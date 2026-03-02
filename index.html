@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<!-- NM build: 2025-02-23 vercel-sync -->
+<html lang="et">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>NoodiMeister</title>
+  </head>
+  <body>
+    <!-- Globaalset root.innerHTML veakäsitlust ei kasutata: see rikuks Reacti DOMi
+         ja põhjustaks "removeChild" vigu. Käivituse vead käsitletakse main.jsx catchis,
+         tööaegsed vead tuleks katta React Error Boundary-ga. -->
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>

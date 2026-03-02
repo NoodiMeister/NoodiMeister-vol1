@@ -1,0 +1,4 @@
+# Staatile failid (JS, CSS) – Netlify/Cloudflare ei tohi neid index.html-iga asendada
+/assets/*  /assets/:splat  200
+# SPA: ülejäänud teed → index.html
+/*         /index.html     200

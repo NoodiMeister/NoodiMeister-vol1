@@ -1,0 +1,18 @@
+# NoodiMeister – Netlify (alternatiiv Vercel'ile)
+# https://docs.netlify.com/configure-builds/file-based-configuration/
+
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+# 1) Staatile failid (JS, CSS) – peavad jõudma brauserisse, mitte index.html
+[[redirects]]
+  from = "/assets/*"
+  to = "/assets/:splat"
+  status = 200
+
+# 2) SPA: kõik ülejäänud teed → index.html (React Router)
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
