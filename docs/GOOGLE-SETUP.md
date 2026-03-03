@@ -9,6 +9,22 @@ Kõik need nõuavad Google Cloud projekti ja OAuth 2.0 kliendi ID-d.
 
 ---
 
+## Kiire parandus: „Access blocked“ / „Error 400: redirect_uri_mismatch“
+
+Kui näed **„This app's request is invalid“** või **„Error 400: redirect_uri_mismatch“**:
+
+1. **Vaata brauseri aadressiribalt**, kust proovid sisse logida (nt `https://noodi-meister-vol1-la-stravaganza.vercel.app`).
+2. **Päritolu** = ainult protokoll + domeen, ilma teekonnata. Näide: `https://noodi-meister-vol1-la-stravaganza.vercel.app`
+3. Mine **[Google Cloud Console](https://console.cloud.google.com/)** → **APIs & Services** → **Credentials**.
+4. Klõpsa oma **OAuth 2.0 Client ID** (Web application) peal.
+5. **Authorized JavaScript origins** – lisa rida täpse päritoluga. Kui kasutad teisi domeene, lisa need samuti.
+6. **Authorized redirect URIs** – lisa **sama** päritolu (üks rida iga domeeni kohta). See on sageli puudu – redirect URIs peab olema täpselt see aadress, kust sisselogimist tehakse.
+7. Klõpsa **Save**. Oota 1–2 minutit ja proovi uuesti.
+
+Kui rakendus töötab teisel domeenil, lisa see domeen mõlemasse välja (origins ja redirect URIs).
+
+---
+
 ## Samm-sammult
 
 ### 1. Google Cloud projekt

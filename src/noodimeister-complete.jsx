@@ -618,15 +618,6 @@ const NoodiMeisterCore = ({ icons }) => {
   const instrumentConfig = useMemo(() => getInstrumentConfig(t), [t]);
   const toolboxes = useMemo(() => getToolboxes(t, instrumentConfig), [t, instrumentConfig]);
 
-  if (!icons) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-amber-900/95 text-amber-100">
-        {t('loading.tools')}
-      </div>
-    );
-  }
-  const { Music2, Clock, Hash, Type, Piano, Palette, Layout, Check, Save, FolderOpen, Plus, Settings, Key, Repeat, Cloud, LogOut, User, CloudUpload, CloudDownload, FolderPlus, ChevronDown } = icons;
-
   // Core state
   const [notationMode, setNotationMode] = useState('traditional');
   const [noteInputMode, setNoteInputMode] = useState(true);
@@ -2078,6 +2069,15 @@ const NoodiMeisterCore = ({ icons }) => {
     { label: '6/8', value: [6, 8] },
     { label: '5/4', value: [5, 4] }
   ];
+
+  if (!icons) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-amber-900/95 text-amber-100">
+        {t('loading.tools')}
+      </div>
+    );
+  }
+  const { Music2, Clock, Hash, Type, Piano, Palette, Layout, Check, Save, FolderOpen, Plus, Settings, Key, Repeat, Cloud, LogOut, User, CloudUpload, CloudDownload, FolderPlus, ChevronDown } = icons;
 
   return (
     <div className="min-h-screen flex flex-col relative" style={{ background: 'linear-gradient(135deg, #fef3c7 0%, #fed7aa 50%, #fdba74 100%)' }}>
