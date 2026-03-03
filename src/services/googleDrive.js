@@ -177,6 +177,32 @@ export async function getFileContent(accessToken, fileId) {
   return res.text();
 }
 
+/**
+ * Loetleb Google Drive'ist failid, mille nimi sisaldab ".noodimeister".
+ * @param {string} accessToken
+ * @param {object} [options] - pageSize, orderBy
+ * @returns {Promise<Array<{ id, name, modifiedTime, createdTime }>>}
+ */
+export async function listNoodimeisterFiles(accessToken, options = {}) {
+  const { pageSize = 50, orderBy = 'modifiedTime desc' } = options;
+  const q = "trashed = false and name contains '.noodimeister'";
+  const params = new URLSearchParams({
+    q,
+    pageSize: String(pageSize),
+    orderBy,
+    fields: 'files(id, name, modifiedTime, createdTime)'
+  });
+  const res = await fetch(`${DRIVE_API_URL}?${params}`, {
+    headers: { Authorization: `Bearer ${accessToken}` }
+  });
+  if (!res.ok) {
+    if (res.status === 401) throw new Error('Token aegunud. Logi uuesti sisse.');
+    throw new Error('Tööde nimekirja laadimine ebaõnnestus');
+  }
+  const data = await res.json();
+  return data.files || [];
+}
+
 export function getStoredToken() {
   const token = localStorage.getItem('noodimeister-google-token');
   const expiry = localStorage.getItem('noodimeister-google-token-expiry');

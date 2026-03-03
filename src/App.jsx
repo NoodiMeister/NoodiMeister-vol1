@@ -5,6 +5,7 @@ import LandingPage from './pages/LandingPage';
 const RegisterPage = lazy(() => import('./pages/RegisterPage'));
 const LoginPage = lazy(() => import('./pages/LoginPage'));
 const HinnakiriPage = lazy(() => import('./pages/HinnakiriPage'));
+const MinuToodPage = lazy(() => import('./pages/MinuTöödPage'));
 const NoodiMeister = lazy(() => import('./noodimeister-complete'));
 
 function ErrorFallback({ error }) {
@@ -34,6 +35,7 @@ function AppRoutes() {
       <Suspense fallback={<div style={{ padding: 24, textAlign: 'center' }}>Laen…</div>}>
         <Routes>
           <Route path="/app" element={<NoodiMeister />} />
+          <Route path="/tood" element={<MinuToodPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/registreeru" element={<RegisterPage />} />
           <Route path="/hinnakiri" element={<HinnakiriPage />} />

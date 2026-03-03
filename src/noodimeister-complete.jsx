@@ -1,5 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Piano, KeyboardShortcuts, MidiNumbers } from 'react-piano';
+import 'react-piano/dist/styles.css';
+import './piano-overrides.css';
 import * as googleDrive from './services/googleDrive';
 
 // Ikoonid laetakse dünaamiliselt, et vältida "Cannot access 'Tt' before initialization" (lucide-react bundle)
@@ -10,7 +13,7 @@ const LUCIDE_ICONS = [
 
 const STORAGE_KEY = 'noodimeister-data';
 
-function LoggedInUser({ onSaveAndExit, onSaveAndLogout, icons }) {
+function LoggedInUser({ icons }) {
   const navigate = useNavigate();
   const [user, setUser] = useState(() => {
     try {
@@ -38,15 +41,6 @@ function LoggedInUser({ onSaveAndExit, onSaveAndLogout, icons }) {
       <span className="text-sm font-medium text-amber-100 max-w-[120px] truncate" title={user.email}>
         {user.name || user.email}
       </span>
-      {typeof onSaveAndLogout === 'function' && (
-        <button
-          onClick={onSaveAndLogout}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-sky-800/80 text-amber-100 hover:bg-sky-700 transition-colors"
-          title="Salvesta ja logi välja"
-        >
-          {LogOutIcon && <LogOutIcon className="w-3.5 h-3.5" />} Välju ja logi välja
-        </button>
-      )}
       <button
         onClick={handleLogout}
         className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-amber-800/80 text-amber-100 hover:bg-amber-700 hover:text-white transition-colors"
@@ -479,6 +473,17 @@ const FIGURENOTES_SHAPES = {
 // Pitch/octave ↔ MIDI; fingering; timeline – defineeritud enne NoodiMeisterit, et vältida TDZ minifitseerimisel
 const PITCH_TO_SEMI = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
 const PAGE_BREAK_GAP = 80;
+// MIDI → noodinimi + oktaav (react-piano); looduslik noot sisestamiseks (C#, Db → C, D jne)
+const PITCH_NAME_TO_NATURAL = { C: 'C', 'C#': 'C', Db: 'C', D: 'D', 'D#': 'D', Eb: 'D', E: 'E', F: 'F', 'F#': 'F', Gb: 'F', G: 'G', 'G#': 'G', Ab: 'G', A: 'A', 'A#': 'A', Bb: 'A', B: 'B' };
+function midiToPitchOctave(midiNumber) {
+  try {
+    const attrs = MidiNumbers.getAttributes(midiNumber);
+    const naturalPitch = PITCH_NAME_TO_NATURAL[attrs.pitchName] || attrs.pitchName.charAt(0);
+    return { pitch: naturalPitch, octave: attrs.octave, isAccidental: attrs.isAccidental };
+  } catch {
+    return { pitch: 'C', octave: 4, isAccidental: false };
+  }
+}
 const FINGERING_TIN_WHISTLE = {
   'D5': [1,1,1,1,1,1], 'E5': [0,1,1,1,1,1], 'F#5': [0,0,1,1,1,1], 'G5': [0,0,0,1,1,1], 'A5': [0,0,0,0,1,1], 'B5': [0,0,0,0,0,1], 'C#6': [0,0,0,0,0,0],
   'D6': [1,1,1,1,1,1], 'E6': [0,1,1,1,1,1], 'F#6': [0,0,1,1,1,1], 'G6': [0,0,0,1,1,1], 'A6': [0,0,0,0,1,1], 'B6': [0,0,0,0,0,1], 'C#7': [0,0,0,0,0,0]
@@ -563,6 +568,9 @@ const NoodiMeisterCore = ({ icons }) => {
   const [tuningReferenceOctave, setTuningReferenceOctave] = useState(3);
   const [tuningReferenceHz, setTuningReferenceHz] = useState(440);
   const [playNoteOnInsert, setPlayNoteOnInsert] = useState(true);
+  const [figurenotesSize, setFigurenotesSize] = useState(16); // Figuurnotatsiooni figuuride suurus (nagu fonti suurus), 10–32
+  const [figurenotesStems, setFigurenotesStems] = useState(false); // Figuurnotatsioonis rütmi näitamine noodivartega (vaikimisi välja)
+  const [showBarNumbers, setShowBarNumbers] = useState(true); // Taktide numbrid iga rea alguses noodivõtme kohal
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [saveCloudDialogOpen, setSaveCloudDialogOpen] = useState(false);
   // Rippmenüüd tööriistaribal: 'file' | 'settings' | null
@@ -603,6 +611,52 @@ const NoodiMeisterCore = ({ icons }) => {
   const lastPersistedRef = useRef(null);
   const audioContextRef = useRef(null);
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const isNewWorkFlow = searchParams.get('new') === '1';
+  const [newWorkSetupOpen, setNewWorkSetupOpen] = useState(false);
+  // Uue töö seadistuse vormi väljad (küsitakse enne töö loomist)
+  const [wizardNotationMethod, setWizardNotationMethod] = useState('traditional'); // 'traditional' | 'figurenotes' | 'vabanotatsioon'
+  const [wizardTimeSignature, setWizardTimeSignature] = useState([4, 4]);
+  const [wizardSongTitle, setWizardSongTitle] = useState('');
+  const [wizardAuthor, setWizardAuthor] = useState('');
+  const [wizardPickupEnabled, setWizardPickupEnabled] = useState(false);
+  const [wizardPickupQuantity, setWizardPickupQuantity] = useState(1);
+  const [wizardPickupDuration, setWizardPickupDuration] = useState('1/4');
+
+  useEffect(() => {
+    if (isNewWorkFlow) setNewWorkSetupOpen(true);
+  }, [isNewWorkFlow]);
+
+  const applyNewWorkSetup = useCallback(() => {
+    setNotationMode(wizardNotationMethod);
+    setNotationStyle(wizardNotationMethod === 'figurenotes' ? 'FIGURENOTES' : 'TRADITIONAL');
+    setTimeSignature({ beats: wizardTimeSignature[0], beatUnit: wizardTimeSignature[1] });
+    setSongTitle(wizardSongTitle.trim());
+    setAuthor(wizardAuthor.trim());
+    setPickupEnabled(wizardPickupEnabled);
+    setPickupQuantity(wizardPickupQuantity);
+    setPickupDuration(wizardPickupDuration);
+    const beatsPerMeasure = wizardTimeSignature[0] * (4 / wizardTimeSignature[1]);
+    const quarterCount = Math.max(1, Math.round(beatsPerMeasure * 4));
+    const initialNotes = Array.from({ length: quarterCount }, (_, i) => ({
+      id: i + 1,
+      pitch: 'C',
+      octave: 4,
+      duration: 1,
+      durationLabel: '1/4',
+      isDotted: false,
+      isRest: true
+    }));
+    setNotes(initialNotes);
+    setCursorPosition(0);
+    setAddedMeasures(0);
+    setHistory([]);
+    setHistoryIndex(-1);
+    setSetupCompleted(true);
+    setNewWorkSetupOpen(false);
+    setSearchParams({});
+    dirtyRef.current = true;
+  }, [wizardNotationMethod, wizardTimeSignature, wizardSongTitle, wizardAuthor, wizardPickupEnabled, wizardPickupQuantity, wizardPickupDuration]);
 
   const isLoggedIn = () => {
     try {
@@ -650,8 +704,11 @@ const NoodiMeisterCore = ({ icons }) => {
     tuningReferenceNote,
     tuningReferenceOctave,
     tuningReferenceHz,
-    playNoteOnInsert
-  }), [notes, timeSignature, timeSignatureMode, clefType, keySignature, staffLines, notationStyle, pixelsPerBeat, notationMode, instrument, instrumentNotationVariant, cursorPosition, addedMeasures, setupCompleted, songTitle, author, pickupEnabled, pickupQuantity, pickupDuration, layoutMeasuresPerLine, layoutLineBreakBefore, layoutPageBreakBefore, visibleToolIds, tuningReferenceNote, tuningReferenceOctave, tuningReferenceHz, playNoteOnInsert]);
+    playNoteOnInsert,
+    figurenotesSize,
+    figurenotesStems,
+    showBarNumbers
+  }), [notes, timeSignature, timeSignatureMode, clefType, keySignature, staffLines, notationStyle, pixelsPerBeat, notationMode, instrument, instrumentNotationVariant, cursorPosition, addedMeasures, setupCompleted, songTitle, author, pickupEnabled, pickupQuantity, pickupDuration, layoutMeasuresPerLine, layoutLineBreakBefore, layoutPageBreakBefore, visibleToolIds, tuningReferenceNote, tuningReferenceOctave, tuningReferenceHz, playNoteOnInsert, figurenotesSize, figurenotesStems, showBarNumbers]);
 
   const saveToStorageSync = useCallback(() => {
     try {
@@ -677,15 +734,7 @@ const NoodiMeisterCore = ({ icons }) => {
 
   const handleSaveAndExit = useCallback(() => {
     saveToStorageSync();
-    navigate('/');
-  }, [saveToStorageSync, navigate]);
-
-  const handleSaveAndLogout = useCallback(() => {
-    saveToStorageSync();
-    localStorage.removeItem('noodimeister-logged-in');
-    localStorage.removeItem('noodimeister-google-token');
-    localStorage.removeItem('noodimeister-google-token-expiry');
-    navigate('/');
+    navigate('/tood');
   }, [saveToStorageSync, navigate]);
 
   // Project file export – single JSON object (future: can send to cloud API)
@@ -717,8 +766,11 @@ const NoodiMeisterCore = ({ icons }) => {
     tuningReferenceOctave,
     tuningReferenceHz,
     playNoteOnInsert,
+    figurenotesSize,
+    figurenotesStems,
+    showBarNumbers,
     scoreData: notes
-  }), [songTitle, author, notationStyle, notationMode, timeSignature, timeSignatureMode, clefType, keySignature, staffLines, pixelsPerBeat, instrument, instrumentNotationVariant, pickupEnabled, pickupQuantity, pickupDuration, setupCompleted, cursorPosition, addedMeasures, layoutMeasuresPerLine, layoutLineBreakBefore, layoutPageBreakBefore, visibleToolIds, tuningReferenceNote, tuningReferenceOctave, tuningReferenceHz, playNoteOnInsert, notes]);
+  }), [songTitle, author, notationStyle, notationMode, timeSignature, timeSignatureMode, clefType, keySignature, staffLines, pixelsPerBeat, instrument, instrumentNotationVariant, pickupEnabled, pickupQuantity, pickupDuration, setupCompleted, cursorPosition, addedMeasures, layoutMeasuresPerLine, layoutLineBreakBefore, layoutPageBreakBefore, visibleToolIds, tuningReferenceNote, tuningReferenceOctave, tuningReferenceHz, playNoteOnInsert, figurenotesSize, figurenotesStems, showBarNumbers, notes]);
 
   // Download project file (future: replace with upload to Google Drive / OneDrive)
   const downloadProject = useCallback(() => {
@@ -756,6 +808,8 @@ const NoodiMeisterCore = ({ icons }) => {
       if (data.notationStyle) setNotationStyle(data.notationStyle);
       if (data.notationMode) setNotationMode(data.notationMode);
       if (data.pixelsPerBeat != null) setPixelsPerBeat(data.pixelsPerBeat);
+      if (data.figurenotesSize != null) setFigurenotesSize(Math.max(10, Math.min(32, data.figurenotesSize)));
+      if (data.figurenotesStems != null) setFigurenotesStems(!!data.figurenotesStems);
       if (data.instrument) setInstrument(data.instrument);
       if (data.instrumentNotationVariant) setInstrumentNotationVariant(data.instrumentNotationVariant);
       if (data.cursorPosition != null) setCursorPosition(data.cursorPosition);
@@ -774,6 +828,7 @@ const NoodiMeisterCore = ({ icons }) => {
       if (data.tuningReferenceOctave != null) setTuningReferenceOctave(data.tuningReferenceOctave);
       if (data.tuningReferenceHz != null) setTuningReferenceHz(data.tuningReferenceHz);
       if (data.playNoteOnInsert != null) setPlayNoteOnInsert(data.playNoteOnInsert);
+      if (data.showBarNumbers != null) setShowBarNumbers(data.showBarNumbers);
       clearDirty();
       setSaveFeedback('Project loaded');
       setTimeout(() => setSaveFeedback(''), 1800);
@@ -823,6 +878,8 @@ const NoodiMeisterCore = ({ icons }) => {
         if (data.notationStyle) setNotationStyle(data.notationStyle);
         else if (data.gridOnlyMode != null) setNotationStyle(data.gridOnlyMode ? 'FIGURENOTES' : 'TRADITIONAL');
         if (data.pixelsPerBeat != null) setPixelsPerBeat(data.pixelsPerBeat);
+        if (data.figurenotesSize != null) setFigurenotesSize(Math.max(10, Math.min(32, data.figurenotesSize)));
+        if (data.figurenotesStems != null) setFigurenotesStems(!!data.figurenotesStems);
         if (data.notationMode) setNotationMode(data.notationMode);
         if (data.instrument) setInstrument(data.instrument);
         if (data.instrumentNotationVariant) setInstrumentNotationVariant(data.instrumentNotationVariant);
@@ -843,6 +900,7 @@ const NoodiMeisterCore = ({ icons }) => {
         if (data.tuningReferenceOctave != null) setTuningReferenceOctave(data.tuningReferenceOctave);
         if (data.tuningReferenceHz != null) setTuningReferenceHz(data.tuningReferenceHz);
         if (data.playNoteOnInsert != null) setPlayNoteOnInsert(data.playNoteOnInsert);
+        if (data.showBarNumbers != null) setShowBarNumbers(data.showBarNumbers);
         clearDirty();
         setSaveFeedback('Laaditud!');
         setTimeout(() => setSaveFeedback(''), 1800);
@@ -947,8 +1005,10 @@ const NoodiMeisterCore = ({ icons }) => {
     }
   }, [importProject]);
 
-  // Load from localStorage on mount
+  // Load from localStorage on mount (skip when opening as new work /app?new=1 or /app?fileId=...)
   useEffect(() => {
+    if (searchParams.get('new') === '1') return;
+    if (searchParams.get('fileId')) return; // laaditakse Drive'ist eraldi effect'iga
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) {
@@ -963,6 +1023,7 @@ const NoodiMeisterCore = ({ icons }) => {
           if (data.notationStyle) setNotationStyle(data.notationStyle);
           else if (data.gridOnlyMode != null) setNotationStyle(data.gridOnlyMode ? 'FIGURENOTES' : 'TRADITIONAL');
           if (data.pixelsPerBeat != null) setPixelsPerBeat(data.pixelsPerBeat);
+          if (data.figurenotesSize != null) setFigurenotesSize(Math.max(10, Math.min(32, data.figurenotesSize)));
           if (data.notationMode) setNotationMode(data.notationMode);
           if (data.instrument) setInstrument(data.instrument);
           if (data.instrumentNotationVariant) setInstrumentNotationVariant(data.instrumentNotationVariant);
@@ -983,10 +1044,44 @@ const NoodiMeisterCore = ({ icons }) => {
           if (data.tuningReferenceOctave != null) setTuningReferenceOctave(data.tuningReferenceOctave);
           if (data.tuningReferenceHz != null) setTuningReferenceHz(data.tuningReferenceHz);
           if (data.playNoteOnInsert != null) setPlayNoteOnInsert(data.playNoteOnInsert);
+          if (data.showBarNumbers != null) setShowBarNumbers(data.showBarNumbers);
         }
       }
     } catch (_) { /* ignore */ }
   }, []);
+
+  // Load from Google Drive when opening /app?fileId=...
+  const driveFileId = searchParams.get('fileId');
+  useEffect(() => {
+    if (!driveFileId) return;
+    const token = googleDrive.getStoredToken();
+    if (!token) {
+      setSaveFeedback('Logi sisse Google\'iga, et laadida pilvest.');
+      setTimeout(() => setSaveFeedback(''), 4000);
+      return;
+    }
+    let cancelled = false;
+    setSaveFeedback('Laadin pilvest…');
+    googleDrive.getFileContent(token, driveFileId)
+      .then((content) => {
+        if (cancelled) return;
+        const data = JSON.parse(content);
+        if (importProject(data)) {
+          setSaveFeedback('Laaditud!');
+          setTimeout(() => setSaveFeedback(''), 2500);
+        } else {
+          setSaveFeedback('Vigane projektifail');
+          setTimeout(() => setSaveFeedback(''), 3000);
+        }
+      })
+      .catch((e) => {
+        if (!cancelled) {
+          setSaveFeedback(e?.message || 'Pilvest laadimine ebaõnnestus');
+          setTimeout(() => setSaveFeedback(''), 4000);
+        }
+      });
+    return () => { cancelled = true; };
+  }, [driveFileId, importProject]);
 
   // Auto-save to localStorage when relevant state changes
   useEffect(() => {
@@ -1000,7 +1095,7 @@ const NoodiMeisterCore = ({ icons }) => {
     return () => {
       if (autoSaveTimeoutRef.current) clearTimeout(autoSaveTimeoutRef.current);
     };
-  }, [notes, timeSignature, timeSignatureMode, clefType, keySignature, staffLines, notationStyle, pixelsPerBeat, notationMode, instrument, cursorPosition, addedMeasures, setupCompleted, songTitle, author, pickupEnabled, pickupQuantity, pickupDuration, tuningReferenceNote, tuningReferenceOctave, tuningReferenceHz, playNoteOnInsert, getPersistedState]);
+  }, [notes, timeSignature, timeSignatureMode, clefType, keySignature, staffLines, notationStyle, pixelsPerBeat, notationMode, instrument, cursorPosition, addedMeasures, setupCompleted, songTitle, author, pickupEnabled, pickupQuantity, pickupDuration, tuningReferenceNote, tuningReferenceOctave, tuningReferenceHz, playNoteOnInsert, figurenotesSize, figurenotesStems, showBarNumbers, getPersistedState]);
 
   // Hoiatus ja salvestamine enne sulgemist (tab/akna sulg, värskendus, navigeerimine)
   useEffect(() => {
@@ -1711,13 +1806,19 @@ const NoodiMeisterCore = ({ icons }) => {
           setGhostPitch(pitch);
         }
 
-        // Backspace in input mode
+        // Backspace in input mode: kustuta viimane noot, kursor liigub eelmise (allesjäänud) noodi juurde
         if (e.key === 'Backspace' && notes.length > 0) {
           e.preventDefault();
           const lastNote = notes[notes.length - 1];
           saveToHistory(notes);
           setNotes(prev => prev.slice(0, -1));
           setCursorPosition(prev => Math.max(0, prev - lastNote.duration));
+          const remaining = notes.slice(0, -1);
+          if (remaining.length > 0) {
+            const prevNote = remaining[remaining.length - 1];
+            setGhostPitch(prevNote.pitch);
+            setGhostOctave(prevNote.octave);
+          }
         }
       }
     };
@@ -1898,6 +1999,135 @@ const NoodiMeisterCore = ({ icons }) => {
         </div>
       )}
 
+      {/* Uue töö seadistuse dialoog – notatsioon, taktimõõt, loo nimi, autor jne */}
+      {newWorkSetupOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-amber-950/70 backdrop-blur-sm p-6" onClick={() => {}}>
+          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-hidden border-2 border-amber-200 flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="bg-gradient-to-r from-amber-600 to-amber-700 text-white px-6 py-4 flex items-center justify-between shrink-0">
+              <h2 className="text-lg font-bold flex items-center gap-2"><Plus className="w-5 h-5" /> Uue töö seadistus</h2>
+            </div>
+            <div className="p-6 space-y-4 overflow-y-auto">
+              <p className="text-sm text-amber-900">Täida väljad uue nooditöö jaoks. Kõik vajalikud seaded saad hiljem muuta menüüst Seaded.</p>
+
+              <div>
+                <label className="block text-sm font-semibold text-amber-900 mb-2">Notatsiooni meetod</label>
+                <div className="flex flex-col gap-2">
+                  <label className="flex items-center gap-3 p-3 rounded-lg border-2 border-amber-200 hover:bg-amber-50 cursor-pointer">
+                    <input type="radio" name="wizardNotation" checked={wizardNotationMethod === 'traditional'} onChange={() => setWizardNotationMethod('traditional')} className="w-4 h-4 text-amber-600" />
+                    <span className="font-medium text-amber-900">Traditsiooniline noodistik</span>
+                  </label>
+                  <label className="flex items-center gap-3 p-3 rounded-lg border-2 border-amber-200 hover:bg-amber-50 cursor-pointer">
+                    <input type="radio" name="wizardNotation" checked={wizardNotationMethod === 'figurenotes'} onChange={() => setWizardNotationMethod('figurenotes')} className="w-4 h-4 text-amber-600" />
+                    <span className="font-medium text-amber-900">Figuurnotatsioon (värvid ja kujundid)</span>
+                  </label>
+                  <label className="flex items-center gap-3 p-3 rounded-lg border-2 border-amber-200 hover:bg-amber-50 cursor-pointer">
+                    <input type="radio" name="wizardNotation" checked={wizardNotationMethod === 'vabanotatsioon'} onChange={() => setWizardNotationMethod('vabanotatsioon')} className="w-4 h-4 text-amber-600" />
+                    <span className="font-medium text-amber-900">Vabanotatsioon (solfeeg)</span>
+                  </label>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-amber-900 mb-2">Taktimõõt</label>
+                <div className="flex flex-wrap gap-2">
+                  {[[4, 4], [3, 4], [2, 4], [6, 8], [5, 4], [7, 8], [12, 8]].map(([beats, unit]) => {
+                    const sel = wizardTimeSignature[0] === beats && wizardTimeSignature[1] === unit;
+                    return (
+                      <button
+                        key={`${beats}/${unit}`}
+                        type="button"
+                        onClick={() => setWizardTimeSignature([beats, unit])}
+                        className={`px-4 py-2 rounded-lg font-medium border-2 transition-colors ${sel ? 'bg-amber-500 border-amber-600 text-white' : 'border-amber-200 text-amber-900 hover:bg-amber-100'}`}
+                      >
+                        {beats}/{unit}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-amber-900 mb-1">Loo nimi</label>
+                <input
+                  type="text"
+                  value={wizardSongTitle}
+                  onChange={(e) => setWizardSongTitle(e.target.value)}
+                  placeholder="Nimetu"
+                  className="w-full px-3 py-2 rounded-lg border-2 border-amber-200 bg-amber-50 text-amber-900"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-amber-900 mb-1">Autori nimi</label>
+                <input
+                  type="text"
+                  value={wizardAuthor}
+                  onChange={(e) => setWizardAuthor(e.target.value)}
+                  placeholder="Autor või helilooja"
+                  className="w-full px-3 py-2 rounded-lg border-2 border-amber-200 bg-amber-50 text-amber-900"
+                />
+              </div>
+
+              <div className="border-t border-amber-200 pt-4">
+                <label className="flex items-center gap-2 cursor-pointer mb-2">
+                  <input
+                    type="checkbox"
+                    checked={wizardPickupEnabled}
+                    onChange={(e) => setWizardPickupEnabled(e.target.checked)}
+                    className="w-4 h-4 rounded border-amber-300 text-amber-600"
+                  />
+                  <span className="text-sm font-semibold text-amber-900">Eeltakt</span>
+                </label>
+                {wizardPickupEnabled && (
+                  <div className="flex flex-wrap items-center gap-3 ml-6">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-amber-800">Kogus:</span>
+                      <input
+                        type="number"
+                        min={1}
+                        max={16}
+                        value={wizardPickupQuantity}
+                        onChange={(e) => setWizardPickupQuantity(Math.max(1, Math.min(16, parseInt(e.target.value, 10) || 1)))}
+                        className="w-12 px-2 py-1 rounded border-2 border-amber-200 bg-amber-50 text-amber-900"
+                      />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-amber-800">Kestus:</span>
+                      <select
+                        value={wizardPickupDuration}
+                        onChange={(e) => setWizardPickupDuration(e.target.value)}
+                        className="px-2 py-1 rounded border-2 border-amber-200 bg-amber-50 text-amber-900"
+                      >
+                        <option value="1/1">1/1</option>
+                        <option value="1/2">1/2</option>
+                        <option value="1/4">1/4</option>
+                        <option value="1/8">1/8</option>
+                        <option value="1/16">1/16</option>
+                      </select>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="p-6 pt-0 shrink-0 flex gap-3">
+              <button
+                type="button"
+                onClick={applyNewWorkSetup}
+                className="flex-1 py-3 rounded-lg bg-amber-600 text-white font-semibold hover:bg-amber-500 transition-colors"
+              >
+                Loo töö
+              </button>
+              <button
+                type="button"
+                onClick={() => { setNewWorkSetupOpen(false); setSearchParams({}); }}
+                className="px-4 py-3 rounded-lg border-2 border-amber-300 text-amber-800 font-medium hover:bg-amber-50"
+              >
+                Tühista
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Settings modal – Title, Author, Pickup (post-setup editing) */}
       {settingsOpen && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-amber-950/60 backdrop-blur-sm p-6" onClick={() => setSettingsOpen(false)}>
@@ -1926,6 +2156,17 @@ const NoodiMeisterCore = ({ icons }) => {
                   placeholder="Composer name"
                   className="w-full px-3 py-2 rounded-lg border-2 border-amber-200 bg-amber-50 text-amber-900"
                 />
+              </div>
+              <div className="flex flex-wrap items-center gap-3">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={showBarNumbers}
+                    onChange={(e) => { dirtyRef.current = true; setShowBarNumbers(e.target.checked); }}
+                    className="w-4 h-4 rounded border-amber-300 text-amber-600"
+                  />
+                  <span className="text-sm font-semibold text-amber-900">Taktiloendur (näita taktinumbreid iga rea alguses; maha võtmise korral takte ei loendata)</span>
+                </label>
               </div>
               <div className="flex flex-wrap items-center gap-3">
                 <label className="flex items-center gap-2 cursor-pointer">
@@ -1966,6 +2207,37 @@ const NoodiMeisterCore = ({ icons }) => {
                     </div>
 </div>
               )}
+              </div>
+              {/* Figuurnotatsioon: figuuride suurus (nagu fonti suurus) */}
+              <div className="border-t border-amber-200 pt-4 mt-4">
+                <h3 className="text-sm font-bold text-amber-900 mb-2">Figuurnotatsioon</h3>
+                <p className="text-xs text-amber-700 mb-2">Figuuride (ring, ruut, kolmnurk) suurus noodistikus. Sarnane fonti suuruse seadistamisega.</p>
+                <div className="flex items-center gap-3">
+                  <label htmlFor="figurenotes-size" className="text-sm font-semibold text-amber-900">Figuuride suurus:</label>
+                  <input
+                    id="figurenotes-size"
+                    type="number"
+                    min={10}
+                    max={32}
+                    value={figurenotesSize}
+                    onChange={(e) => {
+                      const v = parseInt(e.target.value, 10);
+                      if (!isNaN(v)) { dirtyRef.current = true; setFigurenotesSize(Math.max(10, Math.min(32, v))); }
+                    }}
+                    className="w-16 px-2 py-1.5 rounded border-2 border-amber-200 bg-amber-50 text-amber-900"
+                  />
+                  <span className="text-sm text-amber-800">px</span>
+                </div>
+                <label className="flex items-center gap-2 cursor-pointer mt-2">
+                  <input
+                    type="checkbox"
+                    checked={figurenotesStems}
+                    onChange={(e) => { dirtyRef.current = true; setFigurenotesStems(e.target.checked); }}
+                    className="w-4 h-4 rounded border-amber-300 text-amber-600"
+                  />
+                  <span className="text-sm font-semibold text-amber-900">Noodivarte režiim (näita rütmi vartega – vars, vibu)</span>
+                </label>
+                <p className="text-xs text-amber-600 mt-1">Kui see on sisse lülitatud, kuvatakse figuurnoodidel noodivars ja vibu (kaheksandik, kuueteistkümnendik), et rütm oleks selgem. Vaikimisi väljas.</p>
               </div>
               {/* Häälestus: võrdlusnoot (nt A3=440 Hz) */}
               <div className="border-t border-amber-200 pt-4 mt-4">
@@ -2118,7 +2390,7 @@ const NoodiMeisterCore = ({ icons }) => {
                   type="button"
                   onClick={() => setHeaderMenuOpen(prev => prev === 'file' ? null : 'file')}
                   className="inline-flex items-center gap-2 px-4 py-2 rounded-lg font-semibold text-sm bg-slate-600 text-white shadow-md hover:bg-slate-500 border border-slate-700/50"
-                  title="Fail: salvesta, laadi, välju"
+                  title="Fail: uus töö, salvesta, laadi, välju"
                 >
                   <Save className="w-4 h-4" />
                   Fail
@@ -2126,6 +2398,20 @@ const NoodiMeisterCore = ({ icons }) => {
                 </button>
                 {headerMenuOpen === 'file' && (
                   <div className="absolute left-0 top-full mt-1 min-w-[200px] py-1 rounded-lg bg-slate-700 border border-slate-600 shadow-xl z-50">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setHeaderMenuOpen(null);
+                        const base = (typeof import.meta !== 'undefined' && import.meta.env?.BASE_URL) || '';
+                        const path = base.replace(/\/$/, '') + '/app?new=1';
+                        window.open(`${window.location.origin}${path}`, '_blank', 'noopener,noreferrer');
+                      }}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-amber-50 hover:bg-slate-600"
+                      title="Ava uus töö teises aknas (sama kasutaja)"
+                    >
+                      <Plus className="w-4 h-4" /> Uus töö (uus aken)
+                    </button>
+                    <div className="my-1 border-t border-slate-600" />
                     <button
                       type="button"
                       onClick={() => { saveToStorage(); setHeaderMenuOpen(null); }}
@@ -2158,7 +2444,7 @@ const NoodiMeisterCore = ({ icons }) => {
                     <div className="my-1 border-t border-slate-600" />
                     <button
                       type="button"
-                      onClick={() => { navigate('/'); setHeaderMenuOpen(null); }}
+                      onClick={() => { navigate('/tood'); setHeaderMenuOpen(null); }}
                       className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-amber-50 hover:bg-slate-600"
                     >
                       <LogOut className="w-4 h-4" /> Välju
@@ -2187,7 +2473,7 @@ const NoodiMeisterCore = ({ icons }) => {
                   <ChevronDown className="w-4 h-4" />
                 </button>
                 {headerMenuOpen === 'settings' && (
-                  <div className="absolute left-0 top-full mt-1 min-w-[180px] py-1 rounded-lg bg-slate-700 border border-slate-600 shadow-xl z-50">
+                  <div className="absolute left-0 top-full mt-1 min-w-[280px] max-h-[70vh] overflow-auto py-1 rounded-lg bg-slate-700 border border-slate-600 shadow-xl z-50">
                     <button
                       type="button"
                       onClick={() => { setSettingsOpen(true); setHeaderMenuOpen(null); }}
@@ -2195,11 +2481,32 @@ const NoodiMeisterCore = ({ icons }) => {
                     >
                       <Settings className="w-4 h-4" /> Pealkiri, autor, eeltakt
                     </button>
+                    <div className="border-t border-slate-600 mt-1 pt-2 px-3 pb-2">
+                      <h4 className="text-xs font-bold text-amber-200 uppercase mb-2">Klahvikombinatsioonid</h4>
+                      <div className="text-xs text-slate-200 space-y-1">
+                        <div className="font-semibold text-amber-100">Tööriistad (Shift+1–9):</div>
+                        <div>1 Rütm • 2 Taktiõpetus • 3 Noodivõtid • 4 Toonikad • 5 Kõrgus • 6 Noodipead • 7 Pillid • 8 Kordused • 9 Paigutus</div>
+                        <div className="font-semibold text-amber-100 mt-2">Sisestusrežiim (N sisse):</div>
+                        <div><strong>C–G:</strong> Lisa noodid</div>
+                        <div><strong>3–7:</strong> Kestused</div>
+                        <div><strong>0:</strong> Paus • <strong>.:</strong> Punkt</div>
+                        <div className="font-semibold text-amber-100 mt-2">Valik (N väljas):</div>
+                        <div><strong>←→:</strong> Liigu</div>
+                        <div><strong>Shift+←→:</strong> Vali vahemik</div>
+                        <div><strong>↑↓:</strong> Muuda kõrgust</div>
+                        <div><strong>3–7:</strong> Muuda kestust</div>
+                        <div><strong>Del/Backspace:</strong> Kustuta</div>
+                        <div className="font-semibold text-amber-100 mt-2">Lõikelaud:</div>
+                        <div><strong>Ctrl+C:</strong> Kopeeri</div>
+                        <div><strong>Ctrl+V:</strong> Kleebi</div>
+                        <div><strong>Ctrl+Z:</strong> Võta tagasi</div>
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
 
-              <LoggedInUser onSaveAndLogout={handleSaveAndLogout} icons={icons} />
+              <LoggedInUser icons={icons} />
             {!isLoggedIn() && (
               <Link to="/login" className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-amber-700/80 text-amber-100 hover:bg-amber-600 border border-amber-600/50" title="Logi sisse või registreeru, et kasutada piiramatult takte">
                 Demo – max 8 takti
@@ -2618,32 +2925,6 @@ const NoodiMeisterCore = ({ icons }) => {
               </div>
             )}
 
-            {/* Stage VII: Keyboard Shortcuts Guide */}
-            <div className="mt-4 pt-4 border-t-2 border-amber-200">
-              <h4 className="text-xs font-bold text-amber-900 uppercase mb-2">
-                Keyboard Shortcuts
-              </h4>
-              <div className="text-xs text-amber-700 space-y-1 bg-amber-50 p-2 rounded">
-                <div className="font-bold text-amber-900">Toolboxes (Shift+1–9):</div>
-                <div><strong>1</strong> Rhythm • <strong>2</strong> Time Sig • <strong>3</strong> Clefs • <strong>4</strong> Key Sig • <strong>5</strong> Pitch • <strong>6</strong> Notehead • <strong>7</strong> Instruments • <strong>8</strong> Repeats • <strong>9</strong> Layout</div>
-                <div className="font-bold text-amber-900 mt-2">Input Mode (N ON):</div>
-                <div><strong>C-G:</strong> Add notes</div>
-                <div><strong>3-7:</strong> Durations</div>
-                <div><strong>0:</strong> Rest • <strong>.:</strong> Dot</div>
-                
-                <div className="font-bold text-amber-900 mt-2">Selection (N OFF):</div>
-                <div><strong>←→:</strong> Navigate</div>
-                <div><strong>Shift+←→:</strong> Select range</div>
-                <div><strong>↑↓:</strong> Change pitch</div>
-                <div><strong>3-7:</strong> Change duration</div>
-                <div><strong>Del/Backspace:</strong> Delete</div>
-                
-                <div className="font-bold text-amber-900 mt-2">Clipboard:</div>
-                <div><strong>Ctrl+C:</strong> Copy</div>
-                <div><strong>Ctrl+V:</strong> Paste</div>
-                <div><strong>Ctrl+Z:</strong> Undo</div>
-              </div>
-            </div>
           </div>
         </aside>
 
@@ -2685,88 +2966,65 @@ const NoodiMeisterCore = ({ icons }) => {
                 layoutMeasuresPerLine={layoutMeasuresPerLine}
                 layoutLineBreakBefore={layoutLineBreakBefore}
                 layoutPageBreakBefore={layoutPageBreakBefore}
+                figurenotesSize={figurenotesSize}
+                figurenotesStems={figurenotesStems}
               />
           </div>
         </main>
 
-        {/* Klaveri klaviatuur – fikseeritud alumine rida; lehekülge kerides liigub kaasa */}
-        {activeToolbox === 'pianoKeyboard' && (
-          <div className="fixed bottom-0 left-0 right-0 z-40 bg-gradient-to-t from-amber-100 to-amber-50 border-t-2 border-amber-300 shadow-[0_-4px_12px_rgba(0,0,0,0.08)] py-3 px-4">
-            <div className="mx-auto max-w-4xl">
-              <div className="relative" style={{ minHeight: 100 }}>
-                {(() => {
-                  const isTraditional = notationMode === 'traditional';
-                  const octaves = [3, 4];
-                  const whitePitches = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
-                  const blackPitches = ['C#', 'D#', null, 'F#', 'G#', 'A#', null];
-                  return (
-                    <>
-                      <div className="flex absolute top-0 left-0 right-0 h-10 gap-0 justify-center" style={{ paddingLeft: '12%', paddingRight: '12%' }}>
-                        {blackPitches.map((p, i) => (
-                          <div key={i} className="flex-1 flex items-center justify-center" style={{ maxWidth: 20 }}>
-{p ? (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    const basePitch = p.replace('#', '');
-                                    const oct = i <= 1 ? octaves[0] : octaves[1];
-                                    setGhostPitch(basePitch);
-                                    setGhostOctave(oct);
-                                    if (noteInputMode) addNoteAtCursor(basePitch, oct);
-                                    else playPianoNote(basePitch, oct, true);
-                                  }}
-                                className="w-full h-full rounded-b bg-slate-800 hover:bg-slate-700 text-white text-[10px] font-bold flex flex-col items-center justify-center shadow"
-                                title={isTraditional ? `${p} oktaav ${i <= 1 ? octaves[0] : octaves[1]}` : `${p} ${FIGURENOTES_SHAPES[i <= 1 ? octaves[0] : octaves[1]] || ''}`}
-                              >
-                                {isTraditional ? (
-                                  <><span>{p}</span><span className="text-[8px] opacity-80">{i <= 1 ? octaves[0] : octaves[1]}</span></>
-                                ) : (
-                                  <span className="w-2.5 h-2.5 rounded-full border border-white" style={{ backgroundColor: FIGURENOTES_COLORS[p.replace('#','')] || '#333' }} title={FIGURENOTES_SHAPES[i <= 1 ? octaves[0] : octaves[1]]} />
-                                )}
-                              </button>
-                            ) : null}
-                          </div>
-                        ))}
-                      </div>
-                      <div className="flex gap-1 mt-10 border-2 border-amber-800 rounded-b overflow-hidden justify-center max-w-2xl mx-auto">
-                        {octaves.flatMap(oct =>
-                          whitePitches.map((pitch) => (
-                            <button
-                              key={`${pitch}${oct}`}
-                              type="button"
-                              onClick={() => {
-                                setGhostPitch(pitch);
-                                setGhostOctave(oct);
-                                if (noteInputMode) addNoteAtCursor(pitch, oct);
-                                else playPianoNote(pitch, oct, false);
-                              }}
-                              className="flex-1 min-w-[36px] py-5 rounded-b border border-amber-300 bg-white hover:bg-amber-50 flex flex-col items-center justify-center text-sm font-semibold text-amber-900 shadow-sm"
-                            >
-                              {isTraditional ? (
-                                <><span>{pitch}</span><span className="text-amber-600 text-xs">{oct}</span></>
-                              ) : (
-                                <>
-                                  <span className="font-medium">{pitch}</span>
-                                  <span
-                                    className="w-5 h-5 mt-1 border border-amber-800 rounded flex items-center justify-center text-[10px]"
-                                    style={{ backgroundColor: FIGURENOTES_COLORS[pitch] || '#eee', color: oct === 3 ? '#fff' : '#000' }}
-                                    title={FIGURENOTES_SHAPES[oct] || ''}
-                                  >
-                                    {FIGURENOTES_SHAPES[oct] === 'square' ? '□' : FIGURENOTES_SHAPES[oct] === 'circle' ? '○' : '△'}
-                                  </span>
-                                </>
-                              )}
-                            </button>
-                          ))
-                        )}
-                      </div>
-                    </>
-                  );
-                })()}
+        {/* Klaveri klaviatuur – react-piano mudel; fikseeritud all, lehekülge kerides kaasa */}
+        {activeToolbox === 'pianoKeyboard' && (() => {
+          const firstNote = MidiNumbers.fromNote('c3');
+          const lastNote = MidiNumbers.fromNote('c5');
+          const noteRange = { first: firstNote, last: lastNote };
+          const keyboardShortcuts = KeyboardShortcuts.create({
+            firstNote,
+            lastNote,
+            keyboardConfig: KeyboardShortcuts.HOME_ROW
+          });
+          return (
+            <div className="fixed bottom-0 left-0 right-0 z-40 bg-gradient-to-t from-amber-100 to-amber-50 border-t-2 border-amber-300 shadow-[0_-4px_12px_rgba(0,0,0,0.08)] py-3 px-4">
+              <div className="mx-auto max-w-4xl">
+                <Piano
+                  className="NoodiMeisterPiano"
+                  noteRange={noteRange}
+                  playNote={(midiNumber) => {
+                    const { pitch, octave, isAccidental } = midiToPitchOctave(midiNumber);
+                    setGhostPitch(pitch);
+                    setGhostOctave(octave);
+                    if (noteInputMode) addNoteAtCursor(pitch, octave);
+                    else playPianoNote(pitch, octave, isAccidental);
+                  }}
+                  stopNote={() => {}}
+                  width={Math.min(900, typeof window !== 'undefined' ? window.innerWidth - 80 : 900)}
+                  keyboardShortcuts={keyboardShortcuts}
+                  activeNotes={[pitchOctaveToMidi(ghostPitch, ghostOctave)]}
+                  renderNoteLabel={({ midiNumber, isActive, isAccidental }) => {
+                    const { pitch, octave } = midiToPitchOctave(midiNumber);
+                    if (notationMode === 'traditional') {
+                      return (
+                        <span>
+                          {MidiNumbers.getAttributes(midiNumber).pitchName}{octave}
+                        </span>
+                      );
+                    }
+                    const color = FIGURENOTES_COLORS[pitch] || '#666';
+                    const shape = FIGURENOTES_SHAPES[octave] === 'square' ? '□' : FIGURENOTES_SHAPES[octave] === 'circle' ? '○' : '△';
+                    return (
+                      <span
+                        className="inline-block w-4 h-4 rounded border border-amber-800 flex items-center justify-center text-[10px] font-bold"
+                        style={{ backgroundColor: color, color: octave === 3 ? '#fff' : '#000' }}
+                        title={`${pitch} ${FIGURENOTES_SHAPES[octave] || ''}`}
+                      >
+                        {shape}
+                      </span>
+                    );
+                  }}
+                />
               </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
       </div>
     </div>
   );
@@ -2837,7 +3095,7 @@ function getFingeringForNote(pitch, octave, instrumentId) {
 }
 
 // Timeline Component – multi-system layout (VexFlow loogika). (PAGE_BREAK_GAP on defineeritud üleval.)
-function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, pageWidth, cursorPosition, notationMode, staffLines, clefType, instrument = 'piano', instrumentNotationVariant = 'standard', isDotted, isRest, selectedDuration, noteInputMode, selectedNoteIndex, isNoteSelected, notes: allNotes, onStaffAddNote, ghostPitch, ghostOctave, notationStyle, layoutMeasuresPerLine = 4, layoutLineBreakBefore = [], layoutPageBreakBefore = [] }) {
+function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, pageWidth, cursorPosition, notationMode, staffLines, clefType, instrument = 'piano', instrumentNotationVariant = 'standard', isDotted, isRest, selectedDuration, noteInputMode, selectedNoteIndex, isNoteSelected, notes: allNotes, onStaffAddNote, ghostPitch, ghostOctave, notationStyle, layoutMeasuresPerLine = 4, layoutLineBreakBefore = [], layoutPageBreakBefore = [], figurenotesSize = 16, figurenotesStems = false }) {
   const isFigurenotesMode = notationStyle === 'FIGURENOTES';
   const instCfg = INSTRUMENT_CONFIG[instrument];
   const isTabMode = instCfg?.type === 'tab' && instrumentNotationVariant === 'tab';
@@ -3049,12 +3307,18 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
     return <rect x={x - w/2} y={restY - h/2} width={w} height={h} fill="#1a1a1a"/>;
   };
 
-  // Figurenotes rendering function
+  // Figurenotes rendering function (size from figurenotesSize setting)
   const renderFigurenote = (note, x, y, noteIndex) => {
     const color = FIGURENOTES_COLORS[note.pitch] || '#000000';
     const shape = FIGURENOTES_SHAPES[note.octave] || 'circle';
-    const size = 16;
+    const size = figurenotesSize;
     const isSelected = isNoteSelected(noteIndex);
+    const dur = note.durationLabel || '1/4';
+    const drawStem = figurenotesStems && dur !== '1/1';
+    const stemLength = 26;
+    const stemX = x + size / 2 + 1;
+    const stemY1 = y;
+    const stemY2 = y - stemLength;
 
     const shapeElement = (() => {
       if (shape === 'circle') {
@@ -3093,21 +3357,51 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
       }
     })();
 
+    const pad = Math.max(4, size * 0.25);
+    const tailLength = (dur === '1/1') ? Math.max(20, size * 1.4) : (dur === '1/2') ? Math.max(12, size * 0.85) : 0;
+    const selectionHeight = size * 2.5 + tailLength;
     return (
       <g>
         {/* Selection highlight background */}
         {isSelected && (
           <rect
-            x={x - 15}
-            y={y - 20}
-            width={30}
-            height={40}
+            x={x - size - pad * 0.5}
+            y={y - size * 1.25}
+            width={size * 2 + pad}
+            height={selectionHeight}
             fill="#93c5fd"
             opacity="0.3"
             rx="4"
           />
         )}
         {shapeElement}
+        {/* Pikkade nootide (1/2, 1/1) alumine saba – visuaalselt näitab noodi pikkust */}
+        {tailLength > 0 && (
+          <line
+            x1={x}
+            y1={y + size / 2}
+            x2={x}
+            y2={y + size / 2 + tailLength}
+            stroke="#1a1a1a"
+            strokeWidth={Math.max(2, size * 0.14)}
+            strokeLinecap="round"
+          />
+        )}
+        {/* Noodivarte režiim: vars ja vibud (lühikestel nootidel) */}
+        {drawStem && (
+          <g stroke="#1a1a1a" fill="#1a1a1a" strokeWidth="1.8">
+            <line x1={stemX} y1={stemY1} x2={stemX} y2={stemY2} />
+            {dur === '1/8' && (
+              <path d={`M ${stemX} ${stemY2} Q ${stemX + 8} ${stemY2 + 4} ${stemX} ${stemY2 + 8}`} fill="#1a1a1a" />
+            )}
+            {dur === '1/16' && (
+              <>
+                <path d={`M ${stemX} ${stemY2} Q ${stemX + 8} ${stemY2 + 4} ${stemX} ${stemY2 + 8}`} fill="#1a1a1a" />
+                <path d={`M ${stemX} ${stemY2 + 6} Q ${stemX + 8} ${stemY2 + 10} ${stemX} ${stemY2 + 14}`} fill="#1a1a1a" />
+              </>
+            )}
+          </g>
+        )}
         {/* Selection glow effect */}
         {isSelected && (
           <circle
@@ -3220,6 +3514,20 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
               ) : null}
             </>
           )}
+          {/* Taktide numbrid: iga rea alguses noodivõtme kohal (traditsiooniline ja figuurnotatsioon) */}
+          {showBarNumbers && sys.measureIndices.length > 0 && (
+            <text
+              x={20}
+              y={sys.yOffset + (isFigurenotesMode ? 12 : staffLinePositions[0] - 14)}
+              fontSize="14"
+              fontWeight="bold"
+              fill="#555"
+              textAnchor="middle"
+              fontFamily="sans-serif"
+            >
+              {sys.measureIndices[0] + 1}
+            </text>
+          )}
 
           {sys.systemIndex === 0 && (
             <g transform={`translate(0, ${sys.yOffset})`}>{renderTimeSignature()}</g>
@@ -3283,7 +3591,10 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
               </>
             )}
 
-            <line x1={measureX} y1={sys.yOffset + (isFigurenotesMode ? 5 : staffLinePositions[0])} x2={measureX} y2={sys.yOffset + (isFigurenotesMode ? timelineHeight - 5 : staffLinePositions[staffLinePositions.length - 1])} stroke="#1a1a1a" strokeWidth={barLineWidth} />
+            {/* Iga rea esimese takti ees taktijooni ei joonistata (traditsiooniline ja figuurnotatsioon) */}
+            {j !== 0 && (
+              <line x1={measureX} y1={sys.yOffset + (isFigurenotesMode ? 5 : staffLinePositions[0])} x2={measureX} y2={sys.yOffset + (isFigurenotesMode ? timelineHeight - 5 : staffLinePositions[staffLinePositions.length - 1])} stroke="#1a1a1a" strokeWidth={barLineWidth} />
+            )}
             {measureIdx === sys.measureIndices[sys.measureIndices.length - 1] && (
               <line x1={measureX + measureWidth} y1={sys.yOffset + (isFigurenotesMode ? 5 : staffLinePositions[0])} x2={measureX + measureWidth} y2={sys.yOffset + (isFigurenotesMode ? timelineHeight - 5 : staffLinePositions[staffLinePositions.length - 1])} stroke="#1a1a1a" strokeWidth={barLineWidth} />
             )}
@@ -3300,12 +3611,19 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
               const stemUp = pitchY > middleLineY;
 
               if (note.isRest) {
-                if (isFigurenotesMode) {
+                if (isFigurenotesMode && !figurenotesStems) {
                   const boxW = getRestBoxWidth(note);
                   const zSize = Math.min(boxW * 0.55, 26);
                   return (
                     <g key={noteIdx}>
                       <text x={noteX} y={sys.yOffset + centerY + zSize * 0.2} textAnchor="middle" fontSize={zSize} fontWeight="bold" fill="#1a1a1a" fontFamily="serif">Z</text>
+                    </g>
+                  );
+                }
+                if (isFigurenotesMode && figurenotesStems) {
+                  return (
+                    <g key={noteIdx}>
+                      {renderStandardRest(note, noteX, sys.yOffset + centerY)}
                     </g>
                   );
                 }
@@ -3331,14 +3649,18 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
               }
 
               if (notationMode === 'figurenotes') {
+                const labelFontSize = Math.max(8, Math.round(figurenotesSize * 0.625));
+                const dur = note.durationLabel || '1/4';
+                const tailLen = (dur === '1/1') ? Math.max(20, figurenotesSize * 1.4) : (dur === '1/2') ? Math.max(12, figurenotesSize * 0.85) : 0;
+                const labelY = noteY + figurenotesSize * 0.5 + labelFontSize + tailLen;
                 return (
                   <g key={noteIdx}>
                     {renderFigurenote(note, noteX, noteY, globalNoteIndex)}
                     <text
                       x={noteX}
-                      y={noteY + 25}
+                      y={labelY}
                       textAnchor="middle"
-                      fontSize="10"
+                      fontSize={labelFontSize}
                       fill="#333"
                       fontWeight="bold"
                     >
@@ -3534,7 +3856,7 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
               if (notationMode === 'figurenotes') {
                 const color = FIGURENOTES_COLORS[ghostPitch] || '#000';
                 const shape = FIGURENOTES_SHAPES[ghostOctave] || 'circle';
-                const size = 14;
+                const size = figurenotesSize;
                 const el = shape === 'square' ? <rect x={cx - size/2} y={cy - size/2} width={size} height={size} fill={color} stroke="#2563eb" strokeWidth="2" opacity="0.9"/> :
                   shape === 'triangle' ? <path d={`M ${cx} ${cy - size*0.43} L ${cx + size/2} ${cy + size/2} L ${cx - size/2} ${cy + size/2} Z`} fill={color} stroke="#2563eb" strokeWidth="2" opacity="0.9"/> :
                   <circle cx={cx} cy={cy} r={size/2} fill={color} stroke="#2563eb" strokeWidth="2" opacity="0.9"/>;
