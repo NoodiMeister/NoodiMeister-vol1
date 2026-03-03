@@ -2395,6 +2395,22 @@ const NoodiMeisterCore = ({ icons }) => {
                   <span className="text-sm font-semibold text-amber-900">Taktiloendur (näita taktinumbreid iga rea alguses; maha võtmise korral takte ei loendata)</span>
                 </label>
               </div>
+              <div>
+                <label className="block text-sm font-semibold text-amber-900 mb-1">{t('layout.measuresPerLine')}</label>
+                <p className="text-xs text-amber-700 mb-2">{t('layout.measuresPerLineHint')}</p>
+                <div className="flex flex-wrap gap-2">
+                  {[2, 3, 4, 6, 8].map((n) => (
+                    <button
+                      key={n}
+                      type="button"
+                      onClick={() => { dirtyRef.current = true; setLayoutMeasuresPerLine(n); }}
+                      className={`px-3 py-2 rounded-lg text-sm font-medium border-2 transition-colors ${layoutMeasuresPerLine === n ? 'bg-amber-600 border-amber-700 text-white' : 'border-amber-200 text-amber-900 bg-amber-50 hover:bg-amber-100'}`}
+                    >
+                      {n} takti / rida
+                    </button>
+                  ))}
+                </div>
+              </div>
               <div className="flex flex-wrap items-center gap-3">
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input
