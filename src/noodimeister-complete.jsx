@@ -3090,9 +3090,11 @@ const NoodiMeisterCore = ({ icons }) => {
                       >
                         <div className="flex items-center justify-between gap-2">
                           <div className="flex items-center gap-2 min-w-0">
-                            {activeToolbox === 'rhythm' && (option.value === 'rest' || option.value === 'dotted'
-                              ? (option.value === 'rest' ? <RhythmIcon duration={selectedDuration} isRest={true} /> : <RhythmIcon duration={selectedDuration} isDotted={true} />)
-                              : ['1/1','1/2','1/4','1/8','1/16'].includes(option.value) && <RhythmIcon duration={option.value} />)}
+                            {activeToolbox === 'rhythm' && (
+                              <span className="flex items-center justify-center shrink-0 w-7 h-7 text-amber-900">
+                                {option.value === 'rest' ? <RhythmIcon duration={selectedDuration} isRest={true} /> : option.value === 'dotted' ? <RhythmIcon duration={selectedDuration} isDotted={true} /> : ['1/1','1/2','1/4','1/8','1/16'].includes(option.value) ? <RhythmIcon duration={option.value} /> : null}
+                              </span>
+                            )}
                             <span className="font-medium">{option.label}</span>
                           </div>
                           {isActive && <Check className="w-4 h-4 text-amber-600 shrink-0" />}
