@@ -205,7 +205,8 @@ const RhythmIcon = ({ duration, isDotted = false, isRest = false }) => {
       '1/2': <rect x="6" y="11" width="12" height="3" rx="0.5" fill="currentColor"/>,
       '1/4': <path d="M14 5 Q16 8 13 10 L13 14 Q15 16 12 19 Q10 18 12 14 L12 10 Q9 8 11 5 Z" fill="currentColor"/>,
       '1/8': <g fill="currentColor"><ellipse cx="10" cy="10" rx="2.5" ry="2"/><path d="M10 12 L10 20 Q12 19 10 17" stroke="currentColor" strokeWidth="1.2" fill="none"/></g>,
-      '1/16': <g fill="currentColor"><ellipse cx="10" cy="8" rx="2.5" ry="2"/><ellipse cx="10" cy="14" rx="2.5" ry="2"/><path d="M10 16 L10 22 Q12 21 10 19" stroke="currentColor" strokeWidth="1.2" fill="none"/></g>
+      '1/16': <g fill="currentColor"><ellipse cx="10" cy="8" rx="2.5" ry="2"/><ellipse cx="10" cy="14" rx="2.5" ry="2"/><path d="M10 16 L10 22 Q12 21 10 19" stroke="currentColor" strokeWidth="1.2" fill="none"/></g>,
+      '1/32': <g fill="currentColor"><ellipse cx="10" cy="6" rx="2" ry="1.6"/><ellipse cx="10" cy="11" rx="2" ry="1.6"/><ellipse cx="10" cy="16" rx="2" ry="1.6"/><path d="M10 18 L10 24 Q12 23 10 21" stroke="currentColor" strokeWidth="1" fill="none"/></g>
     };
     return <svg viewBox="0 0 24 24" className="w-5 h-5" fill="currentColor">{restIcons[d] || restIcons['1/4']}</svg>;
   }
@@ -216,7 +217,8 @@ const RhythmIcon = ({ duration, isDotted = false, isRest = false }) => {
     '1/2': <><ellipse cx="10" cy="16" rx="4" ry="3" fill="none" stroke="currentColor" strokeWidth="1.5"/><line x1="14" y1="16" x2="14" y2="2" stroke="currentColor" strokeWidth="1.5"/>{dot}</>,
     '1/4': <><ellipse cx="10" cy="16" rx="4" ry="3" fill="currentColor"/><line x1="14" y1="16" x2="14" y2="2" stroke="currentColor" strokeWidth="1.5"/>{dot}</>,
     '1/8': <><ellipse cx="10" cy="16" rx="4" ry="3" fill="currentColor"/><line x1="14" y1="16" x2="14" y2="2" stroke="currentColor" strokeWidth="1.5"/><path d="M14 2 Q18 4 14 6" fill="currentColor"/>{dot}</>,
-    '1/16': <><ellipse cx="10" cy="16" rx="4" ry="3" fill="currentColor"/><line x1="14" y1="16" x2="14" y2="2" stroke="currentColor" strokeWidth="1.5"/><path d="M14 2 Q18 4 14 6 M14 4 Q18 6 14 8" fill="currentColor"/>{dot}</>
+    '1/16': <><ellipse cx="10" cy="16" rx="4" ry="3" fill="currentColor"/><line x1="14" y1="16" x2="14" y2="2" stroke="currentColor" strokeWidth="1.5"/><path d="M14 2 Q18 4 14 6 M14 4 Q18 6 14 8" fill="currentColor"/>{dot}</>,
+    '1/32': <><ellipse cx="10" cy="16" rx="4" ry="3" fill="currentColor"/><line x1="14" y1="16" x2="14" y2="2" stroke="currentColor" strokeWidth="1.5"/><path d="M14 2 Q18 4 14 6 M14 4 Q18 6 14 8 M14 6 Q18 8 14 10" fill="currentColor"/>{dot}</>
   };
   return <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">{noteIcons[d] || noteIcons['1/4']}</svg>;
 };
@@ -436,6 +438,7 @@ function getToolboxes(t, instrumentConfig) {
         { id: '1/4', label: t('note.quarter'), value: '1/4', key: '5', code: 'Digit5' },
         { id: '1/8', label: t('note.eighth'), value: '1/8', key: '4', code: 'Digit4' },
         { id: '1/16', label: t('note.sixteenth'), value: '1/16', key: '3', code: 'Digit3' },
+        { id: '1/32', label: t('note.thirtySecond'), value: '1/32', key: '2', code: 'Digit2' },
         { id: 'rest', label: t('note.rest'), value: 'rest', key: '0', code: 'Digit0' },
         { id: 'dotted', label: t('note.dotted'), value: 'dotted', key: '.', code: 'Period' }
       ]
@@ -1261,7 +1264,7 @@ const NoodiMeisterCore = ({ icons }) => {
     setCursorPosition(prev => Math.max(0, Math.min(prev, maxCursor)));
   }, [timeSignature.beats, timeSignature.beatUnit, notes]);
 
-  const durations = { '1/1': 4, '1/2': 2, '1/4': 1, '1/8': 0.5, '1/16': 0.25 };
+  const durations = { '1/1': 4, '1/2': 2, '1/4': 1, '1/8': 0.5, '1/16': 0.25, '1/32': 0.125 };
   
   const getEffectiveDuration = (dur) => {
     const base = durations[dur];
@@ -1456,14 +1459,49 @@ const NoodiMeisterCore = ({ icons }) => {
     if (activeToolbox === 'instruments' && option.type === 'category') return;
 
     switch (activeToolbox) {
-      case 'rhythm':
-        if (option.value === 'rest') setIsRest(prev => !prev);
-        else if (option.value === 'dotted') setIsDotted(prev => !prev);
-        else {
+      case 'rhythm': {
+        const selected = getSelectedNotes();
+        const hasSelection = selected.length > 0;
+        if (option.value === 'rest') {
+          if (hasSelection) {
+            saveToHistory(notes);
+            setNotes(notes.map((note, i) => {
+              const inRange = selectionStart >= 0 && selectionEnd >= 0
+                ? (i >= Math.min(selectionStart, selectionEnd) && i <= Math.max(selectionStart, selectionEnd))
+                : (i === selectedNoteIndex);
+              return inRange ? { ...note, isRest: !note.isRest } : note;
+            }));
+          } else setIsRest(prev => !prev);
+        } else if (option.value === 'dotted') {
+          if (hasSelection) {
+            saveToHistory(notes);
+            setNotes(notes.map((note, i) => {
+              const inRange = selectionStart >= 0 && selectionEnd >= 0
+                ? (i >= Math.min(selectionStart, selectionEnd) && i <= Math.max(selectionStart, selectionEnd))
+                : (i === selectedNoteIndex);
+              return inRange ? { ...note, isDotted: !note.isDotted, duration: (durations[note.durationLabel] || 1) * (note.isDotted ? 1 : 1.5) } : note;
+            }));
+          } else setIsDotted(prev => !prev);
+        } else {
+          // 1/1, 1/2, 1/4, 1/8, 1/16
           lastDurationRef.current = option.value;
           setSelectedDuration(option.value);
+          if (hasSelection) {
+            const newDurationLabel = option.value;
+            const baseDuration = durations[newDurationLabel];
+            saveToHistory(notes);
+            setNotes(notes.map((note, i) => {
+              const inRange = selectionStart >= 0 && selectionEnd >= 0
+                ? (i >= Math.min(selectionStart, selectionEnd) && i <= Math.max(selectionStart, selectionEnd))
+                : (i === selectedNoteIndex);
+              if (!inRange) return note;
+              const dotted = note.isDotted;
+              return { ...note, durationLabel: newDurationLabel, duration: dotted ? baseDuration * 1.5 : baseDuration, isDotted: dotted };
+            }));
+          }
         }
         break;
+      }
       case 'pitchInput':
         if (noteInputMode && ['C', 'D', 'E', 'F', 'G', 'A', 'B'].includes(option.value)) {
           addNoteAtCursor(option.value, ghostOctave);
@@ -1526,7 +1564,7 @@ const NoodiMeisterCore = ({ icons }) => {
     }
     setActiveToolbox(null);
     setSelectedOptionIndex(0);
-  }, [activeToolbox, selectedOptionIndex, noteInputMode, addNoteAtCursor, ghostOctave, instrumentNotationVariant, addChordAt, getChordInsertBeat]);
+  }, [activeToolbox, selectedOptionIndex, noteInputMode, addNoteAtCursor, ghostOctave, instrumentNotationVariant, addChordAt, getChordInsertBeat, getSelectedNotes, notes, setNotes, saveToHistory, selectedNoteIndex, selectionStart, selectionEnd, durations]);
 
   // Keyboard handler
   useEffect(() => {
@@ -1758,7 +1796,7 @@ const NoodiMeisterCore = ({ icons }) => {
         if (activeToolbox === 'rhythm') {
           const durationMap = {
             'Digit7': '1/1', 'Digit6': '1/2', 'Digit5': '1/4',
-            'Digit4': '1/8', 'Digit3': '1/16'
+            'Digit4': '1/8', 'Digit3': '1/16', 'Digit2': '1/32'
           };
           if (durationMap[e.code] && !e.shiftKey && !modKey) {
             e.preventDefault();
@@ -1889,23 +1927,20 @@ const NoodiMeisterCore = ({ icons }) => {
           return;
         }
 
-        // Stage V: Duration editing (Digits 3-7)
+        // Stage V: Duration editing (Digits 2-7) – valitud nootidele või ühele noodile
         const durationMap = {
           'Digit7': '1/1', 'Digit6': '1/2', 'Digit5': '1/4',
-          'Digit4': '1/8', 'Digit3': '1/16'
+          'Digit4': '1/8', 'Digit3': '1/16', 'Digit2': '1/32'
         };
         if (durationMap[e.code] && selectedNoteIndex >= 0) {
           e.preventDefault();
-          const newNotes = [...notes];
           const newDurationLabel = durationMap[e.code];
-          const newDuration = durations[newDurationLabel];
-          newNotes[selectedNoteIndex] = {
-            ...newNotes[selectedNoteIndex],
-            duration: newDuration,
-            durationLabel: newDurationLabel
-          };
-          saveToHistory(notes);
-          setNotes(newNotes);
+          const baseDuration = durations[newDurationLabel];
+          applyToSelectedNotes(n => ({
+            ...n,
+            durationLabel: newDurationLabel,
+            duration: n.isDotted ? baseDuration * 1.5 : baseDuration
+          }));
           return;
         }
 
@@ -1966,7 +2001,7 @@ const NoodiMeisterCore = ({ icons }) => {
         // Duration shortcuts
         const durationMap = {
           'Digit7': '1/1', 'Digit6': '1/2', 'Digit5': '1/4',
-          'Digit4': '1/8', 'Digit3': '1/16'
+          'Digit4': '1/8', 'Digit3': '1/16', 'Digit2': '1/32'
         };
         if (durationMap[e.code] && !e.shiftKey && !modKey) {
           const dur = durationMap[e.code];
@@ -2178,6 +2213,7 @@ const NoodiMeisterCore = ({ icons }) => {
                         <option value="1/4">1/4 (neljandik)</option>
                         <option value="1/8">1/8 (kaheksandik)</option>
                         <option value="1/16">1/16 (kuueteistkümnendik)</option>
+                        <option value="1/32">1/32 (kuuskümnendik)</option>
                       </select>
                     </div>
                     <span className="text-xs text-amber-700">nt. 1 × 1/8 = üks kaheksandiknoot eeltaktis</span>
@@ -2329,6 +2365,7 @@ const NoodiMeisterCore = ({ icons }) => {
                         <option value="1/4">1/4</option>
                         <option value="1/8">1/8</option>
                         <option value="1/16">1/16</option>
+                        <option value="1/32">1/32</option>
                       </select>
                     </div>
                   </div>
@@ -2446,6 +2483,7 @@ const NoodiMeisterCore = ({ icons }) => {
                         <option value="1/4">1/4</option>
                         <option value="1/8">1/8</option>
                         <option value="1/16">1/16</option>
+                        <option value="1/32">1/32</option>
                       </select>
                     </div>
 </div>
@@ -2960,10 +2998,17 @@ const NoodiMeisterCore = ({ icons }) => {
             {/* Active Toolbox Panel */}
             {activeToolbox && toolboxes[activeToolbox] && (
               <div className="mt-4 bg-amber-50 border-2 border-amber-300 rounded-lg p-3">
-                <h4 className="text-xs font-bold text-amber-900 uppercase mb-2">
+<h4 className="text-xs font-bold text-amber-900 uppercase mb-2">
                   {toolboxes[activeToolbox].name}
                 </h4>
-                
+
+                {/* Rütm: juhend valitud nootide rütmi vahetamiseks */}
+                {activeToolbox === 'rhythm' && (
+                  <p className="text-xs text-amber-700 mb-2">
+                    Vali noot või mitu nooti (klõps või Shift+nooleklahv) ja klõpsa siin rütmi – rütm rakendub valitud nootidele. Ilma valikuta määrab uue nootide rütmi. Klahvid 2–7 muudavad valitud nootide rütmi (2=1/32 … 7=1/1).
+                  </p>
+                )}
+
                 {/* Special UI for Time Signature Editing */}
                 {activeToolbox === 'timeSignature' && selectedOptionIndex === 0 && (
                   <div className="mb-3 p-3 bg-white rounded border-2 border-amber-400">
@@ -3092,7 +3137,7 @@ const NoodiMeisterCore = ({ icons }) => {
                           <div className="flex items-center gap-2 min-w-0">
                             {activeToolbox === 'rhythm' && (
                               <span className="flex items-center justify-center shrink-0 w-7 h-7 text-amber-900">
-                                {option.value === 'rest' ? <RhythmIcon duration={selectedDuration} isRest={true} /> : option.value === 'dotted' ? <RhythmIcon duration={selectedDuration} isDotted={true} /> : ['1/1','1/2','1/4','1/8','1/16'].includes(option.value) ? <RhythmIcon duration={option.value} /> : null}
+                                {option.value === 'rest' ? <RhythmIcon duration={selectedDuration} isRest={true} /> : option.value === 'dotted' ? <RhythmIcon duration={selectedDuration} isDotted={true} /> : ['1/1','1/2','1/4','1/8','1/16','1/32'].includes(option.value) ? <RhythmIcon duration={option.value} /> : null}
                               </span>
                             )}
                             <span className="font-medium">{option.label}</span>
@@ -3672,6 +3717,16 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
         </g>
       );
     }
+    if (dur === '1/32') {
+      return (
+        <g stroke="#1a1a1a" fill="#1a1a1a" strokeWidth="1.1">
+          <circle cx={x} cy={restY - 8} r="1.5"/>
+          <circle cx={x} cy={restY - 2} r="1.5"/>
+          <circle cx={x} cy={restY + 4} r="1.5"/>
+          <path d={`M ${x} ${restY + 6} Q ${x - 4} ${restY + 8} ${x} ${restY + 12}`} fill="none" strokeWidth="1.3"/>
+        </g>
+      );
+    }
     return <rect x={x - w/2} y={restY - h/2} width={w} height={h} fill="#1a1a1a"/>;
   };
 
@@ -3766,6 +3821,13 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
               <>
                 <path d={`M ${stemX} ${stemY2} Q ${stemX + 8} ${stemY2 + 4} ${stemX} ${stemY2 + 8}`} fill="#1a1a1a" />
                 <path d={`M ${stemX} ${stemY2 + 6} Q ${stemX + 8} ${stemY2 + 10} ${stemX} ${stemY2 + 14}`} fill="#1a1a1a" />
+              </>
+            )}
+            {dur === '1/32' && (
+              <>
+                <path d={`M ${stemX} ${stemY2} Q ${stemX + 8} ${stemY2 + 4} ${stemX} ${stemY2 + 8}`} fill="#1a1a1a" />
+                <path d={`M ${stemX} ${stemY2 + 6} Q ${stemX + 8} ${stemY2 + 10} ${stemX} ${stemY2 + 14}`} fill="#1a1a1a" />
+                <path d={`M ${stemX} ${stemY2 + 12} Q ${stemX + 8} ${stemY2 + 16} ${stemX} ${stemY2 + 20}`} fill="#1a1a1a" />
               </>
             )}
           </g>
@@ -4291,6 +4353,7 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
                   if (dur === '1/4') return <path d={`M ${x} ${restY - 10} Q ${x + 6} ${restY - 4} ${x} ${restY} Q ${x - 6} ${restY + 4} ${x} ${restY + 10}`} stroke="#dc2626" strokeWidth="1.8" fill="none"/>;
                   if (dur === '1/8') return <g stroke="#dc2626" fill="#dc2626"><circle cx={x} cy={restY - 4} r="2"/><path d={`M ${x} ${restY - 2} Q ${x - 6} ${restY} ${x} ${restY + 6}`} fill="none" strokeWidth="1.5"/></g>;
                   if (dur === '1/16') return <g stroke="#dc2626" fill="#dc2626"><circle cx={x} cy={restY - 6} r="1.8"/><circle cx={x} cy={restY} r="1.8"/><path d={`M ${x} ${restY + 2} Q ${x - 5} ${restY + 4} ${x} ${restY + 10}`} fill="none" strokeWidth="1.5"/></g>;
+                  if (dur === '1/32') return <g stroke="#dc2626" fill="#dc2626"><circle cx={x} cy={restY - 8} r="1.5"/><circle cx={x} cy={restY - 2} r="1.5"/><circle cx={x} cy={restY + 4} r="1.5"/><path d={`M ${x} ${restY + 6} Q ${x - 4} ${restY + 8} ${x} ${restY + 12}`} fill="none" strokeWidth="1.3"/></g>;
                   return <rect x={x - w/2} y={restY - h/2} width={w} height={h} fill="#dc2626"/>;
                 })()
           ) : ghostPitch && ghostOctave ? (

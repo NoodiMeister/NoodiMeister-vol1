@@ -66,6 +66,7 @@ const translations = {
     'note.quarter': 'Neljandiknoot',
     'note.eighth': 'Kaheksandiknoot',
     'note.sixteenth': 'Kuueteistkümnendiknoot',
+    'note.thirtySecond': 'Kuuskümnendiknoot',
     'note.rest': 'Paus (lülita)',
     'note.dotted': 'Punktiga (lülita)',
     // Taktimõõt – valikud
@@ -317,6 +318,7 @@ const translations = {
     'note.quarter': 'Quarter note',
     'note.eighth': 'Eighth note',
     'note.sixteenth': 'Sixteenth note',
+    'note.thirtySecond': 'Thirty-second note',
     'note.rest': 'Toggle rest',
     'note.dotted': 'Toggle dotted',
     'timesig.edit': 'Edit time signature',
