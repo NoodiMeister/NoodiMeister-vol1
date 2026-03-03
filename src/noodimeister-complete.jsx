@@ -3297,6 +3297,7 @@ const NoodiMeisterCore = ({ icons }) => {
                 clefType={clefType}
                 instrument={instrument}
                 instrumentNotationVariant={instrumentNotationVariant}
+                instrumentConfig={instrumentConfig}
                 isDotted={isDotted}
                 isRest={isRest}
                 selectedDuration={selectedDuration}
@@ -3442,7 +3443,7 @@ function getFingeringForNote(pitch, octave, instrumentId) {
 }
 
 // Timeline Component – multi-system layout (VexFlow loogika). (PAGE_BREAK_GAP on defineeritud üleval.)
-function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, pageWidth, cursorPosition, notationMode, staffLines, clefType, instrument = 'piano', instrumentNotationVariant = 'standard', isDotted, isRest, selectedDuration, noteInputMode, selectedNoteIndex, isNoteSelected, notes: allNotes, onStaffAddNote, ghostPitch, ghostOctave, notationStyle, layoutMeasuresPerLine = 4, layoutLineBreakBefore = [], layoutPageBreakBefore = [], figurenotesSize = 16, figurenotesStems = false }) {
+function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, pageWidth, cursorPosition, notationMode, staffLines, clefType, instrument = 'piano', instrumentNotationVariant = 'standard', instrumentConfig = {}, isDotted, isRest, selectedDuration, noteInputMode, selectedNoteIndex, isNoteSelected, notes: allNotes, onStaffAddNote, ghostPitch, ghostOctave, notationStyle, layoutMeasuresPerLine = 4, layoutLineBreakBefore = [], layoutPageBreakBefore = [], figurenotesSize = 16, figurenotesStems = false }) {
   const isFigurenotesMode = notationStyle === 'FIGURENOTES';
   const instCfg = instrumentConfig[instrument];
   const isTabMode = instCfg?.type === 'tab' && instrumentNotationVariant === 'tab';
