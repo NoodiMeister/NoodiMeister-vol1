@@ -223,6 +223,51 @@ const RhythmIcon = ({ duration, isDotted = false, isRest = false }) => {
   return <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">{noteIcons[d] || noteIcons['1/4']}</svg>;
 };
 
+// Liitrütmide pildid (vibutatud noodigrupid): 2/8, 4/16, 8/16, 1/8+2/16, 2/16+1/8
+const RHYTHM_PATTERN_ICONS = {
+  '2/8': (
+    <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
+      <ellipse cx="6" cy="16" rx="2.5" ry="2" fill="currentColor"/><ellipse cx="14" cy="16" rx="2.5" ry="2" fill="currentColor"/>
+      <line x1="8.5" y1="16" x2="8.5" y2="4" stroke="currentColor" strokeWidth="1.2"/>
+      <line x1="4" y1="4" x2="18" y2="4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+    </svg>
+  ),
+  '4/16': (
+    <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
+      {[4, 8, 12, 16].map((cx, i) => <ellipse key={i} cx={cx} cy="16" rx="2" ry="1.6" fill="currentColor"/>)}
+      <line x1="10" y1="16" x2="10" y2="2" stroke="currentColor" strokeWidth="1.2"/>
+      <line x1="2" y1="2" x2="20" y2="2" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
+      <line x1="2" y1="4" x2="20" y2="4" stroke="currentColor" strokeWidth="1" strokeLinecap="round"/>
+    </svg>
+  ),
+  '8/16': (
+    <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
+      {[2, 5, 8, 11, 14, 17, 20, 23].map((cx, i) => <ellipse key={i} cx={cx} cy="16" rx="1.4" ry="1.2" fill="currentColor"/>)}
+      <line x1="12" y1="16" x2="12" y2="0" stroke="currentColor" strokeWidth="1"/>
+      <line x1="0" y1="0" x2="24" y2="0" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
+      <line x1="0" y1="2" x2="24" y2="2" stroke="currentColor" strokeWidth="0.8" strokeLinecap="round"/>
+    </svg>
+  ),
+  '1/8+2/16': (
+    <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5" stroke="currentColor" strokeWidth="1">
+      <ellipse cx="5" cy="16" rx="2.5" ry="2" fill="currentColor"/><ellipse cx="12" cy="16" rx="2" ry="1.6" fill="currentColor"/><ellipse cx="17" cy="16" rx="2" ry="1.6" fill="currentColor"/>
+      <line x1="7.5" y1="16" x2="7.5" y2="4" strokeWidth="1.2"/>
+      <line x1="4" y1="4" x2="20" y2="4" strokeWidth="1.5" strokeLinecap="round"/>
+    </svg>
+  ),
+  '2/16+1/8': (
+    <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5" stroke="currentColor" strokeWidth="1">
+      <ellipse cx="7" cy="16" rx="2" ry="1.6" fill="currentColor"/><ellipse cx="12" cy="16" rx="2" ry="1.6" fill="currentColor"/><ellipse cx="19" cy="16" rx="2.5" ry="2" fill="currentColor"/>
+      <line x1="16.5" y1="16" x2="16.5" y2="4" strokeWidth="1.2"/>
+      <line x1="4" y1="4" x2="20" y2="4" strokeWidth="1.5" strokeLinecap="round"/>
+    </svg>
+  )
+};
+
+const RhythmPatternIcon = ({ pattern }) => (
+  <span className="inline-flex items-center text-amber-900">{RHYTHM_PATTERN_ICONS[pattern] || null}</span>
+);
+
 const MeterIcon = ({ beats, beatUnit }) => (
   <svg viewBox="0 0 24 24" className="w-5 h-5">
     <text x="12" y="10" textAnchor="middle" fontSize="10" fontWeight="bold" fill="currentColor">{beats}</text>
@@ -439,6 +484,11 @@ function getToolboxes(t, instrumentConfig) {
         { id: '1/8', label: t('note.eighth'), value: '1/8', key: '4', code: 'Digit4' },
         { id: '1/16', label: t('note.sixteenth'), value: '1/16', key: '3', code: 'Digit3' },
         { id: '1/32', label: t('note.thirtySecond'), value: '1/32', key: '2', code: 'Digit2' },
+        { id: '2/8', label: t('note.pattern2eighth'), value: '2/8', key: null, code: null },
+        { id: '4/16', label: t('note.pattern4sixteenth'), value: '4/16', key: null, code: null },
+        { id: '8/16', label: t('note.pattern8sixteenth'), value: '8/16', key: null, code: null },
+        { id: '1/8+2/16', label: t('note.patternEighthTwoSixteenth'), value: '1/8+2/16', key: null, code: null },
+        { id: '2/16+1/8', label: t('note.patternTwoSixteenthEighth'), value: '2/16+1/8', key: null, code: null },
         { id: 'rest', label: t('note.rest'), value: 'rest', key: '0', code: 'Digit0' },
         { id: 'dotted', label: t('note.dotted'), value: 'dotted', key: '.', code: 'Period' }
       ]
@@ -1428,6 +1478,37 @@ const NoodiMeisterCore = ({ icons }) => {
     }
   }, [selectedDuration, getEffectiveDuration, isDotted, isRest, notes, saveToHistory, ghostOctave, playPianoNote, playNoteOnInsert]);
 
+  // Liitrütmimustrid: iga element { durationLabel, duration }
+  const RHYTHM_PATTERN_NOTES = useMemo(() => ({
+    '2/8': [{ durationLabel: '1/8', duration: 0.5 }, { durationLabel: '1/8', duration: 0.5 }],
+    '4/16': Array(4).fill({ durationLabel: '1/16', duration: 0.25 }),
+    '8/16': Array(8).fill({ durationLabel: '1/16', duration: 0.25 }),
+    '1/8+2/16': [{ durationLabel: '1/8', duration: 0.5 }, { durationLabel: '1/16', duration: 0.25 }, { durationLabel: '1/16', duration: 0.25 }],
+    '2/16+1/8': [{ durationLabel: '1/16', duration: 0.25 }, { durationLabel: '1/16', duration: 0.25 }, { durationLabel: '1/8', duration: 0.5 }]
+  }), []);
+
+  const insertPatternAtCursor = useCallback((patternKey) => {
+    const pattern = RHYTHM_PATTERN_NOTES[patternKey];
+    if (!pattern || !ghostPitch) return;
+    const totalBeatsNow = notes.reduce((acc, n) => acc + n.duration, 0);
+    const totalDuration = pattern.reduce((s, n) => s + n.duration, 0);
+    if (!isLoggedIn() && totalBeatsNow + totalDuration > DEMO_MAX_BEATS) return;
+    const newNotes = pattern.map(({ durationLabel, duration }, i) => ({
+      id: Date.now() + i,
+      pitch: ghostPitch,
+      octave: ghostOctave,
+      duration,
+      durationLabel,
+      isDotted: false,
+      isRest: isRest,
+      lyric: ''
+    }));
+    saveToHistory(notes);
+    setNotes(prev => [...prev, ...newNotes]);
+    setCursorPosition(prev => prev + totalDuration);
+    if (!isRest && playNoteOnInsert) playPianoNote(ghostPitch, ghostOctave);
+  }, [RHYTHM_PATTERN_NOTES, ghostPitch, ghostOctave, isRest, notes, saveToHistory, playPianoNote, playNoteOnInsert]);
+
   // Akordi lisamise asukoht: kursor (sisestusrežiim) või valitud noodi algus
   const getChordInsertBeat = useCallback(() => {
     if (noteInputMode) return cursorPosition;
@@ -1462,6 +1543,13 @@ const NoodiMeisterCore = ({ icons }) => {
       case 'rhythm': {
         const selected = getSelectedNotes();
         const hasSelection = selected.length > 0;
+        const patternKeys = ['2/8', '4/16', '8/16', '1/8+2/16', '2/16+1/8'];
+        if (patternKeys.includes(option.value)) {
+          insertPatternAtCursor(option.value);
+          setActiveToolbox(null);
+          setSelectedOptionIndex(0);
+          return;
+        }
         if (option.value === 'rest') {
           if (hasSelection) {
             saveToHistory(notes);
@@ -1483,7 +1571,7 @@ const NoodiMeisterCore = ({ icons }) => {
             }));
           } else setIsDotted(prev => !prev);
         } else {
-          // 1/1, 1/2, 1/4, 1/8, 1/16
+          // 1/1, 1/2, 1/4, 1/8, 1/16, 1/32
           lastDurationRef.current = option.value;
           setSelectedDuration(option.value);
           if (hasSelection) {
@@ -1564,7 +1652,7 @@ const NoodiMeisterCore = ({ icons }) => {
     }
     setActiveToolbox(null);
     setSelectedOptionIndex(0);
-  }, [activeToolbox, selectedOptionIndex, noteInputMode, addNoteAtCursor, ghostOctave, instrumentNotationVariant, addChordAt, getChordInsertBeat, getSelectedNotes, notes, setNotes, saveToHistory, selectedNoteIndex, selectionStart, selectionEnd, durations]);
+  }, [activeToolbox, selectedOptionIndex, noteInputMode, addNoteAtCursor, ghostOctave, instrumentNotationVariant, addChordAt, getChordInsertBeat, getSelectedNotes, notes, setNotes, saveToHistory, selectedNoteIndex, selectionStart, selectionEnd, durations, insertPatternAtCursor]);
 
   // Keyboard handler
   useEffect(() => {
@@ -3136,8 +3224,19 @@ const NoodiMeisterCore = ({ icons }) => {
                         <div className="flex items-center justify-between gap-2">
                           <div className="flex items-center gap-2 min-w-0">
                             {activeToolbox === 'rhythm' && (
-                              <span className="flex items-center justify-center shrink-0 w-7 h-7 text-amber-900">
-                                {option.value === 'rest' ? <RhythmIcon duration={selectedDuration} isRest={true} /> : option.value === 'dotted' ? <RhythmIcon duration={selectedDuration} isDotted={true} /> : ['1/1','1/2','1/4','1/8','1/16','1/32'].includes(option.value) ? <RhythmIcon duration={option.value} /> : null}
+                              <span className="flex items-center gap-0.5 shrink-0 text-amber-900">
+                                {option.value === 'rest' ? (
+                                  <span className="flex items-center w-6 h-6" title={t('note.rest')}><RhythmIcon duration={selectedDuration} isRest={true} /></span>
+                                ) : option.value === 'dotted' ? (
+                                  <span className="flex items-center w-6 h-6" title={t('note.dotted')}><RhythmIcon duration={selectedDuration} isDotted={true} /></span>
+                                ) : ['2/8','4/16','8/16','1/8+2/16','2/16+1/8'].includes(option.value) ? (
+                                  <span className="flex items-center w-8 h-6" title={option.label}><RhythmPatternIcon pattern={option.value} /></span>
+                                ) : ['1/1','1/2','1/4','1/8','1/16','1/32'].includes(option.value) ? (
+                                  <>
+                                    <span className="flex items-center w-6 h-6" title={option.label}><RhythmIcon duration={option.value} /></span>
+                                    <span className="flex items-center w-6 h-6 opacity-90" title={t('note.rest') + ' ' + option.label}><RhythmIcon duration={option.value} isRest={true} /></span>
+                                  </>
+                                ) : null}
                               </span>
                             )}
                             <span className="font-medium">{option.label}</span>
