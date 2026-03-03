@@ -671,7 +671,7 @@ const NoodiMeisterCore = ({ icons }) => {
   }, [selectedNoteIndex, selectionStart, selectionEnd]);
 
   // Paigutus: taktide arv rea kohta (0 = automaatne), käsitsi rea- ja lehevahetused
-  const [layoutMeasuresPerLine, setLayoutMeasuresPerLine] = useState(0);
+  const [layoutMeasuresPerLine, setLayoutMeasuresPerLine] = useState(4);
   const [layoutLineBreakBefore, setLayoutLineBreakBefore] = useState([]);
   const [layoutPageBreakBefore, setLayoutPageBreakBefore] = useState([]);
 
