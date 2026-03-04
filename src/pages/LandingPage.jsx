@@ -18,12 +18,6 @@ export default function LandingPage() {
           </div>
           <nav className="flex items-center gap-3">
             <Link
-              to="/tood"
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-amber-800 font-medium hover:bg-amber-100 transition-colors"
-            >
-              Minu tööd
-            </Link>
-            <Link
               to="/hinnakiri"
               className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-amber-800 font-medium hover:bg-amber-100 transition-colors"
             >

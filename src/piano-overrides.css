@@ -1,4 +1,12 @@
 /* NoodiMeister – klaveri klaviatuuri välimus (react-piano) */
+.NoodiMeisterPianoWrapper {
+  display: block;
+}
+.NoodiMeisterPianoWrapper .ReactPiano__Keyboard,
+.NoodiMeisterPiano.ReactPiano__Keyboard {
+  min-height: 100px;
+  height: 100px;
+}
 .NoodiMeisterPiano .ReactPiano__Key--natural {
   background: linear-gradient(180deg, #fefce8 0%, #fef3c7 100%);
   border: 1px solid #d97706;
