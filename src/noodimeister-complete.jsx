@@ -943,34 +943,6 @@ function NoodiMeisterCore({ icons }) {
     };
   }, [midiSupported, activeToolbox === 'pianoKeyboard']);
 
-  // MIDI sisendi valimine: kuula note on/off ja sünkroni virtuaalse klaviatuuriga (heli + esiletoomine)
-  useEffect(() => {
-    if (!midiAccessRef.current || selectedMidiInputId == null) return;
-    const input = midiAccessRef.current.inputs.get(selectedMidiInputId);
-    if (!input) return;
-    const onMidiMessage = (e) => {
-      const [cmd, note, velocity] = e.data;
-      const isNoteOn = cmd === 0x90 && velocity > 0;
-      const isNoteOff = cmd === 0x80 || (cmd === 0x90 && velocity === 0);
-      if (isNoteOn) {
-        setActiveMidiNotes((prev) => (prev.includes(note) ? prev : [...prev, note]));
-        const { pitch, octave, isAccidental } = midiToPitchOctave(note);
-        const attrs = MidiNumbers.getAttributes(note);
-        const accidental = attrs.pitchName && attrs.pitchName.includes('#') ? 1 : attrs.pitchName && attrs.pitchName.includes('b') ? -1 : 0;
-        setGhostPitch(pitch);
-        setGhostOctave(octave);
-        if (noteInputMode) addNoteAtCursor(pitch, octave, accidental);
-        else playPianoNote(pitch, octave, isAccidental ? 1 : 0);
-      }
-      if (isNoteOff) setActiveMidiNotes((prev) => prev.filter((n) => n !== note));
-    };
-    input.addEventListener('midimessage', onMidiMessage);
-    return () => {
-      input.removeEventListener('midimessage', onMidiMessage);
-      setActiveMidiNotes([]);
-    };
-  }, [selectedMidiInputId, noteInputMode, addNoteAtCursor, playPianoNote]);
-
   const [saveCloudNewFolderName, setSaveCloudNewFolderName] = useState('NoodiMeister');
   const [setupCompleted, setSetupCompleted] = useState(() => {
     try {
@@ -2062,6 +2034,34 @@ function NoodiMeisterCore({ icons }) {
       playPianoNote(pitch, oct, semitones);
     }
   }, [selectedDuration, getEffectiveDuration, isDotted, isRest, notes, saveToHistory, ghostOctave, playPianoNote, playNoteOnInsert, tupletMode, durations]);
+
+  // MIDI sisendi valimine: kuula note on/off ja sünkroni virtuaalse klaviatuuriga (heli + esiletoomine). Siin pärast addNoteAtCursor/playPianoNote, et vältida TDZ.
+  useEffect(() => {
+    if (!midiAccessRef.current || selectedMidiInputId == null) return;
+    const input = midiAccessRef.current.inputs.get(selectedMidiInputId);
+    if (!input) return;
+    const onMidiMessage = (e) => {
+      const [cmd, note, velocity] = e.data;
+      const isNoteOn = cmd === 0x90 && velocity > 0;
+      const isNoteOff = cmd === 0x80 || (cmd === 0x90 && velocity === 0);
+      if (isNoteOn) {
+        setActiveMidiNotes((prev) => (prev.includes(note) ? prev : [...prev, note]));
+        const { pitch, octave, isAccidental } = midiToPitchOctave(note);
+        const attrs = MidiNumbers.getAttributes(note);
+        const accidental = attrs.pitchName && attrs.pitchName.includes('#') ? 1 : attrs.pitchName && attrs.pitchName.includes('b') ? -1 : 0;
+        setGhostPitch(pitch);
+        setGhostOctave(octave);
+        if (noteInputMode) addNoteAtCursor(pitch, octave, accidental);
+        else playPianoNote(pitch, octave, isAccidental ? 1 : 0);
+      }
+      if (isNoteOff) setActiveMidiNotes((prev) => prev.filter((n) => n !== note));
+    };
+    input.addEventListener('midimessage', onMidiMessage);
+    return () => {
+      input.removeEventListener('midimessage', onMidiMessage);
+      setActiveMidiNotes([]);
+    };
+  }, [selectedMidiInputId, noteInputMode, addNoteAtCursor, playPianoNote]);
 
   // Liitrütmimustrid: iga element { durationLabel, duration }
   const RHYTHM_PATTERN_NOTES = useMemo(() => ({

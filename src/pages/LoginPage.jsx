@@ -18,9 +18,11 @@ export default function LoginPage() {
       const user = users.find(u => u.email === email && u.password === password);
       if (user) {
         const storage = getStorageForLogin(stayLoggedIn);
-        if (storage) {
-          storage.setItem('noodimeister-logged-in', JSON.stringify({ email: user.email, name: user.name }));
+        if (!storage) {
+          setMessage('Salvestamine ebaõnnestus (brauser võib blokeerida andmeid). Proovi teist brauserit või lülita privaatse režiimi välja.');
+          return;
         }
+        storage.setItem('noodimeister-logged-in', JSON.stringify({ email: user.email, name: user.name }));
         setMessage('Sisselogimine õnnestus.');
         setTimeout(() => navigate('/app'), 800);
       } else {

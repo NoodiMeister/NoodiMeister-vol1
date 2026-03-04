@@ -19,15 +19,22 @@ function useCloudLoginWithProvider(mode = 'login', stayLoggedIn = false) {
       })
         .then(r => r.json())
         .then(profile => {
+          if (!profile?.email) {
+            console.warn('Google profile ilma e-mailita');
+            return;
+          }
           const user = { email: profile.email, name: profile.name || profile.given_name || profile.email?.split('@')[0], provider: 'google' };
           const storage = getStorageForLogin(stayLoggedIn);
-          if (storage) {
-            storage.setItem(KEY_LOGGED_IN, JSON.stringify(user));
-            if (tokenResponse.access_token) {
-              storage.setItem(KEY_GOOGLE_TOKEN, tokenResponse.access_token);
-              const expiresAt = tokenResponse.expires_in ? Date.now() + tokenResponse.expires_in * 1000 : 0;
-              storage.setItem(KEY_GOOGLE_EXPIRY, String(expiresAt));
-            }
+          if (!storage) {
+            console.error('Salvestus puudub (nt privaatne režiim)');
+            alert('Sisselogimine ei õnnestunud: brauser ei luba andmeid salvestada. Proovi teist brauserit või lülita privaatse režiimi välja.');
+            return;
+          }
+          storage.setItem(KEY_LOGGED_IN, JSON.stringify(user));
+          if (tokenResponse.access_token) {
+            storage.setItem(KEY_GOOGLE_TOKEN, tokenResponse.access_token);
+            const expiresAt = tokenResponse.expires_in ? Date.now() + tokenResponse.expires_in * 1000 : 0;
+            storage.setItem(KEY_GOOGLE_EXPIRY, String(expiresAt));
           }
           if (mode === 'register') {
             const users = JSON.parse(localStorage.getItem('noodimeister-users') || '[]');
@@ -38,7 +45,9 @@ function useCloudLoginWithProvider(mode = 'login', stayLoggedIn = false) {
           }
           navigate('/app');
         })
-        .catch(() => {});
+        .catch((err) => {
+          console.error('Google userinfo viga:', err);
+        });
     },
     onError: () => {},
     flow: 'implicit',
