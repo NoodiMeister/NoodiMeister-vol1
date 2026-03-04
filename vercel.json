@@ -10,9 +10,9 @@
   ],
   "redirects": [
     {
-      "source": "/:path*",
+      "source": "/((?!assets/).*)",
       "has": [{ "type": "host", "value": "www.noodimeister.ee" }],
-      "destination": "https://noodimeister.ee/:path*",
+      "destination": "https://noodimeister.ee/$1",
       "permanent": true
     }
   ]
