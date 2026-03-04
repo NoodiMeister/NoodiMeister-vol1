@@ -5,6 +5,7 @@ import LandingPage from './pages/LandingPage';
 const RegisterPage = lazy(() => import('./pages/RegisterPage'));
 const LoginPage = lazy(() => import('./pages/LoginPage'));
 const HinnakiriPage = lazy(() => import('./pages/HinnakiriPage'));
+const ToetaPage = lazy(() => import('./pages/ToetaPage'));
 const MinuToodPage = lazy(() => import('./pages/MinuTöödPage'));
 const NoodiMeister = lazy(() => import('./noodimeister-complete'));
 
@@ -123,6 +124,7 @@ function AppRoutes() {
           <Route path="/login" element={<LoginOrRedirect />} />
           <Route path="/registreeru" element={<RegisterOrRedirect />} />
           <Route path="/hinnakiri" element={<HinnakiriPage />} />
+          <Route path="/toeta" element={<ToetaPage />} />
           <Route path="/" element={<LandingOrRedirect />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
