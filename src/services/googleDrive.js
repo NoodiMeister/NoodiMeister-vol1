@@ -203,14 +203,8 @@ export async function listNoodimeisterFiles(accessToken, options = {}) {
   return data.files || [];
 }
 
+import * as authStorage from './authStorage';
+
 export function getStoredToken() {
-  const token = localStorage.getItem('noodimeister-google-token');
-  const expiry = localStorage.getItem('noodimeister-google-token-expiry');
-  if (!token) return null;
-  if (expiry && Date.now() > Number(expiry)) {
-    localStorage.removeItem('noodimeister-google-token');
-    localStorage.removeItem('noodimeister-google-token-expiry');
-    return null;
-  }
-  return token;
+  return authStorage.getStoredTokenFromAuth();
 }

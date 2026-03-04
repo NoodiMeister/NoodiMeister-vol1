@@ -2,12 +2,14 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Music2, LogIn, Mail, Lock } from 'lucide-react';
 import { CloudLoginButtons } from '../components/CloudLogin';
+import { getStorageForLogin } from '../services/authStorage';
 
 export default function LoginPage() {
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [message, setMessage] = useState('');
+  const [stayLoggedIn, setStayLoggedIn] = useState(false);
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -15,7 +17,10 @@ export default function LoginPage() {
       const users = JSON.parse(localStorage.getItem('noodimeister-users') || '[]');
       const user = users.find(u => u.email === email && u.password === password);
       if (user) {
-        localStorage.setItem('noodimeister-logged-in', JSON.stringify({ email: user.email, name: user.name }));
+        const storage = getStorageForLogin(stayLoggedIn);
+        if (storage) {
+          storage.setItem('noodimeister-logged-in', JSON.stringify({ email: user.email, name: user.name }));
+        }
         setMessage('Sisselogimine õnnestus.');
         setTimeout(() => navigate('/app'), 800);
       } else {
@@ -87,13 +92,22 @@ export default function LoginPage() {
                 />
               </div>
             </div>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={stayLoggedIn}
+                onChange={(e) => setStayLoggedIn(e.target.checked)}
+                className="w-4 h-4 rounded border-amber-300 text-amber-600 focus:ring-amber-500"
+              />
+              <span className="text-sm text-amber-800">Jää sisse logituks (soovitame välja jätta ühise arvuti puhul)</span>
+            </label>
             <button
               type="submit"
               className="w-full py-3 rounded-lg bg-slate-600 text-white font-bold hover:bg-slate-500 shadow-md transition-all"
             >
               Logi sisse
             </button>
-            <CloudLoginButtons mode="login" />
+            <CloudLoginButtons mode="login" stayLoggedIn={stayLoggedIn} />
             <p className="text-center text-sm text-amber-700">
               Pole kontot? <Link to="/registreeru" className="font-semibold text-amber-800 hover:underline">Registreeru</Link>
             </p>

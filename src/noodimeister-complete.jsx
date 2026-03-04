@@ -4,6 +4,7 @@ import { Piano, KeyboardShortcuts, MidiNumbers } from 'react-piano';
 import 'react-piano/dist/styles.css';
 import './piano-overrides.css';
 import * as googleDrive from './services/googleDrive';
+import * as authStorage from './services/authStorage';
 import { LOCALE_STORAGE_KEY, DEFAULT_LOCALE, LOCALES, createT } from './i18n';
 
 // Ikoonid laetakse dünaamiliselt, et vältida "Cannot access 'Tt' before initialization" (lucide-react bundle)
@@ -17,19 +18,10 @@ const STORAGE_KEY = 'noodimeister-data';
 
 function LoggedInUser({ icons, t }) {
   const navigate = useNavigate();
-  const [user, setUser] = useState(() => {
-    try {
-      const raw = localStorage.getItem('noodimeister-logged-in');
-      return raw ? JSON.parse(raw) : null;
-    } catch {
-      return null;
-    }
-  });
+  const [user, setUser] = useState(() => authStorage.getLoggedInUser());
 
   const handleLogout = () => {
-    localStorage.removeItem('noodimeister-logged-in');
-    localStorage.removeItem('noodimeister-google-token');
-    localStorage.removeItem('noodimeister-google-token-expiry');
+    authStorage.clearAuth();
     setUser(null);
     navigate('/');
   };
@@ -677,7 +669,7 @@ const FINGERING_RECORDER = {
   'D6': [1,1,1,1,1,1,0], 'E6': [1,1,1,1,1,0,0], 'F6': [1,1,1,1,0,0,0], 'G6': [1,1,1,0,0,0,0], 'A6': [1,1,0,0,0,0,0], 'B6': [1,0,0,0,0,0,0], 'C7': [0,0,0,0,0,0,0]
 };
 
-const NoodiMeisterCore = ({ icons }) => {
+function NoodiMeisterCore({ icons }) {
   const [locale, setLocale] = useState(() => {
     try {
       return localStorage.getItem(LOCALE_STORAGE_KEY) || DEFAULT_LOCALE;
@@ -909,13 +901,7 @@ const NoodiMeisterCore = ({ icons }) => {
     dirtyRef.current = true;
   }, [wizardNotationMethod, wizardTimeSignature, wizardSongTitle, wizardAuthor, wizardInstrument, wizardPickupEnabled, wizardPickupQuantity, wizardPickupDuration, instrumentConfig]);
 
-  const isLoggedIn = () => {
-    try {
-      return !!localStorage.getItem('noodimeister-logged-in');
-    } catch {
-      return false;
-    }
-  };
+  const isLoggedIn = () => authStorage.isLoggedIn();
 
   const addMeasure = useCallback(() => {
     if (!isLoggedIn()) {
@@ -3976,7 +3962,7 @@ const NoodiMeisterCore = ({ icons }) => {
       </div>
     </div>
   );
-};
+}
 
 // Pitch/octave ↔ MIDI (C4 = 60). Tuning string "E2" → midi. (PITCH_TO_SEMI on defineeritud üleval.)
 function pitchOctaveToMidi(pitch, octave) {

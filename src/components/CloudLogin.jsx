@@ -1,32 +1,31 @@
 import React from 'react';
 import { useGoogleLogin } from '@react-oauth/google';
 import { useNavigate } from 'react-router-dom';
+import { getStorageForLogin } from '../services/authStorage';
 
-const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+const KEY_LOGGED_IN = 'noodimeister-logged-in';
+const KEY_GOOGLE_TOKEN = 'noodimeister-google-token';
+const KEY_GOOGLE_EXPIRY = 'noodimeister-google-token-expiry';
 
-function useCloudLoginWithProvider(mode = 'login') {
+function useCloudLoginWithProvider(mode = 'login', stayLoggedIn = false) {
   const navigate = useNavigate();
 
   const googleLogin = useGoogleLogin({
     onSuccess: (tokenResponse) => {
-      // tokenResponse is access token; for profile we need to use tokenResponse to fetch userinfo
-      // useGoogleLogin with flow: 'implicit' and scope email profile doesn't give id_token in response
-      // So we use the One Tap or we need to fetch userinfo. Actually @react-oauth/google has
-      // useGoogleLogin that can get credential (id_token) when using flow 'implicit' and responseType 'id_token'
-      // Let me check - useGoogleLogin({ onSuccess: (res) => ... }) - res has access_token. To get profile
-      // we'd need to call https://www.googleapis.com/oauth2/v3/userinfo?access_token=...
       fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
         headers: { Authorization: `Bearer ${tokenResponse.access_token}` }
       })
         .then(r => r.json())
         .then(profile => {
           const user = { email: profile.email, name: profile.name || profile.given_name || profile.email?.split('@')[0], provider: 'google' };
-          localStorage.setItem('noodimeister-logged-in', JSON.stringify(user));
-          // Salvesta token pilve salvestamise/laadimise jaoks (Drive API). Token aegub ~1h.
-          if (tokenResponse.access_token) {
-            localStorage.setItem('noodimeister-google-token', tokenResponse.access_token);
-            const expiresAt = tokenResponse.expires_in ? Date.now() + tokenResponse.expires_in * 1000 : 0;
-            localStorage.setItem('noodimeister-google-token-expiry', String(expiresAt));
+          const storage = getStorageForLogin(stayLoggedIn);
+          if (storage) {
+            storage.setItem(KEY_LOGGED_IN, JSON.stringify(user));
+            if (tokenResponse.access_token) {
+              storage.setItem(KEY_GOOGLE_TOKEN, tokenResponse.access_token);
+              const expiresAt = tokenResponse.expires_in ? Date.now() + tokenResponse.expires_in * 1000 : 0;
+              storage.setItem(KEY_GOOGLE_EXPIRY, String(expiresAt));
+            }
           }
           if (mode === 'register') {
             const users = JSON.parse(localStorage.getItem('noodimeister-users') || '[]');
@@ -63,8 +62,8 @@ function useCloudLoginWithProvider(mode = 'login') {
   return { handleGoogleClick, handleMicrosoftClick, handleAppleClick };
 }
 
-function CloudLoginButtonsInner({ mode = 'login' }) {
-  const { handleGoogleClick, handleMicrosoftClick, handleAppleClick } = useCloudLoginWithProvider(mode);
+function CloudLoginButtonsInner({ mode = 'login', stayLoggedIn = false }) {
+  const { handleGoogleClick, handleMicrosoftClick, handleAppleClick } = useCloudLoginWithProvider(mode, stayLoggedIn);
   const label = mode === 'register' ? 'Või registreeru pilveteenusega' : 'Või logi sisse pilveteenusega';
 
   return (
@@ -119,7 +118,7 @@ function CloudLoginButtonsInner({ mode = 'login' }) {
   );
 }
 
-export function CloudLoginButtons({ mode = 'login' }) {
+export function CloudLoginButtons({ mode = 'login', stayLoggedIn = false }) {
   if (!googleClientId) {
     return (
       <div className="space-y-3">
@@ -135,5 +134,5 @@ export function CloudLoginButtons({ mode = 'login' }) {
       </div>
     );
   }
-  return <CloudLoginButtonsInner mode={mode} />;
+  return <CloudLoginButtonsInner mode={mode} stayLoggedIn={stayLoggedIn} />;
 }

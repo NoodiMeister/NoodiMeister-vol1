@@ -8,6 +8,30 @@ const HinnakiriPage = lazy(() => import('./pages/HinnakiriPage'));
 const MinuToodPage = lazy(() => import('./pages/MinuTöödPage'));
 const NoodiMeister = lazy(() => import('./noodimeister-complete'));
 
+import * as authStorage from './services/authStorage';
+
+/** Kas kasutaja on endiselt sisse logitud (pole välja loginud). */
+function isLoggedIn() {
+  return authStorage.isLoggedIn();
+}
+
+/** Esilehe asemel suuna sisselogitud kasutaja otse Minu tööde lehele. */
+function LandingOrRedirect() {
+  if (isLoggedIn()) return <Navigate to="/tood" replace />;
+  return <LandingPage />;
+}
+
+/** Login/Registreeru lehel suuna juba sisselogitud kasutaja Minu tööde lehele. */
+function LoginOrRedirect() {
+  if (isLoggedIn()) return <Navigate to="/tood" replace />;
+  return <LoginPage />;
+}
+
+function RegisterOrRedirect() {
+  if (isLoggedIn()) return <Navigate to="/tood" replace />;
+  return <RegisterPage />;
+}
+
 function ErrorFallback({ error }) {
   return (
     <div style={{ padding: 24, background: '#fef2f2', color: '#991b1b', fontFamily: 'sans-serif' }}>
@@ -36,10 +60,10 @@ function AppRoutes() {
         <Routes>
           <Route path="/app" element={<NoodiMeister />} />
           <Route path="/tood" element={<MinuToodPage />} />
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/registreeru" element={<RegisterPage />} />
+          <Route path="/login" element={<LoginOrRedirect />} />
+          <Route path="/registreeru" element={<RegisterOrRedirect />} />
           <Route path="/hinnakiri" element={<HinnakiriPage />} />
-          <Route path="/" element={<LandingPage />} />
+          <Route path="/" element={<LandingOrRedirect />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Suspense>

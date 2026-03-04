@@ -12,6 +12,7 @@ export default function RegisterPage() {
     confirmPassword: ''
   });
   const [message, setMessage] = useState('');
+  const [stayLoggedIn, setStayLoggedIn] = useState(false);
 
   const handleChange = (e) => {
     setForm(prev => ({ ...prev, [e.target.name]: e.target.value }));
@@ -144,7 +145,16 @@ export default function RegisterPage() {
             >
               Loo konto
             </button>
-            <CloudLoginButtons mode="register" />
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={stayLoggedIn}
+                onChange={(e) => setStayLoggedIn(e.target.checked)}
+                className="w-4 h-4 rounded border-amber-300 text-amber-600 focus:ring-amber-500"
+              />
+              <span className="text-sm text-amber-800">Jää sisse logituks (soovitame välja jätta ühise arvuti puhul)</span>
+            </label>
+            <CloudLoginButtons mode="register" stayLoggedIn={stayLoggedIn} />
             <p className="text-center text-sm text-amber-700">
               Juba konto? <Link to="/login" className="font-semibold text-amber-800 hover:underline">Logi sisse</Link>
             </p>
