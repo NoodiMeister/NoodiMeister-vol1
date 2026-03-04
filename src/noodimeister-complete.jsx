@@ -8,6 +8,7 @@ import * as googleDrive from './services/googleDrive';
 import * as authStorage from './services/authStorage';
 import { LOCALE_STORAGE_KEY, DEFAULT_LOCALE, LOCALES, createT } from './i18n';
 import html2canvas from 'html2canvas';
+import Soundfont from 'soundfont-player';
 
 // Ikoonid laetakse dünaamiliselt, et vältida "Cannot access 'Tt' before initialization" (lucide-react bundle)
 const LUCIDE_ICONS = [
@@ -981,6 +982,7 @@ function NoodiMeisterCore({ icons }) {
   const dirtyRef = useRef(false);
   const lastPersistedRef = useRef(null);
   const audioContextRef = useRef(null);
+  const soundfontCacheRef = useRef(Object.create(null)); // instrumentId -> Soundfont player (MuseScore-style GM)
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const isNewWorkFlow = searchParams.get('new') === '1';
@@ -1966,8 +1968,32 @@ function NoodiMeisterCore({ icons }) {
   const playPianoNote = useCallback((pitch, octave, semitonesOffset = 0) => {
     const semi = semitonesOffset === true || semitonesOffset === 1 ? 1 : semitonesOffset === -1 ? -1 : 0;
     const freq = getNoteFrequency(tuningReferenceNote, tuningReferenceOctave, tuningReferenceHz, pitch, octave, semi);
+    const midiNote = pitchOctaveToMidi(pitch, octave ?? 4) + semi;
+    const soundfontName = INSTRUMENT_TO_SOUNDFONT_NAME[instrument] || 'acoustic_grand_piano';
+    let ctx = audioContextRef.current;
+    if (!ctx) {
+      try {
+        ctx = new (window.AudioContext || window.webkitAudioContext)();
+        audioContextRef.current = ctx;
+      } catch (_) {}
+    }
+    if (ctx && ctx.state === 'suspended') ctx.resume();
+    const cached = ctx && soundfontCacheRef.current[instrument];
+    if (cached) {
+      try {
+        cached.play(midiNote, ctx.currentTime, { duration: 0.28 });
+        return;
+      } catch (_) {}
+    }
     playTone(audioContextRef, freq);
-  }, [tuningReferenceNote, tuningReferenceOctave, tuningReferenceHz]);
+    if (ctx && !soundfontCacheRef.current[instrument]) {
+      Soundfont.instrument(ctx, soundfontName, { soundfont: 'FluidR3_GM' })
+        .then((player) => {
+          soundfontCacheRef.current[instrument] = player;
+        })
+        .catch(() => {});
+    }
+  }, [tuningReferenceNote, tuningReferenceOctave, tuningReferenceHz, instrument]);
 
   // Handle toolbox selection (clickedIndex = option index when clicking, else uses selectedOptionIndex for keyboard)
   const addNoteAtCursor = useCallback((pitch, octave, accidental = 0) => {

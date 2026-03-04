@@ -35,7 +35,14 @@ try {
   showFatalError(err?.message || 'Rakenduse käivitus ebaõnnestus', err?.stack);
 }
 
-// Püüab võrgu/laadimise vead (nt fetch ebaõnnestub) – näitab konsoolis, võib hiljem UI-sse lisada
+// Püüab võrgu/laadimise vead (nt fetch ebaõnnestub) – näitab konsoolis
 window.addEventListener('unhandledrejection', (e) => {
   console.error('Unhandled rejection:', e.reason);
+});
+
+// Tööaegsed põhiprogrammi vead (nt lazy-load viga) – näita kasutajale
+window.addEventListener('error', (e) => {
+  if (e.message && !e.filename?.includes('node_modules')) {
+    console.error('Uncaught error:', e.message, e.filename, e.lineno);
+  }
 });

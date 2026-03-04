@@ -1,6 +1,18 @@
 # MuseScore heliteek ja Noodimeisteri instrumentide vastendus
 
-## MuseScore heliteegi asukoht
+## Kasutaja ei pea MuseScore'i laadima
+
+Noodimeister laeb **instrumentide helid otse veebist** (GitHub / CDN). Kasutajal ei ole vaja MuseScore'i eraldi paigaldada ega kasutada.
+
+- **Allikas:** teek `soundfont-player` laeb GM-hele (FluidR3_GM) aadressilt  
+  **https://gleitz.github.io/midi-js-soundfonts/FluidR3_GM/**  
+  (Benjamin Gleitzmani [midi-js-soundfonts](https://github.com/gleitz/midi-js-soundfonts) – GitHub Pages).
+- Iga instrument (klaver, viiul, kitarr jne) laetakse esimesel mängimisel võrgu kaudu; edaspidi on heli vahemälus.
+- See on **General MIDI**-ühilduv komplekt, sarnane MuseScore vaikimisi helidega, aga täiesti veebipõhine.
+
+---
+
+## MuseScore heliteegi asukoht (viide, kui kasutad MuseScore'i eraldi)
 
 ### MuseScore 2 (macOS)
 - Vaikimisi SoundFont:  
@@ -57,5 +69,5 @@ See tabel on koodis konstant `INSTRUMENT_TO_GM_PROGRAM` ja SoundFont-mängija ja
 
 ## Noodimeisteris
 
-- **Klaviatuur ja “noot sisestamisel mängib”**: heli valitakse valitud **tööriista instrumendi** (Instrumendid-toolbox) järgi ülaltoodud vastenduse kaudu; kasutatakse kas praegust sine-sünteesi või (kui on lubatud) GM SoundFonti.
-- Kui soovid brauseris kasutada **MuseScore’iga sarnaseid** helisid ilma .sf3 faili kopeerimata, võid kasutada võrguühendusega GM SoundFonti (nt FluidR3_GM) – Noodimeister kasutab samu programminumbreid ja instrumendinimesid.
+- **Klaviatuur ja “noot sisestamisel mängib”**: heli valitakse valitud **tööriista instrumendi** (Instrumendid-toolbox) järgi. Helid laetakse **veebist** (ülal nimetatud GitHub Pages CDN); kasutaja ei pea MuseScore'i ega ühtegi teist tarkvara laadima.
+- Esimesel mängimisel võib ühe hetke kesta instrumendi helifaili laadimine; seejärel mängib valitud instrument GM-heli (MuseScore-moodi).
