@@ -821,6 +821,11 @@ function NoodiMeisterCore({ icons }) {
   const [layoutMeasuresPerLine, setLayoutMeasuresPerLine] = useState(4);
   const [layoutLineBreakBefore, setLayoutLineBreakBefore] = useState([]);
   const [layoutPageBreakBefore, setLayoutPageBreakBefore] = useState([]);
+  // Vaade: partituur vs instrumendi part – instrumendi paigutus on sõltumatu partituurist
+  const [viewMode, setViewMode] = useState('score'); // 'score' | 'part'
+  const [partLayoutMeasuresPerLine, setPartLayoutMeasuresPerLine] = useState(4);
+  const [partLayoutLineBreakBefore, setPartLayoutLineBreakBefore] = useState([]);
+  const [partLayoutPageBreakBefore, setPartLayoutPageBreakBefore] = useState([]);
   const [showPageNavigator, setShowPageNavigator] = useState(false);
   const mainRef = useRef(null);
   const lastVerticalContentHeightRef = useRef(0);
@@ -1317,6 +1322,10 @@ function NoodiMeisterCore({ icons }) {
     layoutMeasuresPerLine,
     layoutLineBreakBefore,
     layoutPageBreakBefore,
+    viewMode,
+    partLayoutMeasuresPerLine,
+    partLayoutLineBreakBefore,
+    partLayoutPageBreakBefore,
     showPageNavigator,
     pageFlowDirection,
     visibleToolIds,
@@ -1335,7 +1344,7 @@ function NoodiMeisterCore({ icons }) {
     pedagogicalPlayheadStyle,
     pedagogicalPlayheadEmoji,
     chords
-  }), [notes, timeSignature, timeSignatureMode, clefType, keySignature, staffLines, notationStyle, pixelsPerBeat, notationMode, instrument, instrumentNotationVariant, cursorPosition, addedMeasures, setupCompleted, songTitle, author, pickupEnabled, pickupQuantity, pickupDuration, pageOrientation, layoutMeasuresPerLine, layoutLineBreakBefore, layoutPageBreakBefore, showPageNavigator, pageFlowDirection, visibleToolIds, tuningReferenceNote, tuningReferenceOctave, tuningReferenceHz, playNoteOnInsert, figurenotesSize, figurenotesStems, showBarNumbers, relativeNotationShowKeySignature, relativeNotationShowTraditionalClef, isPedagogicalProject, pedagogicalAudioBpm, pedagogicalPlayheadStyle, pedagogicalPlayheadEmoji, chords]);
+  }), [notes, timeSignature, timeSignatureMode, clefType, keySignature, staffLines, notationStyle, pixelsPerBeat, notationMode, instrument, instrumentNotationVariant, cursorPosition, addedMeasures, setupCompleted, songTitle, author, pickupEnabled, pickupQuantity, pickupDuration, pageOrientation, layoutMeasuresPerLine, layoutLineBreakBefore, layoutPageBreakBefore, viewMode, partLayoutMeasuresPerLine, partLayoutLineBreakBefore, partLayoutPageBreakBefore, showPageNavigator, pageFlowDirection, visibleToolIds, tuningReferenceNote, tuningReferenceOctave, tuningReferenceHz, playNoteOnInsert, figurenotesSize, figurenotesStems, showBarNumbers, relativeNotationShowKeySignature, relativeNotationShowTraditionalClef, isPedagogicalProject, pedagogicalAudioBpm, pedagogicalPlayheadStyle, pedagogicalPlayheadEmoji, chords]);
 
   const saveToStorageSync = useCallback(() => {
     try {
@@ -1390,6 +1399,10 @@ function NoodiMeisterCore({ icons }) {
     layoutMeasuresPerLine,
     layoutLineBreakBefore,
     layoutPageBreakBefore,
+    viewMode,
+    partLayoutMeasuresPerLine,
+    partLayoutLineBreakBefore,
+    partLayoutPageBreakBefore,
     showPageNavigator,
     pageFlowDirection,
     visibleToolIds,
@@ -1408,7 +1421,7 @@ function NoodiMeisterCore({ icons }) {
     pedagogicalPlayheadEmoji,
     scoreData: notes,
     chords
-  }), [songTitle, author, notationStyle, notationMode, isPedagogicalProject, timeSignature, timeSignatureMode, clefType, keySignature, staffLines, pixelsPerBeat, instrument, instrumentNotationVariant, pickupEnabled, pickupQuantity, pickupDuration, setupCompleted, cursorPosition, addedMeasures, pageOrientation, layoutMeasuresPerLine, layoutLineBreakBefore, layoutPageBreakBefore, showPageNavigator, pageFlowDirection, visibleToolIds, tuningReferenceNote, tuningReferenceOctave, tuningReferenceHz, playNoteOnInsert, figurenotesSize, figurenotesStems, showBarNumbers, relativeNotationShowKeySignature, relativeNotationShowTraditionalClef, pedagogicalAudioBpm, pedagogicalPlayheadStyle, pedagogicalPlayheadEmoji, notes, chords]);
+  }), [songTitle, author, notationStyle, notationMode, isPedagogicalProject, timeSignature, timeSignatureMode, clefType, keySignature, staffLines, pixelsPerBeat, instrument, instrumentNotationVariant, pickupEnabled, pickupQuantity, pickupDuration, setupCompleted, cursorPosition, addedMeasures, pageOrientation, layoutMeasuresPerLine, layoutLineBreakBefore, layoutPageBreakBefore, viewMode, partLayoutMeasuresPerLine, partLayoutLineBreakBefore, partLayoutPageBreakBefore, showPageNavigator, pageFlowDirection, visibleToolIds, tuningReferenceNote, tuningReferenceOctave, tuningReferenceHz, playNoteOnInsert, figurenotesSize, figurenotesStems, showBarNumbers, relativeNotationShowKeySignature, relativeNotationShowTraditionalClef, pedagogicalAudioBpm, pedagogicalPlayheadStyle, pedagogicalPlayheadEmoji, notes, chords]);
 
   // Download project file (future: replace with upload to Google Drive / OneDrive)
   const downloadProject = useCallback(() => {
@@ -1482,6 +1495,10 @@ function NoodiMeisterCore({ icons }) {
       if (data.layoutMeasuresPerLine != null) setLayoutMeasuresPerLine(data.layoutMeasuresPerLine);
       if (Array.isArray(data.layoutLineBreakBefore)) setLayoutLineBreakBefore(data.layoutLineBreakBefore);
       if (Array.isArray(data.layoutPageBreakBefore)) setLayoutPageBreakBefore(data.layoutPageBreakBefore);
+      if (data.viewMode === 'score' || data.viewMode === 'part') setViewMode(data.viewMode);
+      if (data.partLayoutMeasuresPerLine != null) setPartLayoutMeasuresPerLine(data.partLayoutMeasuresPerLine);
+      if (Array.isArray(data.partLayoutLineBreakBefore)) setPartLayoutLineBreakBefore(data.partLayoutLineBreakBefore);
+      if (Array.isArray(data.partLayoutPageBreakBefore)) setPartLayoutPageBreakBefore(data.partLayoutPageBreakBefore);
       if (data.showPageNavigator != null) setShowPageNavigator(!!data.showPageNavigator);
       if (data.pageFlowDirection === 'vertical' || data.pageFlowDirection === 'horizontal') setPageFlowDirection(data.pageFlowDirection);
       if (Array.isArray(data.visibleToolIds) && data.visibleToolIds.length > 0) setVisibleToolIds(data.visibleToolIds);
@@ -1562,6 +1579,10 @@ function NoodiMeisterCore({ icons }) {
         if (data.layoutMeasuresPerLine != null) setLayoutMeasuresPerLine(data.layoutMeasuresPerLine);
         if (Array.isArray(data.layoutLineBreakBefore)) setLayoutLineBreakBefore(data.layoutLineBreakBefore);
         if (Array.isArray(data.layoutPageBreakBefore)) setLayoutPageBreakBefore(data.layoutPageBreakBefore);
+        if (data.viewMode === 'score' || data.viewMode === 'part') setViewMode(data.viewMode);
+        if (data.partLayoutMeasuresPerLine != null) setPartLayoutMeasuresPerLine(data.partLayoutMeasuresPerLine);
+        if (Array.isArray(data.partLayoutLineBreakBefore)) setPartLayoutLineBreakBefore(data.partLayoutLineBreakBefore);
+        if (Array.isArray(data.partLayoutPageBreakBefore)) setPartLayoutPageBreakBefore(data.partLayoutPageBreakBefore);
         if (data.showPageNavigator != null) setShowPageNavigator(!!data.showPageNavigator);
         if (data.pageFlowDirection === 'vertical' || data.pageFlowDirection === 'horizontal') setPageFlowDirection(data.pageFlowDirection);
         if (Array.isArray(data.visibleToolIds) && data.visibleToolIds.length > 0) setVisibleToolIds(data.visibleToolIds);
@@ -1732,6 +1753,10 @@ function NoodiMeisterCore({ icons }) {
           if (data.layoutMeasuresPerLine != null) setLayoutMeasuresPerLine(data.layoutMeasuresPerLine);
           if (Array.isArray(data.layoutLineBreakBefore)) setLayoutLineBreakBefore(data.layoutLineBreakBefore);
           if (Array.isArray(data.layoutPageBreakBefore)) setLayoutPageBreakBefore(data.layoutPageBreakBefore);
+          if (data.viewMode === 'score' || data.viewMode === 'part') setViewMode(data.viewMode);
+          if (data.partLayoutMeasuresPerLine != null) setPartLayoutMeasuresPerLine(data.partLayoutMeasuresPerLine);
+          if (Array.isArray(data.partLayoutLineBreakBefore)) setPartLayoutLineBreakBefore(data.partLayoutLineBreakBefore);
+          if (Array.isArray(data.partLayoutPageBreakBefore)) setPartLayoutPageBreakBefore(data.partLayoutPageBreakBefore);
           if (data.showPageNavigator != null) setShowPageNavigator(!!data.showPageNavigator);
           if (data.pageFlowDirection === 'vertical' || data.pageFlowDirection === 'horizontal') setPageFlowDirection(data.pageFlowDirection);
           if (Array.isArray(data.visibleToolIds) && data.visibleToolIds.length > 0) setVisibleToolIds(data.visibleToolIds);
@@ -2722,11 +2747,15 @@ function NoodiMeisterCore({ icons }) {
   }, [activeToolbox, selectedOptionIndex, handleToolboxSelection, noteInputMode, selectedDuration, isDotted, isRest, notes, getEffectiveDuration, selectedNoteIndex, selectionStart, selectionEnd, clipboard, undo, saveToHistory, getSelectedNotes, shiftPitch, shiftOctave, addMeasure, ghostPitch, ghostOctave]);
 
   const measures = calculateMeasures();
+  // Praeguse vaate paigutus: partituur või instrumendi part (instrumentide paigutus ei mõjuta partituuri)
+  const effectiveLayoutMeasuresPerLine = viewMode === 'score' ? layoutMeasuresPerLine : partLayoutMeasuresPerLine;
+  const effectiveLayoutLineBreakBefore = viewMode === 'score' ? layoutLineBreakBefore : partLayoutLineBreakBefore;
+  const effectiveLayoutPageBreakBefore = viewMode === 'score' ? layoutPageBreakBefore : partLayoutPageBreakBefore;
   const logicalContentHeight = useMemo(() => {
-    const opts = { measuresPerLine: layoutMeasuresPerLine, lineBreakBefore: layoutLineBreakBefore, pageBreakBefore: layoutPageBreakBefore };
+    const opts = { measuresPerLine: effectiveLayoutMeasuresPerLine, lineBreakBefore: effectiveLayoutLineBreakBefore, pageBreakBefore: effectiveLayoutPageBreakBefore };
     const sys = computeLayout(measures, timeSignature, pixelsPerBeat, pageWidth || LAYOUT.PAGE_WIDTH_MIN, opts);
     return sys.length > 0 ? sys[sys.length - 1].yOffset + LAYOUT.STAFF_HEIGHT + 40 : LAYOUT.STAFF_HEIGHT + 40;
-  }, [measures, timeSignature, pixelsPerBeat, pageWidth, layoutMeasuresPerLine, layoutLineBreakBefore, layoutPageBreakBefore]);
+  }, [measures, timeSignature, pixelsPerBeat, pageWidth, effectiveLayoutMeasuresPerLine, effectiveLayoutLineBreakBefore, effectiveLayoutPageBreakBefore]);
   const cursorMeasureIndex = measures.length > 0
     ? (() => {
         const i = measures.findIndex(m => cursorPosition >= m.startBeat && cursorPosition < m.endBeat);
@@ -2756,7 +2785,7 @@ function NoodiMeisterCore({ icons }) {
     ro.observe(el);
     updateHeight();
     return () => ro.disconnect();
-  }, [measures, layoutMeasuresPerLine, pageOrientation, showPageNavigator]);
+  }, [measures, layoutMeasuresPerLine, partLayoutMeasuresPerLine, viewMode, pageOrientation, showPageNavigator]);
 
   useEffect(() => {
     const t = requestAnimationFrame(() => {
@@ -2765,7 +2794,7 @@ function NoodiMeisterCore({ icons }) {
       });
     });
     return () => cancelAnimationFrame(t);
-  }, [measures, layoutMeasuresPerLine, pageOrientation, notes, addedMeasures]);
+  }, [measures, layoutMeasuresPerLine, partLayoutMeasuresPerLine, viewMode, pageOrientation, notes, addedMeasures]);
 
   const completeSetup = useCallback((style) => {
     setNotationStyle(style);
@@ -3202,8 +3231,8 @@ function NoodiMeisterCore({ icons }) {
                     <button
                       key={n}
                       type="button"
-                      onClick={() => { dirtyRef.current = true; setLayoutMeasuresPerLine(n); }}
-                      className={`px-3 py-2 rounded-lg text-sm font-medium border-2 transition-colors ${layoutMeasuresPerLine === n ? 'bg-amber-600 border-amber-700 text-white' : 'border-amber-200 text-amber-900 bg-amber-50 hover:bg-amber-100'}`}
+                      onClick={() => { dirtyRef.current = true; (viewMode === 'score' ? setLayoutMeasuresPerLine : setPartLayoutMeasuresPerLine)(n); }}
+                      className={`px-3 py-2 rounded-lg text-sm font-medium border-2 transition-colors ${effectiveLayoutMeasuresPerLine === n ? 'bg-amber-600 border-amber-700 text-white' : 'border-amber-200 text-amber-900 bg-amber-50 hover:bg-amber-100'}`}
                     >
                       {n} takti / rida
                     </button>
@@ -3618,6 +3647,11 @@ function NoodiMeisterCore({ icons }) {
                 </button>
                 {headerMenuOpen === 'view' && (
                   <div className="absolute left-0 top-full mt-1 min-w-[240px] py-1 rounded-lg bg-slate-700 border border-slate-600 shadow-xl z-50">
+                    {/* Partituur vs instrumendi part */}
+                    <div className="px-3 py-1.5 text-xs font-semibold text-amber-200 uppercase tracking-wider">{t('view.menuTitle')}</div>
+                    <button type="button" onClick={() => { dirtyRef.current = true; setViewMode('score'); setHeaderMenuOpen(null); }} className={`w-full flex items-center gap-2 px-3 py-2 text-left text-sm ${viewMode === 'score' ? 'bg-amber-600 text-white' : 'text-amber-50 hover:bg-slate-600'}`} title={t('view.scoreHint')}>{t('view.score')}</button>
+                    <button type="button" onClick={() => { dirtyRef.current = true; setViewMode('part'); setHeaderMenuOpen(null); }} className={`w-full flex items-center gap-2 px-3 py-2 text-left text-sm ${viewMode === 'part' ? 'bg-amber-600 text-white' : 'text-amber-50 hover:bg-slate-600'}`} title={t('view.partHint')}>{t('view.part')}</button>
+                    <div className="my-1 border-t border-slate-600" />
                     {/* Lehekülje suund */}
                     <div className="relative" onMouseEnter={() => setViewSubmenuOpen('orientation')} onMouseLeave={() => setViewSubmenuOpen(null)}>
                       <button
@@ -3909,17 +3943,22 @@ function NoodiMeisterCore({ icons }) {
                 })()}
                 {activeToolbox === 'layout' && (
                   <>
+                    <div className="mt-2 mb-2 px-2 py-1.5 rounded bg-amber-100/80 border border-amber-300 text-amber-900 text-xs">
+                      {viewMode === 'score' ? t('view.layoutForScore') : t('view.layoutForPart')}
+                    </div>
                     <div className="mt-4 pt-4 border-t-2 border-amber-200">
                       <h4 className="text-xs font-bold text-amber-900 uppercase mb-2">{t('layout.measuresPerLine')}</h4>
                       <p className="text-xs text-amber-700 mb-2">{t('layout.measuresPerLineHint')}</p>
-                      <div className="flex flex-wrap gap-1 mb-3">{[2, 3, 4, 6, 8].map((n) => (<button key={n} type="button" onClick={() => setLayoutMeasuresPerLine(n)} className={`px-2 py-1 rounded text-sm font-medium ${layoutMeasuresPerLine === n ? 'bg-amber-600 text-white' : 'bg-amber-100 text-amber-800 hover:bg-amber-200'}`}>{n}</button>))}</div>
+                      <div className="flex flex-wrap gap-1 mb-3">{[2, 3, 4, 6, 8].map((n) => (
+                        <button key={n} type="button" onClick={() => { dirtyRef.current = true; (viewMode === 'score' ? setLayoutMeasuresPerLine : setPartLayoutMeasuresPerLine)(n); }} className={`px-2 py-1 rounded text-sm font-medium ${effectiveLayoutMeasuresPerLine === n ? 'bg-amber-600 text-white' : 'bg-amber-100 text-amber-800 hover:bg-amber-200'}`}>{n}</button>
+                      ))}</div>
                       <p className="text-xs text-amber-700 mb-1">Paigutuse muudatus kehtib kursorit sisaldava takti suhtes. Liigu kursoriga (← →) soovitud takti.</p>
                       <div className="mb-2 px-2 py-1.5 rounded bg-amber-100 border border-amber-200 text-amber-900 text-sm font-medium">{t('layout.cursorInMeasure')}: {cursorMeasureIndex + 1}</div>
                       <div className="grid grid-cols-2 gap-1 text-xs">
-                        <button type="button" disabled={cursorMeasureIndex <= 0} onClick={() => { if (cursorMeasureIndex <= 0) return; setLayoutLineBreakBefore((prev) => [...new Set([...prev, cursorMeasureIndex])].sort((a, b) => a - b)); }} className="py-1.5 px-2 rounded bg-slate-100 text-slate-800 hover:bg-slate-200 font-medium disabled:opacity-50 disabled:cursor-not-allowed">{t('layout.nextLine')}</button>
-                        <button type="button" disabled={cursorMeasureIndex <= 0} onClick={() => { if (cursorMeasureIndex <= 0) return; setLayoutPageBreakBefore((prev) => [...new Set([...prev, cursorMeasureIndex])].sort((a, b) => a - b)); }} className="py-1.5 px-2 rounded bg-slate-100 text-slate-800 hover:bg-slate-200 font-medium disabled:opacity-50 disabled:cursor-not-allowed">{t('layout.newPage')}</button>
-                        <button type="button" disabled={cursorMeasureIndex <= 0} onClick={() => setLayoutLineBreakBefore((prev) => prev.filter((i) => i !== cursorMeasureIndex))} className="py-1.5 px-2 rounded bg-amber-100 text-amber-800 hover:bg-amber-200 font-medium disabled:opacity-50 disabled:cursor-not-allowed">{t('layout.removeLineBreak')}</button>
-                        <button type="button" disabled={cursorMeasureIndex <= 0} onClick={() => setLayoutPageBreakBefore((prev) => prev.filter((i) => i !== cursorMeasureIndex))} className="py-1.5 px-2 rounded bg-amber-100 text-amber-800 hover:bg-amber-200 font-medium disabled:opacity-50 disabled:cursor-not-allowed">{t('layout.removePageBreak')}</button>
+                        <button type="button" disabled={cursorMeasureIndex <= 0} onClick={() => { if (cursorMeasureIndex <= 0) return; dirtyRef.current = true; (viewMode === 'score' ? setLayoutLineBreakBefore : setPartLayoutLineBreakBefore)((prev) => [...new Set([...prev, cursorMeasureIndex])].sort((a, b) => a - b)); }} className="py-1.5 px-2 rounded bg-slate-100 text-slate-800 hover:bg-slate-200 font-medium disabled:opacity-50 disabled:cursor-not-allowed">{t('layout.nextLine')}</button>
+                        <button type="button" disabled={cursorMeasureIndex <= 0} onClick={() => { if (cursorMeasureIndex <= 0) return; dirtyRef.current = true; (viewMode === 'score' ? setLayoutPageBreakBefore : setPartLayoutPageBreakBefore)((prev) => [...new Set([...prev, cursorMeasureIndex])].sort((a, b) => a - b)); }} className="py-1.5 px-2 rounded bg-slate-100 text-slate-800 hover:bg-slate-200 font-medium disabled:opacity-50 disabled:cursor-not-allowed">{t('layout.newPage')}</button>
+                        <button type="button" disabled={cursorMeasureIndex <= 0} onClick={() => { dirtyRef.current = true; (viewMode === 'score' ? setLayoutLineBreakBefore : setPartLayoutLineBreakBefore)((prev) => prev.filter((i) => i !== cursorMeasureIndex)); }} className="py-1.5 px-2 rounded bg-amber-100 text-amber-800 hover:bg-amber-200 font-medium disabled:opacity-50 disabled:cursor-not-allowed">{t('layout.removeLineBreak')}</button>
+                        <button type="button" disabled={cursorMeasureIndex <= 0} onClick={() => { dirtyRef.current = true; (viewMode === 'score' ? setLayoutPageBreakBefore : setPartLayoutPageBreakBefore)((prev) => prev.filter((i) => i !== cursorMeasureIndex)); }} className="py-1.5 px-2 rounded bg-amber-100 text-amber-800 hover:bg-amber-200 font-medium disabled:opacity-50 disabled:cursor-not-allowed">{t('layout.removePageBreak')}</button>
                       </div>
                     </div>
                     <div className="mt-4 pt-4 border-t-2 border-amber-200">
@@ -4221,9 +4260,9 @@ function NoodiMeisterCore({ icons }) {
                 ghostPitch={ghostPitch}
                 ghostOctave={ghostOctave}
                 notationStyle={notationStyle}
-                layoutMeasuresPerLine={layoutMeasuresPerLine}
-                layoutLineBreakBefore={layoutLineBreakBefore}
-                layoutPageBreakBefore={layoutPageBreakBefore}
+                layoutMeasuresPerLine={effectiveLayoutMeasuresPerLine}
+                layoutLineBreakBefore={effectiveLayoutLineBreakBefore}
+                layoutPageBreakBefore={effectiveLayoutPageBreakBefore}
                 showBarNumbers={showBarNumbers}
                 chords={chords}
                 figurenotesSize={figurenotesSize}
