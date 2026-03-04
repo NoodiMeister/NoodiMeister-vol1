@@ -50,12 +50,72 @@ class ErrorBoundary extends React.Component {
   }
 }
 
+/** Riba, et arendaja näeks, kas ta on test- või toodangukeskkonnas. Toodangus ei ilmu. */
+function EnvBanner() {
+  const vercelEnv = import.meta.env.VITE_VERCEL_ENV;
+  const isLocal = typeof window !== 'undefined' && /^localhost$|^127\.0\.0\.1$/.test(window.location?.hostname || '');
+  if (vercelEnv === 'production') return null;
+  if (vercelEnv === 'preview') {
+    return (
+      <div
+        role="status"
+        aria-label="Testiversioon"
+        style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          zIndex: 9999,
+          background: 'linear-gradient(90deg, #b45309 0%, #92400e 100%)',
+          color: '#fff',
+          fontSize: '13px',
+          fontWeight: 600,
+          textAlign: 'center',
+          padding: '6px 12px',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+        }}
+      >
+        TEST – see on testiversioon. Kasutajate andmeid ei mõjuta. Toodang: noodimeister.ee
+      </div>
+    );
+  }
+  if (isLocal) {
+    return (
+      <div
+        role="status"
+        aria-label="Kohalik arendus"
+        style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          zIndex: 9999,
+          background: 'linear-gradient(90deg, #065f46 0%, #047857 100%)',
+          color: '#fff',
+          fontSize: '13px',
+          fontWeight: 600,
+          textAlign: 'center',
+          padding: '6px 12px',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+        }}
+      >
+        Kohalik arendus – muudatused ei ilmu veebilehele
+      </div>
+    );
+  }
+  return null;
+}
+
 function AppRoutes() {
   const location = useLocation();
   const pathname = location.pathname || '/';
 
+  const needBannerSpace = import.meta.env.VITE_VERCEL_ENV === 'preview' ||
+    (typeof window !== 'undefined' && /^localhost$|^127\.0\.0\.1$/.test(window.location?.hostname || ''));
+
   return (
-    <div key={pathname} style={{ minHeight: '100vh', isolation: 'isolate' }}>
+    <div key={pathname} style={{ minHeight: '100vh', isolation: 'isolate', paddingTop: needBannerSpace ? 40 : 0 }}>
+      <EnvBanner />
       <Suspense fallback={<div style={{ padding: 24, textAlign: 'center' }}>Laen…</div>}>
         <Routes>
           <Route path="/app" element={<NoodiMeister />} />

@@ -33,6 +33,10 @@ function spaFallbackPlugin() {
 export default defineConfig({
   plugins: [react(), spaFallbackPlugin()],
   base: '/',
+  // Vercel seab VERCEL_ENV: 'production' | 'preview' | 'development' – test-riba jaoks
+  define: {
+    'import.meta.env.VITE_VERCEL_ENV': JSON.stringify(process.env.VERCEL_ENV ?? ''),
+  },
   optimizeDeps: {
     include: ['lucide-react'],
   },
