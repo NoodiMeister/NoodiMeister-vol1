@@ -3,6 +3,8 @@ import { useGoogleLogin } from '@react-oauth/google';
 import { useNavigate } from 'react-router-dom';
 import { getStorageForLogin } from '../services/authStorage';
 
+const googleClientId = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_GOOGLE_CLIENT_ID) || '';
+
 const KEY_LOGGED_IN = 'noodimeister-logged-in';
 const KEY_GOOGLE_TOKEN = 'noodimeister-google-token';
 const KEY_GOOGLE_EXPIRY = 'noodimeister-google-token-expiry';

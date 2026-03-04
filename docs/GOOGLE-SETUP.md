@@ -53,7 +53,8 @@ Projektis peavad olema lubatud:
    - Application type: **Web application**
    - Name: nt „NoodiMeister Web”
    - **Authorized JavaScript origins** – lisa **iga** domeen (kui Vercelil on kaks, lisa mõlemad):
-     - `http://localhost:5173` (kohalik arendus)
+     - `http://127.0.0.1:5173` (kohalik arendus – Vite kasutab 127.0.0.1)
+     - `http://localhost:5173` (kohalik arendus, kui käivitad localhostiga)
      - `https://noodi-meister-vol1-la-stravaganza.vercel.app`
      - `https://www.noodimeister.ee`
    - **Authorized redirect URIs** – lisa **samad** read. Kui üks domeen puudub, Google sisselogimine ebaõnnestub sellel domeenil (Error 400: redirect_uri_mismatch).
@@ -69,7 +70,7 @@ Projektis peavad olema lubatud:
 
 ### 5. Taaskäivita ja testi
 
-- Kohalikult: `npm run dev` → ava `http://localhost:5173`
+- Kohalikult: `npm run dev` → ava `http://127.0.0.1:5173` (või `http://localhost:5173` – mõlemad peavad olema Google Console’is, kui kasutad mõlemat)
 - **Registreeru** või **Logi sisse** → vali nupp **Google** → kinnita sisselogimine ja lubadused (sh Drive)
 - Pärast sisselogimist mine **Tööriist** (/app) → kasuta **Pilve salvesta** (vali kaust Drivest) ja **Laadi pilvest** (vali fail)
 

@@ -132,6 +132,46 @@ export async function createFileInFolder(accessToken, folderId, fileName, conten
 }
 
 /**
+ * Laadi binaarfail (nt video) antud kaustas.
+ * @param {string} accessToken
+ * @param {string} folderId
+ * @param {string} fileName
+ * @param {Blob} blob
+ * @param {string} mimeType nt 'video/webm', 'video/mp4'
+ * @returns {Promise<string>} fileId
+ */
+export async function uploadBinaryFileInFolder(accessToken, folderId, fileName, blob, mimeType) {
+  const boundary = '-------noodimeister-bin-------';
+  const meta = JSON.stringify({
+    name: fileName,
+    parents: [folderId],
+    mimeType: mimeType || 'application/octet-stream'
+  });
+  const metaPart = `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${meta}\r\n`;
+  const arrayBuffer = await blob.arrayBuffer();
+  const body = new Blob([
+    metaPart,
+    `\r\n--${boundary}\r\nContent-Type: ${mimeType || 'application/octet-stream'}\r\n\r\n`,
+    arrayBuffer,
+    `\r\n--${boundary}--`
+  ]);
+  const res = await fetch(DRIVE_UPLOAD_URL + '?uploadType=multipart', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': `multipart/related; boundary=${boundary}`
+    },
+    body
+  });
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(res.status === 401 ? 'Token aegunud. Logi uuesti sisse.' : (err || 'Salvestamine ebaõnnestus'));
+  }
+  const data = await res.json();
+  return data.id;
+}
+
+/**
  * Kasutaja valib faili (Picker). Tagastab faili ID või null.
  * @param {string} accessToken
  * @returns {Promise<string|null>}

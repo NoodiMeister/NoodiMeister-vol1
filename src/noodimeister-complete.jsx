@@ -6,12 +6,13 @@ import './piano-overrides.css';
 import * as googleDrive from './services/googleDrive';
 import * as authStorage from './services/authStorage';
 import { LOCALE_STORAGE_KEY, DEFAULT_LOCALE, LOCALES, createT } from './i18n';
+import html2canvas from 'html2canvas';
 
 // Ikoonid laetakse dünaamiliselt, et vältida "Cannot access 'Tt' before initialization" (lucide-react bundle)
 const LUCIDE_ICONS = [
   'Music2', 'Clock', 'Hash', 'Type', 'Piano', 'Palette', 'Layout', 'Check', 'Save', 'FolderOpen',
   'Plus', 'Settings', 'Key', 'Repeat', 'Cloud', 'LogOut', 'User', 'CloudUpload', 'CloudDownload', 'FolderPlus', 'ChevronDown',
-  'Play', 'Pause'
+  'Play', 'Pause', 'Video'
 ];
 
 const STORAGE_KEY = 'noodimeister-data';
@@ -50,6 +51,7 @@ function LoggedInUser({ icons, t }) {
 const LAYOUT = {
   PAGE_WIDTH_MIN: 800,
   PAGE_WIDTH_MAX: 1000,
+  PAGE_WIDTH_MAX_LANDSCAPE: 1400,
   STAFF_HEIGHT: 140,
   SYSTEM_GAP: 120,
   MARGIN_LEFT: 60,
@@ -333,16 +335,34 @@ const PedagogicalMeterIcon = ({ beats, beatUnit }) => {
   );
 };
 
-// Do (Jo) võti = C-võti (𝄡), duuri kujul: keskmine joon = Do (tonika). Kasutatakse Kodály relatiivnotatsioonis.
-const DO_CLEF_UNICODE = '\u{1D121}'; // Musical Symbol C Clef (U+1D121)
+// Jo võti – JO-LE-MI notatsiooni sümbol: vertikaalne joon + kaks horisontaalset joont. Kahe horisontaalse joone vahe = kahe noodijoone kõrgune (2×staffSpacing). Keskmine joon = Jo (tonika).
+const JoClefSymbol = ({ x = 0, centerY, staffSpacing = 10, stroke = '#000', strokeWidth = 2.2, barLength = 14 }) => {
+  const gap = 2 * staffSpacing; // kahe noodijoone kõrgune
+  const topBarY = centerY - staffSpacing;
+  const bottomBarY = centerY + staffSpacing;
+  const vertTop = centerY - gap;
+  const vertBottom = centerY + gap;
+  const t = strokeWidth;
+  return (
+    <g>
+      <rect x={x} y={vertTop} width={t} height={vertBottom - vertTop} fill={stroke} />
+      <rect x={x} y={topBarY - t/2} width={barLength} height={t} fill={stroke} />
+      <rect x={x} y={bottomBarY - t/2} width={barLength} height={t} fill={stroke} />
+    </g>
+  );
+};
 
 const ClefIcon = ({ clefType }) => {
   const clefs = {
-    treble: '𝄞', bass: '𝄢', alto: '𝄡', tenor: '𝄡', do: DO_CLEF_UNICODE
+    treble: '𝄞', bass: '𝄢', alto: '𝄡', tenor: '𝄡'
   };
   return (
     <svg viewBox="0 0 24 24" className="w-5 h-5">
-      <text x="12" y="18" textAnchor="middle" fontSize="20" fontFamily="serif" fill="currentColor">{clefs[clefType] || clefs.treble}</text>
+      {clefType === 'do' || clefType === 'jo' ? (
+        <JoClefSymbol x={3} centerY={12} staffSpacing={4} stroke="#000" strokeWidth={1.6} barLength={10} />
+      ) : (
+        <text x="12" y="18" textAnchor="middle" fontSize="20" fontFamily="serif" fill="currentColor">{clefs[clefType] || clefs.treble}</text>
+      )}
     </svg>
   );
 };
@@ -744,7 +764,8 @@ function NoodiMeisterCore({ icons }) {
     setLyricChainIndex(null);
   }, [selectedNoteIndex, selectionStart, selectionEnd]);
 
-  // Paigutus: taktide arv rea kohta (0 = automaatne), käsitsi rea- ja lehevahetused
+  // Paigutus: lehekülje suund, taktide arv rea kohta (0 = automaatne), käsitsi rea- ja lehevahetused
+  const [pageOrientation, setPageOrientation] = useState('portrait'); // 'portrait' | 'landscape'
   const [layoutMeasuresPerLine, setLayoutMeasuresPerLine] = useState(4);
   const [layoutLineBreakBefore, setLayoutLineBreakBefore] = useState([]);
   const [layoutPageBreakBefore, setLayoutPageBreakBefore] = useState([]);
@@ -781,6 +802,10 @@ function NoodiMeisterCore({ icons }) {
   const [pedagogicalAudioBpm, setPedagogicalAudioBpm] = useState(120);
   const [pedagogicalAudioDuration, setPedagogicalAudioDuration] = useState(0); // sekundites
   const [isPedagogicalAudioPlaying, setIsPedagogicalAudioPlaying] = useState(false);
+  // Animeeritud notatsioon: nooti lugeva kursori kuju (püstine joon, emoji)
+  const [pedagogicalPlayheadStyle, setPedagogicalPlayheadStyle] = useState('line'); // 'line' | 'violin' | 'smiley' | 'custom'
+  const [pedagogicalPlayheadEmoji, setPedagogicalPlayheadEmoji] = useState('🎵'); // kasutub kui style === 'custom'
+  const [isExportingAnimation, setIsExportingAnimation] = useState(false);
   const pedagogicalAudioRef = useRef(null); // HTMLAudioElement
   const pedagogicalPlaybackIntervalRef = useRef(null);
   const pedagogicalAudioDataRef = useRef(null); // base64 string (salvestamiseks)
@@ -986,6 +1011,146 @@ function NoodiMeisterCore({ icons }) {
     };
   }, []);
 
+  // Animatsiooni eksport video failina (MP4 või WebM) – alla laadimine või Google Drive
+  const exportAnimationAsVideo = useCallback(async ({ download = false, saveToDrive = false } = {}) => {
+    if (!isPedagogicalProject || !scoreContainerRef.current) {
+      setSaveFeedback(t('file.exportAnimationNoProject'));
+      setTimeout(() => setSaveFeedback(''), 3000);
+      return;
+    }
+    const totalBeats = notes.reduce((acc, n) => acc + n.duration, 0);
+    const bpm = Math.max(20, Math.min(300, pedagogicalAudioBpm));
+    const durationSec = pedagogicalAudioUrl && pedagogicalAudioDuration > 0
+      ? pedagogicalAudioDuration
+      : totalBeats * 60 / bpm;
+    if (durationSec <= 0) {
+      setSaveFeedback(t('file.exportAnimationNoContent'));
+      setTimeout(() => setSaveFeedback(''), 3000);
+      return;
+    }
+    setIsExportingAnimation(true);
+    setSaveFeedback(t('file.exportAnimationExporting'));
+    stopPedagogicalPlayback();
+    setCursorPosition(0);
+
+    const container = scoreContainerRef.current;
+    const w = container.offsetWidth;
+    const h = container.offsetHeight;
+    if (w <= 0 || h <= 0) {
+      setIsExportingAnimation(false);
+      setSaveFeedback(t('feedback.exportFailed'));
+      setTimeout(() => setSaveFeedback(''), 2000);
+      return;
+    }
+
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    const fps = 15;
+    const stream = canvas.captureStream(fps);
+
+    let audioStream = null;
+    let exportAudio = null;
+    if (pedagogicalAudioUrl) {
+      exportAudio = new Audio(pedagogicalAudioUrl);
+      try {
+        if (typeof exportAudio.captureStream === 'function') {
+          audioStream = exportAudio.captureStream();
+        }
+      } catch (_) {}
+    }
+    const combinedStream = audioStream
+      ? new MediaStream([...stream.getVideoTracks(), ...audioStream.getAudioTracks()])
+      : stream;
+
+    const mimeType = MediaRecorder.isTypeSupported('video/mp4') ? 'video/mp4' : 'video/webm';
+    const ext = mimeType === 'video/mp4' ? 'mp4' : 'webm';
+    const recorder = new MediaRecorder(combinedStream, {
+      mimeType: MediaRecorder.isTypeSupported(mimeType) ? mimeType : 'video/webm',
+      videoBitsPerSecond: 2500000,
+      audioBitsPerSecond: audioStream ? 128000 : undefined
+    });
+    const chunks = [];
+    recorder.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+    recorder.start(500);
+
+    const startTime = Date.now();
+    exportAudio?.play().catch(() => {});
+
+    const cursorInterval = setInterval(() => {
+      const elapsed = (Date.now() - startTime) / 1000;
+      const beat = (elapsed * bpm) / 60;
+      const totalBeatsNow = notes.reduce((acc, n) => acc + n.duration, 0);
+      setCursorPosition(prev => Math.max(0, Math.min(totalBeatsNow, beat)));
+      if (elapsed >= durationSec) {
+        clearInterval(cursorInterval);
+        exportAudio?.pause();
+      }
+    }, 50);
+
+    const captureFrame = () => {
+      if (Date.now() - startTime >= durationSec * 1000 + 500) {
+        clearInterval(frameInterval);
+        recorder.stop();
+        return;
+      }
+      html2canvas(container, { scale: 1, useCORS: true, logging: false }).then((captureCanvas) => {
+        ctx.drawImage(captureCanvas, 0, 0, w, h);
+      }).catch(() => {});
+    };
+    const frameInterval = setInterval(captureFrame, 1000 / fps);
+    captureFrame();
+
+    const onStop = async () => {
+      clearInterval(cursorInterval);
+      clearInterval(frameInterval);
+      exportAudio?.pause();
+      const blob = new Blob(chunks, { type: mimeType });
+      const filename = ((songTitle || t('common.untitled')).replace(/\s+/g, '-').replace(/[^\w\-.]/g, '') || 'animation') + '.' + ext;
+      if (download) {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(url);
+        setSaveFeedback(t('file.exportAnimationDone'));
+      }
+      if (saveToDrive) {
+        const token = googleDrive.getStoredToken();
+        if (!token) {
+          setSaveFeedback(t('feedback.loginGoogle'));
+        } else {
+          setSaveFeedback(t('feedback.saving'));
+          try {
+            const folderId = await googleDrive.pickFolder(token);
+            if (!folderId) { setSaveFeedback(''); setIsExportingAnimation(false); return; }
+            await googleDrive.uploadBinaryFileInFolder(token, folderId, filename, blob, 'video/' + ext);
+            setSaveFeedback(t('feedback.savedToCloud'));
+          } catch (e) {
+            setSaveFeedback(e?.message || t('feedback.cloudError'));
+          }
+          setTimeout(() => setSaveFeedback(''), 2500);
+          setIsExportingAnimation(false);
+          return;
+        }
+      }
+      setTimeout(() => setSaveFeedback(''), 2500);
+      setIsExportingAnimation(false);
+    };
+
+    recorder.onstop = onStop;
+    setTimeout(() => {
+      if (recorder.state === 'recording') {
+        clearInterval(cursorInterval);
+        clearInterval(frameInterval);
+        exportAudio?.pause();
+        recorder.stop();
+      }
+    }, durationSec * 1000 + 1500);
+  }, [isPedagogicalProject, notes, pedagogicalAudioUrl, pedagogicalAudioDuration, pedagogicalAudioBpm, songTitle, stopPedagogicalPlayback, t]);
+
   // Build state to persist
   const getPersistedState = useCallback(() => ({
     notes,
@@ -1007,6 +1172,7 @@ function NoodiMeisterCore({ icons }) {
     pickupEnabled,
     pickupQuantity,
     pickupDuration,
+    pageOrientation,
     layoutMeasuresPerLine,
     layoutLineBreakBefore,
     layoutPageBreakBefore,
@@ -1023,8 +1189,10 @@ function NoodiMeisterCore({ icons }) {
     isPedagogicalProject,
     pedagogicalAudioBpm,
     pedagogicalAudioData: pedagogicalAudioDataRef.current || undefined,
+    pedagogicalPlayheadStyle,
+    pedagogicalPlayheadEmoji,
     chords
-  }), [notes, timeSignature, timeSignatureMode, clefType, keySignature, staffLines, notationStyle, pixelsPerBeat, notationMode, instrument, instrumentNotationVariant, cursorPosition, addedMeasures, setupCompleted, songTitle, author, pickupEnabled, pickupQuantity, pickupDuration, layoutMeasuresPerLine, layoutLineBreakBefore, layoutPageBreakBefore, visibleToolIds, tuningReferenceNote, tuningReferenceOctave, tuningReferenceHz, playNoteOnInsert, figurenotesSize, figurenotesStems, showBarNumbers, relativeNotationShowKeySignature, relativeNotationShowTraditionalClef, isPedagogicalProject, pedagogicalAudioBpm, chords]);
+  }), [notes, timeSignature, timeSignatureMode, clefType, keySignature, staffLines, notationStyle, pixelsPerBeat, notationMode, instrument, instrumentNotationVariant, cursorPosition, addedMeasures, setupCompleted, songTitle, author, pickupEnabled, pickupQuantity, pickupDuration, pageOrientation, layoutMeasuresPerLine, layoutLineBreakBefore, layoutPageBreakBefore, visibleToolIds, tuningReferenceNote, tuningReferenceOctave, tuningReferenceHz, playNoteOnInsert, figurenotesSize, figurenotesStems, showBarNumbers, relativeNotationShowKeySignature, relativeNotationShowTraditionalClef, isPedagogicalProject, pedagogicalAudioBpm, pedagogicalPlayheadStyle, pedagogicalPlayheadEmoji, chords]);
 
   const saveToStorageSync = useCallback(() => {
     try {
@@ -1075,6 +1243,7 @@ function NoodiMeisterCore({ icons }) {
     setupCompleted,
     cursorPosition,
     addedMeasures,
+    pageOrientation,
     layoutMeasuresPerLine,
     layoutLineBreakBefore,
     layoutPageBreakBefore,
@@ -1090,9 +1259,11 @@ function NoodiMeisterCore({ icons }) {
     relativeNotationShowTraditionalClef,
     pedagogicalAudioBpm,
     pedagogicalAudioData: pedagogicalAudioDataRef.current || undefined,
+    pedagogicalPlayheadStyle,
+    pedagogicalPlayheadEmoji,
     scoreData: notes,
     chords
-  }), [songTitle, author, notationStyle, notationMode, isPedagogicalProject, timeSignature, timeSignatureMode, clefType, keySignature, staffLines, pixelsPerBeat, instrument, instrumentNotationVariant, pickupEnabled, pickupQuantity, pickupDuration, setupCompleted, cursorPosition, addedMeasures, layoutMeasuresPerLine, layoutLineBreakBefore, layoutPageBreakBefore, visibleToolIds, tuningReferenceNote, tuningReferenceOctave, tuningReferenceHz, playNoteOnInsert, figurenotesSize, figurenotesStems, showBarNumbers, relativeNotationShowKeySignature, relativeNotationShowTraditionalClef, pedagogicalAudioBpm, notes, chords]);
+  }), [songTitle, author, notationStyle, notationMode, isPedagogicalProject, timeSignature, timeSignatureMode, clefType, keySignature, staffLines, pixelsPerBeat, instrument, instrumentNotationVariant, pickupEnabled, pickupQuantity, pickupDuration, setupCompleted, cursorPosition, addedMeasures, pageOrientation, layoutMeasuresPerLine, layoutLineBreakBefore, layoutPageBreakBefore, visibleToolIds, tuningReferenceNote, tuningReferenceOctave, tuningReferenceHz, playNoteOnInsert, figurenotesSize, figurenotesStems, showBarNumbers, relativeNotationShowKeySignature, relativeNotationShowTraditionalClef, pedagogicalAudioBpm, pedagogicalPlayheadStyle, pedagogicalPlayheadEmoji, notes, chords]);
 
   // Download project file (future: replace with upload to Google Drive / OneDrive)
   const downloadProject = useCallback(() => {
@@ -1134,6 +1305,8 @@ function NoodiMeisterCore({ icons }) {
       if (data.figurenotesStems != null) setFigurenotesStems(!!data.figurenotesStems);
       if (data.isPedagogicalProject != null) setIsPedagogicalProject(!!data.isPedagogicalProject);
       if (data.pedagogicalAudioBpm != null) setPedagogicalAudioBpm(Math.max(20, Math.min(300, data.pedagogicalAudioBpm)));
+      if (data.pedagogicalPlayheadStyle) setPedagogicalPlayheadStyle(data.pedagogicalPlayheadStyle);
+      if (data.pedagogicalPlayheadEmoji != null) setPedagogicalPlayheadEmoji(data.pedagogicalPlayheadEmoji);
       if (data.pedagogicalAudioData) {
         try {
           const binary = atob(data.pedagogicalAudioData);
@@ -1160,6 +1333,7 @@ function NoodiMeisterCore({ icons }) {
       if (data.pickupEnabled != null) setPickupEnabled(data.pickupEnabled);
       if (data.pickupQuantity != null) setPickupQuantity(data.pickupQuantity);
       if (data.pickupDuration != null) setPickupDuration(data.pickupDuration);
+      if (data.pageOrientation === 'portrait' || data.pageOrientation === 'landscape') setPageOrientation(data.pageOrientation);
       if (data.layoutMeasuresPerLine != null) setLayoutMeasuresPerLine(data.layoutMeasuresPerLine);
       if (Array.isArray(data.layoutLineBreakBefore)) setLayoutLineBreakBefore(data.layoutLineBreakBefore);
       if (Array.isArray(data.layoutPageBreakBefore)) setLayoutPageBreakBefore(data.layoutPageBreakBefore);
@@ -1237,6 +1411,7 @@ function NoodiMeisterCore({ icons }) {
         if (data.pickupQuantity != null) setPickupQuantity(data.pickupQuantity);
         if (data.pickupDuration != null) setPickupDuration(data.pickupDuration);
         else if (data.pickupBeats != null) { setPickupQuantity(data.pickupBeats); setPickupDuration('1/4'); }
+        if (data.pageOrientation === 'portrait' || data.pageOrientation === 'landscape') setPageOrientation(data.pageOrientation);
         if (data.layoutMeasuresPerLine != null) setLayoutMeasuresPerLine(data.layoutMeasuresPerLine);
         if (Array.isArray(data.layoutLineBreakBefore)) setLayoutLineBreakBefore(data.layoutLineBreakBefore);
         if (Array.isArray(data.layoutPageBreakBefore)) setLayoutPageBreakBefore(data.layoutPageBreakBefore);
@@ -1250,6 +1425,8 @@ function NoodiMeisterCore({ icons }) {
         if (data.relativeNotationShowTraditionalClef != null) setRelativeNotationShowTraditionalClef(data.relativeNotationShowTraditionalClef);
         if (data.isPedagogicalProject != null) setIsPedagogicalProject(!!data.isPedagogicalProject);
         if (data.pedagogicalAudioBpm != null) setPedagogicalAudioBpm(Math.max(20, Math.min(300, data.pedagogicalAudioBpm)));
+        if (data.pedagogicalPlayheadStyle) setPedagogicalPlayheadStyle(data.pedagogicalPlayheadStyle);
+        if (data.pedagogicalPlayheadEmoji != null) setPedagogicalPlayheadEmoji(data.pedagogicalPlayheadEmoji);
         if (data.pedagogicalAudioData) {
           try {
             const binary = atob(data.pedagogicalAudioData);
@@ -1402,6 +1579,7 @@ function NoodiMeisterCore({ icons }) {
           if (data.pickupQuantity != null) setPickupQuantity(data.pickupQuantity);
           if (data.pickupDuration != null) setPickupDuration(data.pickupDuration);
           else if (data.pickupBeats != null) { setPickupQuantity(data.pickupBeats); setPickupDuration('1/4'); }
+          if (data.pageOrientation === 'portrait' || data.pageOrientation === 'landscape') setPageOrientation(data.pageOrientation);
           if (data.layoutMeasuresPerLine != null) setLayoutMeasuresPerLine(data.layoutMeasuresPerLine);
           if (Array.isArray(data.layoutLineBreakBefore)) setLayoutLineBreakBefore(data.layoutLineBreakBefore);
           if (Array.isArray(data.layoutPageBreakBefore)) setLayoutPageBreakBefore(data.layoutPageBreakBefore);
@@ -1415,6 +1593,8 @@ function NoodiMeisterCore({ icons }) {
           if (data.relativeNotationShowTraditionalClef != null) setRelativeNotationShowTraditionalClef(data.relativeNotationShowTraditionalClef);
           if (data.isPedagogicalProject != null) setIsPedagogicalProject(!!data.isPedagogicalProject);
           if (data.pedagogicalAudioBpm != null) setPedagogicalAudioBpm(Math.max(20, Math.min(300, data.pedagogicalAudioBpm)));
+          if (data.pedagogicalPlayheadStyle) setPedagogicalPlayheadStyle(data.pedagogicalPlayheadStyle);
+          if (data.pedagogicalPlayheadEmoji != null) setPedagogicalPlayheadEmoji(data.pedagogicalPlayheadEmoji);
           if (data.pedagogicalAudioData) {
             try {
               const binary = atob(data.pedagogicalAudioData);
@@ -2375,17 +2555,18 @@ function NoodiMeisterCore({ icons }) {
     : 0;
   const scoreContainerRef = useRef(null);
   const [pageWidth, setPageWidth] = useState(LAYOUT.PAGE_WIDTH_MIN);
+  const effectivePageWidthMax = pageOrientation === 'landscape' ? LAYOUT.PAGE_WIDTH_MAX_LANDSCAPE : LAYOUT.PAGE_WIDTH_MAX;
   useEffect(() => {
     const el = scoreContainerRef.current;
     if (!el) return;
     const ro = new ResizeObserver(([entry]) => {
       const w = entry.contentRect.width;
-      setPageWidth(Math.max(LAYOUT.PAGE_WIDTH_MIN, Math.min(LAYOUT.PAGE_WIDTH_MAX, w)));
+      setPageWidth(Math.max(LAYOUT.PAGE_WIDTH_MIN, Math.min(effectivePageWidthMax, w)));
     });
     ro.observe(el);
-    setPageWidth(Math.max(LAYOUT.PAGE_WIDTH_MIN, Math.min(LAYOUT.PAGE_WIDTH_MAX, el.getBoundingClientRect().width)));
+    setPageWidth(Math.max(LAYOUT.PAGE_WIDTH_MIN, Math.min(effectivePageWidthMax, el.getBoundingClientRect().width)));
     return () => ro.disconnect();
-  }, []);
+  }, [pageOrientation, effectivePageWidthMax]);
 
   const completeSetup = useCallback((style) => {
     setNotationStyle(style);
@@ -2794,9 +2975,29 @@ function NoodiMeisterCore({ icons }) {
                   <span className="text-sm font-semibold text-amber-900">Taktiloendur (näita taktinumbreid iga rea alguses; maha võtmise korral takte ei loendata)</span>
                 </label>
               </div>
+              <div className="border-t border-amber-200 pt-4 mt-4">
+                <label className="block text-sm font-semibold text-amber-900 mb-1">{t('layout.pageOrientation')}</label>
+                <p className="text-xs text-amber-700 mb-2">{t('layout.pageOrientationHint')}</p>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => { dirtyRef.current = true; setPageOrientation('portrait'); }}
+                    className={`px-3 py-2 rounded-lg text-sm font-medium border-2 transition-colors flex items-center gap-2 ${pageOrientation === 'portrait' ? 'bg-amber-600 border-amber-700 text-white' : 'border-amber-200 text-amber-900 bg-amber-50 hover:bg-amber-100'}`}
+                  >
+                    {t('layout.pageOrientationPortrait')}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { dirtyRef.current = true; setPageOrientation('landscape'); }}
+                    className={`px-3 py-2 rounded-lg text-sm font-medium border-2 transition-colors flex items-center gap-2 ${pageOrientation === 'landscape' ? 'bg-amber-600 border-amber-700 text-white' : 'border-amber-200 text-amber-900 bg-amber-50 hover:bg-amber-100'}`}
+                  >
+                    {t('layout.pageOrientationLandscape')}
+                  </button>
+                </div>
+              </div>
               <div>
                 <label className="block text-sm font-semibold text-amber-900 mb-1">{t('layout.measuresPerLine')}</label>
-                <p className="text-xs text-amber-700 mb-2">{t('layout.measuresPerLineHint')}</p>
+                <p className="text-xs text-amber-700 mb-2">{t('layout.measuresPerLineHint')} {t('layout.measuresPerLineHintOrientation')}</p>
                 <div className="flex flex-wrap gap-2">
                   {[2, 3, 4, 6, 8].map((n) => (
                     <button
@@ -3108,6 +3309,44 @@ function NoodiMeisterCore({ icons }) {
                       <CloudDownload className="w-4 h-4" /> {t('file.loadCloud')}
                     </button>
                     <div className="my-1 border-t border-slate-600" />
+                    {/* Animatsiooni eksport (video) – ainult pedagoogilise projekti puhul */}
+                    {isPedagogicalProject && (
+                      <div className="relative" onMouseEnter={() => setFileSubmenuOpen('exportAnimation')} onMouseLeave={() => setFileSubmenuOpen(null)}>
+                        <button
+                          type="button"
+                          disabled={isExportingAnimation}
+                          className="w-full flex items-center justify-between gap-2 px-3 py-2 text-left text-sm text-amber-50 hover:bg-slate-600 disabled:opacity-60"
+                          title={t('file.exportAnimation')}
+                        >
+                          <span className="flex items-center gap-2">
+                            {icons?.Video && <icons.Video className="w-4 h-4" />}
+                            {t('file.exportAnimation')}
+                          </span>
+                          <ChevronDown className="w-4 h-4 rotate-[-90deg]" />
+                        </button>
+                        {fileSubmenuOpen === 'exportAnimation' && (
+                          <div className="absolute left-full top-0 ml-0 min-w-[220px] py-1 rounded-lg bg-slate-700 border border-slate-600 shadow-xl z-50">
+                            <button
+                              type="button"
+                              disabled={isExportingAnimation}
+                              onClick={() => { exportAnimationAsVideo({ download: true }); setHeaderMenuOpen(null); setFileSubmenuOpen(null); }}
+                              className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-amber-50 hover:bg-slate-600 disabled:opacity-60"
+                            >
+                              {t('file.exportAnimationDownload')}
+                            </button>
+                            <button
+                              type="button"
+                              disabled={isExportingAnimation}
+                              onClick={() => { exportAnimationAsVideo({ saveToDrive: true }); setHeaderMenuOpen(null); setFileSubmenuOpen(null); }}
+                              className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-amber-50 hover:bg-slate-600 disabled:opacity-60"
+                            >
+                              <CloudUpload className="w-4 h-4" /> {t('file.exportAnimationDrive')}
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    {isPedagogicalProject && <div className="my-1 border-t border-slate-600" />}
                     {/* Seaded – alammenüü: pealkiri, autor, eeltakt */}
                     <div className="relative" onMouseEnter={() => setFileSubmenuOpen('seaded')} onMouseLeave={() => setFileSubmenuOpen(null)}>
                       <button
@@ -3785,6 +4024,36 @@ function NoodiMeisterCore({ icons }) {
                     <span className="text-sm text-violet-600 italic">{t('pedagogical.noAudio')}</span>
                   )}
                 </div>
+                <div className="mt-3 pt-3 border-t border-violet-200">
+                  <h4 className="text-xs font-bold text-violet-900 uppercase mb-2">{t('pedagogical.playheadStyle')}</h4>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {[
+                      { value: 'line', label: t('pedagogical.playheadLine') },
+                      { value: 'violin', label: '🎻 ' + t('pedagogical.playheadViolin') },
+                      { value: 'smiley', label: '😊 ' + t('pedagogical.playheadSmiley') },
+                      { value: 'custom', label: t('pedagogical.playheadCustom') }
+                    ].map(({ value, label }) => (
+                      <button
+                        key={value}
+                        type="button"
+                        onClick={() => setPedagogicalPlayheadStyle(value)}
+                        className={`px-3 py-1.5 rounded-lg text-sm font-medium ${pedagogicalPlayheadStyle === value ? 'bg-violet-600 text-white' : 'bg-violet-100 text-violet-800 hover:bg-violet-200'}`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                    {pedagogicalPlayheadStyle === 'custom' && (
+                      <input
+                        type="text"
+                        value={pedagogicalPlayheadEmoji}
+                        onChange={(e) => setPedagogicalPlayheadEmoji(e.target.value.slice(0, 4))}
+                        placeholder={t('pedagogical.playheadCustomPlaceholder')}
+                        className="w-20 px-2 py-1 rounded border-2 border-violet-200 bg-white text-violet-900 text-lg text-center"
+                        maxLength={4}
+                      />
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
           )}
@@ -3838,7 +4107,7 @@ function NoodiMeisterCore({ icons }) {
           <div
             ref={scoreContainerRef}
             className="mx-auto bg-white rounded-lg shadow-lg border-2 border-amber-200 p-8 flex-1 transition-colors"
-            style={{ maxWidth: 1000, minHeight: 400 }}
+            style={{ maxWidth: pageOrientation === 'landscape' ? LAYOUT.PAGE_WIDTH_MAX_LANDSCAPE : LAYOUT.PAGE_WIDTH_MAX, minHeight: 400 }}
             onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; e.currentTarget.classList.add('ring-2', 'ring-amber-400', 'ring-offset-2'); }}
             onDragLeave={(e) => { e.currentTarget.classList.remove('ring-2', 'ring-amber-400', 'ring-offset-2'); }}
             onDrop={(e) => {
@@ -3900,6 +4169,9 @@ function NoodiMeisterCore({ icons }) {
                 chords={chords}
                 figurenotesSize={figurenotesSize}
                 figurenotesStems={figurenotesStems}
+                pedagogicalPlayheadStyle={pedagogicalPlayheadStyle}
+                pedagogicalPlayheadEmoji={pedagogicalPlayheadEmoji}
+                isPedagogicalAudioPlaying={isPedagogicalAudioPlaying}
               />
           </div>
         </main>
@@ -4029,7 +4301,7 @@ function getFingeringForNote(pitch, octave, instrumentId) {
 }
 
 // Timeline Component – multi-system layout (VexFlow loogika). (PAGE_BREAK_GAP on defineeritud üleval.)
-function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, pageWidth, cursorPosition, notationMode, staffLines, clefType, keySignature = 'C', relativeNotationShowKeySignature = false, relativeNotationShowTraditionalClef = false, instrument = 'piano', instrumentNotationVariant = 'standard', instrumentConfig = {}, showBarNumbers = true, chords = [], isDotted, isRest, selectedDuration, noteInputMode, selectedNoteIndex, isNoteSelected, notes: allNotes, onStaffAddNote, ghostPitch, ghostOctave, notationStyle, layoutMeasuresPerLine = 4, layoutLineBreakBefore = [], layoutPageBreakBefore = [], figurenotesSize = 16, figurenotesStems = false }) {
+function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, pageWidth, cursorPosition, notationMode, staffLines, clefType, keySignature = 'C', relativeNotationShowKeySignature = false, relativeNotationShowTraditionalClef = false, instrument = 'piano', instrumentNotationVariant = 'standard', instrumentConfig = {}, showBarNumbers = true, chords = [], isDotted, isRest, selectedDuration, noteInputMode, selectedNoteIndex, isNoteSelected, notes: allNotes, onStaffAddNote, ghostPitch, ghostOctave, notationStyle, layoutMeasuresPerLine = 4, layoutLineBreakBefore = [], layoutPageBreakBefore = [], figurenotesSize = 16, figurenotesStems = false, pedagogicalPlayheadStyle = 'line', pedagogicalPlayheadEmoji = '🎵', isPedagogicalAudioPlaying = false }) {
   const isFigurenotesMode = notationStyle === 'FIGURENOTES';
   const instCfg = instrumentConfig[instrument];
   const isTabMode = instCfg?.type === 'tab' && instrumentNotationVariant === 'tab';
@@ -4067,32 +4339,25 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
   const spacing = 10;
   const middleLineY = centerY; // B4 treble / D3 bass
 
-  // Pitch+octave → staff Y. Treble: E4=bottom line. Vabanotatsioon: Do (Jo) võti = C-võti, keskmine joon = Do (duuri kujul).
+  // Pitch+octave → staff Y. JO-võti on vastavuses traditsioonilise noodikirja helikõrgustega (sama skaala kui viiulivõti).
   const getPitchY = (pitch, octave) => {
     if (staffLines !== 5) return centerY;
     const rel = { C: 0, D: 1, E: 2, F: 3, G: 4, A: 5, B: 6 };
-    // Relatiivnotatsioon (Kodály): C-võti, keskmine joon = C4 (Do) → altvõti positsioonid
-    if (notationMode === 'vabanotatsioon') {
-      const bottomY = centerY + spacing * 2;
-      const index = (octave - 3) * 7 + rel[pitch] - 4; // alto: C4 = middle line
-      return bottomY - index * (spacing / 2);
-    }
-    if (clefType === 'treble') {
-      const bottomY = centerY + spacing * 2;
+    const bottomY = centerY + spacing * 2;
+    // Nii vabanotatsioon (Jo võti) kui viiulivõti: E4 = alumine joon (sama helikõrgused)
+    if (notationMode === 'vabanotatsioon' || clefType === 'treble') {
       const index = (octave - 4) * 7 + rel[pitch] - 2;
       return bottomY - index * (spacing / 2);
     }
-    const bottomY = centerY + spacing * 2;
     const index = (octave - 3) * 7 + rel[pitch] - 4;
     return bottomY - index * (spacing / 2);
   };
 
-  // Map staff Y position to pitch. Treble: F5..E4. Vabanotatsioon: Do (C4) keskmisel joonel (altvõti skaala).
+  // Map staff Y position to pitch. JO-võti = sama helikõrgused mis traditsiooniline (viiulivõti): F5..C4.
   const getPitchFromY = (clickY) => {
     if (staffLines !== 5 || !onStaffAddNote) return null;
     const spacing = 10;
     const startY = centerY - spacing * 2;
-    // Vabanotatsioon: keskmine joon = C4 (Do), duuri kujul (altvõti)
     const pitchesTreble = [
       { y: startY, pitch: 'F', octave: 5 },
       { y: startY + spacing/2, pitch: 'E', octave: 5 },
@@ -4106,20 +4371,7 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
       { y: startY + spacing*4.5, pitch: 'D', octave: 4 },
       { y: startY + spacing*5, pitch: 'C', octave: 4 }
     ];
-    const pitchesAlto = [
-      { y: startY, pitch: 'G', octave: 4 },
-      { y: startY + spacing/2, pitch: 'F', octave: 4 },
-      { y: startY + spacing, pitch: 'E', octave: 4 },
-      { y: startY + spacing*1.5, pitch: 'D', octave: 4 },
-      { y: startY + spacing*2, pitch: 'C', octave: 4 },
-      { y: startY + spacing*2.5, pitch: 'B', octave: 3 },
-      { y: startY + spacing*3, pitch: 'A', octave: 3 },
-      { y: startY + spacing*3.5, pitch: 'G', octave: 3 },
-      { y: startY + spacing*4, pitch: 'F', octave: 3 },
-      { y: startY + spacing*4.5, pitch: 'E', octave: 3 },
-      { y: startY + spacing*5, pitch: 'D', octave: 3 }
-    ];
-    const pitches = notationMode === 'vabanotatsioon' ? pitchesAlto : pitchesTreble;
+    const pitches = pitchesTreble;
     let nearest = pitches[0];
     let minDist = Math.abs(clickY - pitches[0].y);
     for (const p of pitches) {
@@ -4496,18 +4748,15 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
                   const clefMiddle = 'middle';
                   if (notationMode === 'vabanotatsioon') {
                     g.push(
-                      <text
-                        key="do-clef"
+                      <JoClefSymbol
+                        key="jo-clef"
                         x={xOffset}
-                        y={sys.yOffset + middleLineYStaff}
-                        fontSize={clefFontSize}
-                        fontFamily="serif"
-                        fill="#333"
-                        textAnchor="start"
-                        dominantBaseline={clefMiddle}
-                      >
-                        {DO_CLEF_UNICODE}
-                      </text>
+                        centerY={sys.yOffset + middleLineYStaff}
+                        staffSpacing={staffSpace}
+                        stroke="#000"
+                        strokeWidth={2.2}
+                        barLength={14}
+                      />
                     );
                     xOffset += LAYOUT.CLEF_WIDTH;
                     if (relativeNotationShowTraditionalClef) {
@@ -4965,17 +5214,47 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
       {/* Cursor + Ghost note (only visible when note input mode is ON) – slot center */}
       {noteInputMode && cursorInfo && cursorSlotCenterX != null && (
         <g>
-          <line
-            x1={cursorSlotCenterX}
-            y1={cursorInfo.system.yOffset + 5}
-            x2={cursorSlotCenterX}
-            y2={cursorInfo.system.yOffset + timelineHeight - 5}
-            stroke="#2563eb"
-            strokeWidth="3"
-            opacity="0.8"
-          >
-            <animate attributeName="opacity" values="0.8;0.3;0.8" dur="1s" repeatCount="indefinite" />
-          </line>
+          {pedagogicalPlayheadStyle === 'line' ? (
+            <line
+              x1={cursorSlotCenterX}
+              y1={cursorInfo.system.yOffset + 5}
+              x2={cursorSlotCenterX}
+              y2={cursorInfo.system.yOffset + timelineHeight - 5}
+              stroke="#2563eb"
+              strokeWidth="3"
+              opacity="0.8"
+            >
+              <animate attributeName="opacity" values="0.8;0.3;0.8" dur="1s" repeatCount="indefinite" />
+            </line>
+          ) : (() => {
+              const playheadEmoji = pedagogicalPlayheadStyle === 'violin' ? '🎻' : pedagogicalPlayheadStyle === 'smiley' ? '😊' : (pedagogicalPlayheadEmoji || '🎵').trim() || '🎵';
+              const cursorCenterY = cursorInfo.system.yOffset + centerY;
+              const emojiSize = 28;
+              return (
+                <>
+                  <line
+                    x1={cursorSlotCenterX}
+                    y1={cursorInfo.system.yOffset + 5}
+                    x2={cursorSlotCenterX}
+                    y2={cursorInfo.system.yOffset + timelineHeight - 5}
+                    stroke="#2563eb"
+                    strokeWidth="1.5"
+                    opacity="0.4"
+                  />
+                  <text
+                    x={cursorSlotCenterX}
+                    y={cursorCenterY}
+                    textAnchor="middle"
+                    dominantBaseline="middle"
+                    fontSize={emojiSize}
+                    fontFamily="sans-serif"
+                  >
+                    {playheadEmoji}
+                    {isPedagogicalAudioPlaying && <animate attributeName="opacity" values="1;0.75;1" dur="0.6s" repeatCount="indefinite" />}
+                  </text>
+                </>
+              );
+            })()}
           {isRest ? (
             isFigurenotesMode
               ? (() => {
