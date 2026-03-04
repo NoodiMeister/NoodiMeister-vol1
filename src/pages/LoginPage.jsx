@@ -2,34 +2,56 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Music2, LogIn, Mail, Lock } from 'lucide-react';
 import { CloudLoginButtons } from '../components/CloudLogin';
+import { AuthErrorBlock } from '../components/AuthErrorBlock';
 import { getStorageForLogin } from '../services/authStorage';
+import { formatAuthError } from '../utils/authError';
 
 export default function LoginPage() {
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [message, setMessage] = useState('');
+  const [errorDetail, setErrorDetail] = useState(null);
   const [stayLoggedIn, setStayLoggedIn] = useState(false);
+
+  const setError = (msg, detail) => {
+    setMessage(msg);
+    setErrorDetail(detail ?? null);
+  };
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    setMessage('');
+    setErrorDetail(null);
     try {
-      const users = JSON.parse(localStorage.getItem('noodimeister-users') || '[]');
-      const user = users.find(u => u.email === email && u.password === password);
+      let users = [];
+      try {
+        users = JSON.parse(localStorage.getItem('noodimeister-users') || '[]');
+      } catch (_) {
+        const payload = formatAuthError('e-mail/parool', { message: 'Andmeid ei saanud lugeda. Proovi uuesti või tühjenda brauseri andmed.' });
+        setError(payload.fullMessage, payload);
+        return;
+      }
+      if (!Array.isArray(users)) users = [];
+      const user = users.find(u => u && u.email === email && u.password === password);
       if (user) {
         const storage = getStorageForLogin(stayLoggedIn);
         if (!storage) {
-          setMessage('Salvestamine ebaõnnestus (brauser võib blokeerida andmeid). Proovi teist brauserit või lülita privaatse režiimi välja.');
+          const payload = formatAuthError('brauser', { message: 'Salvestamine ebaõnnestus (brauser võib blokeerida andmeid). Proovi teist brauserit või lülita privaatse režiimi välja.' });
+          setError(payload.fullMessage, payload);
           return;
         }
         storage.setItem('noodimeister-logged-in', JSON.stringify({ email: user.email, name: user.name }));
         setMessage('Sisselogimine õnnestus.');
+        setErrorDetail(null);
         setTimeout(() => navigate('/app'), 800);
       } else {
-        setMessage('Vale e-mail või parool.');
+        const payload = formatAuthError('e-mail/parool', { code: 'invalid_credentials', message: 'Vale e-mail või parool.' });
+        setError(payload.fullMessage, payload);
       }
     } catch (err) {
-      setMessage('Midagi läks valesti.');
+      const payload = formatAuthError('e-mail/parool', err);
+      setError(payload.fullMessage, payload);
     }
   };
 
@@ -62,9 +84,11 @@ export default function LoginPage() {
           </div>
           <form onSubmit={handleSubmit} className="p-8 space-y-4">
             {message && (
-              <div className={`p-3 rounded-lg text-sm ${message === 'Sisselogimine õnnestus.' ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'}`}>
-                {message}
-              </div>
+              <AuthErrorBlock
+                message={message}
+                errorDetail={errorDetail}
+                isSuccess={message === 'Sisselogimine õnnestus.'}
+              />
             )}
             <div>
               <label className="block text-sm font-semibold text-amber-900 mb-1">E-mail</label>
@@ -109,7 +133,11 @@ export default function LoginPage() {
             >
               Logi sisse
             </button>
-            <CloudLoginButtons mode="login" stayLoggedIn={stayLoggedIn} />
+            <CloudLoginButtons
+              mode="login"
+              stayLoggedIn={stayLoggedIn}
+              onError={(payload) => setError(payload.fullMessage, payload)}
+            />
             <p className="text-center text-sm text-amber-700">
               Pole kontot? <Link to="/registreeru" className="font-semibold text-amber-800 hover:underline">Registreeru</Link>
             </p>

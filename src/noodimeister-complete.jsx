@@ -2751,17 +2751,6 @@ function NoodiMeisterCore({ icons }) {
   const effectiveLayoutMeasuresPerLine = viewMode === 'score' ? layoutMeasuresPerLine : partLayoutMeasuresPerLine;
   const effectiveLayoutLineBreakBefore = viewMode === 'score' ? layoutLineBreakBefore : partLayoutLineBreakBefore;
   const effectiveLayoutPageBreakBefore = viewMode === 'score' ? layoutPageBreakBefore : partLayoutPageBreakBefore;
-  const logicalContentHeight = useMemo(() => {
-    const opts = { measuresPerLine: effectiveLayoutMeasuresPerLine, lineBreakBefore: effectiveLayoutLineBreakBefore, pageBreakBefore: effectiveLayoutPageBreakBefore };
-    const sys = computeLayout(measures, timeSignature, pixelsPerBeat, pageWidth || LAYOUT.PAGE_WIDTH_MIN, opts);
-    return sys.length > 0 ? sys[sys.length - 1].yOffset + LAYOUT.STAFF_HEIGHT + 40 : LAYOUT.STAFF_HEIGHT + 40;
-  }, [measures, timeSignature, pixelsPerBeat, pageWidth, effectiveLayoutMeasuresPerLine, effectiveLayoutLineBreakBefore, effectiveLayoutPageBreakBefore]);
-  const cursorMeasureIndex = measures.length > 0
-    ? (() => {
-        const i = measures.findIndex(m => cursorPosition >= m.startBeat && cursorPosition < m.endBeat);
-        return i >= 0 ? i : Math.max(0, measures.length - 1);
-      })()
-    : 0;
   const scoreContainerRef = useRef(null);
   const [pageWidth, setPageWidth] = useState(LAYOUT.PAGE_WIDTH_MIN);
   const effectivePageWidthMax = pageOrientation === 'landscape' ? LAYOUT.PAGE_WIDTH_MAX_LANDSCAPE : LAYOUT.PAGE_WIDTH_MAX;
@@ -2776,6 +2765,17 @@ function NoodiMeisterCore({ icons }) {
     setPageWidth(Math.max(LAYOUT.PAGE_WIDTH_MIN, Math.min(effectivePageWidthMax, el.getBoundingClientRect().width)));
     return () => ro.disconnect();
   }, [pageOrientation, effectivePageWidthMax]);
+  const logicalContentHeight = useMemo(() => {
+    const opts = { measuresPerLine: effectiveLayoutMeasuresPerLine, lineBreakBefore: effectiveLayoutLineBreakBefore, pageBreakBefore: effectiveLayoutPageBreakBefore };
+    const sys = computeLayout(measures, timeSignature, pixelsPerBeat, pageWidth || LAYOUT.PAGE_WIDTH_MIN, opts);
+    return sys.length > 0 ? sys[sys.length - 1].yOffset + LAYOUT.STAFF_HEIGHT + 40 : LAYOUT.STAFF_HEIGHT + 40;
+  }, [measures, timeSignature, pixelsPerBeat, pageWidth, effectiveLayoutMeasuresPerLine, effectiveLayoutLineBreakBefore, effectiveLayoutPageBreakBefore]);
+  const cursorMeasureIndex = measures.length > 0
+    ? (() => {
+        const i = measures.findIndex(m => cursorPosition >= m.startBeat && cursorPosition < m.endBeat);
+        return i >= 0 ? i : Math.max(0, measures.length - 1);
+      })()
+    : 0;
 
   useEffect(() => {
     const el = mainRef.current;

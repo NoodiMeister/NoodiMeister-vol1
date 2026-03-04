@@ -2,6 +2,7 @@ import React from 'react';
 import { useGoogleLogin } from '@react-oauth/google';
 import { useNavigate } from 'react-router-dom';
 import { getStorageForLogin } from '../services/authStorage';
+import { formatAuthError } from '../utils/authError';
 
 const googleClientId = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_GOOGLE_CLIENT_ID) || '';
 
@@ -9,25 +10,46 @@ const KEY_LOGGED_IN = 'noodimeister-logged-in';
 const KEY_GOOGLE_TOKEN = 'noodimeister-google-token';
 const KEY_GOOGLE_EXPIRY = 'noodimeister-google-token-expiry';
 
-function useCloudLoginWithProvider(mode = 'login', stayLoggedIn = false) {
+function useCloudLoginWithProvider(mode = 'login', stayLoggedIn = false, onError) {
   const navigate = useNavigate();
 
   const googleLogin = useGoogleLogin({
     onSuccess: (tokenResponse) => {
+      if (!tokenResponse?.access_token) {
+        console.error('Google: puudub access_token');
+        return;
+      }
       fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
         headers: { Authorization: `Bearer ${tokenResponse.access_token}` }
       })
-        .then(r => r.json())
+        .then(async (r) => {
+          const body = await r.json().catch(() => ({}));
+          if (!r.ok) {
+            const errDetail = body.error?.message ?? body.error_description ?? body.message ?? (r.status === 401 ? 'Token kehtetu või aegunud' : `HTTP ${r.status}`);
+            const err = { status: r.status, code: body.error?.code ?? body.error, message: errDetail, ...body };
+            console.error('Google userinfo API viga:', err);
+            throw err;
+          }
+          return body;
+        })
         .then(profile => {
-          if (!profile?.email) {
-            console.warn('Google profile ilma e-mailita');
+          if (!profile || profile.error) {
+            const errObj = profile && (typeof profile.error === 'string' ? { error: profile.error, error_description: profile.error_description } : profile);
+            const payload = formatAuthError('Google userinfo', errObj);
+            console.warn(payload.fullMessage);
+            if (onError) onError(payload); else alert(payload.fullMessage);
+            return;
+          }
+          if (!profile.email) {
+            const payload = formatAuthError('Google userinfo', { message: 'e-mail puudub (konto võib olla piiratud)' });
+            if (onError) onError(payload); else alert(payload.fullMessage);
             return;
           }
           const user = { email: profile.email, name: profile.name || profile.given_name || profile.email?.split('@')[0], provider: 'google' };
           const storage = getStorageForLogin(stayLoggedIn);
           if (!storage) {
-            console.error('Salvestus puudub (nt privaatne režiim)');
-            alert('Sisselogimine ei õnnestunud: brauser ei luba andmeid salvestada. Proovi teist brauserit või lülita privaatse režiimi välja.');
+            const payload = formatAuthError('brauser', { message: 'brauser ei luba andmeid salvestada (nt privaatne režiim). Proovi teist brauserit.' });
+            if (onError) onError(payload); else alert(payload.fullMessage);
             return;
           }
           storage.setItem(KEY_LOGGED_IN, JSON.stringify(user));
@@ -47,16 +69,26 @@ function useCloudLoginWithProvider(mode = 'login', stayLoggedIn = false) {
         })
         .catch((err) => {
           console.error('Google userinfo viga:', err);
+          const payload = formatAuthError('Google userinfo', err && typeof err === 'object' ? err : new Error(String(err)));
+          if (onError) onError(payload); else alert(payload.fullMessage);
         });
     },
-    onError: () => {},
+    onError: (err) => {
+      console.error('Google OAuth onError:', err);
+      const isPopupClosed = err?.error === 'popup_closed_by_user' || err?.type === 'popup_closed' || err?.type === 'popup_closed_by_user';
+      if (!isPopupClosed) {
+        const payload = formatAuthError('Google OAuth', err && typeof err === 'object' ? err : new Error(String(err)));
+        if (onError) onError(payload); else alert(payload.fullMessage);
+      }
+    },
     flow: 'implicit',
     scope: 'email profile https://www.googleapis.com/auth/drive'
   });
 
   const handleGoogleClick = () => {
     if (!googleClientId) {
-      alert('Google sisselogimine: lisa .env faili rida VITE_GOOGLE_CLIENT_ID=... (Google Cloud Console).');
+      const payload = formatAuthError('konfiguratsioon', { message: 'VITE_GOOGLE_CLIENT_ID puudub. Lisa .env faili rida (Google Cloud Console).' });
+      if (onError) onError(payload); else alert(payload.fullMessage);
       return;
     }
     googleLogin();
@@ -73,8 +105,8 @@ function useCloudLoginWithProvider(mode = 'login', stayLoggedIn = false) {
   return { handleGoogleClick, handleMicrosoftClick, handleAppleClick };
 }
 
-function CloudLoginButtonsInner({ mode = 'login', stayLoggedIn = false }) {
-  const { handleGoogleClick, handleMicrosoftClick, handleAppleClick } = useCloudLoginWithProvider(mode, stayLoggedIn);
+function CloudLoginButtonsInner({ mode = 'login', stayLoggedIn = false, onError }) {
+  const { handleGoogleClick, handleMicrosoftClick, handleAppleClick } = useCloudLoginWithProvider(mode, stayLoggedIn, onError);
   const label = mode === 'register' ? 'Või registreeru pilveteenusega' : 'Või logi sisse pilveteenusega';
 
   return (
@@ -129,7 +161,7 @@ function CloudLoginButtonsInner({ mode = 'login', stayLoggedIn = false }) {
   );
 }
 
-export function CloudLoginButtons({ mode = 'login', stayLoggedIn = false }) {
+export function CloudLoginButtons({ mode = 'login', stayLoggedIn = false, onError }) {
   if (!googleClientId) {
     return (
       <div className="space-y-3">
@@ -145,5 +177,5 @@ export function CloudLoginButtons({ mode = 'login', stayLoggedIn = false }) {
       </div>
     );
   }
-  return <CloudLoginButtonsInner mode={mode} stayLoggedIn={stayLoggedIn} />;
+  return <CloudLoginButtonsInner mode={mode} stayLoggedIn={stayLoggedIn} onError={onError} />;
 }

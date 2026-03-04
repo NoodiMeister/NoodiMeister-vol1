@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Music2, UserPlus, Mail, Lock, User } from 'lucide-react';
 import { CloudLoginButtons } from '../components/CloudLogin';
+import { AuthErrorBlock } from '../components/AuthErrorBlock';
+import { formatAuthError } from '../utils/authError';
 
 export default function RegisterPage() {
   const navigate = useNavigate();
@@ -12,36 +14,48 @@ export default function RegisterPage() {
     confirmPassword: ''
   });
   const [message, setMessage] = useState('');
+  const [errorDetail, setErrorDetail] = useState(null);
   const [stayLoggedIn, setStayLoggedIn] = useState(false);
+
+  const setError = (msg, detail) => {
+    setMessage(msg);
+    setErrorDetail(detail ?? null);
+  };
 
   const handleChange = (e) => {
     setForm(prev => ({ ...prev, [e.target.name]: e.target.value }));
     setMessage('');
+    setErrorDetail(null);
   };
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    setErrorDetail(null);
     if (form.password !== form.confirmPassword) {
-      setMessage('Paroolid ei kattu.');
+      const payload = formatAuthError('registreerimine', { code: 'password_mismatch', message: 'Paroolid ei kattu.' });
+      setError(payload.fullMessage, payload);
       return;
     }
     if (form.password.length < 8) {
-      setMessage('Parool peab olema vähemalt 8 tähemärki.');
+      const payload = formatAuthError('registreerimine', { code: 'password_too_short', message: 'Parool peab olema vähemalt 8 tähemärki.' });
+      setError(payload.fullMessage, payload);
       return;
     }
-    // Praegu salvestame kohalikku (localStorage) – backend võib tulevikus lisada
     try {
       const users = JSON.parse(localStorage.getItem('noodimeister-users') || '[]');
       if (users.some(u => u.email === form.email)) {
-        setMessage('Selle e-mailiga konto on juba olemas.');
+        const payload = formatAuthError('registreerimine', { code: 'email_exists', message: 'Selle e-mailiga konto on juba olemas.' });
+        setError(payload.fullMessage, payload);
         return;
       }
       users.push({ name: form.name, email: form.email, password: form.password });
       localStorage.setItem('noodimeister-users', JSON.stringify(users));
       setMessage('Konto loodud. Saad nüüd sisse logida.');
+      setErrorDetail(null);
       setTimeout(() => navigate('/login'), 1500);
     } catch (err) {
-      setMessage('Midagi läks valesti. Proovi uuesti.');
+      const payload = formatAuthError('registreerimine', err);
+      setError(payload.fullMessage, payload);
     }
   };
 
@@ -74,9 +88,11 @@ export default function RegisterPage() {
           </div>
           <form onSubmit={handleSubmit} className="p-8 space-y-4">
             {message && (
-              <div className={`p-3 rounded-lg text-sm ${message.startsWith('Konto loodud') ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'}`}>
-                {message}
-              </div>
+              <AuthErrorBlock
+                message={message}
+                errorDetail={errorDetail}
+                isSuccess={message.startsWith('Konto loodud')}
+              />
             )}
             <div>
               <label className="block text-sm font-semibold text-amber-900 mb-1">Nimi</label>
@@ -154,7 +170,11 @@ export default function RegisterPage() {
               />
               <span className="text-sm text-amber-800">Jää sisse logituks (soovitame välja jätta ühise arvuti puhul)</span>
             </label>
-            <CloudLoginButtons mode="register" stayLoggedIn={stayLoggedIn} />
+            <CloudLoginButtons
+              mode="register"
+              stayLoggedIn={stayLoggedIn}
+              onError={(payload) => setError(payload.fullMessage, payload)}
+            />
             <p className="text-center text-sm text-amber-700">
               Juba konto? <Link to="/login" className="font-semibold text-amber-800 hover:underline">Logi sisse</Link>
             </p>
