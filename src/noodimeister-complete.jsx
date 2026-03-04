@@ -935,6 +935,18 @@ function NoodiMeisterCore({ icons }) {
     reader.readAsDataURL(file);
     e.target.value = '';
   }, []);
+  const stopPedagogicalPlayback = useCallback(() => {
+    if (pedagogicalPlaybackIntervalRef.current) {
+      clearInterval(pedagogicalPlaybackIntervalRef.current);
+      pedagogicalPlaybackIntervalRef.current = null;
+    }
+    if (pedagogicalAudioRef.current) {
+      pedagogicalAudioRef.current.pause();
+      pedagogicalAudioRef.current.currentTime = 0;
+      pedagogicalAudioRef.current = null;
+    }
+    setIsPedagogicalAudioPlaying(false);
+  }, []);
   const startPedagogicalPlayback = useCallback(() => {
     if (!pedagogicalAudioUrl) return;
     if (pedagogicalPlaybackIntervalRef.current) return;
@@ -963,18 +975,6 @@ function NoodiMeisterCore({ icons }) {
       setCursorPosition(0);
     };
   }, [pedagogicalAudioUrl, pedagogicalAudioBpm, notes, stopPedagogicalPlayback]);
-  const stopPedagogicalPlayback = useCallback(() => {
-    if (pedagogicalPlaybackIntervalRef.current) {
-      clearInterval(pedagogicalPlaybackIntervalRef.current);
-      pedagogicalPlaybackIntervalRef.current = null;
-    }
-    if (pedagogicalAudioRef.current) {
-      pedagogicalAudioRef.current.pause();
-      pedagogicalAudioRef.current.currentTime = 0;
-      pedagogicalAudioRef.current = null;
-    }
-    setIsPedagogicalAudioPlaying(false);
-  }, []);
   useEffect(() => {
     return () => {
       if (pedagogicalPlaybackIntervalRef.current) clearInterval(pedagogicalPlaybackIntervalRef.current);
