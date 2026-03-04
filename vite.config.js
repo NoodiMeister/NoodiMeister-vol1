@@ -32,14 +32,19 @@ function spaFallbackPlugin() {
 
 export default defineConfig({
   plugins: [react(), spaFallbackPlugin()],
-  base: '/',  // Vercel serveerib juurest; sama paigutus kohalikult ja veebis
+  base: '/',
+  optimizeDeps: {
+    include: ['lucide-react'],
+  },
   root: '.',
   build: {
     sourcemap: true,
     commonjsOptions: { transformMixedEsModules: true },
     rollupOptions: {
       output: {
-        inlineDynamicImports: true,
+        manualChunks: (id) => {
+          if (id.includes('node_modules/lucide-react')) return 'lucide-react';
+        },
       },
     },
   },

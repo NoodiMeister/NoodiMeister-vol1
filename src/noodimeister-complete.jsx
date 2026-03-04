@@ -473,6 +473,27 @@ const INSTRUMENT_I18N_KEYS = {
   trumpet: 'inst.trumpet', trombone: 'inst.trombone', tuba: 'inst.tuba', 'french-horn': 'inst.frenchHorn',
   'tin-whistle': 'inst.tinWhistle', saxophone: 'inst.saxophone', voice: 'inst.voice'
 };
+
+// MuseScore / General MIDI vastendus: Noodimeisteri instrument → GM program (0–127) ja FluidR3_GM SoundFont nimi
+// Vt docs/MUSESCORE-SOUNDS.md
+const INSTRUMENT_TO_GM_PROGRAM = {
+  'single-staff-treble': 0, 'single-staff-bass': 0,
+  piano: 0, organ: 19, harpsichord: 6, accordion: 21,
+  guitar: 24, 'ukulele-sopran': 24, 'ukulele-tenor': 24, 'ukulele-bariton': 24, 'ukulele-bass': 32,
+  violin: 40, viola: 41, cello: 42, 'double-bass': 43,
+  flute: 73, recorder: 74, clarinet: 71, oboe: 68, bassoon: 70,
+  trumpet: 56, trombone: 57, tuba: 58, 'french-horn': 60,
+  'tin-whistle': 75, saxophone: 65, voice: 52
+};
+const INSTRUMENT_TO_SOUNDFONT_NAME = {
+  'single-staff-treble': 'acoustic_grand_piano', 'single-staff-bass': 'acoustic_grand_piano',
+  piano: 'acoustic_grand_piano', organ: 'church_organ', harpsichord: 'harpsichord', accordion: 'accordion',
+  guitar: 'acoustic_guitar_nylon', 'ukulele-sopran': 'acoustic_guitar_nylon', 'ukulele-tenor': 'acoustic_guitar_nylon', 'ukulele-bariton': 'acoustic_guitar_nylon', 'ukulele-bass': 'acoustic_bass',
+  violin: 'violin', viola: 'viola', cello: 'cello', 'double-bass': 'contrabass',
+  flute: 'flute', recorder: 'recorder', clarinet: 'clarinet', oboe: 'oboe', bassoon: 'bassoon',
+  trumpet: 'trumpet', trombone: 'trombone', tuba: 'tuba', 'french-horn': 'french_horn',
+  'tin-whistle': 'whistle', saxophone: 'alto_sax', voice: 'choir_aahs'
+};
 function getInstrumentConfig(t) {
   return Object.fromEntries(
     Object.entries(INSTRUMENT_CONFIG_BASE).map(([id, cfg]) => [
