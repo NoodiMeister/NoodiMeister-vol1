@@ -197,38 +197,38 @@ function computeLayout(measures, timeSignature, pixelsPerBeat, pageWidth, layout
 const RhythmIcon = ({ duration, isDotted = false, isRest = false }) => {
   const d = duration && (duration === 'rest' || duration === 'dotted' ? '1/4' : duration);
   if (isRest) {
-    // Pausid traditsioonilise noodikirja järgi: tervik (riba all), poolik (riba peal), veerand (s-kujuline squiggle), 8/16/32 (blobid + konks)
+    // Pausid traditsioonilise noodikirja järgi (SMuFL / tavapärane noodikiri)
     const restIcons = {
-      // Tervikpaus: paks riba, rippub 4. realt (alla)
-      '1/1': <rect x="5" y="12" width="14" height="4" fill="currentColor"/>,
-      // Poolikpaus: paks riba, istub 3. real (peal)
-      '1/2': <rect x="5" y="8" width="14" height="4" fill="currentColor"/>,
-      // Veerandpaus: klassikaline s-kujuline squiggle (paks joon)
-      '1/4': <path d="M11 3.5 L11 6 C14 6 18 9 17 12.5 C16 16 12 17 11 19 L11 23 C12 24 14 23 13 21" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" fill="none"/>,
-      // Kaheksandikpaus: täidetud blob üleval + konks (7-kujuline)
-      '1/8': <g fill="currentColor" stroke="currentColor" strokeWidth="1.2"><ellipse cx="12" cy="8" rx="2.5" ry="2.2"/><path d="M12 10 L12 22 C10 20 14 18 12 14" fill="none" strokeWidth="1.8"/></g>,
-      // Kuueteistkümnendik: kaks blobi + topeltkonks
-      '1/16': <g fill="currentColor" stroke="currentColor" strokeWidth="1.2"><ellipse cx="12" cy="6" rx="2.2" ry="1.8"/><ellipse cx="12" cy="12" rx="2.2" ry="1.8"/><path d="M12 14 L12 23 C10 21 14 19 12 15" fill="none" strokeWidth="1.6"/></g>,
-      // Kolmekümnekahendik: kolm blobi + kolmekordne konks
-      '1/32': <g fill="currentColor" stroke="currentColor" strokeWidth="1"><ellipse cx="12" cy="4.5" rx="1.9" ry="1.6"/><ellipse cx="12" cy="9.5" rx="1.9" ry="1.6"/><ellipse cx="12" cy="14.5" rx="1.9" ry="1.6"/><path d="M12 16.5 L12 24 C10 22 14 20 12 16" fill="none" strokeWidth="1.4"/></g>
+      // Tervikpaus: paks riba, rippub 4. realt alla
+      '1/1': <rect x="4" y="12" width="16" height="5" fill="currentColor" rx="0.5"/>,
+      // Poolikpaus: paks riba, istub 3. real peal
+      '1/2': <rect x="4" y="7" width="16" height="5" fill="currentColor" rx="0.5"/>,
+      // Veerandpaus: s-kujuline squiggle (kaks lotti, paks joon)
+      '1/4': <path d="M9 2.5 L9 5.5 C9 7 13 7 14.5 10 C15.5 12.5 13 14 9 14 C9 16 14 16 15 19 C15 21 11 22 9 22 L9 23" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" fill="none"/>,
+      // Kaheksandikpaus: üks blob üleval + vars alla + üks konks paremale (7-kujuline)
+      '1/8': <g fill="currentColor" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><ellipse cx="12" cy="7" rx="2.8" ry="2.4" stroke="none"/><path d="M12 9.5 L12 20 C12 22 14.5 21 14.5 18.5" fill="none"/></g>,
+      // Kuueteistkümnendik: kaks blobi + vars + kaks konksu (kaks vibu)
+      '1/16': <g fill="currentColor" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><ellipse cx="12" cy="5.5" rx="2.5" ry="2.2" stroke="none"/><ellipse cx="12" cy="11.5" rx="2.5" ry="2.2" stroke="none"/><path d="M12 13.8 L12 15.2 L14.5 14.8 M12 15.2 L12 22 C12 23 14.5 22 14.5 20" fill="none"/></g>,
+      // Kolmekümnekahendik: kolm blobi + vars + kolm konksu
+      '1/32': <g fill="currentColor" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"><ellipse cx="12" cy="4" rx="2.2" ry="1.9" stroke="none"/><ellipse cx="12" cy="9" rx="2.2" ry="1.9" stroke="none"/><ellipse cx="12" cy="14" rx="2.2" ry="1.9" stroke="none"/><path d="M12 16 L12 17.2 L14 17 M12 17.2 L12 19.2 L14 18.8 M12 19.2 L12 23 C12 24 14 23.2 14 22" fill="none"/></g>
     };
     return <svg viewBox="0 0 24 24" className="w-5 h-5" fill="currentColor">{restIcons[d] || restIcons['1/4']}</svg>;
   }
   // Noodid traditsiooniliselt: tervik (ovaal, varrast pole, kaldus), poolik (tühi ovaal + vars), veerand (täidetud + vars), 8/16/32 (vibu(d) varrel)
-  const dot = isDotted ? <circle cx="19" cy="14" r="1.5" fill="currentColor"/> : null;
+  const dot = isDotted ? <circle cx="18" cy="14" r="1.4" fill="currentColor"/> : null;
   const noteIcons = {
-    // Terviknoot: üks kaldus ovaal, varrast pole
-    '1/1': <><g transform="rotate(-24 12 14)"><ellipse cx="12" cy="14" rx="5" ry="3.5" fill="none" stroke="currentColor" strokeWidth="1.5"/></g>{dot}</>,
-    // Pooliknoot: tühi ovaal + vars paremal
-    '1/2': <><g transform="rotate(-20 10 14)"><ellipse cx="10" cy="14" rx="4" ry="3" fill="none" stroke="currentColor" strokeWidth="1.5"/></g><line x1="14" y1="14" x2="14" y2="2" stroke="currentColor" strokeWidth="1.5"/>{dot}</>,
+    // Terviknoot: tühi kaldus ovaal, varrast pole
+    '1/1': <><g transform="rotate(-25 12 13)"><ellipse cx="12" cy="13" rx="5.5" ry="3.8" fill="none" stroke="currentColor" strokeWidth="1.4"/></g>{dot}</>,
+    // Pooliknoot: tühi ovaal + vars paremal üles
+    '1/2': <><g transform="rotate(-22 10 13)"><ellipse cx="10" cy="13" rx="4.2" ry="3.2" fill="none" stroke="currentColor" strokeWidth="1.4"/></g><line x1="14" y1="13" x2="14" y2="1.5" stroke="currentColor" strokeWidth="1.4"/>{dot}</>,
     // Veerandnoot: täidetud ovaal + vars
-    '1/4': <><ellipse cx="10" cy="14" rx="4" ry="3" fill="currentColor"/><line x1="14" y1="14" x2="14" y2="2" stroke="currentColor" strokeWidth="1.5"/>{dot}</>,
-    // Kaheksandik: täidetud ovaal + vars + üks vibu (konks varre otsas)
-    '1/8': <><ellipse cx="10" cy="14" rx="4" ry="3" fill="currentColor"/><line x1="14" y1="14" x2="14" y2="2" stroke="currentColor" strokeWidth="1.5"/><path d="M14 2 Q18 3 14 5" stroke="currentColor" strokeWidth="1.8" fill="none" strokeLinecap="round"/>{dot}</>,
+    '1/4': <><ellipse cx="10" cy="13" rx="4.2" ry="3.2" fill="currentColor"/><line x1="14" y1="13" x2="14" y2="1.5" stroke="currentColor" strokeWidth="1.4"/>{dot}</>,
+    // Kaheksandik: täidetud ovaal + vars + üks vibu (paremale ja alla)
+    '1/8': <><ellipse cx="10" cy="13" rx="4.2" ry="3.2" fill="currentColor"/><line x1="14" y1="13" x2="14" y2="1.5" stroke="currentColor" strokeWidth="1.4"/><path d="M14 1.5 Q17 2 15.5 4.5" stroke="currentColor" strokeWidth="1.6" fill="none" strokeLinecap="round" strokeLinejoin="round"/>{dot}</>,
     // Kuueteistkümnendik: kaks vibu
-    '1/16': <><ellipse cx="10" cy="14" rx="4" ry="3" fill="currentColor"/><line x1="14" y1="14" x2="14" y2="2" stroke="currentColor" strokeWidth="1.5"/><path d="M14 2 Q18 3 14 5 M14 4 Q18 5 14 7" stroke="currentColor" strokeWidth="1.6" fill="none" strokeLinecap="round"/>{dot}</>,
+    '1/16': <><ellipse cx="10" cy="13" rx="4.2" ry="3.2" fill="currentColor"/><line x1="14" y1="13" x2="14" y2="1.5" stroke="currentColor" strokeWidth="1.4"/><path d="M14 1.5 Q17 2 15 4 M14 3.5 Q17 4 15 6" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round"/>{dot}</>,
     // Kolmekümnekahendik: kolm vibu
-    '1/32': <><ellipse cx="10" cy="14" rx="4" ry="3" fill="currentColor"/><line x1="14" y1="14" x2="14" y2="2" stroke="currentColor" strokeWidth="1.5"/><path d="M14 2 Q18 3 14 5 M14 4 Q18 5 14 7 M14 6 Q18 7 14 9" stroke="currentColor" strokeWidth="1.4" fill="none" strokeLinecap="round"/>{dot}</>
+    '1/32': <><ellipse cx="10" cy="13" rx="4.2" ry="3.2" fill="currentColor"/><line x1="14" y1="13" x2="14" y2="1.5" stroke="currentColor" strokeWidth="1.4"/><path d="M14 1.5 Q17 2 15 3.8 M14 3.2 Q17 3.5 15 5.5 M14 4.8 Q17 5 15 7" stroke="currentColor" strokeWidth="1.35" fill="none" strokeLinecap="round" strokeLinejoin="round"/>{dot}</>
   };
   return <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">{noteIcons[d] || noteIcons['1/4']}</svg>;
 };
@@ -781,6 +781,7 @@ function NoodiMeisterCore({ icons }) {
   const visibleToolsMenuRef = useRef(null);
   const [pianoStripWidth, setPianoStripWidth] = useState(900);
   const [pianoRange, setPianoRange] = useState('C3-C5'); // nagu muted.io piano: C3-C5 (vaikimisi), laiendatav
+  const [pianoStripVisible, setPianoStripVisible] = useState(false); // klaviatuuri riba all – nähtav ka siis, kui avatud on Rütm vms
   const midiAccessRef = useRef(null);
   const [midiInputs, setMidiInputs] = useState([]);
   const [selectedMidiInputId, setSelectedMidiInputId] = useState(null);
@@ -941,7 +942,7 @@ function NoodiMeisterCore({ icons }) {
       midiAccessRef.current = null;
       setActiveMidiNotes([]);
     };
-  }, [midiSupported, activeToolbox === 'pianoKeyboard']);
+  }, [midiSupported, pianoStripVisible]);
 
   const [saveCloudNewFolderName, setSaveCloudNewFolderName] = useState('NoodiMeister');
   const [setupCompleted, setSetupCompleted] = useState(() => {
@@ -3853,10 +3854,10 @@ function NoodiMeisterCore({ icons }) {
         </div>
       </header>
 
-      {/* Tööriistavalikud seadete riba all – magneetiliselt kaasa liiguvad */}
-      {activeToolbox && toolboxes[activeToolbox] && (
-        <div className="flex-shrink-0 w-full bg-gradient-to-b from-amber-100 to-amber-50 border-t-2 border-amber-300 shadow-inner">
-          <div className="mx-auto w-full px-4 py-3 overflow-auto max-h-[70vh]" style={{ maxWidth: 1000 }}>
+      {/* Tööriistavalikud seadete riba all – nähtav kui mõni tööriist on aktiivne või klaviatuuri riba on avatud */}
+      {(activeToolbox && toolboxes[activeToolbox]) || (pianoStripVisible && !activeToolbox) ? (
+        <div className="flex-shrink-0 flex justify-center border-t-2 border-amber-300 bg-amber-100/80 py-2">
+          <div className="w-max max-w-[min(100vw-2rem,28rem)] px-3 py-2 rounded-lg bg-gradient-to-b from-amber-100 to-amber-50 border border-amber-300 shadow-inner overflow-auto max-h-[7.5rem]">
             {activeToolbox === 'rhythm' && toolboxes.rhythm ? (
               <div className="flex flex-wrap items-center justify-center gap-2">
                 <span className="text-xs font-bold text-amber-800 uppercase tracking-wider mr-1 self-center">{t('toolbox.rhythm')}</span>
@@ -3881,9 +3882,9 @@ function NoodiMeisterCore({ icons }) {
                   );
                 })}
               </div>
-            ) : activeToolbox !== 'rhythm' ? (
+            ) : (activeToolbox || pianoStripVisible) && activeToolbox !== 'rhythm' ? (
               <>
-                <h4 className="text-xs font-bold text-amber-900 uppercase mb-2">{toolboxes[activeToolbox].name}</h4>
+                <h4 className="text-xs font-bold text-amber-900 uppercase mb-2">{activeToolbox ? toolboxes[activeToolbox]?.name : (toolboxes.pianoKeyboard?.name || t('toolbox.pianoKeyboard'))}</h4>
                 {activeToolbox === 'timeSignature' && selectedOptionIndex === 0 && (
                   <div className="mb-3 p-3 bg-white rounded border-2 border-amber-400">
                     <div className="text-center mb-2">
@@ -3906,7 +3907,7 @@ function NoodiMeisterCore({ icons }) {
                     <div className="text-xs text-center text-amber-600 mt-2">{t('timesig.tabHint')}</div>
                   </div>
                 )}
-                {activeToolbox === 'pianoKeyboard' && <p className="text-xs text-amber-700">{t('layout.keyboardHint')}</p>}
+                {(activeToolbox === 'pianoKeyboard' || (pianoStripVisible && !activeToolbox)) && <p className="text-xs text-amber-700">{t('layout.keyboardHint')}</p>}
                 {activeToolbox === 'chords' && (
                   <div className="mb-3 p-3 bg-white rounded border-2 border-amber-400 space-y-2">
                     <p className="text-xs text-amber-700">{t('chords.hint')} <kbd className="font-mono bg-amber-100 px-1 rounded">Ctrl+A</kbd> / <kbd className="font-mono bg-amber-100 px-1 rounded">Cmd+A</kbd>.</p>
@@ -3917,18 +3918,16 @@ function NoodiMeisterCore({ icons }) {
                     <button type="button" onClick={() => { const chord = customChordInput.trim(); if (chord) { addChordAt(getChordInsertBeat(), chord, customFiguredBassInput); setCustomChordInput(''); setCustomFiguredBassInput(''); } }} className="w-full py-1.5 px-2 rounded bg-amber-600 text-white text-sm font-medium hover:bg-amber-700">{t('chords.add')}</button>
                   </div>
                 )}
-                <div className="space-y-1">
-                  {activeToolbox !== 'pianoKeyboard' && activeToolbox !== 'rhythm' && toolboxes[activeToolbox]?.options?.map((option, idx) => {
-                    if (activeToolbox === 'instruments' && option.type === 'category') return <div key={option.id} className="pt-2 pb-0.5 px-2 text-xs font-bold text-amber-800 uppercase tracking-wide border-b border-amber-200 first:pt-0">{option.label}</div>;
+                <div className="flex flex-col items-start gap-0.5">
+                  {activeToolbox && activeToolbox !== 'pianoKeyboard' && activeToolbox !== 'rhythm' && toolboxes[activeToolbox]?.options?.map((option, idx) => {
+                    if (activeToolbox === 'instruments' && option.type === 'category') return <div key={option.id} className="pt-1.5 pb-0.5 px-1.5 text-xs font-bold text-amber-800 uppercase tracking-wide border-b border-amber-200 first:pt-0">{option.label}</div>;
                     const isActive = activeToolbox === 'timeSignature' && option.value === 'mode-toggle' ? false : activeToolbox === 'clefs' ? option.value === clefType : activeToolbox === 'keySignatures' ? option.value === keySignature : activeToolbox === 'notehead' ? option.value === notationMode : activeToolbox === 'instruments' ? option.type === 'option' && option.value === instrument : activeToolbox === 'layout' ? (option.value === 'gridOnly' && notationStyle === 'FIGURENOTES') || (option.id === 'staff-5' && notationStyle === 'TRADITIONAL' && staffLines === 5) || (option.id === 'staff-1' && notationStyle === 'TRADITIONAL' && staffLines === 1) || (option.id?.startsWith('spacing-') && pixelsPerBeat === option.value) : selectedOptionIndex === idx;
                     return (
-                      <button key={option.id} onClick={() => handleToolboxSelection(idx)} className={`w-full p-2 rounded text-left text-sm transition-all ${(['layout', 'keySignatures', 'instruments', 'clefs', 'notehead'].includes(activeToolbox) ? isActive : selectedOptionIndex === idx) ? 'bg-amber-200 border-l-2 border-amber-600' : 'hover:bg-amber-100'}`}>
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="flex items-center gap-2 min-w-0"><span className="font-medium">{option.label}</span></div>
-                          {isActive && <Check className="w-4 h-4 text-amber-600 shrink-0" />}
-                          {activeToolbox === 'timeSignature' && option.value === 'mode-toggle' && <span className="text-xs text-amber-600">({timeSignatureMode === 'pedagogical' ? t('timesig.pedagogical') : t('timesig.classic')})</span>}
-                        </div>
-                        {option.key && <span className="text-xs text-amber-600 font-mono">({option.key})</span>}
+                      <button key={option.id} onClick={() => handleToolboxSelection(idx)} className={`w-fit max-w-full px-2 py-1 rounded text-left text-sm transition-all flex items-center gap-2 flex-wrap ${(['layout', 'keySignatures', 'instruments', 'clefs', 'notehead'].includes(activeToolbox) ? isActive : selectedOptionIndex === idx) ? 'bg-amber-200 border-l-2 border-amber-600' : 'hover:bg-amber-100'}`}>
+                        <span className="font-medium truncate">{option.label}</span>
+                        {isActive && <Check className="w-3.5 h-3.5 text-amber-600 shrink-0" />}
+                        {activeToolbox === 'timeSignature' && option.value === 'mode-toggle' && <span className="text-xs text-amber-600">({timeSignatureMode === 'pedagogical' ? t('timesig.pedagogical') : t('timesig.classic')})</span>}
+                        {option.key && <span className="text-xs text-amber-600 font-mono shrink-0">({option.key})</span>}
                       </button>
                     );
                   })}
@@ -3975,11 +3974,11 @@ function NoodiMeisterCore({ icons }) {
             ) : null}
           </div>
         </div>
-      )}
+      ) : null}
 
       </div>
 
-      <div className={`flex flex-1 ${activeToolbox === 'pianoKeyboard' ? 'pb-36' : ''}`}>
+      <div className={`flex flex-1 ${pianoStripVisible ? 'pb-36' : ''}`}>
         {/* Left Sidebar - Main Control Center (saab peita X-ga või Vaade → Tööriistakast) */}
         {toolboxPaletteVisible && (
         <aside className="flex-shrink-0 w-72 bg-white border-r-2 border-amber-200 shadow-xl p-6 overflow-auto">
@@ -4064,11 +4063,22 @@ function NoodiMeisterCore({ icons }) {
                 <button
                   key={id}
                   onClick={() => {
-                    setActiveToolbox(activeToolbox === id ? null : id);
+                    if (id === 'pianoKeyboard') {
+                      setPianoStripVisible((prev) => {
+                        if (!prev) {
+                          setActiveToolbox('pianoKeyboard');
+                          return true;
+                        }
+                        setActiveToolbox(null);
+                        return false;
+                      });
+                    } else {
+                      setActiveToolbox(activeToolbox === id ? null : id);
+                    }
                     setSelectedOptionIndex(0);
                   }}
                   className={`w-full p-3 rounded-lg text-left transition-all flex items-center justify-between ${
-                    activeToolbox === id
+                    (id === 'pianoKeyboard' ? pianoStripVisible : activeToolbox === id)
                       ? 'bg-gradient-to-r from-amber-600 to-orange-600 text-white shadow-lg'
                       : 'bg-amber-50 text-amber-900 hover:bg-amber-100 border border-amber-200'
                   }`}
@@ -4314,7 +4324,7 @@ function NoodiMeisterCore({ icons }) {
         })()}
 
         {/* Klaveri klaviatuur – virtuaalne klaver muted.io/piano stiilis; portaal body-sse */}
-        {activeToolbox === 'pianoKeyboard' && typeof document !== 'undefined' && createPortal(
+        {pianoStripVisible && typeof document !== 'undefined' && createPortal(
           (() => {
             const rangeMap = { 'C3-C5': ['c3', 'c5'], 'C2-C5': ['c2', 'c5'], 'C1-C5': ['c1', 'c5'], 'C1-C7': ['c1', 'c7'] };
             const [firstStr, lastStr] = rangeMap[pianoRange] || ['c3', 'c5'];
@@ -4330,11 +4340,15 @@ function NoodiMeisterCore({ icons }) {
               <div className="fixed bottom-0 left-0 right-0 z-[100] min-h-[140px] bg-gradient-to-t from-amber-100 to-amber-50 border-t-2 border-amber-300 shadow-[0_-4px_12px_rgba(0,0,0,0.12)] py-3 px-4" style={{ isolation: 'isolate' }}>
                 <div className="mx-auto max-w-4xl" style={{ minHeight: 120 }}>
                   <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-                    <span className="text-xs font-semibold text-amber-800 uppercase tracking-wider">
-                      {t('toolbox.pianoKeyboard')} — <a href="https://muted.io/piano/" target="_blank" rel="noopener noreferrer" className="text-amber-600 hover:underline">muted.io/piano</a> stiilis
-                    </span>
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <span className="text-xs text-amber-700 font-medium">{t('layout.range') || 'Vahemik'}:</span>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-xs font-semibold text-amber-800 uppercase tracking-wider">
+                        {t('toolbox.pianoKeyboard')} — <a href="https://muted.io/piano/" target="_blank" rel="noopener noreferrer" className="text-amber-600 hover:underline">muted.io/piano</a> stiilis
+                      </span>
+                      <span className="text-xs text-amber-600">({t('midi.mouseKeyboardHint') || 'Hiirega või arvutiklahvidega (numbrid) mängi noote.'})</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-xs text-amber-700 font-medium">{t('layout.range') || 'Vahemik'}:</span>
                       {(['C3-C5', 'C2-C5', 'C1-C5', 'C1-C7']).map((r) => (
                         <button
                           key={r}
@@ -4345,6 +4359,15 @@ function NoodiMeisterCore({ icons }) {
                           {r}
                         </button>
                       ))}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => { setPianoStripVisible(false); setActiveToolbox(null); }}
+                        className="px-2 py-1 rounded text-xs font-medium bg-amber-200/80 text-amber-900 hover:bg-amber-300 border border-amber-300"
+                        title={t('midi.closePiano') || 'Sulge klaviatuur'}
+                      >
+                        {t('midi.closePianoShort') || 'Sulge'}
+                      </button>
                     </div>
                   </div>
                   <div className="flex flex-wrap items-center gap-3 mb-2">
@@ -4941,7 +4964,7 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
                   const bassFLine = staffLinePositions[1];
                   const middleLineYStaff = centerY;
                   const staffSpace = spacing;
-                  const clefFontSize = staffSpace * 4;
+                  const clefFontSize = staffSpace * 6;
                   const clefX = 12;
                   let xOffset = clefX;
                   const g = [];
@@ -5534,8 +5557,7 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
             </circle>
           )}
         </g>
-      )
-      })}
+      )}
     </svg>
   );
 }
