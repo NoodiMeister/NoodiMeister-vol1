@@ -2031,9 +2031,11 @@ function NoodiMeisterCore({ icons }) {
       measureIndex++;
       endBeat = getMeasureBounds(measureIndex).endBeat;
     }
+    let totalMeasures = measureIndex + 1 + (addedMeasures || 0);
     if (!isLoggedIn()) {
       totalMeasures = Math.min(DEMO_MAX_MEASURES, totalMeasures);
     }
+    const measures = [];
     for (let i = 0; i < totalMeasures; i++) {
       const b = getMeasureBounds(i);
       measures.push({ ...b, notes: [] });

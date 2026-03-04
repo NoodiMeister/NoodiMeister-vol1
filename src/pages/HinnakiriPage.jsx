@@ -1,62 +1,19 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Music2, Check, FileMusic, Cloud, UserPlus, LogIn, Heart } from 'lucide-react';
 
-const supportPlans = [
-  {
-    id: '1kuu',
-    name: '1 kuu',
-    description: 'Ühe kuu toetamine ja täisfunktsioon',
-    price: '5',
-    currency: '€',
-    period: '/kuu',
-    features: [
-      'Täisfunktsioon 1 kuu',
-      'Piiramatu arv ridu ja takte',
-      'Pilvesalvestus (Google Drive jms)',
-      'Toetad NoodiMeistri arendamist'
-    ],
-    cta: 'Toeta 1 kuu',
-    ctaTo: '/toeta?kuud=1',
-    highlighted: false
-  },
-  {
-    id: '2kuud',
-    name: '2 kuud',
-    description: 'Kaks kuud toetamist ja täisfunktsiooni',
-    price: '10',
-    currency: '€',
-    period: 'kokku',
-    features: [
-      'Täisfunktsioon 2 kuud',
-      'Piiramatu arv ridu ja takte',
-      'Pilvesalvestus',
-      'Soodsam kui 2× üksiku kuu hinda'
-    ],
-    cta: 'Toeta 2 kuud',
-    ctaTo: '/toeta?kuud=2',
-    highlighted: true
-  },
-  {
-    id: '12kuud',
-    name: '12 kuud',
-    description: 'Aasta toetamine – kõige soodsam',
-    price: '55',
-    currency: '€',
-    period: 'kokku (12 kuud)',
-    features: [
-      'Täisfunktsioon 12 kuud',
-      'Piiramatu arv ridu ja takte',
-      'Pilvesalvestus',
-      'Parim väärtus toetajale'
-    ],
-    cta: 'Toeta 12 kuud',
-    ctaTo: '/toeta?kuud=12',
-    highlighted: false
-  }
-];
+const PRICE_PER_MONTH = 5;
+const DISCOUNT_12_MONTHS = 55;
+
+function calcTotal(kuud) {
+  if (!Number.isFinite(kuud) || kuud < 1 || kuud > 60) return null;
+  return kuud === 12 ? DISCOUNT_12_MONTHS : kuud * PRICE_PER_MONTH;
+}
 
 export default function HinnakiriPage() {
+  const [months, setMonths] = useState(1);
+  const total = calcTotal(months);
+  const isValid = total !== null;
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-amber-50 via-orange-50 to-amber-100">
       {/* Header */}
@@ -95,52 +52,68 @@ export default function HinnakiriPage() {
             </p>
           </div>
 
-          {/* Toetamise plaanid */}
-          <div className="grid sm:grid-cols-3 gap-6 mb-12">
-            {supportPlans.map((plan) => (
-              <div
-                key={plan.id}
-                className={`rounded-2xl border-2 p-6 flex flex-col transition-all ${
-                  plan.highlighted
-                    ? 'border-amber-500 bg-white shadow-lg shadow-amber-200/40 scale-[1.02]'
-                    : 'border-amber-200/60 bg-white/90'
-                }`}
-              >
-                {plan.highlighted && (
-                  <div className="text-xs font-semibold text-amber-600 uppercase tracking-wider mb-2">
-                    Soovitus
-                  </div>
-                )}
-                <h2 className="text-xl font-bold text-amber-900 mb-1" style={{ fontFamily: 'Georgia, serif' }}>
-                  {plan.name}
-                </h2>
-                <p className="text-sm text-amber-700/90 mb-4">{plan.description}</p>
-                <div className="mb-4">
-                  <span className="text-2xl font-bold text-amber-900">{plan.price}</span>
-                  <span className="text-amber-700 font-medium">{plan.currency}</span>
-                  <span className="text-amber-700/90 text-sm ml-1">{plan.period}</span>
-                </div>
-                <ul className="space-y-2 flex-1 mb-6 text-sm text-amber-800">
-                  {plan.features.map((f, i) => (
-                    <li key={i} className="flex items-start gap-2">
-                      <Check className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
-                      <span>{f}</span>
-                    </li>
-                  ))}
-                </ul>
-                <Link
-                  to={plan.ctaTo}
-                  className={`inline-flex items-center justify-center gap-2 w-full py-3 rounded-xl font-semibold transition-all ${
-                    plan.highlighted
-                      ? 'bg-gradient-to-r from-amber-600 to-orange-600 text-white shadow-md hover:from-amber-500 hover:to-orange-500'
-                      : 'border-2 border-amber-400 bg-white text-amber-800 hover:bg-amber-50'
-                  }`}
-                >
-                  <Heart className="w-4 h-4" />
-                  {plan.cta}
-                </Link>
-              </div>
-            ))}
+          {/* Vali toetamise kuude arv */}
+          <div className="rounded-2xl border-2 border-amber-500 bg-white shadow-lg shadow-amber-200/40 p-6 sm:p-8 mb-12 max-w-xl mx-auto">
+            <h2 className="text-xl font-bold text-amber-900 mb-2 text-center" style={{ fontFamily: 'Georgia, serif' }}>
+              Vali toetamise periood
+            </h2>
+            <p className="text-sm text-amber-700/90 text-center mb-6">
+              Sisesta, mitu kuud soovid ühekordselt toetada (1–60 kuud). Täisfunktsioon kogu valitud perioodi vältel.
+            </p>
+            <div className="mb-4">
+              <label htmlFor="hinnakiri-kuud" className="block text-sm font-semibold text-amber-900 mb-2">
+                Kuude arv
+              </label>
+              <input
+                id="hinnakiri-kuud"
+                type="number"
+                min={1}
+                max={60}
+                value={months}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  const n = parseInt(v, 10);
+                  if (v === '' || !Number.isFinite(n)) return;
+                  setMonths(Math.max(1, Math.min(60, n)));
+                }}
+                className="w-full px-4 py-3 rounded-xl border-2 border-amber-200 bg-white text-amber-900 text-lg font-semibold focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+              />
+              <p className="mt-1 text-xs text-amber-700/80">
+                {PRICE_PER_MONTH} € kuus. 12 kuud soodushinnaga {DISCOUNT_12_MONTHS} € kokku.
+              </p>
+            </div>
+            <ul className="space-y-2 mb-6 text-sm text-amber-800">
+              <li className="flex items-start gap-2">
+                <Check className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                <span>Piiramatu arv ridu ja takte</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <Check className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                <span>Pilvesalvestus (Google Drive jms)</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <Check className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                <span>Toetad NoodiMeistri arendamist</span>
+              </li>
+            </ul>
+            <div className="rounded-xl bg-amber-50/80 border border-amber-200/60 p-4 mb-6">
+              <p className="text-sm text-amber-800/90">
+                {months} {months === 1 ? 'kuu' : 'kuud'} täisfunktsiooni
+              </p>
+              <p className="text-2xl font-bold text-amber-900">
+                Kokku: {isValid ? `${total} €` : '—'}
+              </p>
+              {months === 12 && isValid && (
+                <p className="text-xs text-amber-600 mt-1">12 kuud soodushinnaga</p>
+              )}
+            </div>
+            <Link
+              to={`/toeta?kuud=${months}`}
+              className="inline-flex items-center justify-center gap-2 w-full py-3 rounded-xl font-semibold bg-gradient-to-r from-amber-600 to-orange-600 text-white shadow-md hover:from-amber-500 hover:to-orange-500 transition-all"
+            >
+              <Heart className="w-4 h-4" />
+              Toeta {months} {months === 1 ? 'kuu' : 'kuud'}
+            </Link>
           </div>
 
           {/* Registreeru tasuta */}
@@ -197,19 +170,16 @@ export default function HinnakiriPage() {
             </p>
           </div>
 
-          {/* Administraatori erand – mitte avalikult esile, aga dokumendis */}
-          <p className="text-center text-xs text-amber-600/80">
-            Administraatori kasutaja (info@la-stravaganza.com) ei kuulu kuumakse nõude alla.
-          </p>
-
           <p className="mt-6 text-center text-sm text-amber-700/80">
-            Küsimused? Kirjuta meile või vaata <Link to="/" className="underline hover:text-amber-800">avalehelt</Link> rohkem infot.
+            Küsimused või ettepanekud rakenduse või kuutasu kohta? Kirjuta meile:{' '}
+            <a href="mailto:info@la-stravaganza.com" className="underline hover:text-amber-800 font-medium">info@la-stravaganza.com</a>
+            {' '}või vaata <Link to="/" className="underline hover:text-amber-800">avalehelt</Link> rohkem infot.
           </p>
         </section>
       </main>
 
       <footer className="flex-shrink-0 py-6 text-center text-sm text-amber-700/80 border-t border-amber-200/40">
-        NoodiMeister — veebis noodistiku loomine.
+        NoodiMeister — veebis noodistiku loomine. Küsimused? <a href="mailto:info@la-stravaganza.com" className="underline hover:text-amber-800">info@la-stravaganza.com</a>
       </footer>
     </div>
   );

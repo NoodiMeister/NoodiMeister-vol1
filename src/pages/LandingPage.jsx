@@ -134,6 +134,7 @@ export default function LandingPage() {
 
       <footer className="flex-shrink-0 py-6 text-center text-sm text-amber-700/80 border-t border-amber-200/40">
         NoodiMeister — veebis noodistiku loomine. Kirjuta noote nagu helilooja.
+        <p className="mt-2">Küsimused või ettepanekud? <a href="mailto:info@la-stravaganza.com" className="underline hover:text-amber-800">info@la-stravaganza.com</a></p>
       </footer>
     </div>
   );
