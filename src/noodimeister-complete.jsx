@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Piano, KeyboardShortcuts, MidiNumbers } from 'react-piano';
 import 'react-piano/dist/styles.css';
@@ -12,7 +13,7 @@ import html2canvas from 'html2canvas';
 const LUCIDE_ICONS = [
   'Music2', 'Clock', 'Hash', 'Type', 'Piano', 'Palette', 'Layout', 'Check', 'Save', 'FolderOpen',
   'Plus', 'Settings', 'Key', 'Repeat', 'Cloud', 'LogOut', 'User', 'CloudUpload', 'CloudDownload', 'FolderPlus', 'ChevronDown',
-  'Play', 'Pause', 'Video'
+  'Play', 'Pause', 'Video', 'Eye', 'ArrowDown', 'ArrowRight', 'X'
 ];
 
 const STORAGE_KEY = 'noodimeister-data';
@@ -52,6 +53,7 @@ const LAYOUT = {
   PAGE_WIDTH_MIN: 800,
   PAGE_WIDTH_MAX: 1000,
   PAGE_WIDTH_MAX_LANDSCAPE: 1400,
+  A4_HEIGHT_RATIO: 297 / 210,
   STAFF_HEIGHT: 140,
   SYSTEM_GAP: 120,
   MARGIN_LEFT: 60,
@@ -194,26 +196,38 @@ function computeLayout(measures, timeSignature, pixelsPerBeat, pageWidth, layout
 const RhythmIcon = ({ duration, isDotted = false, isRest = false }) => {
   const d = duration && (duration === 'rest' || duration === 'dotted' ? '1/4' : duration);
   if (isRest) {
-    // Pausid: tervikpaus (riba), poolik (riba), veerand (s-kujuline), kaheksandik (vibu+pea), kuueteistkümnendik (kaks)
+    // Pausid traditsioonilise noodikirja järgi: tervik (riba all), poolik (riba peal), veerand (s-kujuline squiggle), 8/16/32 (blobid + konks)
     const restIcons = {
-      '1/1': <rect x="6" y="10" width="12" height="4" rx="0.5" fill="currentColor"/>,
-      '1/2': <rect x="6" y="11" width="12" height="3" rx="0.5" fill="currentColor"/>,
-      '1/4': <path d="M14 5 Q16 8 13 10 L13 14 Q15 16 12 19 Q10 18 12 14 L12 10 Q9 8 11 5 Z" fill="currentColor"/>,
-      '1/8': <g fill="currentColor"><ellipse cx="10" cy="10" rx="2.5" ry="2"/><path d="M10 12 L10 20 Q12 19 10 17" stroke="currentColor" strokeWidth="1.2" fill="none"/></g>,
-      '1/16': <g fill="currentColor"><ellipse cx="10" cy="8" rx="2.5" ry="2"/><ellipse cx="10" cy="14" rx="2.5" ry="2"/><path d="M10 16 L10 22 Q12 21 10 19" stroke="currentColor" strokeWidth="1.2" fill="none"/></g>,
-      '1/32': <g fill="currentColor"><ellipse cx="10" cy="6" rx="2" ry="1.6"/><ellipse cx="10" cy="11" rx="2" ry="1.6"/><ellipse cx="10" cy="16" rx="2" ry="1.6"/><path d="M10 18 L10 24 Q12 23 10 21" stroke="currentColor" strokeWidth="1" fill="none"/></g>
+      // Tervikpaus: paks riba, rippub 4. realt (alla)
+      '1/1': <rect x="5" y="12" width="14" height="4" fill="currentColor"/>,
+      // Poolikpaus: paks riba, istub 3. real (peal)
+      '1/2': <rect x="5" y="8" width="14" height="4" fill="currentColor"/>,
+      // Veerandpaus: klassikaline s-kujuline squiggle (paks joon)
+      '1/4': <path d="M11 3.5 L11 6 C14 6 18 9 17 12.5 C16 16 12 17 11 19 L11 23 C12 24 14 23 13 21" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" fill="none"/>,
+      // Kaheksandikpaus: täidetud blob üleval + konks (7-kujuline)
+      '1/8': <g fill="currentColor" stroke="currentColor" strokeWidth="1.2"><ellipse cx="12" cy="8" rx="2.5" ry="2.2"/><path d="M12 10 L12 22 C10 20 14 18 12 14" fill="none" strokeWidth="1.8"/></g>,
+      // Kuueteistkümnendik: kaks blobi + topeltkonks
+      '1/16': <g fill="currentColor" stroke="currentColor" strokeWidth="1.2"><ellipse cx="12" cy="6" rx="2.2" ry="1.8"/><ellipse cx="12" cy="12" rx="2.2" ry="1.8"/><path d="M12 14 L12 23 C10 21 14 19 12 15" fill="none" strokeWidth="1.6"/></g>,
+      // Kolmekümnekahendik: kolm blobi + kolmekordne konks
+      '1/32': <g fill="currentColor" stroke="currentColor" strokeWidth="1"><ellipse cx="12" cy="4.5" rx="1.9" ry="1.6"/><ellipse cx="12" cy="9.5" rx="1.9" ry="1.6"/><ellipse cx="12" cy="14.5" rx="1.9" ry="1.6"/><path d="M12 16.5 L12 24 C10 22 14 20 12 16" fill="none" strokeWidth="1.4"/></g>
     };
     return <svg viewBox="0 0 24 24" className="w-5 h-5" fill="currentColor">{restIcons[d] || restIcons['1/4']}</svg>;
   }
-  // Noodid: terviknoot (ovaal, varrast pole), poolik (tühi ovaal + vars), veerand (täidetud + vars), 8/16 (vibu(d))
-  const dot = isDotted ? <circle cx="18" cy="16" r="1.5" fill="currentColor"/> : null;
+  // Noodid traditsiooniliselt: tervik (ovaal, varrast pole, kaldus), poolik (tühi ovaal + vars), veerand (täidetud + vars), 8/16/32 (vibu(d) varrel)
+  const dot = isDotted ? <circle cx="19" cy="14" r="1.5" fill="currentColor"/> : null;
   const noteIcons = {
-    '1/1': <><ellipse cx="12" cy="14" rx="5" ry="3.5" fill="none" stroke="currentColor" strokeWidth="1.5"/>{dot}</>,
-    '1/2': <><ellipse cx="10" cy="16" rx="4" ry="3" fill="none" stroke="currentColor" strokeWidth="1.5"/><line x1="14" y1="16" x2="14" y2="2" stroke="currentColor" strokeWidth="1.5"/>{dot}</>,
-    '1/4': <><ellipse cx="10" cy="16" rx="4" ry="3" fill="currentColor"/><line x1="14" y1="16" x2="14" y2="2" stroke="currentColor" strokeWidth="1.5"/>{dot}</>,
-    '1/8': <><ellipse cx="10" cy="16" rx="4" ry="3" fill="currentColor"/><line x1="14" y1="16" x2="14" y2="2" stroke="currentColor" strokeWidth="1.5"/><path d="M14 2 Q18 4 14 6" fill="currentColor"/>{dot}</>,
-    '1/16': <><ellipse cx="10" cy="16" rx="4" ry="3" fill="currentColor"/><line x1="14" y1="16" x2="14" y2="2" stroke="currentColor" strokeWidth="1.5"/><path d="M14 2 Q18 4 14 6 M14 4 Q18 6 14 8" fill="currentColor"/>{dot}</>,
-    '1/32': <><ellipse cx="10" cy="16" rx="4" ry="3" fill="currentColor"/><line x1="14" y1="16" x2="14" y2="2" stroke="currentColor" strokeWidth="1.5"/><path d="M14 2 Q18 4 14 6 M14 4 Q18 6 14 8 M14 6 Q18 8 14 10" fill="currentColor"/>{dot}</>
+    // Terviknoot: üks kaldus ovaal, varrast pole
+    '1/1': <><g transform="rotate(-24 12 14)"><ellipse cx="12" cy="14" rx="5" ry="3.5" fill="none" stroke="currentColor" strokeWidth="1.5"/></g>{dot}</>,
+    // Pooliknoot: tühi ovaal + vars paremal
+    '1/2': <><g transform="rotate(-20 10 14)"><ellipse cx="10" cy="14" rx="4" ry="3" fill="none" stroke="currentColor" strokeWidth="1.5"/></g><line x1="14" y1="14" x2="14" y2="2" stroke="currentColor" strokeWidth="1.5"/>{dot}</>,
+    // Veerandnoot: täidetud ovaal + vars
+    '1/4': <><ellipse cx="10" cy="14" rx="4" ry="3" fill="currentColor"/><line x1="14" y1="14" x2="14" y2="2" stroke="currentColor" strokeWidth="1.5"/>{dot}</>,
+    // Kaheksandik: täidetud ovaal + vars + üks vibu (konks varre otsas)
+    '1/8': <><ellipse cx="10" cy="14" rx="4" ry="3" fill="currentColor"/><line x1="14" y1="14" x2="14" y2="2" stroke="currentColor" strokeWidth="1.5"/><path d="M14 2 Q18 3 14 5" stroke="currentColor" strokeWidth="1.8" fill="none" strokeLinecap="round"/>{dot}</>,
+    // Kuueteistkümnendik: kaks vibu
+    '1/16': <><ellipse cx="10" cy="14" rx="4" ry="3" fill="currentColor"/><line x1="14" y1="14" x2="14" y2="2" stroke="currentColor" strokeWidth="1.5"/><path d="M14 2 Q18 3 14 5 M14 4 Q18 5 14 7" stroke="currentColor" strokeWidth="1.6" fill="none" strokeLinecap="round"/>{dot}</>,
+    // Kolmekümnekahendik: kolm vibu
+    '1/32': <><ellipse cx="10" cy="14" rx="4" ry="3" fill="currentColor"/><line x1="14" y1="14" x2="14" y2="2" stroke="currentColor" strokeWidth="1.5"/><path d="M14 2 Q18 3 14 5 M14 4 Q18 5 14 7 M14 6 Q18 7 14 9" stroke="currentColor" strokeWidth="1.4" fill="none" strokeLinecap="round"/>{dot}</>
   };
   return <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">{noteIcons[d] || noteIcons['1/4']}</svg>;
 };
@@ -335,17 +349,18 @@ const PedagogicalMeterIcon = ({ beats, beatUnit }) => {
   );
 };
 
-// Jo võti – JO-LE-MI notatsiooni sümbol: vertikaalne joon + kaks horisontaalset joont. Kahe horisontaalse joone vahe = kahe noodijoone kõrgune (2×staffSpacing). Keskmine joon = Jo (tonika).
-const JoClefSymbol = ({ x = 0, centerY, staffSpacing = 10, stroke = '#000', strokeWidth = 2.2, barLength = 14 }) => {
-  const gap = 2 * staffSpacing; // kahe noodijoone kõrgune
+// Jo võti – JO-LE-MI notatsiooni sümbol: paks vertikaalne joon + kaks horisontaalset joont.
+// Kahe horisontaalse joone vahe = täpselt kahe noodijoone kõrgune (2×staffSpacing), mitte kolme. Vertikaalne joon paksem.
+const JoClefSymbol = ({ x = 0, centerY, staffSpacing = 10, stroke = '#000', strokeWidth = 2, barLength = 14, verticalWidth = 4 }) => {
+  const twoSpaces = 2 * staffSpacing; // kahe noodijoone kõrgune vahe (mitte kolme)
   const topBarY = centerY - staffSpacing;
   const bottomBarY = centerY + staffSpacing;
-  const vertTop = centerY - gap;
-  const vertBottom = centerY + gap;
+  const vertTop = centerY - twoSpaces;
+  const vertBottom = centerY + twoSpaces;
   const t = strokeWidth;
   return (
     <g>
-      <rect x={x} y={vertTop} width={t} height={vertBottom - vertTop} fill={stroke} />
+      <rect x={x} y={vertTop} width={verticalWidth} height={vertBottom - vertTop} fill={stroke} />
       <rect x={x} y={topBarY - t/2} width={barLength} height={t} fill={stroke} />
       <rect x={x} y={bottomBarY - t/2} width={barLength} height={t} fill={stroke} />
     </g>
@@ -359,7 +374,7 @@ const ClefIcon = ({ clefType }) => {
   return (
     <svg viewBox="0 0 24 24" className="w-5 h-5">
       {clefType === 'do' || clefType === 'jo' ? (
-        <JoClefSymbol x={3} centerY={12} staffSpacing={4} stroke="#000" strokeWidth={1.6} barLength={10} />
+        <JoClefSymbol x={2} centerY={12} staffSpacing={4} stroke="#000" strokeWidth={1.4} barLength={10} verticalWidth={2.5} />
       ) : (
         <text x="12" y="18" textAnchor="middle" fontSize="20" fontFamily="serif" fill="currentColor">{clefs[clefType] || clefs.treble}</text>
       )}
@@ -734,7 +749,22 @@ function NoodiMeisterCore({ icons }) {
   // Nähtavad tööriistad: millised tööriistakastid on külgribas nähtavad (seotud notatsiooni sisestusmeetodiga)
   const [visibleToolIds, setVisibleToolIds] = useState(() => TOOLBOX_ORDER.slice());
   const [visibleToolsMenuOpen, setVisibleToolsMenuOpen] = useState(false);
+  const [toolboxPaletteVisible, setToolboxPaletteVisible] = useState(() => {
+    try { return localStorage.getItem('noodimeister-toolbox-palette-visible') !== 'false'; } catch (_) { return true; }
+  });
+  const setToolboxPaletteVisiblePersist = useCallback((v) => {
+    setToolboxPaletteVisible(v);
+    try { localStorage.setItem('noodimeister-toolbox-palette-visible', v ? 'true' : 'false'); } catch (_) {}
+  }, []);
   const visibleToolsMenuRef = useRef(null);
+  const [pianoStripWidth, setPianoStripWidth] = useState(900);
+  const [pianoRange, setPianoRange] = useState('C3-C5'); // nagu muted.io piano: C3-C5 (vaikimisi), laiendatav
+  const midiAccessRef = useRef(null);
+  const [midiInputs, setMidiInputs] = useState([]);
+  const [selectedMidiInputId, setSelectedMidiInputId] = useState(null);
+  const [activeMidiNotes, setActiveMidiNotes] = useState([]);
+  const [midiSupported] = useState(() => typeof navigator !== 'undefined' && !!navigator.requestMIDIAccess);
+  const [midiError, setMidiError] = useState(null);
 
   // Stage V: Time signature display mode
   const [timeSignatureMode, setTimeSignatureMode] = useState('pedagogical'); // 'classic' or 'pedagogical'
@@ -769,6 +799,12 @@ function NoodiMeisterCore({ icons }) {
   const [layoutMeasuresPerLine, setLayoutMeasuresPerLine] = useState(4);
   const [layoutLineBreakBefore, setLayoutLineBreakBefore] = useState([]);
   const [layoutPageBreakBefore, setLayoutPageBreakBefore] = useState([]);
+  const [showPageNavigator, setShowPageNavigator] = useState(false);
+  const mainRef = useRef(null);
+  const lastVerticalContentHeightRef = useRef(0);
+  const [mainScrollTop, setMainScrollTop] = useState(0);
+  const [mainScrollLeft, setMainScrollLeft] = useState(0);
+  const [mainContentHeight, setMainContentHeight] = useState(0);
 
   // Initialize with sample notes: C4, D4, E4 (overridden by localStorage if present)
   const [notes, setNotes] = useState([
@@ -813,15 +849,18 @@ function NoodiMeisterCore({ icons }) {
   const pedagogicalAudioInputRef = useRef(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [saveCloudDialogOpen, setSaveCloudDialogOpen] = useState(false);
-  // Rippmenüüd tööriistaribal: 'file' | null (Seaded on Faili all)
+  // Rippmenüüd tööriistaribal: 'file' | 'view' | null (Seaded on Faili all)
   const [headerMenuOpen, setHeaderMenuOpen] = useState(null);
   const [fileSubmenuOpen, setFileSubmenuOpen] = useState(null); // 'seaded' | null
+  const [viewSubmenuOpen, setViewSubmenuOpen] = useState(null); // 'orientation' | 'navigator' | 'flow' | null
+  const [pageFlowDirection, setPageFlowDirection] = useState('vertical'); // 'vertical' | 'horizontal'
   const headerMenuRef = useRef(null);
   useEffect(() => {
     const closeMenus = (e) => {
       if (headerMenuRef.current && !headerMenuRef.current.contains(e.target)) {
         setHeaderMenuOpen(null);
         setFileSubmenuOpen(null);
+        setViewSubmenuOpen(null);
       }
     };
     if (headerMenuOpen) {
@@ -838,6 +877,73 @@ function NoodiMeisterCore({ icons }) {
       return () => document.removeEventListener('click', closeVisibleTools);
     }
   }, [visibleToolsMenuOpen]);
+  useEffect(() => {
+    const updatePianoWidth = () => setPianoStripWidth(Math.min(900, Math.max(320, (typeof window !== 'undefined' ? window.innerWidth : 900) - 80)));
+    updatePianoWidth();
+    window.addEventListener('resize', updatePianoWidth);
+    return () => window.removeEventListener('resize', updatePianoWidth);
+  }, []);
+
+  // Web MIDI API: taotle juurdepääsu ja uuenda sisendite nimekirja (klaviatuuri tööriista avamisel)
+  useEffect(() => {
+    if (!midiSupported || activeToolbox !== 'pianoKeyboard') return;
+    let cancelled = false;
+    navigator.requestMIDIAccess({ sysex: false })
+      .then((access) => {
+        if (cancelled) return;
+        midiAccessRef.current = access;
+        const updateInputs = () => {
+          const inputs = Array.from(access.inputs.values()).map((input) => ({ id: input.id, name: input.name || input.id }));
+          setMidiInputs(inputs);
+          setSelectedMidiInputId((prev) => {
+            if (inputs.length === 0) return null;
+            if (prev && inputs.some((i) => i.id === prev)) return prev;
+            return inputs[0].id;
+          });
+        };
+        updateInputs();
+        setMidiError(null);
+        access.addEventListener('statechange', updateInputs);
+        return () => access.removeEventListener('statechange', updateInputs);
+      })
+      .catch((err) => {
+        if (!cancelled) setMidiError(err?.message || 'MIDI ei ole saadaval');
+      });
+    return () => {
+      cancelled = true;
+      midiAccessRef.current = null;
+      setActiveMidiNotes([]);
+    };
+  }, [midiSupported, activeToolbox === 'pianoKeyboard']);
+
+  // MIDI sisendi valimine: kuula note on/off ja sünkroni virtuaalse klaviatuuriga (heli + esiletoomine)
+  useEffect(() => {
+    if (!midiAccessRef.current || selectedMidiInputId == null) return;
+    const input = midiAccessRef.current.inputs.get(selectedMidiInputId);
+    if (!input) return;
+    const onMidiMessage = (e) => {
+      const [cmd, note, velocity] = e.data;
+      const isNoteOn = cmd === 0x90 && velocity > 0;
+      const isNoteOff = cmd === 0x80 || (cmd === 0x90 && velocity === 0);
+      if (isNoteOn) {
+        setActiveMidiNotes((prev) => (prev.includes(note) ? prev : [...prev, note]));
+        const { pitch, octave, isAccidental } = midiToPitchOctave(note);
+        const attrs = MidiNumbers.getAttributes(note);
+        const accidental = attrs.pitchName && attrs.pitchName.includes('#') ? 1 : attrs.pitchName && attrs.pitchName.includes('b') ? -1 : 0;
+        setGhostPitch(pitch);
+        setGhostOctave(octave);
+        if (noteInputMode) addNoteAtCursor(pitch, octave, accidental);
+        else playPianoNote(pitch, octave, isAccidental ? 1 : 0);
+      }
+      if (isNoteOff) setActiveMidiNotes((prev) => prev.filter((n) => n !== note));
+    };
+    input.addEventListener('midimessage', onMidiMessage);
+    return () => {
+      input.removeEventListener('midimessage', onMidiMessage);
+      setActiveMidiNotes([]);
+    };
+  }, [selectedMidiInputId, noteInputMode, addNoteAtCursor, playPianoNote]);
+
   const [saveCloudNewFolderName, setSaveCloudNewFolderName] = useState('NoodiMeister');
   const [setupCompleted, setSetupCompleted] = useState(() => {
     try {
@@ -871,6 +977,18 @@ function NoodiMeisterCore({ icons }) {
   useEffect(() => {
     if (isNewWorkFlow) setNewWorkSetupOpen(true);
   }, [isNewWorkFlow]);
+
+  // Enne brauseri/lehe sulgemist hoiatab salvestamata muudatuste korral (töö kaotamine)
+  useEffect(() => {
+    const handleBeforeUnload = (e) => {
+      if (dirtyRef.current) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, []);
 
   const applyNewWorkSetup = useCallback(() => {
     const pedagogical = wizardNotationMethod === 'pedagogical';
@@ -1176,6 +1294,8 @@ function NoodiMeisterCore({ icons }) {
     layoutMeasuresPerLine,
     layoutLineBreakBefore,
     layoutPageBreakBefore,
+    showPageNavigator,
+    pageFlowDirection,
     visibleToolIds,
     tuningReferenceNote,
     tuningReferenceOctave,
@@ -1192,7 +1312,7 @@ function NoodiMeisterCore({ icons }) {
     pedagogicalPlayheadStyle,
     pedagogicalPlayheadEmoji,
     chords
-  }), [notes, timeSignature, timeSignatureMode, clefType, keySignature, staffLines, notationStyle, pixelsPerBeat, notationMode, instrument, instrumentNotationVariant, cursorPosition, addedMeasures, setupCompleted, songTitle, author, pickupEnabled, pickupQuantity, pickupDuration, pageOrientation, layoutMeasuresPerLine, layoutLineBreakBefore, layoutPageBreakBefore, visibleToolIds, tuningReferenceNote, tuningReferenceOctave, tuningReferenceHz, playNoteOnInsert, figurenotesSize, figurenotesStems, showBarNumbers, relativeNotationShowKeySignature, relativeNotationShowTraditionalClef, isPedagogicalProject, pedagogicalAudioBpm, pedagogicalPlayheadStyle, pedagogicalPlayheadEmoji, chords]);
+  }), [notes, timeSignature, timeSignatureMode, clefType, keySignature, staffLines, notationStyle, pixelsPerBeat, notationMode, instrument, instrumentNotationVariant, cursorPosition, addedMeasures, setupCompleted, songTitle, author, pickupEnabled, pickupQuantity, pickupDuration, pageOrientation, layoutMeasuresPerLine, layoutLineBreakBefore, layoutPageBreakBefore, showPageNavigator, pageFlowDirection, visibleToolIds, tuningReferenceNote, tuningReferenceOctave, tuningReferenceHz, playNoteOnInsert, figurenotesSize, figurenotesStems, showBarNumbers, relativeNotationShowKeySignature, relativeNotationShowTraditionalClef, isPedagogicalProject, pedagogicalAudioBpm, pedagogicalPlayheadStyle, pedagogicalPlayheadEmoji, chords]);
 
   const saveToStorageSync = useCallback(() => {
     try {
@@ -1247,6 +1367,8 @@ function NoodiMeisterCore({ icons }) {
     layoutMeasuresPerLine,
     layoutLineBreakBefore,
     layoutPageBreakBefore,
+    showPageNavigator,
+    pageFlowDirection,
     visibleToolIds,
     tuningReferenceNote,
     tuningReferenceOctave,
@@ -1263,7 +1385,7 @@ function NoodiMeisterCore({ icons }) {
     pedagogicalPlayheadEmoji,
     scoreData: notes,
     chords
-  }), [songTitle, author, notationStyle, notationMode, isPedagogicalProject, timeSignature, timeSignatureMode, clefType, keySignature, staffLines, pixelsPerBeat, instrument, instrumentNotationVariant, pickupEnabled, pickupQuantity, pickupDuration, setupCompleted, cursorPosition, addedMeasures, pageOrientation, layoutMeasuresPerLine, layoutLineBreakBefore, layoutPageBreakBefore, visibleToolIds, tuningReferenceNote, tuningReferenceOctave, tuningReferenceHz, playNoteOnInsert, figurenotesSize, figurenotesStems, showBarNumbers, relativeNotationShowKeySignature, relativeNotationShowTraditionalClef, pedagogicalAudioBpm, pedagogicalPlayheadStyle, pedagogicalPlayheadEmoji, notes, chords]);
+  }), [songTitle, author, notationStyle, notationMode, isPedagogicalProject, timeSignature, timeSignatureMode, clefType, keySignature, staffLines, pixelsPerBeat, instrument, instrumentNotationVariant, pickupEnabled, pickupQuantity, pickupDuration, setupCompleted, cursorPosition, addedMeasures, pageOrientation, layoutMeasuresPerLine, layoutLineBreakBefore, layoutPageBreakBefore, showPageNavigator, pageFlowDirection, visibleToolIds, tuningReferenceNote, tuningReferenceOctave, tuningReferenceHz, playNoteOnInsert, figurenotesSize, figurenotesStems, showBarNumbers, relativeNotationShowKeySignature, relativeNotationShowTraditionalClef, pedagogicalAudioBpm, pedagogicalPlayheadStyle, pedagogicalPlayheadEmoji, notes, chords]);
 
   // Download project file (future: replace with upload to Google Drive / OneDrive)
   const downloadProject = useCallback(() => {
@@ -1337,6 +1459,8 @@ function NoodiMeisterCore({ icons }) {
       if (data.layoutMeasuresPerLine != null) setLayoutMeasuresPerLine(data.layoutMeasuresPerLine);
       if (Array.isArray(data.layoutLineBreakBefore)) setLayoutLineBreakBefore(data.layoutLineBreakBefore);
       if (Array.isArray(data.layoutPageBreakBefore)) setLayoutPageBreakBefore(data.layoutPageBreakBefore);
+      if (data.showPageNavigator != null) setShowPageNavigator(!!data.showPageNavigator);
+      if (data.pageFlowDirection === 'vertical' || data.pageFlowDirection === 'horizontal') setPageFlowDirection(data.pageFlowDirection);
       if (Array.isArray(data.visibleToolIds) && data.visibleToolIds.length > 0) setVisibleToolIds(data.visibleToolIds);
       if (data.tuningReferenceNote) setTuningReferenceNote(data.tuningReferenceNote);
       if (data.tuningReferenceOctave != null) setTuningReferenceOctave(data.tuningReferenceOctave);
@@ -1415,6 +1539,8 @@ function NoodiMeisterCore({ icons }) {
         if (data.layoutMeasuresPerLine != null) setLayoutMeasuresPerLine(data.layoutMeasuresPerLine);
         if (Array.isArray(data.layoutLineBreakBefore)) setLayoutLineBreakBefore(data.layoutLineBreakBefore);
         if (Array.isArray(data.layoutPageBreakBefore)) setLayoutPageBreakBefore(data.layoutPageBreakBefore);
+        if (data.showPageNavigator != null) setShowPageNavigator(!!data.showPageNavigator);
+        if (data.pageFlowDirection === 'vertical' || data.pageFlowDirection === 'horizontal') setPageFlowDirection(data.pageFlowDirection);
         if (Array.isArray(data.visibleToolIds) && data.visibleToolIds.length > 0) setVisibleToolIds(data.visibleToolIds);
         if (data.tuningReferenceNote) setTuningReferenceNote(data.tuningReferenceNote);
         if (data.tuningReferenceOctave != null) setTuningReferenceOctave(data.tuningReferenceOctave);
@@ -1583,6 +1709,8 @@ function NoodiMeisterCore({ icons }) {
           if (data.layoutMeasuresPerLine != null) setLayoutMeasuresPerLine(data.layoutMeasuresPerLine);
           if (Array.isArray(data.layoutLineBreakBefore)) setLayoutLineBreakBefore(data.layoutLineBreakBefore);
           if (Array.isArray(data.layoutPageBreakBefore)) setLayoutPageBreakBefore(data.layoutPageBreakBefore);
+          if (data.showPageNavigator != null) setShowPageNavigator(!!data.showPageNavigator);
+          if (data.pageFlowDirection === 'vertical' || data.pageFlowDirection === 'horizontal') setPageFlowDirection(data.pageFlowDirection);
           if (Array.isArray(data.visibleToolIds) && data.visibleToolIds.length > 0) setVisibleToolIds(data.visibleToolIds);
           if (data.tuningReferenceNote) setTuningReferenceNote(data.tuningReferenceNote);
           if (data.tuningReferenceOctave != null) setTuningReferenceOctave(data.tuningReferenceOctave);
@@ -2547,6 +2675,11 @@ function NoodiMeisterCore({ icons }) {
   }, [activeToolbox, selectedOptionIndex, handleToolboxSelection, noteInputMode, selectedDuration, isDotted, isRest, notes, getEffectiveDuration, selectedNoteIndex, selectionStart, selectionEnd, clipboard, undo, saveToHistory, getSelectedNotes, shiftPitch, shiftOctave, addMeasure, ghostPitch, ghostOctave]);
 
   const measures = calculateMeasures();
+  const logicalContentHeight = useMemo(() => {
+    const opts = { measuresPerLine: layoutMeasuresPerLine, lineBreakBefore: layoutLineBreakBefore, pageBreakBefore: layoutPageBreakBefore };
+    const sys = computeLayout(measures, timeSignature, pixelsPerBeat, pageWidth || LAYOUT.PAGE_WIDTH_MIN, opts);
+    return sys.length > 0 ? sys[sys.length - 1].yOffset + LAYOUT.STAFF_HEIGHT + 40 : LAYOUT.STAFF_HEIGHT + 40;
+  }, [measures, timeSignature, pixelsPerBeat, pageWidth, layoutMeasuresPerLine, layoutLineBreakBefore, layoutPageBreakBefore]);
   const cursorMeasureIndex = measures.length > 0
     ? (() => {
         const i = measures.findIndex(m => cursorPosition >= m.startBeat && cursorPosition < m.endBeat);
@@ -2567,6 +2700,25 @@ function NoodiMeisterCore({ icons }) {
     setPageWidth(Math.max(LAYOUT.PAGE_WIDTH_MIN, Math.min(effectivePageWidthMax, el.getBoundingClientRect().width)));
     return () => ro.disconnect();
   }, [pageOrientation, effectivePageWidthMax]);
+
+  useEffect(() => {
+    const el = mainRef.current;
+    if (!el) return;
+    const updateHeight = () => { if (el) setMainContentHeight(el.scrollHeight); };
+    const ro = new ResizeObserver(updateHeight);
+    ro.observe(el);
+    updateHeight();
+    return () => ro.disconnect();
+  }, [measures, layoutMeasuresPerLine, pageOrientation, showPageNavigator]);
+
+  useEffect(() => {
+    const t = requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (mainRef.current) setMainContentHeight(mainRef.current.scrollHeight);
+      });
+    });
+    return () => cancelAnimationFrame(t);
+  }, [measures, layoutMeasuresPerLine, pageOrientation, notes, addedMeasures]);
 
   const completeSetup = useCallback((style) => {
     setNotationStyle(style);
@@ -2598,7 +2750,7 @@ function NoodiMeisterCore({ icons }) {
       </div>
     );
   }
-  const { Music2, Clock, Hash, Type, Piano, Palette, Layout, Check, Save, FolderOpen, Plus, Settings, Key, Repeat, Cloud, LogOut, User, CloudUpload, CloudDownload, FolderPlus, ChevronDown } = icons;
+  const { Music2, Clock, Hash, Type, Piano, Palette, Layout, Check, Save, FolderOpen, Plus, Settings, Key, Repeat, Cloud, LogOut, User, CloudUpload, CloudDownload, FolderPlus, ChevronDown, Eye, ArrowDown, ArrowRight } = icons || {};
 
   return (
     <div className="min-h-screen flex flex-col relative" style={{ background: 'linear-gradient(135deg, #fef3c7 0%, #fed7aa 50%, #fdba74 100%)' }}>
@@ -3015,6 +3167,18 @@ function NoodiMeisterCore({ icons }) {
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input
                     type="checkbox"
+                    checked={showPageNavigator}
+                    onChange={(e) => { dirtyRef.current = true; setShowPageNavigator(e.target.checked); }}
+                    className="w-4 h-4 rounded border-amber-300 text-amber-600"
+                  />
+                  <span className="text-sm font-semibold text-amber-900">{t('layout.showPageNavigator')}</span>
+                </label>
+              </div>
+              <p className="text-xs text-amber-700 -mt-2">{t('layout.showPageNavigatorHint')}</p>
+              <div className="flex flex-wrap items-center gap-3">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
                     checked={pickupEnabled}
                     onChange={(e) => setPickupEnabled(e.target.checked)}
                     className="w-4 h-4 rounded border-amber-300 text-amber-600"
@@ -3230,8 +3394,9 @@ function NoodiMeisterCore({ icons }) {
         </div>
       )}
 
-      {/* Minimal Top Bar – rida 1: logo; rida 2: rippmenüüd ja kõik käsud */}
-      <header className="flex-shrink-0 bg-gradient-to-r from-amber-900 via-orange-800 to-red-900 text-amber-50 shadow-lg">
+      {/* Seadete riba + tööriistavalikud magneetiliselt all – sticky üleval */}
+      <div className="sticky top-0 z-30 flex flex-col flex-shrink-0 shadow-lg">
+      <header className="flex-shrink-0 bg-gradient-to-r from-amber-900 via-orange-800 to-red-900 text-amber-50">
         <div className="w-full pl-3 pr-4 py-3 flex flex-col gap-3">
           {/* Rida 1: ainult logo */}
           <div>
@@ -3392,6 +3557,81 @@ function NoodiMeisterCore({ icons }) {
                 )}
               </div>
 
+              {/* Vaade – lehekülje suund, navigaator, lehekülgede liikumise suund */}
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setHeaderMenuOpen(prev => prev === 'view' ? null : 'view')}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg font-semibold text-sm bg-slate-600 text-white shadow-md hover:bg-slate-500 border border-slate-700/50"
+                  title={t('view.menuTitle')}
+                >
+                  {Eye && <Eye className="w-4 h-4" />}
+                  {t('view.menu')}
+                  <ChevronDown className="w-4 h-4" />
+                </button>
+                {headerMenuOpen === 'view' && (
+                  <div className="absolute left-0 top-full mt-1 min-w-[240px] py-1 rounded-lg bg-slate-700 border border-slate-600 shadow-xl z-50">
+                    {/* Lehekülje suund */}
+                    <div className="relative" onMouseEnter={() => setViewSubmenuOpen('orientation')} onMouseLeave={() => setViewSubmenuOpen(null)}>
+                      <button
+                        type="button"
+                        onClick={() => setViewSubmenuOpen(prev => prev === 'orientation' ? null : 'orientation')}
+                        className="w-full flex items-center justify-between gap-2 px-3 py-2 text-left text-sm text-amber-50 hover:bg-slate-600"
+                        title={t('layout.pageOrientation')}
+                      >
+                        <span className="flex items-center gap-2">{t('view.pageOrientation')}</span>
+                        <ChevronDown className="w-4 h-4 rotate-[-90deg]" />
+                      </button>
+                      {viewSubmenuOpen === 'orientation' && (
+                        <div className="absolute left-full top-0 ml-0 min-w-[180px] py-1 rounded-lg bg-slate-700 border border-slate-600 shadow-xl z-50">
+                          <button type="button" onClick={() => { dirtyRef.current = true; setPageOrientation('portrait'); setHeaderMenuOpen(null); setViewSubmenuOpen(null); }} className={`w-full flex items-center gap-2 px-3 py-2 text-left text-sm ${pageOrientation === 'portrait' ? 'bg-amber-600 text-white' : 'text-amber-50 hover:bg-slate-600'}`}>{t('layout.pageOrientationPortrait')}</button>
+                          <button type="button" onClick={() => { dirtyRef.current = true; setPageOrientation('landscape'); setHeaderMenuOpen(null); setViewSubmenuOpen(null); }} className={`w-full flex items-center gap-2 px-3 py-2 text-left text-sm ${pageOrientation === 'landscape' ? 'bg-amber-600 text-white' : 'text-amber-50 hover:bg-slate-600'}`}>{t('layout.pageOrientationLandscape')}</button>
+                        </div>
+                      )}
+                    </div>
+                    {/* Navigaatori seade */}
+                    <button
+                      type="button"
+                      onClick={() => { dirtyRef.current = true; setShowPageNavigator(prev => !prev); }}
+                      className="w-full flex items-center justify-between gap-2 px-3 py-2 text-left text-sm text-amber-50 hover:bg-slate-600"
+                      title={t('layout.showPageNavigatorHint')}
+                    >
+                      <span>{t('view.pageNavigator')}</span>
+                      {showPageNavigator && <Check className="w-4 h-4 text-amber-400" />}
+                    </button>
+                    {/* Tööriistakast (palett) – linnuke näitab/peidab külgriba */}
+                    <button
+                      type="button"
+                      onClick={() => { setToolboxPaletteVisiblePersist(!toolboxPaletteVisible); setHeaderMenuOpen(null); }}
+                      className="w-full flex items-center justify-between gap-2 px-3 py-2 text-left text-sm text-amber-50 hover:bg-slate-600"
+                      title={t('view.toolboxPaletteHint')}
+                    >
+                      <span>{t('view.toolboxPalette')}</span>
+                      {toolboxPaletteVisible && <Check className="w-4 h-4 text-amber-400" />}
+                    </button>
+                    <div className="my-1 border-t border-slate-600" />
+                    {/* Lehekülgede liikumise suund */}
+                    <div className="relative" onMouseEnter={() => setViewSubmenuOpen('flow')} onMouseLeave={() => setViewSubmenuOpen(null)}>
+                      <button
+                        type="button"
+                        onClick={() => setViewSubmenuOpen(prev => prev === 'flow' ? null : 'flow')}
+                        className="w-full flex items-center justify-between gap-2 px-3 py-2 text-left text-sm text-amber-50 hover:bg-slate-600"
+                        title={t('view.pageFlowHint')}
+                      >
+                        <span className="flex items-center gap-2">{t('view.pageFlow')}</span>
+                        <ChevronDown className="w-4 h-4 rotate-[-90deg]" />
+                      </button>
+                      {viewSubmenuOpen === 'flow' && (
+                        <div className="absolute left-full top-0 ml-0 min-w-[200px] py-1 rounded-lg bg-slate-700 border border-slate-600 shadow-xl z-50">
+                          <button type="button" onClick={() => { dirtyRef.current = true; setPageFlowDirection('vertical'); setHeaderMenuOpen(null); setViewSubmenuOpen(null); }} className={`w-full flex items-center gap-2 px-3 py-2 text-left text-sm ${pageFlowDirection === 'vertical' ? 'bg-amber-600 text-white' : 'text-amber-50 hover:bg-slate-600'}`}>{ArrowDown && <ArrowDown className="w-4 h-4" />} {t('view.pageFlowVertical')}</button>
+                          <button type="button" onClick={() => { dirtyRef.current = true; setPageFlowDirection('horizontal'); setHeaderMenuOpen(null); setViewSubmenuOpen(null); }} className={`w-full flex items-center gap-2 px-3 py-2 text-left text-sm ${pageFlowDirection === 'horizontal' ? 'bg-amber-600 text-white' : 'text-amber-50 hover:bg-slate-600'}`}>{ArrowRight && <ArrowRight className="w-4 h-4" />} {t('view.pageFlowHorizontal')}</button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
               {/* Keelevalik */}
               <div className="flex items-center gap-0.5 rounded-lg overflow-hidden border border-amber-600/50 bg-amber-900/40">
                 {LOCALES.map(({ code, name }) => (
@@ -3532,14 +3772,146 @@ function NoodiMeisterCore({ icons }) {
         </div>
       </header>
 
+      {/* Tööriistavalikud seadete riba all – magneetiliselt kaasa liiguvad */}
+      {activeToolbox && toolboxes[activeToolbox] && (
+        <div className="flex-shrink-0 w-full bg-gradient-to-b from-amber-100 to-amber-50 border-t-2 border-amber-300 shadow-inner">
+          <div className="mx-auto w-full px-4 py-3 overflow-auto max-h-[70vh]" style={{ maxWidth: 1000 }}>
+            {activeToolbox === 'rhythm' && toolboxes.rhythm ? (
+              <div className="flex flex-wrap items-center justify-center gap-2">
+                <span className="text-xs font-bold text-amber-800 uppercase tracking-wider mr-1 self-center">{t('toolbox.rhythm')}</span>
+                {toolboxes.rhythm.options.map((option, idx) => {
+                  const isActive = (option.value === 'rest' && isRest) || (option.value === 'dotted' && isDotted) || (option.value === selectedDuration && option.value !== 'rest' && option.value !== 'dotted');
+                  return (
+                    <button
+                      key={option.id}
+                      type="button"
+                      draggable
+                      onDragStart={(e) => { e.dataTransfer.setData('text/plain', 'rhythm:' + idx); e.dataTransfer.effectAllowed = 'copy'; e.currentTarget.classList.add('opacity-70'); }}
+                      onDragEnd={(e) => e.currentTarget.classList.remove('opacity-70')}
+                      onClick={() => handleToolboxSelection(idx)}
+                      className={`flex flex-col items-center gap-0.5 p-2 rounded-lg min-w-[3rem] transition-all cursor-grab active:cursor-grabbing ${isActive ? 'bg-amber-400 ring-2 ring-amber-600 shadow-md' : 'bg-white/80 hover:bg-amber-100 border border-amber-200'}`}
+                      title={`${option.label}. Lohistage noodilehele.`}
+                    >
+                      <span className="flex items-center justify-center gap-0.5 text-amber-900">
+                        {option.value === 'rest' ? <RhythmIcon duration={selectedDuration} isRest={true} /> : option.value === 'dotted' ? <RhythmIcon duration={selectedDuration} isDotted={true} /> : ['2/8','4/16','8/16','1/8+2/16','2/16+1/8'].includes(option.value) ? <RhythmPatternIcon pattern={option.value} /> : ['1/1','1/2','1/4','1/8','1/16','1/32'].includes(option.value) ? (<><RhythmIcon duration={option.value} /><RhythmIcon duration={option.value} isRest={true} /></>) : null}
+                      </span>
+                      {option.key != null && <kbd className="text-[10px] font-mono bg-amber-200/80 text-amber-900 px-1.5 py-0.5 rounded">{option.key}</kbd>}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : activeToolbox !== 'rhythm' ? (
+              <>
+                <h4 className="text-xs font-bold text-amber-900 uppercase mb-2">{toolboxes[activeToolbox].name}</h4>
+                {activeToolbox === 'timeSignature' && selectedOptionIndex === 0 && (
+                  <div className="mb-3 p-3 bg-white rounded border-2 border-amber-400">
+                    <div className="text-center mb-2">
+                      <div className="text-xs text-amber-700 uppercase font-bold mb-1">{t('timesig.current')}: {timeSignature.beats}/{timeSignature.beatUnit}</div>
+                      <div className="text-xs text-amber-600">{t('timesig.mode')}: {timeSignatureMode === 'pedagogical' ? t('timesig.pedagogical') : t('timesig.classic')}</div>
+                    </div>
+                    <div className="flex gap-2 items-center justify-center">
+                      <div className={`flex flex-col items-center p-2 rounded ${timeSignatureEditField === 'numerator' ? 'bg-blue-100 border-2 border-blue-500' : 'bg-gray-50'}`}>
+                        <div className="text-xs text-gray-600 mb-1">{t('timesig.beats')}</div>
+                        <div className="text-2xl font-bold text-amber-900">{timeSignature.beats}</div>
+                        <div className="text-xs text-gray-500 mt-1">↑↓</div>
+                      </div>
+                      <div className="text-2xl font-bold text-amber-900">/</div>
+                      <div className={`flex flex-col items-center p-2 rounded ${timeSignatureEditField === 'denominator' ? 'bg-blue-100 border-2 border-blue-500' : 'bg-gray-50'}`}>
+                        <div className="text-xs text-gray-600 mb-1">{t('timesig.unit')}</div>
+                        <div className="text-2xl font-bold text-amber-900">{timeSignature.beatUnit}</div>
+                        <div className="text-xs text-gray-500 mt-1">↑↓</div>
+                      </div>
+                    </div>
+                    <div className="text-xs text-center text-amber-600 mt-2">{t('timesig.tabHint')}</div>
+                  </div>
+                )}
+                {activeToolbox === 'pianoKeyboard' && <p className="text-xs text-amber-700">{t('layout.keyboardHint')}</p>}
+                {activeToolbox === 'chords' && (
+                  <div className="mb-3 p-3 bg-white rounded border-2 border-amber-400 space-y-2">
+                    <p className="text-xs text-amber-700">{t('chords.hint')} <kbd className="font-mono bg-amber-100 px-1 rounded">Ctrl+A</kbd> / <kbd className="font-mono bg-amber-100 px-1 rounded">Cmd+A</kbd>.</p>
+                    <label className="block text-xs font-semibold text-amber-900">{t('chords.customLabel')}</label>
+                    <input type="text" value={customChordInput} onChange={(e) => setCustomChordInput(e.target.value)} placeholder={t('chords.customPlaceholder')} className="w-full px-2 py-1.5 rounded border border-amber-300 text-sm" />
+                    <label className="block text-xs font-semibold text-amber-900">{t('chords.figuredBass')}</label>
+                    <input type="text" value={customFiguredBassInput} onChange={(e) => setCustomFiguredBassInput(e.target.value)} placeholder={t('chords.figuredBassPlaceholder')} className="w-full px-2 py-1.5 rounded border border-amber-300 text-sm" />
+                    <button type="button" onClick={() => { const chord = customChordInput.trim(); if (chord) { addChordAt(getChordInsertBeat(), chord, customFiguredBassInput); setCustomChordInput(''); setCustomFiguredBassInput(''); } }} className="w-full py-1.5 px-2 rounded bg-amber-600 text-white text-sm font-medium hover:bg-amber-700">{t('chords.add')}</button>
+                  </div>
+                )}
+                <div className="space-y-1">
+                  {activeToolbox !== 'pianoKeyboard' && activeToolbox !== 'rhythm' && toolboxes[activeToolbox]?.options?.map((option, idx) => {
+                    if (activeToolbox === 'instruments' && option.type === 'category') return <div key={option.id} className="pt-2 pb-0.5 px-2 text-xs font-bold text-amber-800 uppercase tracking-wide border-b border-amber-200 first:pt-0">{option.label}</div>;
+                    const isActive = activeToolbox === 'timeSignature' && option.value === 'mode-toggle' ? false : activeToolbox === 'clefs' ? option.value === clefType : activeToolbox === 'keySignatures' ? option.value === keySignature : activeToolbox === 'notehead' ? option.value === notationMode : activeToolbox === 'instruments' ? option.type === 'option' && option.value === instrument : activeToolbox === 'layout' ? (option.value === 'gridOnly' && notationStyle === 'FIGURENOTES') || (option.id === 'staff-5' && notationStyle === 'TRADITIONAL' && staffLines === 5) || (option.id === 'staff-1' && notationStyle === 'TRADITIONAL' && staffLines === 1) || (option.id?.startsWith('spacing-') && pixelsPerBeat === option.value) : selectedOptionIndex === idx;
+                    return (
+                      <button key={option.id} onClick={() => handleToolboxSelection(idx)} className={`w-full p-2 rounded text-left text-sm transition-all ${(['layout', 'keySignatures', 'instruments', 'clefs', 'notehead'].includes(activeToolbox) ? isActive : selectedOptionIndex === idx) ? 'bg-amber-200 border-l-2 border-amber-600' : 'hover:bg-amber-100'}`}>
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2 min-w-0"><span className="font-medium">{option.label}</span></div>
+                          {isActive && <Check className="w-4 h-4 text-amber-600 shrink-0" />}
+                          {activeToolbox === 'timeSignature' && option.value === 'mode-toggle' && <span className="text-xs text-amber-600">({timeSignatureMode === 'pedagogical' ? t('timesig.pedagogical') : t('timesig.classic')})</span>}
+                        </div>
+                        {option.key && <span className="text-xs text-amber-600 font-mono">({option.key})</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+                {activeToolbox === 'instruments' && (() => {
+                  const cfg = instrumentConfig[instrument];
+                  if (!cfg || cfg.type === 'standard') return null;
+                  if (cfg.type === 'tab') return (<div className="mt-3 pt-3 border-t-2 border-amber-200"><h4 className="text-xs font-bold text-amber-900 uppercase mb-2">{t('inst.view')}</h4><div className="flex gap-2"><button type="button" onClick={() => setInstrumentNotationVariant('standard')} className={`flex-1 py-1.5 px-2 rounded text-sm font-medium ${instrumentNotationVariant === 'standard' ? 'bg-amber-600 text-white' : 'bg-amber-100 text-amber-800 hover:bg-amber-200'}`}>{t('inst.staff')}</button><button type="button" onClick={() => setInstrumentNotationVariant('tab')} className={`flex-1 py-1.5 px-2 rounded text-sm font-medium ${instrumentNotationVariant === 'tab' ? 'bg-amber-600 text-white' : 'bg-amber-100 text-amber-800 hover:bg-amber-200'}`}>{t('inst.tab')}</button></div></div>);
+                  if (cfg.type === 'wind' && cfg.fingering) return (<div className="mt-3 pt-3 border-t-2 border-amber-200"><h4 className="text-xs font-bold text-amber-900 uppercase mb-2">{t('inst.view')}</h4><div className="flex gap-2"><button type="button" onClick={() => setInstrumentNotationVariant('standard')} className={`flex-1 py-1.5 px-2 rounded text-sm font-medium ${instrumentNotationVariant === 'standard' ? 'bg-amber-600 text-white' : 'bg-amber-100 text-amber-800 hover:bg-amber-200'}`}>{t('inst.staff')}</button><button type="button" onClick={() => setInstrumentNotationVariant('fingering')} className={`flex-1 py-1.5 px-2 rounded text-sm font-medium ${instrumentNotationVariant === 'fingering' ? 'bg-amber-600 text-white' : 'bg-amber-100 text-amber-800 hover:bg-amber-200'}`}>{t('inst.fingering')}</button></div></div>);
+                  if (cfg.type === 'figuredBass') return (<div className="mt-3 pt-3 border-t-2 border-amber-200"><h4 className="text-xs font-bold text-amber-900 uppercase mb-2">{t('inst.view')}</h4><div className="flex gap-2"><button type="button" onClick={() => setInstrumentNotationVariant('standard')} className={`flex-1 py-1.5 px-2 rounded text-sm font-medium ${instrumentNotationVariant === 'standard' ? 'bg-amber-600 text-white' : 'bg-amber-100 text-amber-800 hover:bg-amber-200'}`}>{t('inst.staff')}</button><button type="button" onClick={() => setInstrumentNotationVariant('figuredBass')} className={`flex-1 py-1.5 px-2 rounded text-sm font-medium ${instrumentNotationVariant === 'figuredBass' ? 'bg-amber-600 text-white' : 'bg-amber-100 text-amber-800 hover:bg-amber-200'}`}>{t('inst.figuredBass')}</button></div></div>);
+                  return null;
+                })()}
+                {activeToolbox === 'layout' && (
+                  <>
+                    <div className="mt-4 pt-4 border-t-2 border-amber-200">
+                      <h4 className="text-xs font-bold text-amber-900 uppercase mb-2">{t('layout.measuresPerLine')}</h4>
+                      <p className="text-xs text-amber-700 mb-2">{t('layout.measuresPerLineHint')}</p>
+                      <div className="flex flex-wrap gap-1 mb-3">{[2, 3, 4, 6, 8].map((n) => (<button key={n} type="button" onClick={() => setLayoutMeasuresPerLine(n)} className={`px-2 py-1 rounded text-sm font-medium ${layoutMeasuresPerLine === n ? 'bg-amber-600 text-white' : 'bg-amber-100 text-amber-800 hover:bg-amber-200'}`}>{n}</button>))}</div>
+                      <p className="text-xs text-amber-700 mb-1">Paigutuse muudatus kehtib kursorit sisaldava takti suhtes. Liigu kursoriga (← →) soovitud takti.</p>
+                      <div className="mb-2 px-2 py-1.5 rounded bg-amber-100 border border-amber-200 text-amber-900 text-sm font-medium">{t('layout.cursorInMeasure')}: {cursorMeasureIndex + 1}</div>
+                      <div className="grid grid-cols-2 gap-1 text-xs">
+                        <button type="button" disabled={cursorMeasureIndex <= 0} onClick={() => { if (cursorMeasureIndex <= 0) return; setLayoutLineBreakBefore((prev) => [...new Set([...prev, cursorMeasureIndex])].sort((a, b) => a - b)); }} className="py-1.5 px-2 rounded bg-slate-100 text-slate-800 hover:bg-slate-200 font-medium disabled:opacity-50 disabled:cursor-not-allowed">{t('layout.nextLine')}</button>
+                        <button type="button" disabled={cursorMeasureIndex <= 0} onClick={() => { if (cursorMeasureIndex <= 0) return; setLayoutPageBreakBefore((prev) => [...new Set([...prev, cursorMeasureIndex])].sort((a, b) => a - b)); }} className="py-1.5 px-2 rounded bg-slate-100 text-slate-800 hover:bg-slate-200 font-medium disabled:opacity-50 disabled:cursor-not-allowed">{t('layout.newPage')}</button>
+                        <button type="button" disabled={cursorMeasureIndex <= 0} onClick={() => setLayoutLineBreakBefore((prev) => prev.filter((i) => i !== cursorMeasureIndex))} className="py-1.5 px-2 rounded bg-amber-100 text-amber-800 hover:bg-amber-200 font-medium disabled:opacity-50 disabled:cursor-not-allowed">{t('layout.removeLineBreak')}</button>
+                        <button type="button" disabled={cursorMeasureIndex <= 0} onClick={() => setLayoutPageBreakBefore((prev) => prev.filter((i) => i !== cursorMeasureIndex))} className="py-1.5 px-2 rounded bg-amber-100 text-amber-800 hover:bg-amber-200 font-medium disabled:opacity-50 disabled:cursor-not-allowed">{t('layout.removePageBreak')}</button>
+                      </div>
+                    </div>
+                    <div className="mt-4 pt-4 border-t-2 border-amber-200">
+                      <h4 className="text-xs font-bold text-amber-900 uppercase mb-2">{t('layout.projectFile')}</h4>
+                      <div className="flex flex-col gap-2">
+                        <button type="button" onClick={downloadProject} className="w-full py-2 px-3 rounded-lg bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-500">{t('layout.saveProject')}</button>
+                        <button type="button" onClick={() => projectFileInputRef.current?.click()} className="w-full py-2 px-3 rounded-lg bg-slate-600 text-white text-sm font-semibold hover:bg-slate-500">{t('layout.openProject')}</button>
+                        <input ref={projectFileInputRef} type="file" accept=".json,.noodimeister,application/json" className="hidden" onChange={handleOpenProjectFile} />
+                      </div>
+                    </div>
+                  </>
+                )}
+              </>
+            ) : null}
+          </div>
+        </div>
+      )}
+
+      </div>
+
       <div className={`flex flex-1 ${activeToolbox === 'pianoKeyboard' ? 'pb-36' : ''}`}>
-        {/* Left Sidebar - Main Control Center */}
+        {/* Left Sidebar - Main Control Center (saab peita X-ga või Vaade → Tööriistakast) */}
+        {toolboxPaletteVisible && (
         <aside className="flex-shrink-0 w-72 bg-white border-r-2 border-amber-200 shadow-xl p-6 overflow-auto">
           <div className="space-y-4">
-            <h3 className="text-sm font-bold text-amber-900 uppercase tracking-wider mb-3 flex items-center gap-2">
-              <span className="w-1 h-4 bg-amber-600"></span>
-              {t('toolbar.palette')}
-            </h3>
+            <div className="flex items-center justify-between gap-2 mb-3">
+              <h3 className="text-sm font-bold text-amber-900 uppercase tracking-wider flex items-center gap-2">
+                <span className="w-1 h-4 bg-amber-600"></span>
+                {t('toolbar.palette')}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setToolboxPaletteVisiblePersist(false)}
+                className="p-1.5 rounded-lg text-amber-600 hover:bg-amber-100 hover:text-amber-800 transition-colors"
+                title={t('view.toolboxPaletteHint')}
+              >
+                {icons?.X && <icons.X className="w-5 h-5" />}
+              </button>
+            </div>
 
             {/* Nähtavad tööriistad – rippmenüü */}
             <div className="relative mb-3" ref={visibleToolsMenuRef}>
@@ -3624,354 +3996,20 @@ function NoodiMeisterCore({ icons }) {
               );
             })}
 
-            {/* Active Toolbox Panel */}
             {activeToolbox && toolboxes[activeToolbox] && (
-              <div className="mt-4 bg-amber-50 border-2 border-amber-300 rounded-lg p-3">
-<h4 className="text-xs font-bold text-amber-900 uppercase mb-2">
-                  {toolboxes[activeToolbox].name}
-                </h4>
-
-                {/* Rütm: valikud on noodilehe kohal rippuval ribal */}
-                {activeToolbox === 'rhythm' && (
-                  <p className="text-xs text-amber-700 mb-2">
-                    Rütmipildid ja klahvid on noodilehe kohal rippuval ribal. {t('rhythm.hint')} Klahvid 2–7, 0, .
-                  </p>
-                )}
-
-                {/* Special UI for Time Signature Editing */}
-                {activeToolbox === 'timeSignature' && selectedOptionIndex === 0 && (
-                  <div className="mb-3 p-3 bg-white rounded border-2 border-amber-400">
-                    <div className="text-center mb-2">
-                      <div className="text-xs text-amber-700 uppercase font-bold mb-1">
-                        {t('timesig.current')}: {timeSignature.beats}/{timeSignature.beatUnit}
-                      </div>
-                      <div className="text-xs text-amber-600">
-                        {t('timesig.mode')}: {timeSignatureMode === 'pedagogical' ? t('timesig.pedagogical') : t('timesig.classic')}
-                      </div>
-                    </div>
-                    
-                    <div className="flex gap-2 items-center justify-center">
-                      <div className={`flex flex-col items-center p-2 rounded ${
-                        timeSignatureEditField === 'numerator' ? 'bg-blue-100 border-2 border-blue-500' : 'bg-gray-50'
-                      }`}>
-                        <div className="text-xs text-gray-600 mb-1">{t('timesig.beats')}</div>
-                        <div className="text-2xl font-bold text-amber-900">{timeSignature.beats}</div>
-                        <div className="text-xs text-gray-500 mt-1">↑↓</div>
-                      </div>
-                      
-                      <div className="text-2xl font-bold text-amber-900">/</div>
-                      
-                      <div className={`flex flex-col items-center p-2 rounded ${
-                        timeSignatureEditField === 'denominator' ? 'bg-blue-100 border-2 border-blue-500' : 'bg-gray-50'
-                      }`}>
-                        <div className="text-xs text-gray-600 mb-1">{t('timesig.unit')}</div>
-                        <div className="text-2xl font-bold text-amber-900">{timeSignature.beatUnit}</div>
-                        <div className="text-xs text-gray-500 mt-1">↑↓</div>
-                      </div>
-                    </div>
-                    
-                    <div className="text-xs text-center text-amber-600 mt-2">
-                      {t('timesig.tabHint')}
-                    </div>
-                  </div>
-                )}
-
-                {/* Klaveri klaviatuur – kuvatakse lehe all; liigub lehekülge kerides kaasa */}
-                {activeToolbox === 'pianoKeyboard' && (
-                  <p className="text-xs text-amber-700">
-                    {t('layout.keyboardHint')}
-                  </p>
-                )}
-
-                {/* Akordid: kohandatud akord ja figuurnoodid (figuurnotatsioon) */}
-                {activeToolbox === 'chords' && (
-                  <div className="mb-3 p-3 bg-white rounded border-2 border-amber-400 space-y-2">
-                    <p className="text-xs text-amber-700">
-                      {t('chords.hint')} <kbd className="font-mono bg-amber-100 px-1 rounded">Ctrl+A</kbd> / <kbd className="font-mono bg-amber-100 px-1 rounded">Cmd+A</kbd>.
-                    </p>
-                    <label className="block text-xs font-semibold text-amber-900">{t('chords.customLabel')}</label>
-                    <input
-                      type="text"
-                      value={customChordInput}
-                      onChange={(e) => setCustomChordInput(e.target.value)}
-                      placeholder={t('chords.customPlaceholder')}
-                      className="w-full px-2 py-1.5 rounded border border-amber-300 text-sm"
-                    />
-                    <label className="block text-xs font-semibold text-amber-900">{t('chords.figuredBass')}</label>
-                    <input
-                      type="text"
-                      value={customFiguredBassInput}
-                      onChange={(e) => setCustomFiguredBassInput(e.target.value)}
-                      placeholder={t('chords.figuredBassPlaceholder')}
-                      className="w-full px-2 py-1.5 rounded border border-amber-300 text-sm"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const chord = customChordInput.trim();
-                        if (chord) {
-                          addChordAt(getChordInsertBeat(), chord, customFiguredBassInput);
-                          setCustomChordInput('');
-                          setCustomFiguredBassInput('');
-                        }
-                      }}
-                      className="w-full py-1.5 px-2 rounded bg-amber-600 text-white text-sm font-medium hover:bg-amber-700"
-                    >
-                      {t('chords.add')}
-                    </button>
-                  </div>
-                )}
-                
-                <div className="space-y-1">
-                  {activeToolbox !== 'pianoKeyboard' && activeToolbox !== 'rhythm' && toolboxes[activeToolbox]?.options?.map((option, idx) => {
-                    if (activeToolbox === 'instruments' && option.type === 'category') {
-                      return (
-                        <div key={option.id} className="pt-2 pb-0.5 px-2 text-xs font-bold text-amber-800 uppercase tracking-wide border-b border-amber-200 first:pt-0">
-                          {option.label}
-                        </div>
-                      );
-                    }
-                    const isActive = activeToolbox === 'rhythm'
-                      ? (option.value === 'rest' && isRest) ||
-                        (option.value === 'dotted' && isDotted) ||
-                        (option.value === selectedDuration && option.value !== 'rest' && option.value !== 'dotted')
-                      : activeToolbox === 'timeSignature' && option.value === 'mode-toggle'
-                      ? false
-                      : activeToolbox === 'clefs'
-                      ? option.value === clefType
-                      : activeToolbox === 'keySignatures'
-                      ? option.value === keySignature
-                      : activeToolbox === 'notehead'
-                      ? option.value === notationMode
-                      : activeToolbox === 'instruments'
-                      ? option.type === 'option' && option.value === instrument
-                      : activeToolbox === 'layout'
-                      ? (option.value === 'gridOnly' && notationStyle === 'FIGURENOTES') ||
-                        (option.id === 'staff-5' && notationStyle === 'TRADITIONAL' && staffLines === 5) ||
-                        (option.id === 'staff-1' && notationStyle === 'TRADITIONAL' && staffLines === 1) ||
-                        (option.id?.startsWith('spacing-') && pixelsPerBeat === option.value)
-                      : selectedOptionIndex === idx;
-
-                    return (
-                      <button
-                        key={option.id}
-                        onClick={() => handleToolboxSelection(idx)}
-                        className={`w-full p-2 rounded text-left text-sm transition-all ${
-                          (['layout', 'keySignatures', 'instruments', 'clefs', 'notehead'].includes(activeToolbox) ? isActive : selectedOptionIndex === idx)
-                            ? 'bg-amber-200 border-l-2 border-amber-600'
-                            : 'hover:bg-amber-100'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="flex items-center gap-2 min-w-0">
-                            {activeToolbox === 'rhythm' && (
-                              <span className="flex items-center gap-0.5 shrink-0 text-amber-900">
-                                {option.value === 'rest' ? (
-                                  <span className="flex items-center w-6 h-6" title={t('note.rest')}><RhythmIcon duration={selectedDuration} isRest={true} /></span>
-                                ) : option.value === 'dotted' ? (
-                                  <span className="flex items-center w-6 h-6" title={t('note.dotted')}><RhythmIcon duration={selectedDuration} isDotted={true} /></span>
-                                ) : ['2/8','4/16','8/16','1/8+2/16','2/16+1/8'].includes(option.value) ? (
-                                  <span className="flex items-center w-8 h-6" title={option.label}><RhythmPatternIcon pattern={option.value} /></span>
-                                ) : ['1/1','1/2','1/4','1/8','1/16','1/32'].includes(option.value) ? (
-                                  <>
-                                    <span className="flex items-center w-6 h-6" title={option.label}><RhythmIcon duration={option.value} /></span>
-                                    <span className="flex items-center w-6 h-6 opacity-90" title={t('note.rest') + ' ' + option.label}><RhythmIcon duration={option.value} isRest={true} /></span>
-                                  </>
-                                ) : null}
-                              </span>
-                            )}
-                            <span className="font-medium">{option.label}</span>
-                          </div>
-                          {isActive && <Check className="w-4 h-4 text-amber-600 shrink-0" />}
-                          {activeToolbox === 'timeSignature' && option.value === 'mode-toggle' && (
-                            <span className="text-xs text-amber-600">
-                              ({timeSignatureMode === 'pedagogical' ? t('timesig.pedagogical') : t('timesig.classic')})
-                            </span>
-                          )}
-                        </div>
-                        {option.key && (
-                          <span className="text-xs text-amber-600 font-mono">({option.key})</span>
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-
-                {/* Instruments: linked TAB / Fingering variant when applicable */}
-                {activeToolbox === 'instruments' && (() => {
-                  const cfg = instrumentConfig[instrument];
-                  if (!cfg || cfg.type === 'standard') return null;
-                  if (cfg.type === 'tab') {
-                    return (
-                      <div className="mt-3 pt-3 border-t-2 border-amber-200">
-                        <h4 className="text-xs font-bold text-amber-900 uppercase mb-2">{t('inst.view')}</h4>
-                        <div className="flex gap-2">
-                          <button
-                            type="button"
-                            onClick={() => setInstrumentNotationVariant('standard')}
-                            className={`flex-1 py-1.5 px-2 rounded text-sm font-medium ${instrumentNotationVariant === 'standard' ? 'bg-amber-600 text-white' : 'bg-amber-100 text-amber-800 hover:bg-amber-200'}`}
-                          >
-                            {t('inst.staff')}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setInstrumentNotationVariant('tab')}
-                            className={`flex-1 py-1.5 px-2 rounded text-sm font-medium ${instrumentNotationVariant === 'tab' ? 'bg-amber-600 text-white' : 'bg-amber-100 text-amber-800 hover:bg-amber-200'}`}
-                          >
-                            {t('inst.tab')}
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  }
-                  if (cfg.type === 'wind' && cfg.fingering) {
-                    return (
-                      <div className="mt-3 pt-3 border-t-2 border-amber-200">
-                        <h4 className="text-xs font-bold text-amber-900 uppercase mb-2">{t('inst.view')}</h4>
-                        <div className="flex gap-2">
-                          <button
-                            type="button"
-                            onClick={() => setInstrumentNotationVariant('standard')}
-                            className={`flex-1 py-1.5 px-2 rounded text-sm font-medium ${instrumentNotationVariant === 'standard' ? 'bg-amber-600 text-white' : 'bg-amber-100 text-amber-800 hover:bg-amber-200'}`}
-                          >
-                            {t('inst.staff')}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setInstrumentNotationVariant('fingering')}
-                            className={`flex-1 py-1.5 px-2 rounded text-sm font-medium ${instrumentNotationVariant === 'fingering' ? 'bg-amber-600 text-white' : 'bg-amber-100 text-amber-800 hover:bg-amber-200'}`}
-                          >
-                            {t('inst.fingering')}
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  }
-                  if (cfg.type === 'figuredBass') {
-                    return (
-                      <div className="mt-3 pt-3 border-t-2 border-amber-200">
-                        <h4 className="text-xs font-bold text-amber-900 uppercase mb-2">{t('inst.view')}</h4>
-                        <div className="flex gap-2">
-                          <button
-                            type="button"
-                            onClick={() => setInstrumentNotationVariant('standard')}
-                            className={`flex-1 py-1.5 px-2 rounded text-sm font-medium ${instrumentNotationVariant === 'standard' ? 'bg-amber-600 text-white' : 'bg-amber-100 text-amber-800 hover:bg-amber-200'}`}
-                          >
-                            {t('inst.staff')}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setInstrumentNotationVariant('figuredBass')}
-                            className={`flex-1 py-1.5 px-2 rounded text-sm font-medium ${instrumentNotationVariant === 'figuredBass' ? 'bg-amber-600 text-white' : 'bg-amber-100 text-amber-800 hover:bg-amber-200'}`}
-                          >
-                            {t('inst.figuredBass')}
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  }
-                  return null;
-                })()}
-
-                {/* Layout toolbox: Taktide paigutus + Project file */}
-                {activeToolbox === 'layout' && (
-                  <>
-                  <div className="mt-4 pt-4 border-t-2 border-amber-200">
-                    <h4 className="text-xs font-bold text-amber-900 uppercase mb-2">{t('layout.measuresPerLine')}</h4>
-                    <p className="text-xs text-amber-700 mb-2">{t('layout.measuresPerLineHint')}</p>
-                    <div className="flex flex-wrap gap-1 mb-3">
-                      {[2, 3, 4, 6, 8].map((n) => (
-                        <button
-                          key={n}
-                          type="button"
-                          onClick={() => setLayoutMeasuresPerLine(n)}
-                          className={`px-2 py-1 rounded text-sm font-medium ${layoutMeasuresPerLine === n ? 'bg-amber-600 text-white' : 'bg-amber-100 text-amber-800 hover:bg-amber-200'}`}
-                        >
-                          {n}
-                        </button>
-                      ))}
-                    </div>
-                    <p className="text-xs text-amber-700 mb-1">Paigutuse muudatus kehtib kursorit sisaldava takti suhtes. Liigu kursoriga (← →) soovitud takti.</p>
-                    <div className="mb-2 px-2 py-1.5 rounded bg-amber-100 border border-amber-200 text-amber-900 text-sm font-medium">
-                      {t('layout.cursorInMeasure')}: {cursorMeasureIndex + 1}
-                    </div>
-                    <div className="grid grid-cols-2 gap-1 text-xs">
-                      <button
-                        type="button"
-                        disabled={cursorMeasureIndex <= 0}
-                        onClick={() => {
-                          if (cursorMeasureIndex <= 0) return;
-                          setLayoutLineBreakBefore((prev) => [...new Set([...prev, cursorMeasureIndex])].sort((a, b) => a - b));
-                        }}
-                        className="py-1.5 px-2 rounded bg-slate-100 text-slate-800 hover:bg-slate-200 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        {t('layout.nextLine')}
-                      </button>
-                      <button
-                        type="button"
-                        disabled={cursorMeasureIndex <= 0}
-                        onClick={() => {
-                          if (cursorMeasureIndex <= 0) return;
-                          setLayoutPageBreakBefore((prev) => [...new Set([...prev, cursorMeasureIndex])].sort((a, b) => a - b));
-                        }}
-                        className="py-1.5 px-2 rounded bg-slate-100 text-slate-800 hover:bg-slate-200 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        {t('layout.newPage')}
-                      </button>
-                      <button
-                        type="button"
-                        disabled={cursorMeasureIndex <= 0}
-                        onClick={() => setLayoutLineBreakBefore((prev) => prev.filter((i) => i !== cursorMeasureIndex))}
-                        className="py-1.5 px-2 rounded bg-amber-100 text-amber-800 hover:bg-amber-200 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        {t('layout.removeLineBreak')}
-                      </button>
-                      <button
-                        type="button"
-                        disabled={cursorMeasureIndex <= 0}
-                        onClick={() => setLayoutPageBreakBefore((prev) => prev.filter((i) => i !== cursorMeasureIndex))}
-                        className="py-1.5 px-2 rounded bg-amber-100 text-amber-800 hover:bg-amber-200 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        {t('layout.removePageBreak')}
-                      </button>
-                    </div>
-                  </div>
-                  <div className="mt-4 pt-4 border-t-2 border-amber-200">
-                    <h4 className="text-xs font-bold text-amber-900 uppercase mb-2">{t('layout.projectFile')}</h4>
-                    <div className="flex flex-col gap-2">
-                      <button
-                        type="button"
-                        onClick={downloadProject}
-                        className="w-full py-2 px-3 rounded-lg bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-500"
-                      >
-                        {t('layout.saveProject')}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => projectFileInputRef.current?.click()}
-                        className="w-full py-2 px-3 rounded-lg bg-slate-600 text-white text-sm font-semibold hover:bg-slate-500"
-                      >
-                        {t('layout.openProject')}
-                      </button>
-                      <input
-                        ref={projectFileInputRef}
-                        type="file"
-                        accept=".json,.noodimeister,application/json"
-                        className="hidden"
-                        onChange={handleOpenProjectFile}
-                      />
-                    </div>
-                  </div>
-                  </>
-                )}
-              </div>
+              <p className="mt-3 text-xs text-amber-600 italic">{t('toolbox.optionsAboveScore')}</p>
             )}
 
           </div>
         </aside>
+        )}
 
         {/* Main Score Area – A4 proportsioon (laius 800–1000px) */}
-        <main className="flex-1 p-8 overflow-auto flex flex-col items-stretch">
+        <main
+          ref={mainRef}
+          className={`flex-1 p-8 flex flex-col items-stretch ${pageFlowDirection === 'horizontal' ? 'overflow-x-auto overflow-y-hidden' : 'overflow-auto'}`}
+          onScroll={(e) => { setMainScrollTop(e.target.scrollTop); setMainScrollLeft(e.target.scrollLeft); }}
+        >
           {/* Pedagoogiline notatsioon: taustheli ja animeerimine (kursor liigub heli järgi) */}
           {isPedagogicalProject && (
             <div className="flex-shrink-0 mb-4 mx-auto w-full" style={{ maxWidth: 1000 }}>
@@ -4043,71 +4081,45 @@ function NoodiMeisterCore({ icons }) {
                       </button>
                     ))}
                     {pedagogicalPlayheadStyle === 'custom' && (
-                      <input
-                        type="text"
-                        value={pedagogicalPlayheadEmoji}
-                        onChange={(e) => setPedagogicalPlayheadEmoji(e.target.value.slice(0, 4))}
-                        placeholder={t('pedagogical.playheadCustomPlaceholder')}
-                        className="w-20 px-2 py-1 rounded border-2 border-violet-200 bg-white text-violet-900 text-lg text-center"
-                        maxLength={4}
-                      />
+                      <div className="flex flex-col gap-1">
+                        <input
+                          type="text"
+                          value={pedagogicalPlayheadEmoji}
+                          onChange={(e) => setPedagogicalPlayheadEmoji(e.target.value.slice(0, 4))}
+                          placeholder={t('pedagogical.playheadCustomPlaceholder')}
+                          title={t('pedagogical.playheadCustomHint')}
+                          className="w-20 px-2 py-1 rounded border-2 border-violet-200 bg-white text-violet-900 text-lg text-center"
+                          maxLength={4}
+                        />
+                        <p className="text-xs text-violet-700 max-w-sm">
+                          {t('pedagogical.playheadCustomHint')}
+                        </p>
+                      </div>
                     )}
                   </div>
                 </div>
               </div>
             </div>
           )}
-          {/* Rütmi rippuv riba – noodilehe kohale, kui rütm on aktiivne (Shift+1) */}
-          {activeToolbox === 'rhythm' && toolboxes.rhythm && (
-            <div className="flex-shrink-0 mb-4 mx-auto w-full" style={{ maxWidth: 1000 }}>
-              <div className="bg-gradient-to-b from-amber-100 to-amber-50 border-2 border-amber-300 rounded-xl shadow-lg p-3 flex flex-wrap items-center justify-center gap-2">
-                <span className="text-xs font-bold text-amber-800 uppercase tracking-wider mr-1 self-center">{t('toolbox.rhythm')}</span>
-                {toolboxes.rhythm.options.map((option, idx) => {
-                  const isActive = (option.value === 'rest' && isRest) || (option.value === 'dotted' && isDotted) || (option.value === selectedDuration && option.value !== 'rest' && option.value !== 'dotted');
-                  return (
-                    <button
-                      key={option.id}
-                      type="button"
-                      draggable
-                      onDragStart={(e) => {
-                        e.dataTransfer.setData('text/plain', 'rhythm:' + idx);
-                        e.dataTransfer.effectAllowed = 'copy';
-                        e.currentTarget.classList.add('opacity-70');
-                      }}
-                      onDragEnd={(e) => e.currentTarget.classList.remove('opacity-70')}
-                      onClick={() => handleToolboxSelection(idx)}
-                      className={`flex flex-col items-center gap-0.5 p-2 rounded-lg min-w-[3rem] transition-all cursor-grab active:cursor-grabbing ${
-                        isActive ? 'bg-amber-400 ring-2 ring-amber-600 shadow-md' : 'bg-white/80 hover:bg-amber-100 border border-amber-200'
-                      }`}
-                      title={`${option.label}. Lohistage noodilehele.`}
-                    >
-                      <span className="flex items-center justify-center gap-0.5 text-amber-900">
-                        {option.value === 'rest' ? (
-                          <RhythmIcon duration={selectedDuration} isRest={true} />
-                        ) : option.value === 'dotted' ? (
-                          <RhythmIcon duration={selectedDuration} isDotted={true} />
-                        ) : ['2/8','4/16','8/16','1/8+2/16','2/16+1/8'].includes(option.value) ? (
-                          <RhythmPatternIcon pattern={option.value} />
-                        ) : ['1/1','1/2','1/4','1/8','1/16','1/32'].includes(option.value) ? (
-                          <>
-                            <RhythmIcon duration={option.value} />
-                            <RhythmIcon duration={option.value} isRest={true} />
-                          </>
-                        ) : null}
-                      </span>
-                      {option.key != null && (
-                        <kbd className="text-[10px] font-mono bg-amber-200/80 text-amber-900 px-1.5 py-0.5 rounded">{option.key}</kbd>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
+          {(() => {
+            const a4PageHeightVal = (pageWidth || LAYOUT.PAGE_WIDTH_MIN) * LAYOUT.A4_HEIGHT_RATIO;
+            const contentHeightForPages = pageFlowDirection === 'horizontal' ? (lastVerticalContentHeightRef.current || logicalContentHeight) : mainContentHeight;
+            const totalPagesVal = Math.max(1, Math.ceil((contentHeightForPages || logicalContentHeight) / a4PageHeightVal));
+            const isHorizontalFlow = pageFlowDirection === 'horizontal';
+            return (
+          <div
+            className={isHorizontalFlow ? 'flex-shrink-0' : ''}
+            style={isHorizontalFlow ? { width: totalPagesVal * (pageWidth || LAYOUT.PAGE_WIDTH_MIN), height: a4PageHeightVal } : undefined}
+          >
           <div
             ref={scoreContainerRef}
             className="mx-auto bg-white rounded-lg shadow-lg border-2 border-amber-200 p-8 flex-1 transition-colors"
-            style={{ maxWidth: pageOrientation === 'landscape' ? LAYOUT.PAGE_WIDTH_MAX_LANDSCAPE : LAYOUT.PAGE_WIDTH_MAX, minHeight: 400 }}
+            style={{
+              minWidth: LAYOUT.PAGE_WIDTH_MIN,
+              maxWidth: pageOrientation === 'landscape' ? LAYOUT.PAGE_WIDTH_MAX_LANDSCAPE : LAYOUT.PAGE_WIDTH_MAX,
+              minHeight: Math.max(500, LAYOUT.STAFF_HEIGHT + LAYOUT.SYSTEM_GAP + LAYOUT.STAFF_HEIGHT + 120),
+              ...(isHorizontalFlow ? { width: totalPagesVal * (pageWidth || LAYOUT.PAGE_WIDTH_MIN), height: a4PageHeightVal } : {})
+            }}
             onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; e.currentTarget.classList.add('ring-2', 'ring-amber-400', 'ring-offset-2'); }}
             onDragLeave={(e) => { e.currentTarget.classList.remove('ring-2', 'ring-amber-400', 'ring-offset-2'); }}
             onDrop={(e) => {
@@ -4172,65 +4184,155 @@ function NoodiMeisterCore({ icons }) {
                 pedagogicalPlayheadStyle={pedagogicalPlayheadStyle}
                 pedagogicalPlayheadEmoji={pedagogicalPlayheadEmoji}
                 isPedagogicalAudioPlaying={isPedagogicalAudioPlaying}
+                pageFlowDirection={pageFlowDirection}
               />
           </div>
+          </div>
+            );
+          })()}
         </main>
 
-        {/* Klaveri klaviatuur – react-piano mudel; fikseeritud all, lehekülge kerides kaasa */}
-        {activeToolbox === 'pianoKeyboard' && (() => {
-          const firstNote = MidiNumbers.fromNote('c3');
-          const lastNote = MidiNumbers.fromNote('c5');
-          const noteRange = { first: firstNote, last: lastNote };
-          const keyboardShortcuts = KeyboardShortcuts.create({
-            firstNote,
-            lastNote,
-            keyboardConfig: KeyboardShortcuts.HOME_ROW
-          });
+        {/* Lehekülgede / ekraani vaate navigaator – kui dokument on pikem kui üks A4 leht */}
+        {showPageNavigator && (mainContentHeight > 0 || lastVerticalContentHeightRef.current > 0 || logicalContentHeight > 0) && (() => {
+          const a4PageHeight = (pageWidth || LAYOUT.PAGE_WIDTH_MIN) * LAYOUT.A4_HEIGHT_RATIO;
+          const a4PageWidth = pageWidth || LAYOUT.PAGE_WIDTH_MIN;
+          const contentH = pageFlowDirection === 'horizontal' ? (lastVerticalContentHeightRef.current || logicalContentHeight) : mainContentHeight;
+          const totalPages = Math.max(1, Math.ceil((contentH || logicalContentHeight) / a4PageHeight));
+          if (totalPages <= 1) return null;
+          const isHorizontalFlow = pageFlowDirection === 'horizontal';
+          const currentPage = isHorizontalFlow
+            ? Math.min(totalPages, Math.max(1, Math.floor(mainScrollLeft / a4PageWidth) + 1))
+            : Math.min(totalPages, Math.max(1, Math.floor(mainScrollTop / a4PageHeight) + 1));
+          const scrollToPage = (p) => {
+            if (!mainRef.current) return;
+            if (isHorizontalFlow) mainRef.current.scrollTo({ left: (p - 1) * a4PageWidth, behavior: 'smooth' });
+            else mainRef.current.scrollTo({ top: (p - 1) * a4PageHeight, behavior: 'smooth' });
+          };
           return (
-            <div className="fixed bottom-0 left-0 right-0 z-40 bg-gradient-to-t from-amber-100 to-amber-50 border-t-2 border-amber-300 shadow-[0_-4px_12px_rgba(0,0,0,0.08)] py-3 px-4">
-              <div className="mx-auto max-w-4xl">
-                <Piano
-                  className="NoodiMeisterPiano"
-                  noteRange={noteRange}
-                  playNote={(midiNumber) => {
-                    const { pitch, octave, isAccidental } = midiToPitchOctave(midiNumber);
-                    const attrs = MidiNumbers.getAttributes(midiNumber);
-                    const accidental = attrs.pitchName && attrs.pitchName.includes('#') ? 1 : attrs.pitchName && attrs.pitchName.includes('b') ? -1 : 0;
-                    setGhostPitch(pitch);
-                    setGhostOctave(octave);
-                    if (noteInputMode) addNoteAtCursor(pitch, octave, accidental);
-                    else playPianoNote(pitch, octave, isAccidental ? 1 : 0);
-                  }}
-                  stopNote={() => {}}
-                  width={Math.min(900, typeof window !== 'undefined' ? window.innerWidth - 80 : 900)}
-                  keyboardShortcuts={keyboardShortcuts}
-                  activeNotes={[pitchOctaveToMidi(ghostPitch, ghostOctave)]}
-                  renderNoteLabel={({ midiNumber, isActive, isAccidental }) => {
-                    const { pitch, octave } = midiToPitchOctave(midiNumber);
-                    if (notationMode === 'traditional') {
-                      return (
-                        <span>
-                          {MidiNumbers.getAttributes(midiNumber).pitchName}{octave}
-                        </span>
-                      );
-                    }
-                    const color = FIGURENOTES_COLORS[pitch] || '#666';
-                    const shape = FIGURENOTES_SHAPES[octave] === 'square' ? '□' : FIGURENOTES_SHAPES[octave] === 'circle' ? '○' : '△';
-                    return (
-                      <span
-                        className="inline-block w-4 h-4 rounded border border-amber-800 flex items-center justify-center text-[10px] font-bold"
-                        style={{ backgroundColor: color, color: octave === 3 ? '#fff' : '#000' }}
-                        title={`${pitch} ${FIGURENOTES_SHAPES[octave] || ''}`}
-                      >
-                        {shape}
-                      </span>
-                    );
-                  }}
-                />
-              </div>
+            <div className="fixed right-4 top-1/2 -translate-y-1/2 z-30 flex flex-col gap-1 py-2 px-2 bg-white/95 backdrop-blur rounded-xl border-2 border-amber-200 shadow-lg">
+              <span className="text-xs font-semibold text-amber-800 px-1 mb-1">{t('layout.pageNavigatorTitle')}</span>
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+                <button
+                  key={p}
+                  type="button"
+                  onClick={() => scrollToPage(p)}
+                  className={`w-8 h-8 rounded-lg text-sm font-medium transition-colors ${currentPage === p ? 'bg-amber-600 text-white shadow-md' : 'bg-amber-100 text-amber-800 hover:bg-amber-200'}`}
+                  title={t('layout.pageNavigatorGoTo').replace('{{page}}', String(p))}
+                >
+                  {p}
+                </button>
+              ))}
+              <span className="text-xs text-amber-600 px-1 mt-1">{currentPage} / {totalPages}</span>
             </div>
           );
         })()}
+
+        {/* Klaveri klaviatuur – virtuaalne klaver muted.io/piano stiilis; portaal body-sse */}
+        {activeToolbox === 'pianoKeyboard' && typeof document !== 'undefined' && createPortal(
+          (() => {
+            const rangeMap = { 'C3-C5': ['c3', 'c5'], 'C2-C5': ['c2', 'c5'], 'C1-C5': ['c1', 'c5'], 'C1-C7': ['c1', 'c7'] };
+            const [firstStr, lastStr] = rangeMap[pianoRange] || ['c3', 'c5'];
+            const firstNote = MidiNumbers.fromNote(firstStr);
+            const lastNote = MidiNumbers.fromNote(lastStr);
+            const noteRange = { first: firstNote, last: lastNote };
+            const keyboardShortcuts = KeyboardShortcuts.create({
+              firstNote,
+              lastNote,
+              keyboardConfig: KeyboardShortcuts.HOME_ROW
+            });
+            return (
+              <div className="fixed bottom-0 left-0 right-0 z-[100] min-h-[140px] bg-gradient-to-t from-amber-100 to-amber-50 border-t-2 border-amber-300 shadow-[0_-4px_12px_rgba(0,0,0,0.12)] py-3 px-4" style={{ isolation: 'isolate' }}>
+                <div className="mx-auto max-w-4xl" style={{ minHeight: 120 }}>
+                  <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                    <span className="text-xs font-semibold text-amber-800 uppercase tracking-wider">
+                      {t('toolbox.pianoKeyboard')} — <a href="https://muted.io/piano/" target="_blank" rel="noopener noreferrer" className="text-amber-600 hover:underline">muted.io/piano</a> stiilis
+                    </span>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="text-xs text-amber-700 font-medium">{t('layout.range') || 'Vahemik'}:</span>
+                      {(['C3-C5', 'C2-C5', 'C1-C5', 'C1-C7']).map((r) => (
+                        <button
+                          key={r}
+                          type="button"
+                          onClick={() => setPianoRange(r)}
+                          className={`px-2 py-1 rounded text-xs font-medium transition-colors ${pianoRange === r ? 'bg-amber-600 text-white' : 'bg-amber-200/80 text-amber-900 hover:bg-amber-300'}`}
+                        >
+                          {r}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-3 mb-2">
+                    <span className="text-xs text-amber-800 font-medium">{t('midi.title') || 'MIDI klaviatuur'}:</span>
+                    {!midiSupported ? (
+                      <span className="text-xs text-amber-700">{t('midi.unsupported') || 'Brauser ei toeta MIDI (soovitus: Chrome, Edge)'}</span>
+                    ) : midiError ? (
+                      <span className="text-xs text-red-600">{midiError}</span>
+                    ) : midiInputs.length === 0 ? (
+                      <span className="text-xs text-amber-700">{t('midi.noDevices') || 'Seadmeid pole. Ühenda MIDI klaviatuur ja värskenda lehte.'}</span>
+                    ) : (
+                      <select
+                        value={selectedMidiInputId ?? ''}
+                        onChange={(e) => setSelectedMidiInputId(e.target.value || null)}
+                        className="text-xs rounded border border-amber-400 bg-amber-50 text-amber-900 px-2 py-1"
+                      >
+                        <option value="">{t('midi.selectDevice') || 'Vali seade…'}</option>
+                        {midiInputs.map((inp) => (
+                          <option key={inp.id} value={inp.id}>{inp.name}</option>
+                        ))}
+                      </select>
+                    )}
+                    {activeMidiNotes.length > 0 && (
+                      <span className="text-xs text-blue-600 font-medium">
+                        {t('midi.playing') || 'Mängib'} ({activeMidiNotes.length})
+                      </span>
+                    )}
+                  </div>
+                  <Piano
+                    className={`NoodiMeisterPiano ${activeMidiNotes.length > 0 ? 'midi-keys-active' : ''}`}
+                    noteRange={noteRange}
+                    playNote={(midiNumber) => {
+                      const { pitch, octave, isAccidental } = midiToPitchOctave(midiNumber);
+                      const attrs = MidiNumbers.getAttributes(midiNumber);
+                      const accidental = attrs.pitchName && attrs.pitchName.includes('#') ? 1 : attrs.pitchName && attrs.pitchName.includes('b') ? -1 : 0;
+                      setGhostPitch(pitch);
+                      setGhostOctave(octave);
+                      if (noteInputMode) addNoteAtCursor(pitch, octave, accidental);
+                      else playPianoNote(pitch, octave, isAccidental ? 1 : 0);
+                    }}
+                    stopNote={() => {}}
+                    width={pianoStripWidth}
+                    keyboardShortcuts={keyboardShortcuts}
+                    activeNotes={activeMidiNotes.length > 0 ? activeMidiNotes : [pitchOctaveToMidi(ghostPitch, ghostOctave)]}
+                    renderNoteLabel={({ midiNumber, isActive, isAccidental }) => {
+                      const { pitch, octave } = midiToPitchOctave(midiNumber);
+                      const attrs = MidiNumbers.getAttributes(midiNumber);
+                      const pitchName = attrs.pitchName;
+                      if (notationMode === 'traditional' || notationMode === 'vabanotatsioon') {
+                        return (
+                          <span>
+                            {pitchName}{octave}
+                          </span>
+                        );
+                      }
+                      const color = FIGURENOTES_COLORS[pitch] || '#666';
+                      const shape = FIGURENOTES_SHAPES[octave] === 'square' ? '□' : FIGURENOTES_SHAPES[octave] === 'circle' ? '○' : '△';
+                      return (
+                        <span
+                          className="inline-block w-4 h-4 rounded border border-amber-800 flex items-center justify-center text-[10px] font-bold"
+                          style={{ backgroundColor: color, color: octave === 3 ? '#fff' : '#000' }}
+                          title={`${pitch} ${FIGURENOTES_SHAPES[octave] || ''}`}
+                        >
+                          {shape}
+                        </span>
+                      );
+                    }}
+                  />
+                </div>
+              </div>
+            );
+          })(),
+          document.body
+        )}
       </div>
     </div>
   );
@@ -4301,7 +4403,7 @@ function getFingeringForNote(pitch, octave, instrumentId) {
 }
 
 // Timeline Component – multi-system layout (VexFlow loogika). (PAGE_BREAK_GAP on defineeritud üleval.)
-function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, pageWidth, cursorPosition, notationMode, staffLines, clefType, keySignature = 'C', relativeNotationShowKeySignature = false, relativeNotationShowTraditionalClef = false, instrument = 'piano', instrumentNotationVariant = 'standard', instrumentConfig = {}, showBarNumbers = true, chords = [], isDotted, isRest, selectedDuration, noteInputMode, selectedNoteIndex, isNoteSelected, notes: allNotes, onStaffAddNote, ghostPitch, ghostOctave, notationStyle, layoutMeasuresPerLine = 4, layoutLineBreakBefore = [], layoutPageBreakBefore = [], figurenotesSize = 16, figurenotesStems = false, pedagogicalPlayheadStyle = 'line', pedagogicalPlayheadEmoji = '🎵', isPedagogicalAudioPlaying = false }) {
+function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, pageWidth, cursorPosition, notationMode, staffLines, clefType, keySignature = 'C', relativeNotationShowKeySignature = false, relativeNotationShowTraditionalClef = false, instrument = 'piano', instrumentNotationVariant = 'standard', instrumentConfig = {}, showBarNumbers = true, chords = [], isDotted, isRest, selectedDuration, noteInputMode, selectedNoteIndex, isNoteSelected, notes: allNotes, onStaffAddNote, ghostPitch, ghostOctave, notationStyle, layoutMeasuresPerLine = 4, layoutLineBreakBefore = [], layoutPageBreakBefore = [], figurenotesSize = 16, figurenotesStems = false, pedagogicalPlayheadStyle = 'line', pedagogicalPlayheadEmoji = '🎵', isPedagogicalAudioPlaying = false, pageFlowDirection = 'vertical' }) {
   const isFigurenotesMode = notationStyle === 'FIGURENOTES';
   const instCfg = instrumentConfig[instrument];
   const isTabMode = instCfg?.type === 'tab' && instrumentNotationVariant === 'tab';
@@ -4316,6 +4418,9 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
   const totalHeight = systems.length > 0
     ? systems[systems.length - 1].yOffset + LAYOUT.STAFF_HEIGHT + 40
     : LAYOUT.STAFF_HEIGHT + 40;
+  const isHorizontal = pageFlowDirection === 'horizontal';
+  const a4PageHeight = (pageWidth || LAYOUT.PAGE_WIDTH_MIN) * LAYOUT.A4_HEIGHT_RATIO;
+  const totalPages = Math.max(1, Math.ceil(totalHeight / a4PageHeight));
   const timelineHeight = LAYOUT.STAFF_HEIGHT;
   const centerY = timelineHeight / 2;
   const marginLeft = LAYOUT.MARGIN_LEFT;
@@ -4338,6 +4443,9 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
   const staffLinePositions = getStaffLinePositions();
   const spacing = 10;
   const middleLineY = centerY; // B4 treble / D3 bass
+
+  // Helistiku toonika (I aste) noodijoonestiku positsiooni jaoks: [pitch, octave]. Bb/Eb = sama joon kui B/E.
+  const KEY_TONIC_FOR_STAFF = { C: ['C', 4], G: ['G', 4], D: ['D', 4], A: ['A', 4], E: ['E', 4], B: ['B', 4], F: ['F', 4], Bb: ['B', 4], Eb: ['E', 4] };
 
   // Pitch+octave → staff Y. JO-võti on vastavuses traditsioonilise noodikirja helikõrgustega (sama skaala kui viiulivõti).
   const getPitchY = (pitch, octave) => {
@@ -4701,17 +4809,24 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
     return marginLeft + widths.slice(0, j + 1).reduce((a, b) => a + b, 0) - (widths[j] ?? 0) * 0.5;
   })() : null;
 
+  const svgWidth = isHorizontal ? totalPages * (pageWidth || LAYOUT.PAGE_WIDTH_MIN) : '100%';
+  const svgHeight = isHorizontal ? a4PageHeight : totalHeight;
+
   return (
     <svg
-      width="100%"
-      height={totalHeight}
+      width={svgWidth}
+      height={svgHeight}
       className={`overflow-visible ${noteInputMode ? 'cursor-pointer' : ''}`}
       onClick={handleStaffClick}
+      style={isHorizontal ? { display: 'block', minWidth: svgWidth } : undefined}
     >
-      <rect width="100%" height={totalHeight} fill="#fffbf0" pointerEvents={noteInputMode ? 'auto' : 'none'} />
+      <rect width={isHorizontal ? svgWidth : '100%'} height={svgHeight} fill="#fffbf0" pointerEvents={noteInputMode ? 'auto' : 'none'} />
 
-      {systems.map((sys) => (
-        <g key={sys.systemIndex}>
+      {systems.map((sys) => {
+        const pageIndex = isHorizontal ? Math.floor(sys.yOffset / a4PageHeight) : 0;
+        const groupTransform = isHorizontal ? `translate(${pageIndex * (pageWidth || LAYOUT.PAGE_WIDTH_MIN)}, ${-pageIndex * a4PageHeight})` : undefined;
+        return (
+        <g key={sys.systemIndex} transform={groupTransform}>
           {sys.pageBreakBefore && (
             <line x1={0} y1={sys.yOffset - PAGE_BREAK_GAP / 2} x2={pageWidth || LAYOUT.PAGE_WIDTH_MIN} y2={sys.yOffset - PAGE_BREAK_GAP / 2} stroke="#c4b896" strokeWidth={1} strokeDasharray="4 4" />
           )}
@@ -4747,11 +4862,13 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
                   const clefBaseline = 'alphabetic';
                   const clefMiddle = 'middle';
                   if (notationMode === 'vabanotatsioon') {
+                    const [tonicPitch, tonicOctave] = KEY_TONIC_FOR_STAFF[keySignature] || ['C', 4];
+                    const joClefCenterY = getPitchY(tonicPitch, tonicOctave);
                     g.push(
                       <JoClefSymbol
                         key="jo-clef"
                         x={xOffset}
-                        centerY={sys.yOffset + middleLineYStaff}
+                        centerY={sys.yOffset + joClefCenterY}
                         staffSpacing={staffSpace}
                         stroke="#000"
                         strokeWidth={2.2}
@@ -5195,7 +5312,8 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
             })}
           </g>
             );
-          })}
+          })
+          }
 
           {/* Final barline – only in TRADITIONAL (FIGURENOTES already has thick bar at measure end) */}
             {!isFigurenotesMode && (
@@ -5209,7 +5327,7 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
             />
           )}
         </g>
-      ))}
+      ); })}
 
       {/* Cursor + Ghost note (only visible when note input mode is ON) – slot center */}
       {noteInputMode && cursorInfo && cursorSlotCenterX != null && (
@@ -5330,7 +5448,8 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
             </circle>
           )}
         </g>
-      )}
+      )
+      })}
     </svg>
   );
 }

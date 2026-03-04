@@ -48,3 +48,13 @@
   color: #fef3c7;
   font-size: 10px;
 }
+
+/* Füüsilise MIDI klaviatuuri vajutamisel: klahv muutub siniseks */
+.NoodiMeisterPiano.midi-keys-active .ReactPiano__Key--active.ReactPiano__Key--natural {
+  background: linear-gradient(180deg, #93c5fd 0%, #3b82f6 100%);
+  border-color: #1d4ed8;
+}
+.NoodiMeisterPiano.midi-keys-active .ReactPiano__Key--active.ReactPiano__Key--accidental {
+  background: linear-gradient(180deg, #60a5fa 0%, #2563eb 100%);
+  border-top-color: #3b82f6;
+}
