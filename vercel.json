@@ -7,13 +7,5 @@
       "source": "/((?!assets/)(?!.*\\.).*)",
       "destination": "/index.html"
     }
-  ],
-  "redirects": [
-    {
-      "source": "/((?!assets/).*)",
-      "has": [{ "type": "host", "value": "www.noodimeister.ee" }],
-      "destination": "https://noodimeister.ee/$1",
-      "permanent": true
-    }
   ]
 }
