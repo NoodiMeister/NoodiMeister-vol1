@@ -39,6 +39,7 @@ export default defineConfig({
   root: '.',
   build: {
     sourcemap: true,
+    chunkSizeWarningLimit: 900,
     commonjsOptions: { transformMixedEsModules: true },
     rollupOptions: {
       output: {
