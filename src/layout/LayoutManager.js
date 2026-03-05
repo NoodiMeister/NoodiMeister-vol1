@@ -52,8 +52,20 @@ export function computeLayout(measures, timeSignature, pixelsPerBeat, pageWidth,
     systemGap = LAYOUT.SYSTEM_GAP,
     staffCount = 1,
     measureStretchFactors = [],
+    staffHeight: optionsStaffHeight,
+    staffSpace: optionsStaffSpace,
+    globalSpacingMultiplier = 1,
+    staffSpacing: optionsStaffSpacing,
+    pageHeight: optionsPageHeight,
   } = layoutOptions;
-  const step = (staffCount || 1) * getStaffHeight() + systemGap;
+  const mult = Math.max(0.25, Math.min(3, Number(globalSpacingMultiplier) || 1));
+  const effectiveMeasuresPerLine = measuresPerLine > 0 ? Math.max(1, Math.round(measuresPerLine / mult)) : 0;
+  const effectiveAvailableWidth = availableWidth / mult;
+  const staffHeightForStep = optionsStaffHeight ?? getStaffHeight();
+  const step = typeof optionsStaffSpacing === 'number' && optionsStaffSpacing > 0
+    ? optionsStaffSpacing
+    : (staffCount || 1) * staffHeightForStep + systemGap;
+  const pageHeight = typeof optionsPageHeight === 'number' && optionsPageHeight > 0 ? optionsPageHeight : null;
   const lineSet = new Set(Array.isArray(lineBreakBefore) ? lineBreakBefore : []);
   const pageSet = new Set(Array.isArray(pageBreakBefore) ? pageBreakBefore : []);
   const getFactor = (i) => (Array.isArray(measureStretchFactors) && typeof measureStretchFactors[i] === 'number')
@@ -89,10 +101,14 @@ export function computeLayout(measures, timeSignature, pixelsPerBeat, pageWidth,
     for (let i = 0; i < measures.length; i++) {
       const forceLine = lineSet.has(i);
       const forcePage = pageSet.has(i);
-      const forceBreak = forceLine || forcePage || (measuresPerLine > 0 && currentRow.length >= measuresPerLine && currentRow.length > 0);
+      const forceBreak = forceLine || forcePage || (effectiveMeasuresPerLine > 0 && currentRow.length >= effectiveMeasuresPerLine && currentRow.length > 0);
       if (forceBreak && currentRow.length > 0) {
         const sys = buildSystem([...currentRow], systems.length, nextPageBreak);
         if (sys) {
+          if (pageHeight != null && yAcc + step > pageHeight && yAcc > 0) {
+            sys.pageBreakBefore = true;
+            yAcc = 0;
+          }
           sys.yOffset = yAcc;
           yAcc += step;
           if (nextPageBreak) {
@@ -109,6 +125,10 @@ export function computeLayout(measures, timeSignature, pixelsPerBeat, pageWidth,
     if (currentRow.length > 0) {
       const sys = buildSystem(currentRow, systems.length, nextPageBreak);
       if (sys) {
+        if (pageHeight != null && yAcc + step > pageHeight && yAcc > 0) {
+          sys.pageBreakBefore = true;
+          yAcc = 0;
+        }
         sys.yOffset = yAcc;
         systems.push(sys);
       }
@@ -137,7 +157,7 @@ export function computeLayout(measures, timeSignature, pixelsPerBeat, pageWidth,
       const nextIdx = measureIdx + rowIndices.length;
       const nextBeatCount = measures[nextIdx].beatCount ?? beatsPerMeasure;
       const wouldBeTotal = totalBeatCount + nextBeatCount;
-      const wouldBePixelsPerBeat = availableWidth / wouldBeTotal;
+      const wouldBePixelsPerBeat = effectiveAvailableWidth / wouldBeTotal;
       const nextMeasureWidth = nextBeatCount * wouldBePixelsPerBeat;
       if (rowIndices.length > 0 && nextMeasureWidth < (LAYOUT.MEASURE_MIN_WIDTH || 28)) break;
       rowIndices.push(nextIdx);
@@ -152,14 +172,17 @@ export function computeLayout(measures, timeSignature, pixelsPerBeat, pageWidth,
       ? rowIndices.map((i) => ((measures[i].beatCount ?? beatsPerMeasure) * getFactor(i) / totalWeight) * availableWidth)
       : rowIndices.map((i) => (measures[i].beatCount ?? beatsPerMeasure) * (availableWidth / totalBeatCount));
     const pixelsPerBeatForRow = totalBeatCount > 0 ? availableWidth / totalBeatCount : pixelsPerBeat;
+    const yOffset = systemIndex * step;
+    const autoPageBreak = pageHeight != null && systemIndex > 0
+      && Math.floor(yOffset / pageHeight) > Math.floor(((systemIndex - 1) * step) / pageHeight);
     systems.push({
       systemIndex,
       measureIndices: rowIndices,
       measureWidths,
-      yOffset: systemIndex * step,
+      yOffset,
       pixelsPerBeat: pixelsPerBeatForRow,
       measureWidth: measureWidths[0],
-      pageBreakBefore: false,
+      pageBreakBefore: autoPageBreak,
     });
     measureIdx += rowIndices.length;
     systemIndex++;

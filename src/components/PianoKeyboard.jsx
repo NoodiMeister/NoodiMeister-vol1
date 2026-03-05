@@ -8,6 +8,7 @@ import { InteractivePiano } from '../piano';
 import { FIGURENOTES_COLORS } from '../utils/figurenotes';
 
 export { PianoSection, InteractivePiano };
+export { PianoKeyboardSVG } from './PianoKeyboardSVG';
 
 /**
  * Täielik klaviatuuri riba redaktoris: vahemikud, sulgemine, figuurid ja JO-nimed.

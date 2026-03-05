@@ -7,8 +7,10 @@ import { getFigureSymbol } from '../utils/figurenotes';
 import { getJoName } from '../notation/joNames';
 import { RhythmSyllableLabel } from '../components/RhythmSyllableLabel';
 import { getRhythmSyllableForNote } from '../notation/rhythmSyllables';
+import { getFigureNoteWidth, FIGURE_BASE_WIDTH } from '../layout/LayoutEngine';
 
 const LAYOUT = { MARGIN_LEFT: 60, MEASURE_MIN_WIDTH: 28 };
+const FIGURE_START_PADDING = 8;
 const PAGE_BREAK_GAP = 80;
 const barLineWidth = 5;
 
@@ -74,6 +76,7 @@ export function FigurenotesView({
   isHorizontal = false,
   a4PageHeight = 400,
   pageFlowDirection = 'vertical',
+  figureBaseWidth = FIGURE_BASE_WIDTH,
 }) {
   const centerY = timelineHeight / 2;
   const beatsPerMeasure = timeSignature?.beats ?? 4;
@@ -231,48 +234,48 @@ export function FigurenotesView({
                       </g>
                     );
                   })}
-                  {measure.notes.map((note, noteIdx) => {
-                    const noteX = getNoteSlotCenterX(note);
-                    let globalNoteIndex = 0;
-                    for (let i = 0; i < measureIdx; i++) globalNoteIndex += effectiveMeasures[i].notes.length;
-                    globalNoteIndex += noteIdx;
-                    const noteY = sys.yOffset + centerY;
-                    const noteGroupProps = { onClick: (e) => { e.stopPropagation(); onNoteClick?.(globalNoteIndex); }, style: { cursor: onNoteClick ? 'pointer' : undefined } };
-                    if (note.isRest) {
-                      const restLabelY = sys.yOffset + centerY + 20;
-                      const restSyllable = showRhythmSyllables ? getRhythmSyllableForNote(note) : '';
-                      if (!figurenotesStems) {
-                        const zSize = Math.min(getRestBoxWidth(note) * 0.55, 26);
-                        return (<g key={noteIdx} {...noteGroupProps}><text x={noteX} y={sys.yOffset + centerY + zSize * 0.2} textAnchor="middle" fontSize={zSize} fontWeight="bold" fill="#1a1a1a" fontFamily="serif">Z</text>{restSyllable && <RhythmSyllableLabel x={noteX} y={restLabelY} text={restSyllable} staffSpace={10} />}</g>);
+                  {(() => {
+                    let currentX = measureX + FIGURE_START_PADDING;
+                    return measure.notes.map((note, noteIdx) => {
+                      const noteWidth = getFigureNoteWidth(note.durationLabel || '1/4', figureBaseWidth);
+                      const figureCenterX = currentX + noteWidth / 2;
+                      currentX += noteWidth;
+
+                      let globalNoteIndex = 0;
+                      for (let i = 0; i < measureIdx; i++) globalNoteIndex += effectiveMeasures[i].notes.length;
+                      globalNoteIndex += noteIdx;
+                      const noteY = sys.yOffset + centerY;
+                      const noteGroupProps = { onClick: (e) => { e.stopPropagation(); onNoteClick?.(globalNoteIndex); }, style: { cursor: onNoteClick ? 'pointer' : undefined } };
+                      if (note.isRest) {
+                        const restLabelY = sys.yOffset + centerY + 20;
+                        const restSyllable = showRhythmSyllables ? getRhythmSyllableForNote(note) : '';
+                        if (!figurenotesStems) {
+                          const zSize = Math.min(noteWidth * 0.55, 26);
+                          return (<g key={noteIdx} {...noteGroupProps}><text x={figureCenterX} y={sys.yOffset + centerY + zSize * 0.2} textAnchor="middle" fontSize={zSize} fontWeight="bold" fill="#1a1a1a" fontFamily="serif">Z</text>{restSyllable && <RhythmSyllableLabel x={figureCenterX} y={restLabelY} text={restSyllable} staffSpace={10} />}</g>);
+                        }
+                        return (<g key={noteIdx} {...noteGroupProps}>{restSyllable && <RhythmSyllableLabel x={figureCenterX} y={restLabelY} text={restSyllable} staffSpace={10} />}</g>);
                       }
-                      return (<g key={noteIdx} {...noteGroupProps}>{restSyllable && <RhythmSyllableLabel x={noteX} y={restLabelY} text={restSyllable} staffSpace={10} />}</g>);
-                    }
-                    const beatIndex = Math.floor(note.beat - measure.startBeat);
-                    const beatLeft = measureX + beatIndex * beatWidth;
-                    const figureCenterX = beatLeft + beatFigurePadding + figureSize / 2;
-                    const accidentalNudge = (note.accidental === 1 || note.accidental === -1) ? (note.accidental === 1 ? 1 : -1) * Math.max(2, figureSize * 0.2) : 0;
-                    const figureX = figureCenterX + accidentalNudge;
-                    const labelFontSize = Math.max(8, Math.round(figureSize * 0.625));
-                    const dur = note.durationLabel || '1/4';
-                    const tailLen = (dur === '1/1') ? Math.max(20, figureSize * 1.4) : (dur === '1/2') ? Math.max(12, figureSize * 0.85) : 0;
-                    const labelY = noteY + figureSize * 0.5 + labelFontSize + tailLen;
-                    const noteStartBeat = note.beat - measure.startBeat;
-                    const noteDurationBeats = typeof note.duration === 'number' ? note.duration : 1;
-                    const bandLeft = measureX + noteStartBeat * beatWidth;
-                    const bandWidth = Math.max(2, noteDurationBeats * beatWidth);
-                    const bandY = sys.yOffset + 6;
-                    const bandH = timelineHeight - 12;
-                    const { color: bandColor } = getFigureSymbol(note.pitch, note.octave);
-                    return (
-                      <g key={noteIdx} {...noteGroupProps}>
-                        <rect x={bandLeft} y={bandY} width={bandWidth} height={bandH} fill={bandColor} opacity="0.2" rx="2" />
-                        {renderFigurenote(note, figureX, noteY, globalNoteIndex)}
-                        {(note.lyric != null && String(note.lyric).trim() !== '') && (
-                          <text x={figureX} y={labelY + 14} textAnchor="middle" fontSize="11" fill="#333" fontFamily={lyricFontFamily}>{note.lyric}</text>
-                        )}
-                      </g>
-                    );
-                  })}
+                      const accidentalNudge = (note.accidental === 1 || note.accidental === -1) ? (note.accidental === 1 ? 1 : -1) * Math.max(2, figureSize * 0.2) : 0;
+                      const figureX = figureCenterX + accidentalNudge;
+                      const labelFontSize = Math.max(8, Math.round(figureSize * 0.625));
+                      const dur = note.durationLabel || '1/4';
+                      const tailLen = (dur === '1/1') ? Math.max(20, figureSize * 1.4) : (dur === '1/2') ? Math.max(12, figureSize * 0.85) : 0;
+                      const labelY = noteY + figureSize * 0.5 + labelFontSize + tailLen;
+                      const bandLeft = currentX - noteWidth;
+                      const bandY = sys.yOffset + 6;
+                      const bandH = timelineHeight - 12;
+                      const { color: bandColor } = getFigureSymbol(note.pitch, note.octave);
+                      return (
+                        <g key={noteIdx} {...noteGroupProps}>
+                          <rect x={bandLeft} y={bandY} width={noteWidth} height={bandH} fill={bandColor} opacity="0.2" rx="2" />
+                          {renderFigurenote(note, figureX, noteY, globalNoteIndex)}
+                          {(note.lyric != null && String(note.lyric).trim() !== '') && (
+                            <text x={figureX} y={labelY + 14} textAnchor="middle" fontSize="11" fill="#333" fontFamily={lyricFontFamily}>{note.lyric}</text>
+                          )}
+                        </g>
+                      );
+                    });
+                  })()}
                 </g>
               );
             })}

@@ -25,6 +25,7 @@ import RestSymbol from '../notation/RestSymbols';
 import { TraditionalNotationView } from '../views/TraditionalNotationView';
 import { FigurenotesView } from '../views/FigurenotesView';
 import { computeLayout, getStaffHeight, LAYOUT, PAGE_BREAK_GAP } from '../layout/LayoutManager';
+import { computeScaleForA4, FIGURE_BASE_WIDTH, PAGE_DIMENSIONS } from '../layout/LayoutEngine';
 import {
   getStaffLinePositions,
   getYFromStaffPosition,
@@ -122,6 +123,33 @@ function buildMeasuresFromNotes(notes, timeSignature) {
   });
   const effectiveMeasures = measures.map((m, i) => ({ ...m, notes: notesByMeasure[i] || [] }));
   return { measures, effectiveMeasures };
+}
+
+/** Kõikide instrumentide noodid: ühine taktide ahel, iga instrumendi effectiveMeasures eraldi. */
+function buildMeasuresFromInstruments(instruments, timeSignature) {
+  const beatsPerMeasure = timeSignature?.beats ?? 4;
+  const totalBeats = (instruments || []).reduce((acc, inst) => {
+    const sum = (inst.notes || []).reduce((s, n) => s + n.duration, 0);
+    return Math.max(acc, sum);
+  }, 0);
+  const measureCount = Math.max(1, Math.ceil(totalBeats / beatsPerMeasure));
+  const measures = [];
+  for (let i = 0; i < measureCount; i++) {
+    const startBeat = i * beatsPerMeasure;
+    measures.push({
+      startBeat,
+      endBeat: startBeat + beatsPerMeasure,
+      beatCount: beatsPerMeasure,
+      notes: [],
+    });
+  }
+  const effectiveMeasuresPerInstrument = {};
+  (instruments || []).forEach((inst) => {
+    const { effectiveMeasures } = buildMeasuresFromNotes(inst.notes || [], timeSignature);
+    const padded = measures.map((m, i) => ({ ...m, notes: effectiveMeasures[i]?.notes ?? [] }));
+    effectiveMeasuresPerInstrument[inst.id] = padded;
+  });
+  return { measures, effectiveMeasuresPerInstrument };
 }
 
 /**
@@ -224,27 +252,47 @@ function NotationOrchestratorInner({ showPiano = true, t = (k) => k }) {
     keySignature,
     timeSignature,
     timeSignatureMode,
-    notes,
+    instruments,
+    activeInstrumentId,
+    setActiveInstrumentId,
+    addInstrument,
     clefType,
     cursorPosition,
     ghostPitch,
     ghostOctave,
     notationStyle,
+    globalSpacingMultiplier = 1,
+    staffSpacing = 120,
   } = notation;
 
   const onNotePlay = usePianoToNotationHandler();
 
-  const { measures, effectiveMeasures } = useMemo(
-    () => buildMeasuresFromNotes(notes, timeSignature),
-    [notes, timeSignature]
+  const { measures, effectiveMeasuresPerInstrument } = useMemo(
+    () => buildMeasuresFromInstruments(instruments, timeSignature),
+    [instruments, timeSignature]
   );
 
-  const systems = useMemo(() => {
-    const opts = { measuresPerLine: 4, staffCount: 1 };
-    return computeLayout(measures, timeSignature, PIXELS_PER_BEAT, PAGE_WIDTH_DEFAULT, opts);
-  }, [measures, timeSignature]);
+  const staffCount = instruments?.length ?? 1;
+  const layoutWithScale = useMemo(() => {
+    const dims = PAGE_DIMENSIONS.portrait ?? { height: 1123, margin: 60 };
+    const availablePageHeight = dims.height - (dims.margin ?? 60) * 2;
+    const opts = {
+      measuresPerLine: 4,
+      staffCount,
+      globalSpacingMultiplier,
+      staffSpacing: Math.max(40, staffSpacing),
+      pageHeight: availablePageHeight > 0 ? availablePageHeight : undefined,
+    };
+    const systemsZero = computeLayout(measures, timeSignature, PIXELS_PER_BEAT, PAGE_WIDTH_DEFAULT, opts);
+    const systemCount = systemsZero.length;
+    const { scale, staffHeight, staffSpace } = computeScaleForA4(staffCount, systemCount, 'portrait');
+    const optsScaled = { ...opts, staffHeight, staffSpace };
+    const systems = computeLayout(measures, timeSignature, PIXELS_PER_BEAT, PAGE_WIDTH_DEFAULT, optsScaled);
+    return { systems, staffHeight, staffSpace, scale };
+  }, [measures, timeSignature, staffCount, globalSpacingMultiplier, staffSpacing]);
 
-  const timelineHeight = getStaffHeight();
+  const { systems, staffHeight, staffSpace } = layoutWithScale;
+  const timelineHeight = staffHeight;
   const marginLeft = LAYOUT.MARGIN_LEFT ?? 60;
   const pageWidth = PAGE_WIDTH_DEFAULT;
   const joClefStaffPosition = DEFAULT_JO_CLEF_STAFF_POSITION;
@@ -253,22 +301,58 @@ function NotationOrchestratorInner({ showPiano = true, t = (k) => k }) {
     (pitch, octave) =>
       getVerticalPosition(pitch, octave, clefType, {
         centerY,
-        staffSpace: 10,
+        staffSpace: staffSpace || 10,
         keySignature,
       }),
-    [clefType, centerY, keySignature]
+    [clefType, centerY, keySignature, staffSpace]
   );
 
   return (
     <div className="flex flex-col min-h-[400px] bg-white">
       <RhythmToolbar t={t} />
+      <div className="flex flex-wrap items-center gap-2 p-2 bg-slate-100 border-b border-slate-200">
+        <span className="text-xs font-bold text-slate-700 uppercase tracking-wider mr-1">
+          {t('toolbox.instruments') || 'Instrumendid'}
+        </span>
+        <select
+          value={activeInstrumentId}
+          onChange={(e) => setActiveInstrumentId(e.target.value)}
+          className="px-2 py-1 rounded text-sm border border-slate-300 bg-white text-slate-800"
+        >
+          {instruments.map((inst) => (
+            <option key={inst.id} value={inst.id}>
+              {inst.name}
+            </option>
+          ))}
+        </select>
+        <button
+          type="button"
+          onClick={() => addInstrument({ name: 'Plokkflööt', clef: 'treble' })}
+          className="px-2 py-1 rounded text-xs font-medium bg-slate-200 text-slate-800 hover:bg-slate-300 transition-colors"
+          title={t('toolbox.addInstrument') || 'Lisa instrument'}
+        >
+          + {t('toolbox.addInstrument') || 'Lisa instrument'}
+        </button>
+        <span className="text-xs font-bold text-slate-700 uppercase tracking-wider ml-2 mr-1">{t('layout.staffSpacing') || 'Ridade vahe'}</span>
+        <input
+          type="range"
+          min={60}
+          max={240}
+          step={10}
+          value={staffSpacing}
+          onChange={(e) => notation.setStaffSpacing(Number(e.target.value))}
+          className="w-24 h-2 rounded accent-slate-600"
+          title={t('layout.staffSpacingHint') || 'Vertikaalne vahe joonestikute vahel (px)'}
+        />
+        <span className="text-xs text-slate-600 w-10">{staffSpacing} px</span>
+      </div>
 
       <div className="flex-1 overflow-auto p-4">
         <div className="min-w-[600px]" style={{ width: pageWidth }}>
           {notationStyle === 'FIGURENOTES' ? (
             <FigurenotesView
               systems={systems}
-              effectiveMeasures={effectiveMeasures}
+              effectiveMeasures={effectiveMeasuresPerInstrument[activeInstrumentId] ?? effectiveMeasuresPerInstrument[instruments?.[0]?.id]}
               marginLeft={marginLeft}
               timelineHeight={timelineHeight}
               pageWidth={pageWidth}
@@ -276,17 +360,20 @@ function NotationOrchestratorInner({ showPiano = true, t = (k) => k }) {
               timeSignatureMode={timeSignatureMode}
               keySignature={keySignature}
               showBarNumbers={true}
+              figureBaseWidth={FIGURE_BASE_WIDTH * globalSpacingMultiplier}
             />
           ) : (
             <TraditionalNotationView
               systems={systems}
-              effectiveMeasures={effectiveMeasures}
+              instruments={instruments}
+              effectiveMeasuresPerInstrument={effectiveMeasuresPerInstrument}
               marginLeft={marginLeft}
               timelineHeight={timelineHeight}
               pageWidth={pageWidth}
               timeSignature={timeSignature}
               timeSignatureMode={timeSignatureMode}
               staffLines={5}
+              staffSpace={staffSpace}
               clefType={clefType}
               keySignature={keySignature}
               notationMode="traditional"

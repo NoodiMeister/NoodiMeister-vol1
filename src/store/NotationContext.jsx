@@ -29,6 +29,15 @@ export function getEffectiveDuration(durationLabel, isDotted = false) {
 
 const defaultTimeSignature = { beats: 4, beatUnit: 4 };
 
+/** Ühe instrumendi andmed: id, name, clef, notes. */
+function createInstrument(id, name, clef, notes = []) {
+  return { id, name, clef, notes: notes ?? [] };
+}
+
+const DEFAULT_INSTRUMENTS = [
+  createInstrument('default', 'Klaver', 'treble', []),
+];
+
 export function NotationProvider({ children }) {
   const [keySignature, setKeySignatureState] = useState('C');
   const [timeSignature, setTimeSignatureState] = useState(defaultTimeSignature);
@@ -36,12 +45,22 @@ export function NotationProvider({ children }) {
   const [selectedRhythm, setSelectedRhythmState] = useState('1/4'); // durationLabel – RhythmToolbox valik
   const [isDotted, setIsDottedState] = useState(false);
   const [isRest, setIsRestState] = useState(false);
-  const [notes, setNotesState] = useState([]);
-  const [clefType, setClefTypeState] = useState('treble');
+  const [instruments, setInstrumentsState] = useState(() => [...DEFAULT_INSTRUMENTS.map((i) => ({ ...i, notes: [] }))]);
+  const [activeInstrumentId, setActiveInstrumentIdState] = useState('default');
   const [cursorPosition, setCursorPositionState] = useState(0);
   const [ghostPitch, setGhostPitchState] = useState('C');
   const [ghostOctave, setGhostOctaveState] = useState(4);
   const [notationStyle, setNotationStyleState] = useState('TRADITIONAL'); // 'TRADITIONAL' | 'FIGURENOTES'
+  const [globalSpacingMultiplier, setGlobalSpacingMultiplierState] = useState(1.0);
+  const [staffSpacing, setStaffSpacingState] = useState(120); // Vertikaalne vahe joonestikute vahel (px), keskkohast keskkohani
+  const [measureWidthMultiplier, setMeasureWidthMultiplierState] = useState(1.0); // Horisontaalne kordaja
+
+  const activeInstrument = useMemo(
+    () => instruments.find((i) => i.id === activeInstrumentId) ?? instruments[0],
+    [instruments, activeInstrumentId]
+  );
+  const notes = activeInstrument?.notes ?? [];
+  const clefType = activeInstrument?.clef ?? 'treble';
 
   const setKeySignature = useCallback((key) => setKeySignatureState(key), []);
   const setTimeSignature = useCallback((ts) => setTimeSignatureState(ts || defaultTimeSignature), []);
@@ -50,13 +69,50 @@ export function NotationProvider({ children }) {
   const setIsDotted = useCallback((d) => setIsDottedState(!!d), []);
   const setIsRest = useCallback((r) => setIsRestState(!!r), []);
   const setNotes = useCallback((updater) => {
-    setNotesState((prev) => (typeof updater === 'function' ? updater(prev) : updater));
+    setInstrumentsState((prev) =>
+      prev.map((inst) =>
+        inst.id === activeInstrumentId
+          ? { ...inst, notes: typeof updater === 'function' ? updater(inst.notes) : updater }
+          : inst
+      )
+    );
+  }, [activeInstrumentId]);
+  const setClefType = useCallback((clef) => {
+    setInstrumentsState((prev) =>
+      prev.map((inst) => (inst.id === activeInstrumentId ? { ...inst, clef } : inst))
+    );
+  }, [activeInstrumentId]);
+  const setActiveInstrumentId = useCallback((id) => setActiveInstrumentIdState(id), []);
+  const addInstrument = useCallback((options = {}) => {
+    const id = options.id ?? `inst-${Date.now()}`;
+    const name = options.name ?? 'Instrument';
+    const clef = options.clef ?? 'treble';
+    setInstrumentsState((prev) => [...prev, createInstrument(id, name, clef, [])]);
+    setActiveInstrumentIdState(id);
+    return id;
   }, []);
-  const setClefType = useCallback((clef) => setClefTypeState(clef), []);
+  const removeInstrument = useCallback((instrumentId) => {
+    setInstrumentsState((prev) => {
+      const next = prev.filter((i) => i.id !== instrumentId);
+      if (next.length === 0) return [...DEFAULT_INSTRUMENTS.map((i) => ({ ...i, notes: [] }))];
+      if (activeInstrumentId === instrumentId) setActiveInstrumentIdState(next[0].id);
+      return next;
+    });
+  }, [activeInstrumentId]);
+  const updateInstrument = useCallback((instrumentId, patch) => {
+    setInstrumentsState((prev) =>
+      prev.map((inst) =>
+        inst.id === instrumentId ? { ...inst, ...patch } : inst
+      )
+    );
+  }, []);
   const setCursorPosition = useCallback((pos) => setCursorPositionState(pos), []);
   const setGhostPitch = useCallback((p) => setGhostPitchState(p), []);
   const setGhostOctave = useCallback((o) => setGhostOctaveState(o), []);
   const setNotationStyle = useCallback((s) => setNotationStyleState(s), []);
+  const setGlobalSpacingMultiplier = useCallback((v) => setGlobalSpacingMultiplierState(typeof v === 'number' ? v : 1), []);
+  const setStaffSpacing = useCallback((v) => setStaffSpacingState(typeof v === 'number' ? v : 120), []);
+  const setMeasureWidthMultiplier = useCallback((v) => setMeasureWidthMultiplierState(typeof v === 'number' ? v : 1), []);
 
   const getEffectiveDurationForSelection = useCallback((durationLabel, dotted) => {
     return getEffectiveDuration(durationLabel ?? selectedRhythm, dotted ?? isDotted);
@@ -82,30 +138,40 @@ export function NotationProvider({ children }) {
       ...(options.tuplet && { tuplet: options.tuplet }),
     };
 
-    setNotesState((prev) => [...prev, newNote]);
+    setInstrumentsState((prev) =>
+      prev.map((inst) =>
+        inst.id === activeInstrumentId
+          ? { ...inst, notes: [...inst.notes, newNote] }
+          : inst
+      )
+    );
     setCursorPositionState((p) => p + effectiveDuration);
     setGhostPitchState(pitch);
     setGhostOctaveState(octave);
     return newNote;
-  }, [selectedRhythm, isDotted, isRest]);
+  }, [selectedRhythm, isDotted, isRest, activeInstrumentId]);
 
-  /** Transponeerib kõik noodid pooltoonide võrra. Pausid jäävad muutmata. */
+  /** Transponeerib kõik instrumentide noodid pooltoonide võrra. */
   const transposeScore = useCallback((semitones) => {
     if (!semitones) return;
-    setNotesState((prev) => transposeNotes(prev, semitones));
+    setInstrumentsState((prev) =>
+      prev.map((inst) => ({ ...inst, notes: transposeNotes(inst.notes, semitones) }))
+    );
   }, []);
 
   /** Transponeerib partituuri uude helistikku (värskendab ka keySignature). */
   const transposeToKey = useCallback((newKey) => {
     const semitones = getTransposeSemitones(keySignature, newKey);
     if (!semitones) return;
-    setNotesState((prev) => transposeNotes(prev, semitones));
+    setInstrumentsState((prev) =>
+      prev.map((inst) => ({ ...inst, notes: transposeNotes(inst.notes, semitones) }))
+    );
     setKeySignatureState(newKey);
   }, [keySignature]);
 
-  /** Uue faili loomine: tühjendab noodid, kursor algusesse, ghost väärtused. */
+  /** Uue faili loomine: tühjendab kõikide instrumentide noodid, kursor algusesse. */
   const createNewFile = useCallback(() => {
-    setNotesState([]);
+    setInstrumentsState((prev) => prev.map((inst) => ({ ...inst, notes: [] })));
     setCursorPositionState(0);
     setGhostPitchState('C');
     setGhostOctaveState(4);
@@ -126,6 +192,13 @@ export function NotationProvider({ children }) {
     setIsRest,
     notes,
     setNotes,
+    instruments,
+    activeInstrumentId,
+    activeInstrument,
+    setActiveInstrumentId,
+    addInstrument,
+    removeInstrument,
+    updateInstrument,
     clefType,
     setClefType,
     cursorPosition,
@@ -136,6 +209,12 @@ export function NotationProvider({ children }) {
     setGhostOctave,
     notationStyle,
     setNotationStyle,
+    globalSpacingMultiplier,
+    setGlobalSpacingMultiplier,
+    staffSpacing,
+    setStaffSpacing,
+    measureWidthMultiplier,
+    setMeasureWidthMultiplier,
     getEffectiveDuration: getEffectiveDurationForSelection,
     addNote,
     transposeScore,
@@ -150,11 +229,17 @@ export function NotationProvider({ children }) {
     isDotted,
     isRest,
     notes,
+    instruments,
+    activeInstrumentId,
+    activeInstrument,
     clefType,
     cursorPosition,
     ghostPitch,
     ghostOctave,
     notationStyle,
+    globalSpacingMultiplier,
+    staffSpacing,
+    measureWidthMultiplier,
     getEffectiveDurationForSelection,
     addNote,
     transposeScore,
