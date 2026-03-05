@@ -25,8 +25,9 @@ function useCloudLoginWithProvider(mode = 'login', stayLoggedIn = false, onError
           return;
         }
       } catch (e) {
-        console.error('[CloudLogin] Viga tokenResponse kontrollil:', e?.message, e);
-        if (onError) onError(formatAuthError('Google OAuth', e)); else alert(String(e?.message || e));
+        alert('Sisselogimise viga: ' + (e?.message ?? String(e)));
+        console.error(e);
+        if (onError) onError(formatAuthError('Google OAuth', e));
         return;
       }
       fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
@@ -51,22 +52,24 @@ function useCloudLoginWithProvider(mode = 'login', stayLoggedIn = false, onError
             if (!profile || profile.error) {
               const errObj = profile && (typeof profile.error === 'string' ? { error: profile.error, error_description: profile.error_description } : profile);
               const payload = formatAuthError('Google userinfo', errObj);
-              console.warn('[CloudLogin]', payload.fullMessage);
-              if (onError) onError(payload); else alert(payload.fullMessage);
+              alert('Sisselogimise viga: ' + (payload.fullMessage || payload.description || 'Profiili viga'));
+              if (onError) onError(payload);
               return;
             }
             if (!profile.email) {
-              console.error('[CloudLogin] profile.email puudub:', { hasProfile: !!profile, profileKeys: profile && typeof profile === 'object' ? Object.keys(profile) : [] });
-              const payload = formatAuthError('Google userinfo', { message: 'e-mail puudub (konto võib olla piiratud)' });
-              if (onError) onError(payload); else alert(payload.fullMessage);
+              const msg = 'e-mail puudub (konto võib olla piiratud)';
+              alert('Sisselogimise viga: ' + msg);
+              const payload = formatAuthError('Google userinfo', { message: msg });
+              if (onError) onError(payload);
               return;
             }
             const user = { email: profile.email, name: profile.name || profile.given_name || profile.email?.split('@')[0], provider: 'google' };
             const storage = getStorageForLogin(stayLoggedIn);
             if (!storage) {
-              console.error('[CloudLogin] getStorageForLogin tagastas null/undefined. stayLoggedIn:', stayLoggedIn, 'window:', typeof window, 'sessionStorage:', typeof window?.sessionStorage, 'localStorage:', typeof window?.localStorage);
-              const payload = formatAuthError('brauser', { message: 'brauser ei luba andmeid salvestada (nt privaatne režiim). Proovi teist brauserit.' });
-              if (onError) onError(payload); else alert(payload.fullMessage);
+              const msg = 'brauser ei luba andmeid salvestada (nt privaatne režiim). Proovi teist brauserit.';
+              alert('Sisselogimise viga: ' + msg);
+              const payload = formatAuthError('brauser', { message: msg });
+              if (onError) onError(payload);
               return;
             }
             storage.setItem(KEY_LOGGED_IN, JSON.stringify(user));
@@ -87,9 +90,10 @@ function useCloudLoginWithProvider(mode = 'login', stayLoggedIn = false, onError
             const confirmedUser = getLoggedInUser();
             const loggedIn = isLoggedIn();
             if (!readStorage || !confirmedUser?.email || !loggedIn) {
-              console.error('[CloudLogin] Pärast salvestust auth ei kinnitunud:', { readStorage: !!readStorage, confirmedUser: !!confirmedUser, hasEmail: !!confirmedUser?.email, isLoggedIn: loggedIn });
-              const payload = formatAuthError('brauser', { message: 'Sisselogimine salvestati, kuid kinnitamine ebaõnnestus. Proovi uuesti või teist brauserit.' });
-              if (onError) onError(payload); else alert(payload.fullMessage);
+              const msg = 'Sisselogimine salvestati, kuid kinnitamine ebaõnnestus. Proovi uuesti või teist brauserit.';
+              alert('Sisselogimise viga: ' + msg);
+              const payload = formatAuthError('brauser', { message: msg });
+              if (onError) onError(payload);
               return;
             }
             console.log('[CloudLogin] Auth kinnitatud, suuname /app poole');
@@ -97,23 +101,28 @@ function useCloudLoginWithProvider(mode = 'login', stayLoggedIn = false, onError
               navigate('/app');
             });
           } catch (e) {
-            console.error('[CloudLogin] Viga sisselogimise töötlemisel:', e?.message, e);
+            alert('Sisselogimise viga: ' + (e?.message ?? String(e)));
+            console.error(e);
             const payload = formatAuthError('Google userinfo', e && typeof e === 'object' ? e : new Error(String(e)));
-            if (onError) onError(payload); else alert(payload.fullMessage);
+            if (onError) onError(payload);
           }
         })
         .catch((err) => {
-          console.error('[CloudLogin] Google userinfo viga:', err);
+          const msg = err?.message ?? err?.error_description ?? (err && typeof err === 'object' ? (err.fullMessage || JSON.stringify(err)) : String(err));
+          alert('Sisselogimise viga: ' + msg);
+          console.error(err);
           const payload = formatAuthError('Google userinfo', err && typeof err === 'object' ? err : new Error(String(err)));
-          if (onError) onError(payload); else alert(payload.fullMessage);
+          if (onError) onError(payload);
         });
     },
     onError: (err) => {
       console.error('[CloudLogin] Google OAuth onError:', err, { errorType: typeof err, keys: err && typeof err === 'object' ? Object.keys(err) : [] });
       const isPopupClosed = err?.error === 'popup_closed_by_user' || err?.type === 'popup_closed' || err?.type === 'popup_closed_by_user';
       if (!isPopupClosed) {
+        const msg = err?.message ?? err?.error_description ?? err?.error ?? (err && typeof err === 'object' ? JSON.stringify(err) : String(err));
+        alert('Sisselogimise viga: ' + msg);
         const payload = formatAuthError('Google OAuth', err && typeof err === 'object' ? err : new Error(String(err)));
-        if (onError) onError(payload); else alert(payload.fullMessage);
+        if (onError) onError(payload);
       }
     },
     flow: 'implicit',
@@ -122,8 +131,10 @@ function useCloudLoginWithProvider(mode = 'login', stayLoggedIn = false, onError
 
   const handleGoogleClick = () => {
     if (!googleClientId) {
-      const payload = formatAuthError('konfiguratsioon', { message: 'VITE_GOOGLE_CLIENT_ID puudub. Lisa .env faili rida (Google Cloud Console).' });
-      if (onError) onError(payload); else alert(payload.fullMessage);
+      const msg = 'VITE_GOOGLE_CLIENT_ID puudub. Lisa .env faili rida (Google Cloud Console).';
+      alert('Sisselogimise viga: ' + msg);
+      const payload = formatAuthError('konfiguratsioon', { message: msg });
+      if (onError) onError(payload);
       return;
     }
     googleLogin();
