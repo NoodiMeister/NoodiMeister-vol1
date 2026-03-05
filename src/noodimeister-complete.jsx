@@ -39,20 +39,31 @@ import { LOCALE_STORAGE_KEY, DEFAULT_LOCALE, LOCALES, createT } from './i18n';
 import html2canvas from 'html2canvas';
 import Soundfont from 'soundfont-player';
 
-// Noodijoonestiku globaalsed seaded – KÕIGE ALGUSES, et Vercel minifier (YA/JA) ei põhjustaks "before initialization"
-var globalStaffSettings = { JO_VOTI: 0, STAFF_HEIGHT: 140, EMOJIS: true };
+// Safe Initialization: väline seadete objekt KÕIGE ALGUSES (väljaspool komponente). Vercel ei minifitseeri var-deklaratsioone YA/JA-ks.
+var GLOBAL_NOTATION_CONFIG = {
+  STAFF_HEIGHT: 140,
+  JO_VOTI: 0,
+  EMOJIS: true,
+  DEFAULT_JO_STAFF_POSITION: 7,
+  CLEF_WIDTH: 45,
+  SYSTEM_GAP: 120,
+  STAFF_SPACE: 10,
+  MARGIN_LEFT: 60,
+  MARGIN_RIGHT: 40
+};
 if (typeof window !== 'undefined') {
-  var wc = window.NOODIMEISTER_CONFIG;
-  if (wc) {
-    if (wc.JO_VOTI != null) globalStaffSettings.JO_VOTI = wc.JO_VOTI;
-    if (wc.STAFF_HEIGHT != null && wc.STAFF_HEIGHT > 0) globalStaffSettings.STAFF_HEIGHT = wc.STAFF_HEIGHT;
-    if (wc.EMOJIS !== undefined) globalStaffSettings.EMOJIS = wc.EMOJIS;
+  var _wc = window.NOODIMEISTER_CONFIG;
+  if (_wc) {
+    if (_wc.STAFF_HEIGHT != null && _wc.STAFF_HEIGHT > 0) GLOBAL_NOTATION_CONFIG.STAFF_HEIGHT = _wc.STAFF_HEIGHT;
+    if (_wc.JO_VOTI != null) GLOBAL_NOTATION_CONFIG.JO_VOTI = _wc.JO_VOTI;
+    if (_wc.EMOJIS !== undefined) GLOBAL_NOTATION_CONFIG.EMOJIS = _wc.EMOJIS;
   }
-  window.NOODIMEISTER_CONFIG = globalStaffSettings;
+  window.NOODIMEISTER_CONFIG = GLOBAL_NOTATION_CONFIG;
 }
 
 function getStaffHeight() {
-  return (globalStaffSettings.STAFF_HEIGHT != null && globalStaffSettings.STAFF_HEIGHT > 0) ? globalStaffSettings.STAFF_HEIGHT : 140;
+  var h = GLOBAL_NOTATION_CONFIG.STAFF_HEIGHT;
+  return (h != null && h > 0) ? h : 140;
 }
 
 // var = hoisted, vältib "before initialization" vigu faili keskosa komponentide puhul
@@ -71,7 +82,7 @@ var DEMO_MAX_MEASURES = 2;
 var PAGE_BREAK_GAP = 80;
 var KEY_ORDER = ['C', 'G', 'D', 'A', 'E', 'B', 'F', 'Bb', 'Eb'];
 
-// Graafika ja app konstandid var'iga faili alguses (globalStaffSettings on noodijoonestiku seaded)
+// Graafika ja app konstandid var'iga faili alguses (GLOBAL_NOTATION_CONFIG on noodijoonestiku seaded)
 var LUCIDE_ICONS = [
   'Music2', 'Clock', 'Hash', 'Type', 'Piano', 'Palette', 'Layout', 'Check', 'Save', 'FolderOpen',
   'Plus', 'Settings', 'Key', 'Repeat', 'Cloud', 'LogOut', 'User', 'CloudUpload', 'CloudDownload', 'FolderPlus', 'ChevronDown',
@@ -414,8 +425,9 @@ function computeLayout(measures, timeSignature, pixelsPerBeat, pageWidth, layout
 
 // Rütmipildid (noodid ja pausid) – standardnotatsioon (SMuFL / Gould Behind Bars)
 // Tervikpaus rippub 4. joone alt; poolikpaus istub 3. joone peal; veerandpaus = squiggle; 8/16/32 = blobi(d) + vars.
-const RhythmIcon = ({ duration, isDotted = false, isRest = false }) => {
-  const d = duration && (duration === 'rest' || duration === 'dotted' ? '1/4' : duration);
+function RhythmIcon(props) {
+  var duration = props.duration, isDotted = props.isDotted === true, isRest = props.isRest === true;
+  var d = duration && (duration === 'rest' || duration === 'dotted' ? '1/4' : duration);
   if (isRest) {
     const restIcons = {
       '1/1': <rect x="5" y="11" width="14" height="4" fill="currentColor" rx="0.5"/>,
@@ -427,8 +439,8 @@ const RhythmIcon = ({ duration, isDotted = false, isRest = false }) => {
     };
     return <svg viewBox="0 0 24 24" className="w-5 h-5" fill="currentColor">{restIcons[d] || restIcons['1/4']}</svg>;
   }
-  const dot = isDotted ? <circle cx="18" cy="14" r="1.3" fill="currentColor"/> : null;
-  const noteIcons = {
+  var dot = isDotted ? <circle cx="18" cy="14" r="1.3" fill="currentColor"/> : null;
+  var noteIcons = {
     '1/1': <><g transform="rotate(-24 12 12.5)"><ellipse cx="12" cy="12.5" rx="5" ry="3.5" fill="none" stroke="currentColor" strokeWidth="1.3"/></g>{dot}</>,
     '1/2': <><g transform="rotate(-22 10 13)"><ellipse cx="10" cy="13" rx="4" ry="3" fill="none" stroke="currentColor" strokeWidth="1.3"/></g><line x1="14" y1="13" x2="14" y2="2" stroke="currentColor" strokeWidth="1.3"/>{dot}</>,
     '1/4': <><ellipse cx="10" cy="13" rx="4" ry="3" fill="currentColor"/><line x1="14" y1="13" x2="14" y2="2" stroke="currentColor" strokeWidth="1.3"/>{dot}</>,
@@ -437,26 +449,29 @@ const RhythmIcon = ({ duration, isDotted = false, isRest = false }) => {
     '1/32': <><ellipse cx="10" cy="13" rx="4" ry="3" fill="currentColor"/><line x1="14" y1="13" x2="14" y2="2" stroke="currentColor" strokeWidth="1.3"/><path d="M14 2 L16.5 2.6 L15 4 M14 3.2 L16.5 3.8 L15 5.2 M14 4.2 L16.5 4.8 L15 6.2" stroke="currentColor" strokeWidth="1.2" fill="none" strokeLinecap="round" strokeLinejoin="round"/>{dot}</>
   };
   return <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">{noteIcons[d] || noteIcons['1/4']}</svg>;
-};
+}
 
 // RHYTHM_PATTERN_ICONS on faili alguses var'iga
-const RhythmPatternIcon = ({ pattern }) => (
-  <span className="inline-flex items-center text-amber-900">{RHYTHM_PATTERN_ICONS[pattern] || null}</span>
-);
+function RhythmPatternIcon(props) {
+  return <span className="inline-flex items-center text-amber-900">{RHYTHM_PATTERN_ICONS[props.pattern] || null}</span>;
+}
 
 // VALID_DENOMINATORS, MAX_NUMERATOR on faili alguses var'iga
-const MeterIcon = ({ beats, beatUnit }) => (
+function MeterIcon(props) {
+  var beats = props.beats, beatUnit = props.beatUnit;
+  return (
   <svg viewBox="0 0 24 24" className="w-5 h-5">
     <text x="12" y="10" textAnchor="middle" fontSize="10" fontWeight="bold" fill="currentColor">{beats}</text>
     <line x1="4" y1="12" x2="20" y2="12" stroke="currentColor" strokeWidth="1.5"/>
     <text x="12" y="21" textAnchor="middle" fontSize="10" fontWeight="bold" fill="currentColor">{beatUnit}</text>
   </svg>
-);
+  );
+}
 
 // Pedagogical Time Signature Component - shows note symbol for denominator
-const PedagogicalMeterIcon = ({ beats, beatUnit }) => {
-  // Map denominator to note symbol
-  const getNoteSymbol = () => {
+function PedagogicalMeterIcon(props) {
+  var beats = props.beats, beatUnit = props.beatUnit;
+  function getNoteSymbol() {
     switch(beatUnit) {
       case 1: // Whole note
         return <ellipse cx="12" cy="18" rx="4" ry="2.5" fill="none" stroke="currentColor" strokeWidth="1"/>;
@@ -502,10 +517,11 @@ const PedagogicalMeterIcon = ({ beats, beatUnit }) => {
       {getNoteSymbol()}
     </svg>
   );
-};
+}
 
 // TREBLE_CLEF_PATH, BASS_CLEF_PATH, ALTO_TENOR_CLEF_PATH on faili alguses var'iga
-const ClefIcon = ({ clefType }) => {
+function ClefIcon(props) {
+  var clefType = props.clefType;
   if (clefType === 'do' || clefType === 'jo') {
     return (
       <svg viewBox="0 0 24 24" className="w-5 h-5">
@@ -513,36 +529,35 @@ const ClefIcon = ({ clefType }) => {
       </svg>
     );
   }
-  const paths = {
+  var paths = {
     treble: <path d={TREBLE_CLEF_PATH} fill="currentColor" transform="scale(0.08) translate(-80,-20)" />,
     bass: <path d={BASS_CLEF_PATH} fill="currentColor" transform="scale(0.35) translate(2,2)" />,
     alto: <path d={ALTO_TENOR_CLEF_PATH} fill="currentColor" transform="scale(0.4) translate(2,2)" />,
     tenor: <path d={ALTO_TENOR_CLEF_PATH} fill="currentColor" transform="scale(0.4) translate(2,2)" />
   };
-  // Lihtsustatud SVG võtmed (24×24 viewBox) – selge kuvamine kõikides fondides
-  const trebleSvg = (
+  var trebleSvg = (
     <path fill="currentColor" d="M16 2.5c-.6 0-1.2.3-1.5.8-.4.6-.4 1.4 0 2 .3.5.9.8 1.5.8.6 0 1.2-.3 1.5-.8.4-.6.4-1.4 0-2-.3-.5-.9-.8-1.5-.8zm-2 4v14.2c0 .5.4.8.8.8.5 0 .8-.4.8-.8V6.5h-1.6zm4 0v14.2c0 .5.4.8.8.8.5 0 .8-.4.8-.8V6.5H18zM12 4c-.5 0-1 .4-1.2 1-.2.5 0 1 .4 1.3.4.2.8.2 1.2 0 .4-.3.6-.8.4-1.3C13 4.4 12.5 4 12 4z"/>
   );
-  const bassSvg = (
+  var bassSvg = (
     <g fill="currentColor">
       <ellipse cx="8" cy="10" rx="1.8" ry="2.2"/>
       <ellipse cx="16" cy="10" rx="1.8" ry="2.2"/>
       <path d="M10 4v16c0 .6.5 1 1 1s1-.4 1-1V4c0-.6-.5-1-1-1s-1 .4-1 1zm4 0v16c0 .6.5 1 1 1s1-.4 1-1V4c0-.6-.5-1-1-1s-1 .4-1 1z"/>
     </g>
   );
-  const altoSvg = (
+  var altoSvg = (
     <g fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round">
       <path d="M6 6c-1.5 0-3 1.2-3 3s1.5 3 3 3 3-1.2 3-3-1.5-3-3-3z"/>
       <path d="M18 6c1.5 0 3 1.2 3 3s-1.5 3-3 3-3-1.2-3-3 1.5-3 3-3z"/>
     </g>
   );
-  const svgByClef = { treble: trebleSvg, bass: bassSvg, alto: altoSvg, tenor: altoSvg };
+  var svgByClef = { treble: trebleSvg, bass: bassSvg, alto: altoSvg, tenor: altoSvg };
   return (
     <svg viewBox="0 0 24 24" className="w-5 h-5" aria-hidden="true">
       {svgByClef[clefType] || trebleSvg}
     </svg>
   );
-};
+}
 
 // Noodijoonestikul kasutatav võtme sümbol. Viiulivõti: G-joon ankurdatud; bassivõti: F-joon (4. joon) ankurdatud (dünaamiline nagu JO-võti).
 function StaffClefSymbol({ x, y, height, clefType, fill = '#333' }) {
@@ -553,7 +568,7 @@ function StaffClefSymbol({ x, y, height, clefType, fill = '#333' }) {
     return <BassClefSymbol x={x} y={y} height={height} fill={fill} />;
   }
   if (clefType === 'alto' || clefType === 'tenor') {
-    const scale = (height && height > 0) ? height / 24 : 0.4;
+    var scale = (height && height > 0) ? height / 24 : 0.4;
     return (
       <g transform={`translate(${x}, ${y}) scale(${scale}) translate(-12, -12)`} fill="none" stroke={fill} strokeWidth="1.4" strokeLinecap="round">
         <path d="M7 5.5c-1.8 0-3.2 1.4-3.2 3.2s1.4 3.2 3.2 3.2 3.2-1.4 3.2-3.2S8.8 5.5 7 5.5z"/>
@@ -564,7 +579,8 @@ function StaffClefSymbol({ x, y, height, clefType, fill = '#333' }) {
   return null;
 }
 
-const PitchIcon = () => (
+function PitchIcon() {
+  return (
   <svg viewBox="0 0 24 24" className="w-5 h-5">
     <line x1="2" y1="8" x2="22" y2="8" stroke="currentColor" strokeWidth="0.5"/>
     <line x1="2" y1="10" x2="22" y2="10" stroke="currentColor" strokeWidth="0.5"/>
@@ -574,17 +590,22 @@ const PitchIcon = () => (
     <ellipse cx="12" cy="12" rx="2.5" ry="2" fill="currentColor"/>
     <line x1="14.5" y1="12" x2="14.5" y2="4" stroke="currentColor" strokeWidth="1"/>
   </svg>
-);
+  );
+}
 
-const NoteheadIcon = () => (
+function NoteheadIcon() {
+  return (
   <svg viewBox="0 0 24 24" className="w-5 h-5">
     <ellipse cx="6" cy="12" rx="2" ry="1.5" fill="currentColor"/>
     <path d="M12 10 L12 14 L14 12 Z" fill="currentColor"/>
     <circle cx="19" cy="12" r="2" fill="none" stroke="currentColor" strokeWidth="1.5"/>
   </svg>
-);
+  );
+}
 
-const LayoutIcon = ({ staffLines }) => (
+function LayoutIcon(props) {
+  var staffLines = props.staffLines;
+  return (
   <svg viewBox="0 0 24 24" className="w-5 h-5">
     <line x1="4" y1="8" x2="14" y2="8" stroke="currentColor" strokeWidth="1"/>
     <line x1="4" y1="12" x2="14" y2="12" stroke="currentColor" strokeWidth="1"/>
@@ -593,9 +614,10 @@ const LayoutIcon = ({ staffLines }) => (
     <path d="M16 16 L20 14 L20 18 Z" fill="currentColor"/>
     <text x="21" y="13" fontSize="6" fill="currentColor">{staffLines}</text>
   </svg>
-);
+  );
+}
 
-// INSTRUMENT_* on faili alguses var'iga (YA/TDZ fix)
+// INSTRUMENT_* on faili alguses var'iga
 function getInstrumentConfig(t) {
   return Object.fromEntries(
     Object.entries(INSTRUMENT_CONFIG_BASE).map(([id, cfg]) => [
@@ -605,8 +627,9 @@ function getInstrumentConfig(t) {
   );
 }
 
-const InstrumentIcon = ({ instrument }) => {
-  const icons = {
+function InstrumentIcon(props) {
+  var instrument = props.instrument;
+  var icons = {
     piano: <><rect x="4" y="8" width="3" height="10" fill="currentColor"/><rect x="8" y="8" width="3" height="10" fill="currentColor"/><rect x="12" y="8" width="3" height="10" fill="currentColor"/><rect x="16" y="8" width="3" height="10" fill="currentColor"/><rect x="5.5" y="8" width="2" height="6" fill="none" stroke="white" strokeWidth="0.5"/></>,
     organ: <><rect x="4" y="6" width="4" height="12" fill="currentColor"/><rect x="10" y="8" width="4" height="10" fill="currentColor"/><rect x="16" y="10" width="4" height="8" fill="currentColor"/><path d="M6 4 L6 6 M12 6 L12 8 M18 8 L18 10" stroke="currentColor" strokeWidth="1" fill="none"/></>,
     harpsichord: <><rect x="3" y="10" width="18" height="4" rx="1" fill="currentColor"/><path d="M5 10 L5 14 M9 10 L9 14 M13 10 L13 14 M17 10 L17 14 M21 10 L21 14" stroke="white" strokeWidth="0.8" fill="none"/></>,
@@ -630,19 +653,21 @@ const InstrumentIcon = ({ instrument }) => {
     'single-staff-treble': <><line x1="4" y1="12" x2="20" y2="12" stroke="currentColor" strokeWidth="0.8"/><text x="12" y="16" textAnchor="middle" fontSize="10" fontFamily="serif" fill="currentColor">𝄞</text></>,
     'single-staff-bass': <><line x1="4" y1="12" x2="20" y2="12" stroke="currentColor" strokeWidth="0.8"/><text x="12" y="16" textAnchor="middle" fontSize="10" fontFamily="serif" fill="currentColor">𝄢</text></>
   };
-  const icon = icons[instrument] || icons[instrument?.startsWith('ukulele') ? 'guitar' : null];
-  const fallback = <circle cx="12" cy="12" r="6" fill="currentColor" />;
+  var icon = icons[instrument] || icons[instrument && instrument.startsWith && instrument.startsWith('ukulele') ? 'guitar' : null];
+  var fallback = <circle cx="12" cy="12" r="6" fill="currentColor" />;
   return <svg viewBox="0 0 24 24" className="w-5 h-5">{typeof icon === 'string' ? icons[icon] : (icon || fallback)}</svg>;
-};
+}
 
 // Akordide ikoon (traditsiooniline sümbol)
-const ChordIcon = () => (
+function ChordIcon() {
+  return (
   <svg viewBox="0 0 24 24" className="w-5 h-5">
     <text x="12" y="16" textAnchor="middle" fontSize="14" fontWeight="bold" fill="currentColor" fontFamily="serif">C</text>
     <ellipse cx="8" cy="10" rx="2.5" ry="2" fill="currentColor"/>
     <ellipse cx="16" cy="10" rx="2.5" ry="2" fill="currentColor"/>
   </svg>
-);
+  );
+}
 
 // FONT_OPTIONS, TEMPO_TERMS on faili alguses var'iga
 function getToolboxes(t, instrumentConfig) {
@@ -848,9 +873,9 @@ function midiToNoteWithAccidental(midiNumber) {
 }
 // FINGERING_TIN_WHISTLE, FINGERING_RECORDER on faili alguses var'iga
 function NoodiMeisterCore({ icons }) {
-  if (typeof globalStaffSettings === 'undefined' || !globalStaffSettings || globalStaffSettings.EMOJIS === undefined) return null;
+  if (typeof GLOBAL_NOTATION_CONFIG === 'undefined' || !GLOBAL_NOTATION_CONFIG || GLOBAL_NOTATION_CONFIG.EMOJIS === undefined) return null;
 
-  // Sisselogimise järgne suunamine /app peale: oota 100ms, kuni noodijoonestiku seaded on mälus valmis
+  // Kaitse renderdamist: sisselogimise järel anna brauserile 50ms, et konstandid mällu laadida (Safe Initialization)
   const [isReady, setIsReady] = useState(false);
   const [locale, setLocale] = useState(() => {
     try {
@@ -866,11 +891,11 @@ function NoodiMeisterCore({ icons }) {
   }, [locale]);
 
   useEffect(() => {
-    if (typeof globalStaffSettings === 'undefined' || !globalStaffSettings) return;
+    if (typeof GLOBAL_NOTATION_CONFIG === 'undefined' || !GLOBAL_NOTATION_CONFIG) return;
     const t = setTimeout(() => {
       setIsReady(true);
       if (typeof window !== 'undefined') window.NOODIMEISTER_APP_READY = true;
-    }, 100);
+    }, 50);
     return () => clearTimeout(t);
   }, []);
 
@@ -878,7 +903,7 @@ function NoodiMeisterCore({ icons }) {
   const instrumentConfig = useMemo(() => getInstrumentConfig(t), [t]);
   const toolboxes = useMemo(() => getToolboxes(t, instrumentConfig), [t, instrumentConfig]);
 
-  // JO-võti ja noodigraafika state (globalStaffSettings on faili alguses)
+  // JO-võti ja noodigraafika state (GLOBAL_NOTATION_CONFIG on faili alguses)
   const [joClefFocused, setJoClefFocused] = useState(false);
   const [joClefStaffPosition, setJoClefStaffPosition] = useState(DEFAULT_JO_CLEF_STAFF_POSITION);
 
@@ -1032,7 +1057,7 @@ function NoodiMeisterCore({ icons }) {
   const instrument = activeStaff?.instrumentId ?? 'piano';
   const setInstrument = useCallback((instId) => {
     setStaves((prev) => {
-      if (typeof globalStaffSettings === 'undefined' || !globalStaffSettings || typeof INSTRUMENT_CONFIG_BASE === 'undefined' || !INSTRUMENT_CONFIG_BASE) return prev;
+      if (typeof GLOBAL_NOTATION_CONFIG === 'undefined' || !GLOBAL_NOTATION_CONFIG || typeof INSTRUMENT_CONFIG_BASE === 'undefined' || !INSTRUMENT_CONFIG_BASE) return prev;
       const idx = typeof activeStaffIndex === 'number' ? activeStaffIndex : 0;
       if (idx < 0 || idx >= prev.length) return prev;
       const cfg = INSTRUMENT_CONFIG_BASE[instId];
@@ -1040,6 +1065,7 @@ function NoodiMeisterCore({ icons }) {
       const current = prev[idx];
       const inBraceGroup = current.braceGroupId && prev[idx + 1]?.braceGroupId === current.braceGroupId;
       // MuseScore klaverisüsteem: kaks paralleelset noodijoonestikku – ülemine viiulivõti (G), alumine bassivõti (F täpselt 4. joonel), vasakult ühendatud klaveriklambriga (Brace)
+      // MuseScore Grand Staff: klaver = viiulivõti (G) + bassivõti (F 4. joonel)
       if (isGrandStaff && instId === 'piano') {
         const braceGroupId = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `piano-${Date.now()}`;
         const id1 = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `staff-${Date.now()}-a`;
@@ -3403,7 +3429,7 @@ function NoodiMeisterCore({ icons }) {
     { label: '5/4', value: [5, 4] }
   ];
 
-  if (!isReady) return <div className="loading-screen min-h-screen flex items-center justify-center bg-amber-950 text-amber-100"><span className="animate-pulse">Laen noodijoonestikku…</span></div>;
+  if (!isReady) return <div className="loading-screen min-h-screen flex items-center justify-center bg-amber-950 text-amber-100"><span className="animate-pulse">Laen süsteemi...</span></div>;
   if (!icons) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-amber-900/95 text-amber-100">
@@ -5476,7 +5502,7 @@ function getFingeringForNote(pitch, octave, instrumentId) {
 
 // Timeline Component – multi-system layout (VexFlow loogika). (PAGE_BREAK_GAP on defineeritud üleval.)
 function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, pageWidth, cursorPosition, notationMode, staffLines, clefType, keySignature = 'C', relativeNotationShowKeySignature = false, relativeNotationShowTraditionalClef = false, onJoClefPositionChange, joClefFocused = false, onJoClefFocus, instrument = 'piano', instrumentNotationVariant = 'standard', instrumentConfig = {}, showBarNumbers = true, showRhythmSyllables = false, joClefStaffPosition: joClefStaffPositionProp, showAllNoteLabels = false, enableEmojiOverlays = true, onNoteTeacherLabelChange, onNoteLabelClick, chords = [], isDotted, isRest, selectedDuration, noteInputMode, selectedNoteIndex, isNoteSelected, notes: allNotes, onStaffAddNote, onNoteClick, ghostPitch, ghostOctave, notationStyle, layoutMeasuresPerLine = 4, layoutLineBreakBefore = [], layoutPageBreakBefore = [], layoutSystemGap = 120, systems: systemsProp, baseYOffset = 0, staffCount = 1, staffHeight: staffHeightProp, figurenotesSize = 16, figurenotesStems = false, pedagogicalPlayheadStyle = 'line', pedagogicalPlayheadEmoji = '🎵', pedagogicalPlayheadEmojiSize = 32, isPedagogicalAudioPlaying = false, isExportingAnimation = false, exportCursorRef, scoreContainerRef, pageFlowDirection = 'vertical', isFirstInBraceGroup = false, braceGroupSize = 0, lyricFontFamily = 'sans-serif' }) {
-  if (typeof globalStaffSettings === 'undefined' || !globalStaffSettings || globalStaffSettings.EMOJIS === false) return null;
+  if (typeof GLOBAL_NOTATION_CONFIG === 'undefined' || !GLOBAL_NOTATION_CONFIG || GLOBAL_NOTATION_CONFIG.EMOJIS === false) return null;
   const safeKey = keySignature ?? 'C';
   const joClefStaffPosition = typeof joClefStaffPositionProp === 'number' ? joClefStaffPositionProp : getTonicStaffPosition(safeKey);
   if (typeof joClefStaffPosition !== 'number') return null;
