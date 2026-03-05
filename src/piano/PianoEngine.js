@@ -48,6 +48,7 @@ export function usePianoEngine(options = {}) {
       setActiveNotes((prev) => (prev.includes(midi) ? prev : [...prev, midi]));
       stopOscillator(midi);
       const ctx = ensureAudioContext();
+      if (ctx.state === 'suspended') ctx.resume();
       const oscillator = ctx.createOscillator();
       const gainNode = ctx.createGain();
       oscillator.type = type;

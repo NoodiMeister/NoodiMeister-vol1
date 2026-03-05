@@ -24,8 +24,8 @@ function NoteHeadShape({ cx, cy, staffSpace, filled, stemUp }) {
       cy={cy}
       rx={rx}
       ry={ry}
-      fill={filled ? '#1a1a1a' : 'none'}
-      stroke="#1a1a1a"
+      fill={filled ? 'var(--note-fill, #1a1a1a)' : 'none'}
+      stroke="var(--note-fill, #1a1a1a)"
       strokeWidth={filled ? 0 : Math.max(0.8, staffSpace * 0.12)}
       transform={`rotate(${tiltDeg} ${cx} ${cy})`}
     />
@@ -47,7 +47,7 @@ function Stem({ cx, cy, staffSpace, stemUp }) {
       y1={cy}
       x2={x}
       y2={y2}
-      stroke="#1a1a1a"
+      stroke="var(--note-fill, #1a1a1a)"
       strokeWidth={staffSpace * 0.12}
       strokeLinecap="round"
     />
@@ -80,7 +80,7 @@ function Flags({ cx, cy, staffSpace, stemUp, count = 1 }) {
         key={i}
         d={d}
         fill="none"
-        stroke="#1a1a1a"
+        stroke="var(--note-fill, #1a1a1a)"
         strokeWidth={strokeW}
         strokeLinecap="round"
       />

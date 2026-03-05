@@ -1,0 +1,36 @@
+/* Noodijoonestiku ja teema CSS muutujad. */
+/* Impordi see fail main.jsx või index.css kaudu. */
+
+/* --- Teema: vaikimisi hele režiim, oranž aktsent --- */
+:root {
+  --primary-color: #FF8C00;
+  --bg-color: #fef3c7;
+  --text-color: #1a1a1a;
+  --staff-line-color: #000000;
+  --note-fill: #1a1a1a;
+  --score-bg: #fffbf0;
+}
+
+/* Põhivärvid (aktsent) */
+[data-primary-color="orange"] { --primary-color: #FF8C00; }
+[data-primary-color="blue"]  { --primary-color: #007BFF; }
+[data-primary-color="green"] { --primary-color: #28A745; }
+
+/* Tume režiim: tume taust, valge tekst ja joonestik */
+[data-theme="dark"] {
+  --bg-color: #1e1e1e;
+  --text-color: #f0f0f0;
+  --staff-line-color: #ffffff;
+  --note-fill: #ffffff;
+  --score-bg: #2d2d2d;
+}
+
+/* Hele režiimi laadimise ekraan (tagasiühilduvus) */
+:root .loading-screen {
+  color: #92400e;
+  background: linear-gradient(to bottom right, #fffbeb, #fef3c7);
+}
+[data-theme="dark"] .loading-screen {
+  color: #f0f0f0;
+  background: var(--bg-color);
+}

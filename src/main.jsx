@@ -5,6 +5,20 @@ import './utils/notationConstants'; // Lae enne Appi – vältib TDZ/ReferenceEr
 import App from './App';
 import './index.css';
 
+// Teema enne esimest joonistust (vältib vilkumist)
+(function applyStoredTheme() {
+  try {
+    const raw = localStorage.getItem('noodimeister-theme');
+    if (raw) {
+      const o = JSON.parse(raw);
+      const mode = o.mode === 'dark' ? 'dark' : 'light';
+      const primaryColor = ['orange', 'blue', 'green'].includes(o.primaryColor) ? o.primaryColor : 'orange';
+      document.documentElement.setAttribute('data-theme', mode);
+      document.documentElement.setAttribute('data-primary-color', primaryColor);
+    }
+  } catch (_) { /* ignore */ }
+})();
+
 function showFatalError(message, detail) {
   const el = document.getElementById('root');
   if (!el) return;

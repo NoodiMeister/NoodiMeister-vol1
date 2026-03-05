@@ -1,7 +1,8 @@
-/* Globaalsed alusstiilid. */
+/* Globaalsed alusstiilid. Teema muutujad on NotationStyles.css-s. */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+@import './NotationStyles.css';
 
 html, body, #root {
   margin: 0;
@@ -9,7 +10,8 @@ html, body, #root {
   width: 100%;
   min-height: 100vh;
   font-family: system-ui, -apple-system, sans-serif;
-  background: #fef3c7;
+  background: var(--bg-color);
+  color: var(--text-color);
 }
 
 .loading-screen {
@@ -19,8 +21,8 @@ html, body, #root {
   min-height: 100vh;
   font-size: 1.125rem;
   font-weight: 500;
-  color: #92400e;
-  background: linear-gradient(to bottom right, #fffbeb, #fef3c7);
+  color: var(--text-color);
+  background: var(--bg-color);
 }
 
 /* Klaveri klaviatuuri wrapper (allriba) */

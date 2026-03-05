@@ -199,16 +199,23 @@ export function getLedgerLineCount(pitchY, firstLineY, lastLineY, staffSpace = S
 }
 
 /**
- * Abijooned joonestikust väljas: iga joon on staffSpace kaugusel (üks abijoon per vajalik joon).
+ * Abijooned vastavalt joon/vahe reeglile: noot võib olla JOONEL või VAHES.
+ * Üleval: esimene vahe (A5) = 0 abijoont, esimene abijoon (B5) = 1 abijoon, jne.
+ * All: esimene vahe (D4) = 0 abijoont, esimene abijoon (C4) = 1 abijoon, B3 = 1 abijoon (esimese abijoone all),
+ *      A3 teisel abijoonel = 2 abijoont, G3 teise abijoone all = 2 abijoont.
+ * Positsioon arvutatakse poolspace sammudes (0 = joon, 1 = vahe, 2 = joon, ...).
  */
 export function getLedgerLineCountExact(pitchY, firstLineY, lastLineY, staffSpace = STAFF_SPACE) {
+  const half = staffSpace / 2;
   let above = 0;
   let below = 0;
   if (pitchY < firstLineY) {
-    above = Math.ceil((firstLineY - pitchY) / staffSpace);
+    const stepsAbove = Math.round((firstLineY - pitchY) / half);
+    above = stepsAbove <= 0 ? 0 : Math.floor(stepsAbove / 2);
   }
   if (pitchY > lastLineY) {
-    below = Math.ceil((pitchY - lastLineY) / staffSpace);
+    const stepsBelow = Math.round((pitchY - lastLineY) / half);
+    below = stepsBelow <= 0 ? 0 : Math.floor(stepsBelow / 2);
   }
   return { above, below };
 }

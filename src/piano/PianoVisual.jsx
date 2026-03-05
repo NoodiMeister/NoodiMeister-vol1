@@ -1,18 +1,67 @@
 /**
  * PianoVisual – visuaalne klaverikomponent.
- * Figuurnotatsioon: valged klahvid värviskeemi järgi, JO/LE tekst kujundi sees;
- * mustad klahvid tumedaks, kujund noolega (↗ kõrgendus, ↖ madaldus).
+ * Figuurnotatsioon: värv = noodi nimi (C, D, …), kujund = oktaav (rist, ruut, ring, kolmnurk);
+ * mustadel klahvidel nool kujundi peal (↗ kõrgendus, ↖ madaldus).
  */
 
 import React, { useMemo } from 'react';
 import { getKeysInRange } from './pianoKeys.js';
 import { getJoName } from '../notation/joNames';
+import { getFigureSymbol } from '../utils/figurenotes';
 import './PianoVisual.css';
 
 const BLACK_WIDTH_RATIO = 0.6;
 const NATURAL_PITCH_BY_MIDI_MOD = { 0: 'C', 2: 'D', 4: 'E', 5: 'F', 7: 'G', 9: 'A', 11: 'B' };
 /** Mustad klahvid: MIDI mod 12 -> kas kõrgendus (#) või madaldus (b). Vaikimisi #. */
 const BLACK_KEY_ACCIDENTAL = { 1: 'sharp', 3: 'sharp', 6: 'sharp', 8: 'sharp', 10: 'sharp' };
+
+/** Väike figuuri kujund klahvidel (SVG). shape: none | cross | square | circle | triangle | triangleDown. */
+function FigureKeyShape({ shape, color, size = 14, className = '' }) {
+  const r = size / 2;
+  const strokeW = Math.max(1.5, size * 0.2);
+  if (shape === 'none') {
+    return <span className={className} style={{ display: 'inline-block', width: size, height: size, border: '1px dashed rgba(0,0,0,0.3)', borderRadius: 2 }} aria-hidden="true" />;
+  }
+  if (shape === 'cross') {
+    return (
+      <svg className={className} width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden="true">
+        <line x1={0} y1={0} x2={size} y2={size} stroke={color} strokeWidth={strokeW} strokeLinecap="round" />
+        <line x1={size} y1={0} x2={0} y2={size} stroke={color} strokeWidth={strokeW} strokeLinecap="round" />
+        <rect x={0} y={0} width={size} height={size} fill="none" stroke="currentColor" strokeWidth={1} opacity={0.4} />
+      </svg>
+    );
+  }
+  if (shape === 'square') {
+    return (
+      <svg className={className} width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden="true">
+        <rect x={0} y={0} width={size} height={size} fill={color} stroke="currentColor" strokeWidth={1} opacity={0.5} />
+      </svg>
+    );
+  }
+  if (shape === 'circle') {
+    return (
+      <svg className={className} width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden="true">
+        <circle cx={r} cy={r} r={r - 1} fill={color} stroke="currentColor" strokeWidth={1} opacity={0.5} />
+      </svg>
+    );
+  }
+  if (shape === 'triangle') {
+    const h = size * 0.866;
+    return (
+      <svg className={className} width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden="true">
+        <path d={`M ${r} 1 L ${size - 1} ${size - 1} L 1 ${size - 1} Z`} fill={color} stroke="currentColor" strokeWidth={1} opacity={0.5} />
+      </svg>
+    );
+  }
+  if (shape === 'triangleDown') {
+    return (
+      <svg className={className} width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden="true">
+        <path d={`M ${r} ${size - 1} L ${size - 1} 1 L 1 1 Z`} fill={color} stroke="currentColor" strokeWidth={1} opacity={0.5} />
+      </svg>
+    );
+  }
+  return null;
+}
 
 export function PianoVisual({
   firstNote = 48,
@@ -74,13 +123,26 @@ export function PianoVisual({
     return getJoName(natural, octave, keySignature);
   };
 
+  /** Valge klahvi figuur: värv + kujund (getFigureSymbol). */
+  const getWhiteKeyFigure = (midi) => {
+    if (!useFigurenotes) return null;
+    const natural = NATURAL_PITCH_BY_MIDI_MOD[midi % 12];
+    if (!natural) return null;
+    const octave = Math.floor(midi / 12) - 1;
+    return getFigureSymbol(natural, octave);
+  };
+
+  /** Musta klahvi figuur: värv + kujund + nool (kõrgendus/madaldus). */
   const getBlackKeyFigure = (midi) => {
     if (!useFigurenotes) return null;
     const mod = midi % 12;
     const naturalForColor = { 1: 'C', 3: 'D', 6: 'F', 8: 'G', 10: 'A' }[mod];
-    const color = naturalForColor ? figurenotesColors[naturalForColor] : null;
-    const arrow = BLACK_KEY_ACCIDENTAL[mod] || 'sharp';
-    return color ? { color, arrow } : null;
+    if (!naturalForColor) return null;
+    const octave = Math.floor(midi / 12) - 1;
+    const { color, shape } = getFigureSymbol(naturalForColor, octave);
+    const useFlat = keySignature === 'F' || keySignature === 'Bb' || keySignature === 'Eb';
+    const arrow = BLACK_KEY_ACCIDENTAL[mod] ? (useFlat ? 'flat' : 'sharp') : 'sharp';
+    return { color, shape, arrow };
   };
 
   return (
@@ -103,11 +165,20 @@ export function PianoVisual({
               onPointerLeave={(e) => handlePointerLeave(e, midi)}
               onContextMenu={(e) => e.preventDefault()}
             >
-              {useFigurenotes && getJoLabel(midi) && (
-                <span className="PianoVisual__key-label" style={{ color: 'var(--piano-figurenotes-text)' }}>
-                  {getJoLabel(midi)}
-                </span>
-              )}
+              {useFigurenotes && (() => {
+                const fig = getWhiteKeyFigure(midi);
+                if (!fig) return null;
+                return (
+                  <>
+                    <FigureKeyShape shape={fig.shape} color={fig.color} size={14} className="PianoVisual__key-figure" />
+                    {getJoLabel(midi) && (
+                      <span className="PianoVisual__key-label" style={{ color: 'var(--piano-figurenotes-text)' }}>
+                        {getJoLabel(midi)}
+                      </span>
+                    )}
+                  </>
+                );
+              })()}
             </button>
           ))}
         </div>
@@ -132,6 +203,7 @@ export function PianoVisual({
               >
                 {fig && (
                   <span className="PianoVisual__black-figure" style={{ backgroundColor: fig.color }}>
+                    <FigureKeyShape shape={fig.shape} color="#fff" size={12} className="PianoVisual__black-shape" />
                     <span className="PianoVisual__black-arrow" aria-hidden="true">
                       {fig.arrow === 'flat' ? '↖' : '↗'}
                     </span>

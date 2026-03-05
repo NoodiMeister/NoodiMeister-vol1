@@ -34,6 +34,9 @@ import {
   DEFAULT_SHOW_ALL_NOTE_LABELS,
   KEY_TO_SEMITONE,
 } from './utils/notationConstants';
+import { FIGURENOTES_COLORS, getFigureSymbol } from './utils/figurenotes';
+import { FigurenotesView } from './views/FigurenotesView';
+import { TraditionalNotationView } from './views/TraditionalNotationView';
 import { LOCALE_STORAGE_KEY, DEFAULT_LOCALE, LOCALES, createT } from './i18n';
 import html2canvas from 'html2canvas';
 import Soundfont from 'soundfont-player';
@@ -46,7 +49,7 @@ var GLOBAL_NOTATION_CONFIG = {
   DEFAULT_JO_STAFF_POSITION: 7,
   CLEF_WIDTH: 45,
   SYSTEM_GAP: 120,
-  GRAND_STAFF_GAP_MIN: 100,
+  GRAND_STAFF_GAP_MIN: 90,
   STAFF_SPACE: 10,
   MARGIN_LEFT: 60,
   MARGIN_RIGHT: 40
@@ -75,7 +78,9 @@ var LAYOUT = {
   SYSTEM_GAP: 120,
   MARGIN_LEFT: 60,
   MARGIN_RIGHT: 40,
-  CLEF_WIDTH: 45
+  CLEF_WIDTH: 45,
+  /** Takti miinimumlaius (px); alla selle joonistatakse rea raam punase hoiatusena. */
+  MEASURE_MIN_WIDTH: 28
 };
 var DEMO_MAX_BEATS = 8;
 var DEMO_MAX_MEASURES = 2;
@@ -89,6 +94,27 @@ var LUCIDE_ICONS = [
   'Play', 'Pause', 'Video', 'Eye', 'ArrowDown', 'ArrowRight', 'ArrowUpDown', 'X'
 ];
 var STORAGE_KEY = 'noodimeister-data';
+var THEME_STORAGE_KEY = 'noodimeister-theme';
+
+function getStoredTheme() {
+  try {
+    const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(THEME_STORAGE_KEY) : null;
+    if (raw) {
+      const o = JSON.parse(raw);
+      return {
+        mode: o.mode === 'dark' ? 'dark' : 'light',
+        primaryColor: ['orange', 'blue', 'green'].includes(o.primaryColor) ? o.primaryColor : 'orange',
+      };
+    }
+  } catch (_) { /* ignore */ }
+  return { mode: 'light', primaryColor: 'orange' };
+}
+
+function applyThemeToDocument(mode, primaryColor) {
+  if (typeof document === 'undefined' || !document.documentElement) return;
+  document.documentElement.setAttribute('data-theme', mode);
+  document.documentElement.setAttribute('data-primary-color', primaryColor);
+}
 
 // Rütmiõppe režiim: Kodály silpide pildid (public/) – kui rütmirežiim on sisse lülitatud, kasutatakse neid faile
 var RHYTHM_SYLLABLE_IMAGES = {
@@ -104,8 +130,6 @@ var RHYTHM_SYLLABLE_IMAGES = {
 var VALID_DENOMINATORS = [1, 2, 4, 8, 16, 32, 64, 128];
 var MAX_NUMERATOR = 99;
 var TOOLBOX_ORDER = ['rhythm', 'timeSignature', 'clefs', 'keySignatures', 'transpose', 'pitchInput', 'pianoKeyboard', 'notehead', 'instruments', 'repeatsJumps', 'layout', 'textBox', 'chords'];
-var FIGURENOTES_COLORS = { 'C': '#FF0000', 'D': '#8B4513', 'E': '#808080', 'F': '#0000FF', 'G': '#000000', 'A': '#FFFF00', 'B': '#008000' };
-var FIGURENOTES_SHAPES = { 2: 'cross', 3: 'square', 4: 'circle', 5: 'triangle' };
 var PITCH_TO_SEMI = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
 var PITCH_NAME_TO_NATURAL = { C: 'C', 'C#': 'C', Db: 'C', D: 'D', 'D#': 'D', Eb: 'D', E: 'E', F: 'F', 'F#': 'F', Gb: 'F', G: 'G', 'G#': 'G', Ab: 'G', A: 'A', 'A#': 'A', Bb: 'A', B: 'B' };
 
@@ -303,17 +327,25 @@ function computeLayout(measures, timeSignature, pixelsPerBeat, pageWidth, layout
     lineBreakBefore = [],
     pageBreakBefore = [],
     systemGap = LAYOUT.SYSTEM_GAP,
-    staffCount = 1
+    staffCount = 1,
+    measureStretchFactors = []
   } = layoutOptions;
   const step = (staffCount || 1) * getStaffHeight() + systemGap;
   const lineSet = new Set(Array.isArray(lineBreakBefore) ? lineBreakBefore : []);
   const pageSet = new Set(Array.isArray(pageBreakBefore) ? pageBreakBefore : []);
+  const getFactor = (i) => (Array.isArray(measureStretchFactors) && typeof measureStretchFactors[i] === 'number') ? measureStretchFactors[i] : 1;
 
   const buildSystem = (rowIndices, systemIndex, nextPageBreak) => {
     if (rowIndices.length === 0) return null;
+    // Taktide laiuse täppisjuhtimine: kaal = beatCount * stretchFactor; rida täidab ikkagi 100% laiust
+    const totalWeight = rowIndices.reduce((sum, i) => sum + (measures[i].beatCount ?? beatsPerMeasure) * getFactor(i), 0);
+    if (totalWeight <= 0) return null;
+    const measureWidths = rowIndices.map(i => {
+      const beats = measures[i].beatCount ?? beatsPerMeasure;
+      return (beats * getFactor(i) / totalWeight) * availableWidth;
+    });
     const totalBeatCount = rowIndices.reduce((sum, i) => sum + (measures[i].beatCount ?? beatsPerMeasure), 0);
-    const pixelsPerBeatForRow = availableWidth / totalBeatCount;
-    const measureWidths = rowIndices.map(i => (measures[i].beatCount ?? beatsPerMeasure) * pixelsPerBeatForRow);
+    const pixelsPerBeatForRow = totalBeatCount > 0 ? availableWidth / totalBeatCount : pixelsPerBeat;
     return {
       systemIndex,
       measureIndices: rowIndices,
@@ -387,7 +419,7 @@ function computeLayout(measures, timeSignature, pixelsPerBeat, pageWidth, layout
       const wouldBeTotal = totalBeatCount + nextBeatCount;
       const wouldBePixelsPerBeat = availableWidth / wouldBeTotal;
       const nextMeasureWidth = nextBeatCount * wouldBePixelsPerBeat;
-      if (rowIndices.length > 0 && nextMeasureWidth < 24) break;
+      if (rowIndices.length > 0 && nextMeasureWidth < (LAYOUT.MEASURE_MIN_WIDTH || 28)) break;
       rowIndices.push(nextIdx);
       totalBeatCount = wouldBeTotal;
     }
@@ -395,8 +427,11 @@ function computeLayout(measures, timeSignature, pixelsPerBeat, pageWidth, layout
       rowIndices.push(measureIdx);
       totalBeatCount = measures[measureIdx].beatCount ?? beatsPerMeasure;
     }
-    const pixelsPerBeatForRow = availableWidth / totalBeatCount;
-    const measureWidths = rowIndices.map(i => (measures[i].beatCount ?? beatsPerMeasure) * pixelsPerBeatForRow);
+    const totalWeight = rowIndices.reduce((sum, i) => sum + (measures[i].beatCount ?? beatsPerMeasure) * getFactor(i), 0);
+    const measureWidths = totalWeight > 0
+      ? rowIndices.map(i => ((measures[i].beatCount ?? beatsPerMeasure) * getFactor(i) / totalWeight) * availableWidth)
+      : rowIndices.map(i => (measures[i].beatCount ?? beatsPerMeasure) * (availableWidth / totalBeatCount));
+    const pixelsPerBeatForRow = totalBeatCount > 0 ? availableWidth / totalBeatCount : pixelsPerBeat;
     systems.push({
       systemIndex,
       measureIndices: rowIndices,
@@ -525,7 +560,7 @@ function ClefIcon(props) {
   if (clefType === 'do' || clefType === 'jo') {
     return (
       <svg viewBox="0 0 24 24" className="w-5 h-5">
-        <JoClefSymbol x={2} centerY={12} staffSpacing={4} stroke="currentColor" strokeWidth={1.4} barLength={10} verticalWidth={2.5} showLedgerLine={false} />
+        <JoClefSymbol x={2} centerY={12} staffSpacing={4} stroke="currentColor" />
       </svg>
     );
   }
@@ -559,18 +594,18 @@ function ClefIcon(props) {
   );
 }
 
-// Noodijoonestikul kasutatav võtme sümbol. Viiulivõti: G-joon ankurdatud; bassivõti: F-joon (4. joon) ankurdatud (dünaamiline nagu JO-võti).
-function StaffClefSymbol({ x, y, height, clefType, fill = '#333' }) {
+// Noodijoonestikul kasutatav võtme sümbol. Must (#000), terav. Viiulivõti: G-joon; bassivõti: F-joon (4. joon), punktid vahedes.
+function StaffClefSymbol({ x, y, height, clefType, fill = '#000', staffSpace = 10 }) {
   if (clefType === 'treble') {
     return <TrebleClefSymbol x={x} y={y} height={height} fill={fill} />;
   }
   if (clefType === 'bass') {
-    return <BassClefSymbol x={x} y={y} height={height} fill={fill} />;
+    return <BassClefSymbol x={x} y={y} height={height} fill={fill} staffSpace={staffSpace} />;
   }
   if (clefType === 'alto' || clefType === 'tenor') {
     var scale = (height && height > 0) ? height / 24 : 0.4;
     return (
-      <g transform={`translate(${x}, ${y}) scale(${scale}) translate(-12, -12)`} fill="none" stroke={fill} strokeWidth="1.4" strokeLinecap="round">
+      <g transform={`translate(${x}, ${y}) scale(${scale}) translate(-12, -12)`} fill="none" stroke={fill || '#000'} strokeWidth="1.4" strokeLinecap="round">
         <path d="M7 5.5c-1.8 0-3.2 1.4-3.2 3.2s1.4 3.2 3.2 3.2 3.2-1.4 3.2-3.2S8.8 5.5 7 5.5z"/>
         <path d="M17 5.5c1.8 0 3.2 1.4 3.2 3.2s-1.4 3.2-3.2 3.2-3.2-1.4-3.2-3.2 1.4-3.2 3.2-3.2z"/>
       </g>
@@ -844,7 +879,6 @@ function getToolboxes(t, instrumentConfig) {
   };
 }
 
-// FIGURENOTES_COLORS, FIGURENOTES_SHAPES on faili alguses var'iga
 /** Teksti värv kujundi sees: valge, välja arvatud A (kollane) ja E (hall) – must loetavuse jaoks */
 function getFigurenoteTextColor(pitch) {
   return (pitch === 'A' || pitch === 'E') ? '#000000' : '#ffffff';
@@ -852,6 +886,9 @@ function getFigurenoteTextColor(pitch) {
 
 // MIDI ↔ note string ilma react-piano sõltuvuseta (C4 = 60).
 var MIDI_PITCH_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+/** Standardse 88-klahvilise klaveri MIDI ulatus: A0 = 21, C8 = 108 */
+var PIANO_MIDI_MIN = 21;
+var PIANO_MIDI_MAX = 108;
 function noteStringToMidi(str) {
   const m = String(str).trim().toLowerCase().match(/^([a-g])(#|b)?(\d+)$/);
   if (!m) return 60;
@@ -859,6 +896,12 @@ function noteStringToMidi(str) {
   const octave = parseInt(m[3], 10);
   const semi = pitchIndex + (m[2] === '#' ? 1 : m[2] === 'b' ? -1 : 0);
   return (octave + 1) * 12 + ((semi % 12) + 12) % 12;
+}
+/** MIDI number → lühike nimetus (nt "C3", "F#4") vahemiku kuvamiseks */
+function midiToRangeLabel(midi) {
+  const n = Number(midi);
+  if (!Number.isFinite(n) || n < 0 || n > 127) return 'C4';
+  return MIDI_PITCH_NAMES[n % 12] + (Math.floor(n / 12) - 1);
 }
 function getMidiAttributes(midiNumber) {
   const n = Number(midiNumber);
@@ -880,6 +923,14 @@ function midiToNoteWithAccidental(midiNumber) {
   const naturalPitch = PITCH_NAME_TO_NATURAL[attrs.pitchName] || attrs.pitchName.charAt(0);
   const accidental = attrs.pitchName && attrs.pitchName.includes('#') ? 1 : attrs.pitchName && attrs.pitchName.includes('b') ? -1 : 0;
   return { pitch: naturalPitch, octave: attrs.octave, accidental };
+}
+
+/** Musta klahvi alteratsioon helistiku järgi: bemolli-helistikud (F, Bb, Eb) → ♭ (-1), muud → ♯ (1). Valge klahv → 0. */
+function getAccidentalForPianoKey(midiNumber, keySignature) {
+  const attrs = getMidiAttributes(midiNumber);
+  if (!attrs.isAccidental) return 0;
+  const useFlat = keySignature === 'F' || keySignature === 'Bb' || keySignature === 'Eb';
+  return useFlat ? -1 : 1;
 }
 // FINGERING_TIN_WHISTLE, FINGERING_RECORDER on faili alguses var'iga
 function NoodiMeisterCore({ icons }) {
@@ -952,8 +1003,43 @@ function NoodiMeisterCore({ icons }) {
   const visibleToolsMenuRef = useRef(null);
   const [pianoStripWidth, setPianoStripWidth] = useState(900);
   const pianoStripWrapperRef = useRef(null); // klaviatuuri wrapper – laius mõõdetakse ResizeObserveriga
-  const [pianoRange, setPianoRange] = useState('C3-C5'); // nagu muted.io piano: C3-C5 (vaikimisi), laiendatav
+  const [pianoRangeNumbers, setPianoRangeNumbers] = useState({ first: 48, last: 72 }); // klaviatuuri vahemik MIDI (first, last); piirang 21–108
   const [pianoStripVisible, setPianoStripVisible] = useState(false); // klaviatuuri riba all – nähtav ka siis, kui avatud on Rütm vms
+  const PIANO_RANGE_PRESETS = useMemo(() => [
+    { id: 'C3-C5', label: 'C3-C5', first: 48, last: 72 },
+    { id: 'C2-C5', label: 'C2-C5', first: 36, last: 72 },
+    { id: 'C1-C5', label: 'C1-C5', first: 24, last: 72 },
+    { id: 'C1-C7', label: 'C1-C7', first: 24, last: 96 },
+  ], []);
+
+  // Kiirklahvid: Alt + Nool paremale/vasakule nihutavad klaviatuuri vahemikku ühe oktavi võrra (88-klahvi piirides)
+  useEffect(() => {
+    if (!pianoStripVisible) return;
+    const handleKeyDown = (e) => {
+      if (!e.altKey || e.repeat) return;
+      if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        setPianoRangeNumbers((prev) => {
+          const span = prev.last - prev.first + 1;
+          const newFirst = Math.min(prev.first + 12, PIANO_MIDI_MAX - span + 1);
+          const newLast = newFirst + span - 1;
+          if (newFirst === prev.first) return prev;
+          return { first: Math.max(PIANO_MIDI_MIN, newFirst), last: Math.min(PIANO_MIDI_MAX, newLast) };
+        });
+      } else if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        setPianoRangeNumbers((prev) => {
+          const span = prev.last - prev.first + 1;
+          const newLast = Math.max(prev.last - 12, PIANO_MIDI_MIN + span - 1);
+          const newFirst = newLast - span + 1;
+          if (newLast === prev.last) return prev;
+          return { first: Math.max(PIANO_MIDI_MIN, newFirst), last: Math.min(PIANO_MIDI_MAX, newLast) };
+        });
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [pianoStripVisible]);
 
   // Stage V: Time signature display mode
   const [timeSignatureMode, setTimeSignatureMode] = useState('pedagogical'); // 'classic' or 'pedagogical'
@@ -990,6 +1076,8 @@ function NoodiMeisterCore({ icons }) {
   const [pageOrientation, setPageOrientation] = useState('portrait'); // 'portrait' | 'landscape'
   const [layoutMeasuresPerLine, setLayoutMeasuresPerLine] = useState(4);
   const [layoutLineBreakBefore, setLayoutLineBreakBefore] = useState([]);
+  const [measureStretchFactors, setMeasureStretchFactors] = useState([]);
+  const [systemYOffsets, setSystemYOffsets] = useState([]);
   const [layoutPageBreakBefore, setLayoutPageBreakBefore] = useState([]);
   const [layoutSystemGap, setLayoutSystemGap] = useState(120); // noodiridade vahe (px), vahemik ca 60–200
   // Vaade: partituur vs instrumendi part – instrumendi paigutus on sõltumatu partituurist
@@ -1165,6 +1253,18 @@ function NoodiMeisterCore({ icons }) {
   const pedagogicalAudioInputRef = useRef(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [saveCloudDialogOpen, setSaveCloudDialogOpen] = useState(false);
+  const [themeMode, setThemeMode] = useState(() => getStoredTheme().mode);
+  const [themePrimaryColor, setThemePrimaryColor] = useState(() => getStoredTheme().primaryColor);
+  const themeColors = useMemo(() => {
+    const isDark = themeMode === 'dark';
+    return {
+      staffLineColor: isDark ? '#ffffff' : '#000000',
+      noteFill: isDark ? '#ffffff' : '#1a1a1a',
+      textColor: isDark ? '#f0f0f0' : '#1a1a1a',
+      scoreBg: isDark ? '#2d2d2d' : '#fffbf0',
+      isDark,
+    };
+  }, [themeMode]);
   // Rippmenüüd tööriistaribal: 'file' | 'view' | null (Seaded on Faili all)
   const [headerMenuOpen, setHeaderMenuOpen] = useState(null);
   const [fileSubmenuOpen, setFileSubmenuOpen] = useState(null); // 'seaded' | null
@@ -1193,6 +1293,13 @@ function NoodiMeisterCore({ icons }) {
       return () => document.removeEventListener('click', closeVisibleTools);
     }
   }, [visibleToolsMenuOpen]);
+  useEffect(() => {
+    applyThemeToDocument(themeMode, themePrimaryColor);
+    try {
+      localStorage.setItem(THEME_STORAGE_KEY, JSON.stringify({ mode: themeMode, primaryColor: themePrimaryColor }));
+    } catch (_) { /* ignore */ }
+  }, [themeMode, themePrimaryColor]);
+
   useEffect(() => {
     const updatePianoWidth = () => setPianoStripWidth(Math.min(900, Math.max(320, (typeof window !== 'undefined' ? window.innerWidth : 900) - 80)));
     updatePianoWidth();
@@ -1549,6 +1656,8 @@ function NoodiMeisterCore({ icons }) {
     staves,
     activeStaffIndex,
     staffYOffsets,
+    measureStretchFactors: measureStretchFactors?.length ? measureStretchFactors : undefined,
+    systemYOffsets: systemYOffsets?.length ? systemYOffsets : undefined,
     timeSignature,
     timeSignatureMode,
     keySignature,
@@ -1602,7 +1711,7 @@ function NoodiMeisterCore({ icons }) {
     lyricFontFamily,
     visibleStaves: visibleStaves.length === staves.length ? visibleStaves : staves.map(() => true),
     intermissionLabels
-  }), [staves, activeStaffIndex, staffYOffsets, visibleStaves, intermissionLabels, timeSignature, timeSignatureMode, keySignature, staffLines, notationStyle, pixelsPerBeat, notationMode, instrumentNotationVariant, cursorPosition, addedMeasures, setupCompleted, songTitle, author, pickupEnabled, pickupQuantity, pickupDuration, pageOrientation, layoutMeasuresPerLine, layoutLineBreakBefore, layoutPageBreakBefore, layoutSystemGap, viewMode, partLayoutMeasuresPerLine, partLayoutLineBreakBefore, partLayoutPageBreakBefore, showPageNavigator, pageFlowDirection, visibleToolIds, tuningReferenceNote, tuningReferenceOctave, tuningReferenceHz, playNoteOnInsert, figurenotesSize, figurenotesStems, showBarNumbers, showRhythmSyllables, showAllNoteLabels, enableEmojiOverlays, joClefStaffPosition, relativeNotationShowKeySignature, relativeNotationShowTraditionalClef, isPedagogicalProject, pedagogicalAudioBpm, pedagogicalPlayheadStyle, pedagogicalPlayheadEmoji, pedagogicalPlayheadEmojiSize, chords, textBoxes, documentFontFamily, lyricFontFamily]);
+  }), [staves, activeStaffIndex, staffYOffsets, measureStretchFactors, systemYOffsets, visibleStaves, intermissionLabels, timeSignature, timeSignatureMode, keySignature, staffLines, notationStyle, pixelsPerBeat, notationMode, instrumentNotationVariant, cursorPosition, addedMeasures, setupCompleted, songTitle, author, pickupEnabled, pickupQuantity, pickupDuration, pageOrientation, layoutMeasuresPerLine, layoutLineBreakBefore, layoutPageBreakBefore, layoutSystemGap, viewMode, partLayoutMeasuresPerLine, partLayoutLineBreakBefore, partLayoutPageBreakBefore, showPageNavigator, pageFlowDirection, visibleToolIds, tuningReferenceNote, tuningReferenceOctave, tuningReferenceHz, playNoteOnInsert, figurenotesSize, figurenotesStems, showBarNumbers, showRhythmSyllables, showAllNoteLabels, enableEmojiOverlays, joClefStaffPosition, relativeNotationShowKeySignature, relativeNotationShowTraditionalClef, isPedagogicalProject, pedagogicalAudioBpm, pedagogicalPlayheadStyle, pedagogicalPlayheadEmoji, pedagogicalPlayheadEmojiSize, chords, textBoxes, documentFontFamily, lyricFontFamily]);
 
   const saveToStorageSync = useCallback(() => {
     try {
@@ -1683,12 +1792,14 @@ function NoodiMeisterCore({ icons }) {
     staves,
     activeStaffIndex,
     staffYOffsets,
+    measureStretchFactors: measureStretchFactors?.length ? measureStretchFactors : undefined,
+    systemYOffsets: systemYOffsets?.length ? systemYOffsets : undefined,
     scoreData: staves[0]?.notes,
     chords,
     textBoxes,
     visibleStaves: visibleStaves.length === staves.length ? visibleStaves : staves.map(() => true),
     intermissionLabels
-  }), [songTitle, author, notationStyle, notationMode, isPedagogicalProject, timeSignature, timeSignatureMode, keySignature, staffLines, pixelsPerBeat, instrumentNotationVariant, pickupEnabled, pickupQuantity, pickupDuration, setupCompleted, cursorPosition, addedMeasures, pageOrientation, layoutMeasuresPerLine, layoutLineBreakBefore, layoutPageBreakBefore, layoutSystemGap, viewMode, partLayoutMeasuresPerLine, partLayoutLineBreakBefore, partLayoutPageBreakBefore, showPageNavigator, pageFlowDirection, visibleToolIds, tuningReferenceNote, tuningReferenceOctave, tuningReferenceHz, playNoteOnInsert, figurenotesSize, figurenotesStems, showBarNumbers, showRhythmSyllables, showAllNoteLabels, enableEmojiOverlays, joClefStaffPosition, relativeNotationShowKeySignature, relativeNotationShowTraditionalClef, pedagogicalAudioBpm, pedagogicalPlayheadStyle, pedagogicalPlayheadEmoji, pedagogicalPlayheadEmojiSize, staves, activeStaffIndex, staffYOffsets, visibleStaves, intermissionLabels, chords, textBoxes]);
+  }), [songTitle, author, notationStyle, notationMode, isPedagogicalProject, timeSignature, timeSignatureMode, keySignature, staffLines, pixelsPerBeat, instrumentNotationVariant, pickupEnabled, pickupQuantity, pickupDuration, setupCompleted, cursorPosition, addedMeasures, pageOrientation, layoutMeasuresPerLine, layoutLineBreakBefore, layoutPageBreakBefore, layoutSystemGap, viewMode, partLayoutMeasuresPerLine, partLayoutLineBreakBefore, partLayoutPageBreakBefore, showPageNavigator, pageFlowDirection, visibleToolIds, tuningReferenceNote, tuningReferenceOctave, tuningReferenceHz, playNoteOnInsert, figurenotesSize, figurenotesStems, showBarNumbers, showRhythmSyllables, showAllNoteLabels, enableEmojiOverlays, joClefStaffPosition, relativeNotationShowKeySignature, relativeNotationShowTraditionalClef, pedagogicalAudioBpm, pedagogicalPlayheadStyle, pedagogicalPlayheadEmoji, pedagogicalPlayheadEmojiSize, staves, activeStaffIndex, staffYOffsets, measureStretchFactors, systemYOffsets, visibleStaves, intermissionLabels, chords, textBoxes]);
 
   // Download project file (future: replace with upload to Google Drive / OneDrive)
   const downloadProject = useCallback(() => {
@@ -1719,6 +1830,8 @@ function NoodiMeisterCore({ icons }) {
         setStaves(data.staves);
         setActiveStaffIndex(typeof data.activeStaffIndex === 'number' ? Math.max(0, Math.min(data.activeStaffIndex, data.staves.length - 1)) : 0);
         if (Array.isArray(data.staffYOffsets)) setStaffYOffsets(data.staffYOffsets);
+      if (Array.isArray(data.measureStretchFactors)) setMeasureStretchFactors(data.measureStretchFactors);
+      if (Array.isArray(data.systemYOffsets)) setSystemYOffsets(data.systemYOffsets);
       } else {
         const scoreData = data.scoreData ?? data.notes;
         const notesArr = Array.isArray(scoreData) ? scoreData : [];
@@ -1842,6 +1955,8 @@ function NoodiMeisterCore({ icons }) {
           setStaves(data.staves);
           setActiveStaffIndex(typeof data.activeStaffIndex === 'number' ? Math.max(0, Math.min(data.activeStaffIndex, data.staves.length - 1)) : 0);
           if (Array.isArray(data.staffYOffsets)) setStaffYOffsets(data.staffYOffsets);
+          if (Array.isArray(data.measureStretchFactors)) setMeasureStretchFactors(data.measureStretchFactors);
+          if (Array.isArray(data.systemYOffsets)) setSystemYOffsets(data.systemYOffsets);
         } else {
           const cfg = INSTRUMENT_CONFIG_BASE[data.instrument];
           setStaves([{ id: '1', instrumentId: data.instrument || 'piano', clefType: (cfg?.defaultClef) || data.clefType || 'treble', notes: data.notes }]);
@@ -2724,6 +2839,25 @@ function NoodiMeisterCore({ icons }) {
         return;
       }
 
+      // Alt+[ / Alt+{ – vähenda valitud takti laiust (kokkusurumine); Alt+] / Alt+} – suurenda (laiendamine)
+      if (e.altKey && !e.ctrlKey && !e.metaKey && (e.code === 'BracketLeft' || e.code === 'BracketRight')) {
+        const ms = measuresRef.current;
+        if (ms && ms.length > 0) {
+          const measureIndex = ms.findIndex((m) => cursorPosition >= m.startBeat && cursorPosition < m.endBeat);
+          const idx = measureIndex >= 0 ? measureIndex : Math.min(cursorPosition > 0 ? Math.floor(cursorPosition / (timeSignature?.beats || 4)) : 0, ms.length - 1);
+          const delta = e.code === 'BracketLeft' ? -0.1 : 0.1;
+          e.preventDefault();
+          dirtyRef.current = true;
+          setMeasureStretchFactors((prev) => {
+            const next = [...(prev || [])];
+            while (next.length <= idx) next.push(1);
+            next[idx] = Math.max(0.25, Math.min(4, (next[idx] ?? 1) + delta));
+            return next;
+          });
+        }
+        return;
+      }
+
       // Cmd+A / Ctrl+A – ava Akordid tööriistakast (akordi lisamiseks)
       if (modKey && e.code === 'KeyA') {
         e.preventDefault();
@@ -3272,6 +3406,8 @@ function NoodiMeisterCore({ icons }) {
   }, [joClefFocused]);
 
   const measures = calculateMeasures();
+  const measuresRef = useRef(measures);
+  measuresRef.current = measures;
   // Praeguse vaate paigutus: partituur või instrumendi part (instrumentide paigutus ei mõjuta partituuri)
   const effectiveLayoutMeasuresPerLine = viewMode === 'score' ? layoutMeasuresPerLine : partLayoutMeasuresPerLine;
   const effectiveLayoutLineBreakBefore = viewMode === 'score' ? layoutLineBreakBefore : partLayoutLineBreakBefore;
@@ -3292,15 +3428,17 @@ function NoodiMeisterCore({ icons }) {
     return () => ro.disconnect();
   }, [pageOrientation, effectivePageWidthMax]);
   const logicalContentHeight = useMemo(() => {
-    const opts = { measuresPerLine: effectiveLayoutMeasuresPerLine, lineBreakBefore: effectiveLayoutLineBreakBefore, pageBreakBefore: effectiveLayoutPageBreakBefore, systemGap: layoutSystemGap, staffCount: staves.length };
+    const opts = { measuresPerLine: effectiveLayoutMeasuresPerLine, lineBreakBefore: effectiveLayoutLineBreakBefore, pageBreakBefore: effectiveLayoutPageBreakBefore, systemGap: layoutSystemGap, staffCount: staves.length, measureStretchFactors };
     const sys = computeLayout(measures, timeSignature, pixelsPerBeat, pageWidth || LAYOUT.PAGE_WIDTH_MIN, opts);
     const n = staves.length || 1;
-    return sys.length > 0 ? sys[sys.length - 1].yOffset + n * getStaffHeight() + 40 : n * getStaffHeight() + 40;
-  }, [measures, timeSignature, pixelsPerBeat, pageWidth, effectiveLayoutMeasuresPerLine, effectiveLayoutLineBreakBefore, effectiveLayoutPageBreakBefore, layoutSystemGap, staves.length]);
+    const lastY = sys.length > 0 ? sys[sys.length - 1].yOffset + (systemYOffsets[sys.length - 1] ?? 0) : 0;
+    return sys.length > 0 ? lastY + n * getStaffHeight() + 40 : n * getStaffHeight() + 40;
+  }, [measures, timeSignature, pixelsPerBeat, pageWidth, effectiveLayoutMeasuresPerLine, effectiveLayoutLineBreakBefore, effectiveLayoutPageBreakBefore, layoutSystemGap, staves.length, measureStretchFactors, systemYOffsets]);
   const systemsForScore = useMemo(() => {
-    const opts = { measuresPerLine: effectiveLayoutMeasuresPerLine, lineBreakBefore: effectiveLayoutLineBreakBefore, pageBreakBefore: effectiveLayoutPageBreakBefore, systemGap: layoutSystemGap, staffCount: staves.length };
-    return computeLayout(measures, timeSignature, pixelsPerBeat, pageWidth || LAYOUT.PAGE_WIDTH_MIN, opts);
-  }, [measures, timeSignature, pixelsPerBeat, pageWidth, effectiveLayoutMeasuresPerLine, effectiveLayoutLineBreakBefore, effectiveLayoutPageBreakBefore, layoutSystemGap, staves.length]);
+    const opts = { measuresPerLine: effectiveLayoutMeasuresPerLine, lineBreakBefore: effectiveLayoutLineBreakBefore, pageBreakBefore: effectiveLayoutPageBreakBefore, systemGap: layoutSystemGap, staffCount: staves.length, measureStretchFactors };
+    const raw = computeLayout(measures, timeSignature, pixelsPerBeat, pageWidth || LAYOUT.PAGE_WIDTH_MIN, opts);
+    return raw.map((s, i) => ({ ...s, yOffset: s.yOffset + (systemYOffsets[i] ?? 0) }));
+  }, [measures, timeSignature, pixelsPerBeat, pageWidth, effectiveLayoutMeasuresPerLine, effectiveLayoutLineBreakBefore, effectiveLayoutPageBreakBefore, layoutSystemGap, staves.length, measureStretchFactors, systemYOffsets]);
   // Nutikas fookus: ainult valitud read; vähem ridu = suurem rea kõrgus (HEV/solfedž)
   const visibleStaffList = useMemo(() => {
     const list = [];
@@ -3740,6 +3878,58 @@ function NoodiMeisterCore({ icons }) {
               <button onClick={() => setSettingsOpen(false)} className="text-white/90 hover:text-white text-2xl leading-none">&times;</button>
             </div>
             <div className="p-6 space-y-4">
+              {/* Teema: põhivärv ja režiim (hele/tume) */}
+              <div className="border-b border-amber-200 pb-4">
+                <h3 className="text-sm font-bold text-amber-900 mb-2">{t('theme.title')}</h3>
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-sm font-semibold text-amber-900 mb-1">{t('theme.primaryColor')}</label>
+                    <div className="flex flex-wrap gap-2">
+                      {[
+                        { value: 'orange', label: t('theme.orange') },
+                        { value: 'blue', label: t('theme.blue') },
+                        { value: 'green', label: t('theme.green') },
+                      ].map((opt) => (
+                        <button
+                          key={opt.value}
+                          type="button"
+                          onClick={() => { dirtyRef.current = true; setThemePrimaryColor(opt.value); }}
+                          className={`px-3 py-2 rounded-lg text-sm font-medium border-2 transition-colors ${
+                            themePrimaryColor === opt.value
+                              ? 'border-amber-600 bg-amber-100 text-amber-900'
+                              : 'border-amber-200 text-amber-900 bg-amber-50 hover:bg-amber-100'
+                          }`}
+                          style={themePrimaryColor === opt.value && opt.value === 'orange' ? { borderColor: '#FF8C00', backgroundColor: 'rgba(255,140,0,0.15)' } : themePrimaryColor === opt.value && opt.value === 'blue' ? { borderColor: '#007BFF', backgroundColor: 'rgba(0,123,255,0.15)' } : themePrimaryColor === opt.value && opt.value === 'green' ? { borderColor: '#28A745', backgroundColor: 'rgba(40,167,69,0.15)' } : {}}
+                        >
+                          <span className="inline-block w-3 h-3 rounded-full mr-1.5 align-middle" style={{
+                            backgroundColor: opt.value === 'orange' ? '#FF8C00' : opt.value === 'blue' ? '#007BFF' : '#28A745',
+                          }} />
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-amber-900 mb-1">{t('theme.mode')}</label>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => { dirtyRef.current = true; setThemeMode('light'); }}
+                        className={`px-3 py-2 rounded-lg text-sm font-medium border-2 transition-colors ${themeMode === 'light' ? 'bg-amber-600 border-amber-700 text-white' : 'border-amber-200 text-amber-900 bg-amber-50 hover:bg-amber-100'}`}
+                      >
+                        {t('theme.light')}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { dirtyRef.current = true; setThemeMode('dark'); }}
+                        className={`px-3 py-2 rounded-lg text-sm font-medium border-2 transition-colors ${themeMode === 'dark' ? 'bg-amber-600 border-amber-700 text-white' : 'border-amber-200 text-amber-900 bg-amber-50 hover:bg-amber-100'}`}
+                      >
+                        {t('theme.dark')}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
               <div>
                 <label className="block text-sm font-semibold text-amber-900 mb-1">Loo pealkiri</label>
                 <input
@@ -4716,6 +4906,12 @@ function NoodiMeisterCore({ icons }) {
                         <button type="button" disabled={cursorMeasureIndex <= 0} onClick={() => { dirtyRef.current = true; (viewMode === 'score' ? setLayoutLineBreakBefore : setPartLayoutLineBreakBefore)((prev) => prev.filter((i) => i !== cursorMeasureIndex)); }} className="py-1.5 px-2 rounded bg-amber-100 text-amber-800 hover:bg-amber-200 font-medium disabled:opacity-50 disabled:cursor-not-allowed">{t('layout.removeLineBreak')}</button>
                         <button type="button" disabled={cursorMeasureIndex <= 0} onClick={() => { dirtyRef.current = true; (viewMode === 'score' ? setLayoutPageBreakBefore : setPartLayoutPageBreakBefore)((prev) => prev.filter((i) => i !== cursorMeasureIndex)); }} className="py-1.5 px-2 rounded bg-amber-100 text-amber-800 hover:bg-amber-200 font-medium disabled:opacity-50 disabled:cursor-not-allowed">{t('layout.removePageBreak')}</button>
                       </div>
+                      <p className="text-xs text-amber-700 mt-2 mb-1">{t('layout.measureWidthHint')}</p>
+                      <div className="grid grid-cols-2 gap-1 text-xs">
+                        <button type="button" title={t('layout.compressMeasureShortcut')} onClick={() => { dirtyRef.current = true; setMeasureStretchFactors((prev) => { const next = [...(prev || [])]; while (next.length <= cursorMeasureIndex) next.push(1); next[cursorMeasureIndex] = Math.max(0.25, (next[cursorMeasureIndex] ?? 1) - 0.1); return next; }); }} className="py-1.5 px-2 rounded bg-slate-100 text-slate-800 hover:bg-slate-200 font-medium">{t('layout.compressMeasure')}</button>
+                        <button type="button" title={t('layout.stretchMeasureShortcut')} onClick={() => { dirtyRef.current = true; setMeasureStretchFactors((prev) => { const next = [...(prev || [])]; while (next.length <= cursorMeasureIndex) next.push(1); next[cursorMeasureIndex] = Math.min(4, (next[cursorMeasureIndex] ?? 1) + 0.1); return next; }); }} className="py-1.5 px-2 rounded bg-slate-100 text-slate-800 hover:bg-slate-200 font-medium">{t('layout.stretchMeasure')}</button>
+                      </div>
+                      <button type="button" onClick={() => { dirtyRef.current = true; (viewMode === 'score' ? setLayoutLineBreakBefore : setPartLayoutLineBreakBefore)([]); (viewMode === 'score' ? setLayoutPageBreakBefore : setPartLayoutPageBreakBefore)([]); (viewMode === 'score' ? setLayoutMeasuresPerLine : setPartLayoutMeasuresPerLine)(0); setMeasureStretchFactors([]); setSystemYOffsets([]); }} className="mt-3 w-full py-2 px-3 rounded-lg bg-slate-100 text-slate-800 text-sm font-semibold hover:bg-slate-200 border border-slate-300" title={t('layout.resetLayoutHint')}>{t('layout.resetLayout')}</button>
                     </div>
                     <div className="mt-4 pt-4 border-t-2 border-amber-200">
                       <h4 className="text-xs font-bold text-amber-900 uppercase mb-2">{t('layout.projectFile')}</h4>
@@ -5142,6 +5338,26 @@ function NoodiMeisterCore({ icons }) {
                   layoutLineBreakBefore={effectiveLayoutLineBreakBefore}
                   layoutPageBreakBefore={effectiveLayoutPageBreakBefore}
                   layoutSystemGap={layoutSystemGap}
+                  showLayoutBreakIcons={activeToolbox === 'layout'}
+                  showStaffSpacerHandles={activeToolbox === 'layout'}
+                  onSystemYOffsetChange={isFirstVisible ? (systemIndex, deltaY) => {
+                    dirtyRef.current = true;
+                    setSystemYOffsets((prev) => {
+                      const next = [...(prev || [])];
+                      while (next.length <= systemIndex) next.push(0);
+                      next[systemIndex] = (next[systemIndex] ?? 0) + deltaY;
+                      return next;
+                    });
+                  } : undefined}
+                  onToggleLineBreakAfter={(measureIndex) => {
+                    dirtyRef.current = true;
+                    const setter = viewMode === 'score' ? setLayoutLineBreakBefore : setPartLayoutLineBreakBefore;
+                    setter((prev) => {
+                      const next = measureIndex + 1;
+                      if (prev.includes(next)) return prev.filter((i) => i !== next);
+                      return [...prev, next].sort((a, b) => a - b);
+                    });
+                  }}
                   systems={systemsForScore}
                   baseYOffset={baseYOffset}
                   staffCount={visibleStaffList.length > 0 ? visibleStaffList.length : staves.length}
@@ -5156,6 +5372,7 @@ function NoodiMeisterCore({ icons }) {
                   chords={chords}
                   figurenotesSize={figurenotesSize}
                   figurenotesStems={figurenotesStems}
+                  themeColors={themeColors}
                   pedagogicalPlayheadStyle={pedagogicalPlayheadStyle}
                   pedagogicalPlayheadEmoji={pedagogicalPlayheadEmoji}
                   pedagogicalPlayheadEmojiSize={pedagogicalPlayheadEmojiSize}
@@ -5244,18 +5461,17 @@ function NoodiMeisterCore({ icons }) {
         {/* Klaveri klaviatuur – täisfunktsionaalne interaktiivne klaver (vähemalt 2 oktaavi), heli + MIDI */}
         {pianoStripVisible && typeof document !== 'undefined' && createPortal(
           (() => {
-            const rangeMap = { 'C3-C5': ['c3', 'c5'], 'C2-C5': ['c2', 'c5'], 'C1-C5': ['c1', 'c5'], 'C1-C7': ['c1', 'c7'] };
-            const [firstStr, lastStr] = rangeMap[pianoRange] || ['c3', 'c5'];
-            const firstNote = noteStringToMidi(firstStr);
-            const lastNote = noteStringToMidi(lastStr);
+            const firstNote = pianoRangeNumbers.first;
+            const lastNote = pianoRangeNumbers.last;
+            const activePresetId = PIANO_RANGE_PRESETS.find((p) => p.first === firstNote && p.last === lastNote)?.id ?? null;
+            const rangeLabel = activePresetId ?? `${midiToRangeLabel(firstNote)}–${midiToRangeLabel(lastNote)}`;
             const handleNotePlay = (midiNumber) => {
               const { pitch, octave } = midiToPitchOctave(midiNumber);
-              const attrs = getMidiAttributes(midiNumber);
-              const accidental = attrs.pitchName && attrs.pitchName.includes('#') ? 1 : attrs.pitchName && attrs.pitchName.includes('b') ? -1 : 0;
+              const accidental = getAccidentalForPianoKey(midiNumber, keySignature);
               setGhostPitch(pitch);
               setGhostOctave(octave);
               if (noteInputMode) addNoteAtCursor(pitch, octave, accidental, { skipPlay: true });
-              /* Väljaspool sisestusrežiimi heli teeb juba InteractivePiano (Oscillator) */
+              /* Heli teeb InteractivePiano (Oscillator); noot lisatakse massiivi ja joonestik uuendub */
             };
             return (
               <div className="fixed bottom-0 left-0 right-0 z-[100] min-h-[140px] bg-gradient-to-t from-amber-100 to-amber-50 border-t-2 border-amber-300 shadow-[0_-4px_12px_rgba(0,0,0,0.12)] py-3 px-4" style={{ isolation: 'isolate' }}>
@@ -5265,21 +5481,24 @@ function NoodiMeisterCore({ icons }) {
                       <span className="text-xs font-semibold text-amber-800 uppercase tracking-wider">
                         {t('toolbox.pianoKeyboard')}
                       </span>
-                      <span className="text-xs text-amber-600">({t('midi.mouseKeyboardHint') || 'Hiirega või arvutiklahvidega mängi noote. Noot ilmub noodijoonestikule.'})</span>
+                      <span className="text-xs text-amber-600">({t('midi.mouseKeyboardHint') || 'Hiirega või arvutiklahvidega mängi noote. Noot ilmub noodijoonestikule.'}) Alt+←/→ nihutab vahemikku.</span>
                     </div>
                     <div className="flex items-center gap-2">
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <span className="text-xs text-amber-700 font-medium">{t('layout.range') || 'Vahemik'}:</span>
-                        {(['C3-C5', 'C2-C5', 'C1-C5', 'C1-C7']).map((r) => (
+                        {PIANO_RANGE_PRESETS.map((preset) => (
                           <button
-                            key={r}
+                            key={preset.id}
                             type="button"
-                            onClick={() => setPianoRange(r)}
-                            className={`px-2 py-1 rounded text-xs font-medium transition-colors ${pianoRange === r ? 'bg-amber-600 text-white' : 'bg-amber-200/80 text-amber-900 hover:bg-amber-300'}`}
+                            onClick={() => setPianoRangeNumbers({ first: preset.first, last: preset.last })}
+                            className={`px-2 py-1 rounded text-xs font-medium transition-colors ${activePresetId === preset.id ? 'bg-amber-600 text-white' : 'bg-amber-200/80 text-amber-900 hover:bg-amber-300'}`}
                           >
-                            {r}
+                            {preset.label}
                           </button>
                         ))}
+                        {!activePresetId && (
+                          <span className="text-xs text-amber-700 font-medium">{rangeLabel}</span>
+                        )}
                       </div>
                       <button
                         type="button"
@@ -5396,8 +5615,9 @@ function getFingeringForNote(pitch, octave, instrumentId) {
 }
 
 // Timeline Component – multi-system layout (VexFlow loogika). (PAGE_BREAK_GAP on defineeritud üleval.)
-function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, pageWidth, cursorPosition, notationMode, staffLines, clefType, keySignature = 'C', relativeNotationShowKeySignature = false, relativeNotationShowTraditionalClef = false, onJoClefPositionChange, joClefFocused = false, onJoClefFocus, instrument = 'piano', instrumentNotationVariant = 'standard', instrumentConfig = {}, showBarNumbers = true, showRhythmSyllables = false, joClefStaffPosition: joClefStaffPositionProp, showAllNoteLabels = false, enableEmojiOverlays = true, onNoteTeacherLabelChange, onNoteLabelClick, chords = [], isDotted, isRest, selectedDuration, noteInputMode, selectedNoteIndex, isNoteSelected, notes: allNotes, onStaffAddNote, onNoteClick, ghostPitch, ghostOctave, notationStyle, layoutMeasuresPerLine = 4, layoutLineBreakBefore = [], layoutPageBreakBefore = [], layoutSystemGap = 120, systems: systemsProp, baseYOffset = 0, staffCount = 1, staffHeight: staffHeightProp, figurenotesSize = 16, figurenotesStems = false, pedagogicalPlayheadStyle = 'line', pedagogicalPlayheadEmoji = '🎵', pedagogicalPlayheadEmojiSize = 32, isPedagogicalAudioPlaying = false, isExportingAnimation = false, exportCursorRef, scoreContainerRef, pageFlowDirection = 'vertical', isFirstInBraceGroup = false, braceGroupSize = 0, lyricFontFamily = 'sans-serif', translateLabel }) {
+function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, pageWidth, cursorPosition, notationMode, staffLines, clefType, keySignature = 'C', relativeNotationShowKeySignature = false, relativeNotationShowTraditionalClef = false, onJoClefPositionChange, joClefFocused = false, onJoClefFocus, instrument = 'piano', instrumentNotationVariant = 'standard', instrumentConfig = {}, showBarNumbers = true, showRhythmSyllables = false, joClefStaffPosition: joClefStaffPositionProp, showAllNoteLabels = false, enableEmojiOverlays = true, onNoteTeacherLabelChange, onNoteLabelClick, chords = [], isDotted, isRest, selectedDuration, noteInputMode, selectedNoteIndex, isNoteSelected, notes: allNotes, onStaffAddNote, onNoteClick, ghostPitch, ghostOctave, notationStyle, layoutMeasuresPerLine = 4, layoutLineBreakBefore = [], layoutPageBreakBefore = [], layoutSystemGap = 120, systems: systemsProp, baseYOffset = 0, staffCount = 1, staffHeight: staffHeightProp, figurenotesSize = 16, figurenotesStems = false, themeColors: themeColorsProp, pedagogicalPlayheadStyle = 'line', pedagogicalPlayheadEmoji = '🎵', pedagogicalPlayheadEmojiSize = 32, isPedagogicalAudioPlaying = false, isExportingAnimation = false, exportCursorRef, scoreContainerRef, pageFlowDirection = 'vertical', isFirstInBraceGroup = false, braceGroupSize = 0, lyricFontFamily = 'sans-serif', translateLabel, showLayoutBreakIcons = false, showStaffSpacerHandles = false, onSystemYOffsetChange, onToggleLineBreakAfter }) {
   if (typeof GLOBAL_NOTATION_CONFIG === 'undefined' || !GLOBAL_NOTATION_CONFIG || GLOBAL_NOTATION_CONFIG.EMOJIS === false) return null;
+  const themeColors = themeColorsProp || { staffLineColor: '#000', noteFill: '#1a1a1a', textColor: '#1a1a1a', scoreBg: '#fffbf0', isDark: false };
   const safeKey = keySignature ?? 'C';
   const joClefStaffPosition = typeof joClefStaffPositionProp === 'number' ? joClefStaffPositionProp : getTonicStaffPosition(safeKey);
   if (typeof joClefStaffPosition !== 'number') return null;
@@ -5432,6 +5652,7 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
   const effectiveMeasures = React.useMemo(() => (measures || []).map((m, i) => ({ ...m, notes: notesByMeasure[i] || [] })), [measures, notesByMeasure]);
   const timelineSvgRef = useRef(null);
   const timelineHeight = staffHeightProp ?? getStaffHeight();
+  const [staffSpacerDrag, setStaffSpacerDrag] = React.useState({ systemIndex: null, startClientY: 0, cumulativeDelta: 0 });
   const totalHeight = systemsComputed.length > 0
     ? systemsComputed[systemsComputed.length - 1].yOffset + (staffCount || 1) * timelineHeight + 40
     : (staffCount || 1) * timelineHeight + 40;
@@ -5454,11 +5675,30 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
   const staffLinePositions = getStaffLinePositions();
   const middleLineY = centerY; // B4 treble / D3 bass
 
+  const staffSpacerDragRef = useRef(staffSpacerDrag);
+  staffSpacerDragRef.current = staffSpacerDrag;
+  React.useEffect(() => {
+    if (staffSpacerDrag.systemIndex == null || typeof onSystemYOffsetChange !== 'function') return;
+    const onMove = (e) => {
+      const cur = staffSpacerDragRef.current;
+      if (cur.systemIndex == null) return;
+      const delta = e.clientY - cur.startClientY;
+      if (Math.abs(delta) >= 0.5) {
+        onSystemYOffsetChange(cur.systemIndex, delta);
+        setStaffSpacerDrag((prev) => ({ ...prev, startClientY: e.clientY, cumulativeDelta: (prev.cumulativeDelta || 0) + delta }));
+      }
+    };
+    const onUp = () => setStaffSpacerDrag({ systemIndex: null, startClientY: 0, cumulativeDelta: 0 });
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    return () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+  }, [staffSpacerDrag.systemIndex, onSystemYOffsetChange]);
+
   // Helistiku toonika (I aste) noodijoonestiku positsiooni jaoks: [pitch, octave]. Kõik helistikud.
   const KEY_TONIC_FOR_STAFF = { C: ['C', 4], G: ['G', 4], D: ['D', 4], A: ['A', 4], E: ['E', 4], B: ['B', 4], F: ['F', 4], Bb: ['B', 4], Eb: ['E', 4] };
-  // Lisa abijooned JO-võtme juures vastavalt helistikule (viiulivõtme skaala: C4/F4 = 1 all, D4 = 1 üleval).
-  const KEY_LEDGER_ABOVE = { C: 0, G: 0, D: 1, A: 0, E: 0, B: 0, F: 0, Bb: 0, Eb: 0 };
-  const KEY_LEDGER_BELOW = { C: 1, G: 0, D: 0, A: 0, E: 0, B: 0, F: 1, Bb: 0, Eb: 0 };
   // JO-võtme lohistamisel: (pitch, octave) → helistik (looduslikud astmed C,D,E,F,G,A,B).
   const STAFF_PITCH_TO_KEY = { C: 'C', D: 'D', E: 'E', F: 'F', G: 'G', A: 'A', B: 'B' };
 
@@ -5538,49 +5778,49 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
         switch(timeSignature.beatUnit) {
           case 1: // Whole note
             return (
-              <ellipse cx={noteX} cy={noteY} rx="5" ry="3" fill="none" stroke="#333" strokeWidth="1.5"/>
+              <ellipse cx={noteX} cy={noteY} rx="5" ry="3" fill="none" stroke={themeColors.textColor} strokeWidth="1.5"/>
             );
           case 2: // Half note
             return (
               <>
-                <ellipse cx={noteX} cy={noteY} rx="4" ry="2.5" fill="none" stroke="#333" strokeWidth="1.5"/>
-                <line x1={stemX} y1={noteY} x2={stemX} y2={noteY + 20} stroke="#333" strokeWidth="1.5"/>
+                <ellipse cx={noteX} cy={noteY} rx="4" ry="2.5" fill="none" stroke={themeColors.textColor} strokeWidth="1.5"/>
+                <line x1={stemX} y1={noteY} x2={stemX} y2={noteY + 20} stroke={themeColors.textColor} strokeWidth="1.5"/>
               </>
             );
           case 4: // Quarter note
             return (
               <>
-                <ellipse cx={noteX} cy={noteY} rx="4" ry="2.5" fill="#333"/>
-                <line x1={stemX} y1={noteY} x2={stemX} y2={noteY + 20} stroke="#333" strokeWidth="1.5"/>
+                <ellipse cx={noteX} cy={noteY} rx="4" ry="2.5" fill={themeColors.noteFill}/>
+                <line x1={stemX} y1={noteY} x2={stemX} y2={noteY + 20} stroke={themeColors.textColor} strokeWidth="1.5"/>
               </>
             );
           case 8: // Eighth note
             return (
               <>
-                <ellipse cx={noteX} cy={noteY} rx="4" ry="2.5" fill="#333"/>
-                <line x1={stemX} y1={noteY} x2={stemX} y2={noteY + 20} stroke="#333" strokeWidth="1.5"/>
-                <path d={`M ${stemX} ${noteY + 20} Q ${stemX - 6} ${noteY + 18} ${stemX} ${noteY + 15}`} fill="#333"/>
+                <ellipse cx={noteX} cy={noteY} rx="4" ry="2.5" fill={themeColors.noteFill}/>
+                <line x1={stemX} y1={noteY} x2={stemX} y2={noteY + 20} stroke={themeColors.textColor} strokeWidth="1.5"/>
+                <path d={`M ${stemX} ${noteY + 20} Q ${stemX - 6} ${noteY + 18} ${stemX} ${noteY + 15}`} fill={themeColors.noteFill}/>
               </>
             );
           case 16: // Sixteenth note
             return (
               <>
-                <ellipse cx={noteX} cy={noteY} rx="4" ry="2.5" fill="#333"/>
-                <line x1={stemX} y1={noteY} x2={stemX} y2={noteY + 20} stroke="#333" strokeWidth="1.5"/>
-                <path d={`M ${stemX} ${noteY + 20} Q ${stemX - 6} ${noteY + 18} ${stemX} ${noteY + 15} M ${stemX} ${noteY + 17} Q ${stemX - 6} ${noteY + 15} ${stemX} ${noteY + 12}`} fill="#333"/>
+                <ellipse cx={noteX} cy={noteY} rx="4" ry="2.5" fill={themeColors.noteFill}/>
+                <line x1={stemX} y1={noteY} x2={stemX} y2={noteY + 20} stroke={themeColors.textColor} strokeWidth="1.5"/>
+                <path d={`M ${stemX} ${noteY + 20} Q ${stemX - 6} ${noteY + 18} ${stemX} ${noteY + 15} M ${stemX} ${noteY + 17} Q ${stemX - 6} ${noteY + 15} ${stemX} ${noteY + 12}`} fill={themeColors.noteFill}/>
               </>
             );
           default:
-            return <text x={noteX} y={noteY + 20} textAnchor="middle" fontSize="16" fontWeight="bold" fill="#333">{timeSignature.beatUnit}</text>;
+            return <text x={noteX} y={noteY + 20} textAnchor="middle" fontSize="16" fontWeight="bold" fill={themeColors.textColor}>{timeSignature.beatUnit}</text>;
         }
       };
 
       return (
         <g>
-          <text x={x} y={y - 8} textAnchor="middle" fontSize="18" fontWeight="bold" fill="#333">
+          <text x={x} y={y - 8} textAnchor="middle" fontSize="18" fontWeight="bold" fill={themeColors.textColor}>
             {timeSignature.beats}
           </text>
-          <line x1={x - 10} y1={y + 2} x2={x + 10} y2={y + 2} stroke="#333" strokeWidth="1.5"/>
+          <line x1={x - 10} y1={y + 2} x2={x + 10} y2={y + 2} stroke={themeColors.textColor} strokeWidth="1.5"/>
           {getNoteSymbolForDenominator()}
         </g>
       );
@@ -5588,11 +5828,11 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
       // Classic mode: both as numbers
       return (
         <g>
-          <text x={x} y={y - 8} textAnchor="middle" fontSize="18" fontWeight="bold" fill="#333">
+          <text x={x} y={y - 8} textAnchor="middle" fontSize="18" fontWeight="bold" fill={themeColors.textColor}>
             {timeSignature.beats}
           </text>
-          <line x1={x - 10} y1={y + 2} x2={x + 10} y2={y + 2} stroke="#333" strokeWidth="1.5"/>
-          <text x={x} y={y + 20} textAnchor="middle" fontSize="18" fontWeight="bold" fill="#333">
+          <line x1={x - 10} y1={y + 2} x2={x + 10} y2={y + 2} stroke={themeColors.textColor} strokeWidth="1.5"/>
+          <text x={x} y={y + 20} textAnchor="middle" fontSize="18" fontWeight="bold" fill={themeColors.textColor}>
             {timeSignature.beatUnit}
           </text>
         </g>
@@ -5607,17 +5847,17 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
     const w = 8 * scale;
     const h = 3 * scale;
     if (dur === '1/1') {
-      return <rect x={x - w/2} y={restY - h/2} width={w} height={h} fill="#1a1a1a"/>;
+      return <rect x={x - w/2} y={restY - h/2} width={w} height={h} fill={themeColors.noteFill}/>;
     }
     if (dur === '1/2') {
-      return <rect x={x - w/2} y={restY - h/2} width={w} height={h} fill="#1a1a1a"/>;
+      return <rect x={x - w/2} y={restY - h/2} width={w} height={h} fill={themeColors.noteFill}/>;
     }
     if (dur === '1/4') {
-      return <path d={`M ${x} ${restY - 10} Q ${x + 6} ${restY - 4} ${x} ${restY} Q ${x - 6} ${restY + 4} ${x} ${restY + 10}`} stroke="#1a1a1a" strokeWidth="1.8" fill="none"/>;
+      return <path d={`M ${x} ${restY - 10} Q ${x + 6} ${restY - 4} ${x} ${restY} Q ${x - 6} ${restY + 4} ${x} ${restY + 10}`} stroke={themeColors.noteFill} strokeWidth="1.8" fill="none"/>;
     }
     if (dur === '1/8') {
       return (
-        <g stroke="#1a1a1a" fill="#1a1a1a" strokeWidth="1.2">
+        <g stroke={themeColors.noteFill} fill={themeColors.noteFill} strokeWidth="1.2">
           <circle cx={x} cy={restY - 4} r="2"/>
           <path d={`M ${x} ${restY - 2} Q ${x - 6} ${restY} ${x} ${restY + 6}`} fill="none" strokeWidth="1.5"/>
         </g>
@@ -5625,7 +5865,7 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
     }
     if (dur === '1/16') {
       return (
-        <g stroke="#1a1a1a" fill="#1a1a1a" strokeWidth="1.2">
+        <g stroke={themeColors.noteFill} fill={themeColors.noteFill} strokeWidth="1.2">
           <circle cx={x} cy={restY - 6} r="1.8"/>
           <circle cx={x} cy={restY} r="1.8"/>
           <path d={`M ${x} ${restY + 2} Q ${x - 5} ${restY + 4} ${x} ${restY + 10}`} fill="none" strokeWidth="1.5"/>
@@ -5634,7 +5874,7 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
     }
     if (dur === '1/32') {
       return (
-        <g stroke="#1a1a1a" fill="#1a1a1a" strokeWidth="1.1">
+        <g stroke={themeColors.noteFill} fill={themeColors.noteFill} strokeWidth="1.1">
           <circle cx={x} cy={restY - 8} r="1.5"/>
           <circle cx={x} cy={restY - 2} r="1.5"/>
           <circle cx={x} cy={restY + 4} r="1.5"/>
@@ -5642,13 +5882,12 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
         </g>
       );
     }
-    return <rect x={x - w/2} y={restY - h/2} width={w} height={h} fill="#1a1a1a"/>;
+    return <rect x={x - w/2} y={restY - h/2} width={w} height={h} fill={themeColors.noteFill}/>;
   };
 
-  // Figurenotes rendering function (size from figurenotesSize setting)
+  // Figurenotes rendering function (size from figurenotesSize setting); kujund = getFigureSymbol(pitch, octave)
   const renderFigurenote = (note, x, y, noteIndex) => {
-    const color = FIGURENOTES_COLORS[note.pitch] || '#000000';
-    const shape = FIGURENOTES_SHAPES[note.octave] || 'circle';
+    const { color, shape } = getFigureSymbol(note.pitch, note.octave);
     const size = figurenotesSize;
     const isSelected = isNoteSelected(noteIndex);
     const dur = note.durationLabel || '1/4';
@@ -5660,40 +5899,32 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
 
     const textColor = getFigurenoteTextColor(note.pitch);
     const shapeElement = (() => {
+      const r = size / 2;
+      const strokeW = Math.max(2, size * 0.38);
+      const strokeShape = isSelected ? '#2563eb' : (themeColors.isDark ? '#ffffff' : '#000');
+      const strokeWShape = isSelected ? 3 : (themeColors.isDark ? 2.5 : 2);
+      if (shape === 'none') {
+        return (
+          <rect x={x - r} y={y - r} width={size} height={size} fill="none" stroke={strokeShape} strokeWidth={strokeWShape} strokeDasharray="2 2" opacity={0.6} />
+        );
+      }
       if (shape === 'cross') {
-        const r = size / 2;
-        const strokeW = Math.max(2, size * 0.38);
         return (
           <g stroke={color} strokeWidth={strokeW} strokeLinecap="round">
             <line x1={x - r} y1={y - r} x2={x + r} y2={y + r} />
             <line x1={x + r} y1={y - r} x2={x - r} y2={y + r} />
-            <rect x={x - r} y={y - r} width={size} height={size} fill="none" stroke={isSelected ? "#2563eb" : "#000"} strokeWidth={isSelected ? "3" : "2"} />
+            <rect x={x - r} y={y - r} width={size} height={size} fill="none" stroke={strokeShape} strokeWidth={strokeWShape} />
           </g>
         );
       }
       if (shape === 'circle') {
         return (
-          <circle
-            cx={x}
-            cy={y}
-            r={size / 2}
-            fill={color}
-            stroke={isSelected ? "#2563eb" : "#000"}
-            strokeWidth={isSelected ? "3" : "2"}
-          />
+          <circle cx={x} cy={y} r={r} fill={color} stroke={strokeShape} strokeWidth={strokeWShape} />
         );
       }
       if (shape === 'square') {
         return (
-          <rect
-            x={x - size / 2}
-            y={y - size / 2}
-            width={size}
-            height={size}
-            fill={color}
-            stroke={isSelected ? "#2563eb" : "#000"}
-            strokeWidth={isSelected ? "3" : "2"}
-          />
+          <rect x={x - r} y={y - r} width={size} height={size} fill={color} stroke={strokeShape} strokeWidth={strokeWShape} />
         );
       }
       if (shape === 'triangle') {
@@ -5702,8 +5933,19 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
           <path
             d={`M ${x} ${y - h / 2} L ${x + size / 2} ${y + h / 2} L ${x - size / 2} ${y + h / 2} Z`}
             fill={color}
-            stroke={isSelected ? "#2563eb" : "#000"}
-            strokeWidth={isSelected ? "3" : "2"}
+            stroke={strokeShape}
+            strokeWidth={strokeWShape}
+          />
+        );
+      }
+      if (shape === 'triangleDown') {
+        const h = size * 0.866;
+        return (
+          <path
+            d={`M ${x} ${y + h / 2} L ${x + size / 2} ${y - h / 2} L ${x - size / 2} ${y - h / 2} Z`}
+            fill={color}
+            stroke={strokeShape}
+            strokeWidth={strokeWShape}
           />
         );
       }
@@ -5739,29 +5981,29 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
             y1={y + size / 2}
             x2={x}
             y2={y + size / 2 + tailLength}
-            stroke="#1a1a1a"
+            stroke={themeColors.noteFill}
             strokeWidth={Math.max(2, size * 0.14)}
             strokeLinecap="round"
           />
         )}
         {/* Noodivarte režiim: vars ja vibud (lühikestel nootidel) */}
         {drawStem && (
-          <g stroke="#1a1a1a" fill="#1a1a1a" strokeWidth="1.8">
+          <g stroke={themeColors.noteFill} fill={themeColors.noteFill} strokeWidth="1.8">
             <line x1={stemX} y1={stemY1} x2={stemX} y2={stemY2} />
             {dur === '1/8' && (
-              <path d={`M ${stemX} ${stemY2} Q ${stemX + 8} ${stemY2 + 4} ${stemX} ${stemY2 + 8}`} fill="#1a1a1a" />
+              <path d={`M ${stemX} ${stemY2} Q ${stemX + 8} ${stemY2 + 4} ${stemX} ${stemY2 + 8}`} fill={themeColors.noteFill} />
             )}
             {dur === '1/16' && (
               <>
-                <path d={`M ${stemX} ${stemY2} Q ${stemX + 8} ${stemY2 + 4} ${stemX} ${stemY2 + 8}`} fill="#1a1a1a" />
-                <path d={`M ${stemX} ${stemY2 + 6} Q ${stemX + 8} ${stemY2 + 10} ${stemX} ${stemY2 + 14}`} fill="#1a1a1a" />
+                <path d={`M ${stemX} ${stemY2} Q ${stemX + 8} ${stemY2 + 4} ${stemX} ${stemY2 + 8}`} fill={themeColors.noteFill} />
+                <path d={`M ${stemX} ${stemY2 + 6} Q ${stemX + 8} ${stemY2 + 10} ${stemX} ${stemY2 + 14}`} fill={themeColors.noteFill} />
               </>
             )}
             {dur === '1/32' && (
               <>
-                <path d={`M ${stemX} ${stemY2} Q ${stemX + 8} ${stemY2 + 4} ${stemX} ${stemY2 + 8}`} fill="#1a1a1a" />
-                <path d={`M ${stemX} ${stemY2 + 6} Q ${stemX + 8} ${stemY2 + 10} ${stemX} ${stemY2 + 14}`} fill="#1a1a1a" />
-                <path d={`M ${stemX} ${stemY2 + 12} Q ${stemX + 8} ${stemY2 + 16} ${stemX} ${stemY2 + 20}`} fill="#1a1a1a" />
+                <path d={`M ${stemX} ${stemY2} Q ${stemX + 8} ${stemY2 + 4} ${stemX} ${stemY2 + 8}`} fill={themeColors.noteFill} />
+                <path d={`M ${stemX} ${stemY2 + 6} Q ${stemX + 8} ${stemY2 + 10} ${stemX} ${stemY2 + 14}`} fill={themeColors.noteFill} />
+                <path d={`M ${stemX} ${stemY2 + 12} Q ${stemX + 8} ${stemY2 + 16} ${stemX} ${stemY2 + 20}`} fill={themeColors.noteFill} />
               </>
             )}
           </g>
@@ -5858,551 +6100,78 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
       onClick={handleStaffClick}
       style={isHorizontal ? { display: 'block', minWidth: svgWidth } : undefined}
     >
-      <rect width={isHorizontal ? svgWidth : '100%'} height={svgHeight} fill="#fffbf0" pointerEvents={noteInputMode ? 'auto' : 'none'} />
+      <rect width={isHorizontal ? svgWidth : '100%'} height={svgHeight} fill={themeColors.scoreBg} pointerEvents={noteInputMode ? 'auto' : 'none'} />
 
-      {systems.map((sys) => {
-        const pageIndex = isHorizontal ? Math.floor(sys.yOffset / a4PageHeight) : 0;
-        const groupTransform = isHorizontal ? `translate(${pageIndex * (pageWidth || LAYOUT.PAGE_WIDTH_MIN)}, ${-pageIndex * a4PageHeight})` : undefined;
-        return (
-        <g key={sys.systemIndex} transform={groupTransform}>
-          {sys.pageBreakBefore && (
-            <line x1={0} y1={sys.yOffset - PAGE_BREAK_GAP / 2} x2={pageWidth || LAYOUT.PAGE_WIDTH_MIN} y2={sys.yOffset - PAGE_BREAK_GAP / 2} stroke="#c4b896" strokeWidth={1} strokeDasharray="4 4" />
-          )}
-          {/* Klaveriklamber (Brace): vasakul servas, ühendab viiuli- ja bassijoonestiku (MuseScore stiilis) */}
-          {!isFigurenotesMode && isFirstInBraceGroup && braceGroupSize >= 2 && (() => {
-            const staffH = getStaffHeight();
-            const braceH = braceGroupSize * staffH + (GLOBAL_NOTATION_CONFIG.GRAND_STAFF_GAP_MIN || 100);
-            const top = sys.yOffset + 4;
-            const bottom = sys.yOffset + braceH - 4;
-            const q = braceH * 0.25;
-            const braceW = 18;
-            const pathD = `M ${braceW} ${top} C 2 ${top} 0 ${top + q} 0 ${top + braceH / 2} C 0 ${bottom - q} 2 ${bottom} ${braceW} ${bottom}`;
-            return <path d={pathD} fill="none" stroke="#1a1a1a" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />;
-          })()}
-          {isFigurenotesMode ? (
-            /* FIGURENOTES: drawRhythmGrid() – no staff, grid only */
-            null
-          ) : (
-            /* TRADITIONAL: drawStaffLines() */
-            <>
-              {staffLinePositions.map((y, index) => (
-                <line
-                  key={`staff-${sys.systemIndex}-${index}`}
-                  x1={0}
-                  y1={sys.yOffset + y}
-                  x2={marginLeft + (sys.measureWidths ?? []).reduce((a, b) => a + b, 0)}
-                  y2={sys.yOffset + y}
-                  stroke="#333"
-                  strokeWidth="1.5"
-                />
-              ))}
-              {isTabMode ? (
-                <text x={18} y={sys.yOffset + centerY + 6} fontSize="14" fontWeight="bold" fill="#333">TAB</text>
-              ) : staffLines === 5 ? (
-                (() => {
-                  // Viiulivõti: G algab 2. joonelt (ülalt); bassivõti: F on neljas joon ülevalt (MuseScore/Grand Staff).
-                  const trebleGLine = staffLinePositions[3];
-                  const bassFLine = staffLinePositions[3];
-                  const bassClefYOffset = 0;
-                  const middleLineYStaff = centerY;
-                  const staffSpace = spacing;
-                  const clefFontSize = staffSpace * 6;
-                  const clefX = 22;
-                  let xOffset = clefX;
-                  const g = [];
-                  const clefBaseline = 'middle';
-                  const clefMiddle = 'middle';
-                  if (notationMode === 'vabanotatsioon') {
-                    const joClefCenterY = sys.yOffset + joKeyY;
-                    const ledgerAbove = Math.max(0, joClefStaffPosition - 8);
-                    const ledgerBelow = Math.max(0, -joClefStaffPosition);
-                    const joClefEl = (
-                      <JoClefSymbol
-                        x={xOffset}
-                        centerY={joClefCenterY}
-                        staffSpacing={staffSpace}
-                        stroke="#000"
-                        strokeWidth={2.2}
-                        barLength={14}
-                        showLedgerLine={true}
-                        ledgerLinesAbove={ledgerAbove}
-                        ledgerLinesBelow={ledgerBelow}
-                      />
-                    );
-                    const isFirstSystem = sys.systemIndex === 0;
-                    const canFocus = isFirstSystem && typeof onJoClefFocus === 'function';
-                    g.push(
-                      <g
-                        key="jo-clef"
-                        data-jo-clef
-                        style={{ cursor: canFocus ? 'pointer' : undefined }}
-                        title={canFocus ? (joClefFocused ? 'Kasuta nooleklahve ↑ ja ↓ JO-võtme nihutamiseks (joon/vahe ja abijooned). Escape = lõpeta.' : 'Klõpsa JO-võtit, seejärel nooltega ↑↓ nihuta võtit. Noodid liiguvad koos.') : undefined}
-                        onClick={canFocus ? (e) => {
-                          e.stopPropagation();
-                          onJoClefFocus(true);
-                        } : undefined}
-                      >
-                        {joClefEl}
-                        {joClefFocused && (
-                          <rect x={xOffset - 2} y={joClefCenterY - staffSpace * 2 - 4} width={24} height={staffSpace * 4 + 8} fill="none" stroke="#0ea5e9" strokeWidth="2" strokeDasharray="4 2" rx="2" />
-                        )}
-                      </g>
-                    );
-                    xOffset += LAYOUT.CLEF_WIDTH;
-                    if (relativeNotationShowTraditionalClef) {
-                      const tradY = clefType === 'treble' ? sys.yOffset + trebleGLine : clefType === 'bass' ? sys.yOffset + bassFLine + bassClefYOffset : sys.yOffset + centerY;
-                      g.push(
-                        <StaffClefSymbol key="trad-clef" x={xOffset} y={tradY} height={clefFontSize} clefType={clefType} fill="#333" />
-                      );
-                      xOffset += LAYOUT.CLEF_WIDTH;
-                    }
-                    if (relativeNotationShowKeySignature && keySignature && keySignature !== 'C') {
-                      const sharpCount = { G: 1, D: 2, A: 3, E: 4, B: 5 }[keySignature] || 0;
-                      const flatCount = { F: 1, Bb: 2, Eb: 3 }[keySignature] || 0;
-                      const sym = flatCount ? '♭' : '♯';
-                      for (let i = 0; i < (sharpCount || flatCount); i++) {
-                        g.push(<text key={`ks-${i}`} x={xOffset + i * 10} y={sys.yOffset + middleLineYStaff - 8} fontSize="20" fontFamily="serif" fill="#333" textAnchor="middle" dominantBaseline="middle">{sym}</text>);
-                      }
-                      xOffset += Math.max(sharpCount, flatCount) * 12;
-                    }
-                    return <g>{g}</g>;
-                  }
-                  const clefY = clefType === 'treble' ? sys.yOffset + trebleGLine : clefType === 'bass' ? sys.yOffset + bassFLine + bassClefYOffset : sys.yOffset + centerY;
-                  return (
-                    <StaffClefSymbol
-                      key={`clef-${sys.systemIndex}-${clefType}`}
-                      x={clefX}
-                      y={clefY}
-                      height={clefFontSize}
-                      clefType={clefType}
-                      fill="#333"
-                    />
-                  );
-                })()
-              ) : null}
-            </>
-          )}
-          {/* Taktide numbrid: iga rea alguses noodivõtme kohal (traditsiooniline ja figuurnotatsioon) */}
-          {showBarNumbers && sys.measureIndices.length > 0 && (
-            <text
-              x={20}
-              y={sys.yOffset + (isFigurenotesMode ? 12 : staffLinePositions[0] - 14)}
-              fontSize="14"
-              fontWeight="bold"
-              fill="#555"
-              textAnchor="middle"
-              fontFamily="sans-serif"
-            >
-              {sys.measureIndices[0] + 1}
-            </text>
-          )}
+      {isFigurenotesMode ? (
+        <FigurenotesView
+          systems={systems}
+          effectiveMeasures={effectiveMeasures}
+          marginLeft={marginLeft}
+          timelineHeight={timelineHeight}
+          pageWidth={pageWidth || LAYOUT.PAGE_WIDTH_MIN}
+          timeSignature={timeSignature}
+          timeSignatureMode={timeSignatureMode}
+          layoutLineBreakBefore={layoutLineBreakBefore}
+          showLayoutBreakIcons={showLayoutBreakIcons}
+          onToggleLineBreakAfter={onToggleLineBreakAfter}
+          translateLabel={translateLabel}
+          showBarNumbers={showBarNumbers}
+          chords={chords}
+          figurenotesSize={figurenotesSize}
+          figurenotesStems={figurenotesStems}
+          keySignature={safeKey}
+          isNoteSelected={isNoteSelected}
+          onNoteClick={onNoteClick}
+          showRhythmSyllables={showRhythmSyllables}
+          lyricFontFamily={lyricFontFamily}
+          isHorizontal={isHorizontal}
+          a4PageHeight={a4PageHeight}
+          pageFlowDirection={pageFlowDirection}
+        />
+      ) : (
+        <TraditionalNotationView
+          systems={systems}
+          effectiveMeasures={effectiveMeasures}
+          marginLeft={marginLeft}
+          timelineHeight={timelineHeight}
+          pageWidth={pageWidth || LAYOUT.PAGE_WIDTH_MIN}
+          timeSignature={timeSignature}
+          timeSignatureMode={timeSignatureMode}
+          staffLines={staffLines}
+          clefType={clefType}
+          keySignature={safeKey}
+          notationMode={notationMode}
+          joClefStaffPosition={joClefStaffPosition}
+          relativeNotationShowKeySignature={relativeNotationShowKeySignature}
+          relativeNotationShowTraditionalClef={relativeNotationShowTraditionalClef}
+          onJoClefPositionChange={onJoClefPositionChange}
+          joClefFocused={joClefFocused}
+          onJoClefFocus={onJoClefFocus}
+          layoutLineBreakBefore={layoutLineBreakBefore}
+          showLayoutBreakIcons={showLayoutBreakIcons}
+          onToggleLineBreakAfter={onToggleLineBreakAfter}
+          translateLabel={translateLabel}
+          showBarNumbers={showBarNumbers}
+          showRhythmSyllables={showRhythmSyllables}
+          showAllNoteLabels={showAllNoteLabels}
+          enableEmojiOverlays={enableEmojiOverlays}
+          chords={chords}
+          isNoteSelected={isNoteSelected}
+          onNoteClick={onNoteClick}
+          onNoteTeacherLabelChange={onNoteTeacherLabelChange}
+          onNoteLabelClick={onNoteLabelClick}
+          getPitchY={getPitchY}
+          isFirstInBraceGroup={isFirstInBraceGroup}
+          braceGroupSize={braceGroupSize}
+          lyricFontFamily={lyricFontFamily}
+          isHorizontal={isHorizontal}
+          a4PageHeight={a4PageHeight}
+          getStaffHeight={getStaffHeight}
+          showStaffSpacerHandles={showStaffSpacerHandles && typeof onSystemYOffsetChange === 'function'}
+          onStaffSpacerMouseDown={typeof onSystemYOffsetChange === 'function' ? (systemIndex) => (e) => { e.stopPropagation(); setStaffSpacerDrag({ systemIndex, startClientY: e.clientY, cumulativeDelta: 0 }); } : undefined}
+        />
+      )}
 
-          {sys.systemIndex === 0 && (
-            <g transform={`translate(0, ${sys.yOffset})`}>{renderTimeSignature()}</g>
-          )}
-
-          {/* Measures: FIGURENOTES = rhythm grid + thick bar lines; TRADITIONAL = thin bar lines only */}
-          {sys.measureIndices.map((measureIdx, j) => {
-            const measure = effectiveMeasures[measureIdx];
-            const measureWidths = sys.measureWidths ?? sys.measureIndices.map(() => sys.measureWidth ?? timeSignature.beats * 80);
-            const measureWidth = measureWidths[j] ?? (sys.measureWidth ?? timeSignature.beats * 80);
-            const measureX = marginLeft + measureWidths.slice(0, j).reduce((a, b) => a + b, 0);
-            const beatsInMeasure = measure.beatCount ?? timeSignature.beats;
-            const beatWidth = measureWidth / beatsInMeasure;
-
-            const getSlotsPerBeat = (beatIndex) => {
-              const beatStart = measure.startBeat + beatIndex;
-              const beatEnd = beatStart + 1;
-              const notesInBeat = measure.notes.filter(n => n.beat >= beatStart && n.beat < beatEnd);
-              if (notesInBeat.length === 0) return 1;
-              const minDur = Math.min(...notesInBeat.map(n => n.duration));
-              return Math.max(1, Math.round(1 / minDur));
-            };
-
-            const getNoteSlotCenterX = (note) => {
-              const beatInMeasure = note.beat - measure.startBeat;
-              const beatIndex = Math.floor(beatInMeasure);
-              const posInBeat = beatInMeasure - beatIndex;
-              const slotsPerBeat = getSlotsPerBeat(beatIndex);
-              const slotIndex = Math.min(Math.floor(posInBeat * slotsPerBeat), slotsPerBeat - 1);
-              const slotCenter = (slotIndex + 0.5) / slotsPerBeat;
-              return measureX + (beatIndex + slotCenter) * beatWidth;
-            };
-
-            const getRestBoxWidth = (note) => {
-              const beatInMeasure = note.beat - measure.startBeat;
-              const beatIndex = Math.floor(beatInMeasure);
-              const slotsPerBeat = getSlotsPerBeat(beatIndex);
-              return beatWidth / slotsPerBeat;
-            };
-
-            // Liitrütmide magneetiline ühendamine (beaming): sama löögi 1/8, 1/16, 1/32 ühendatakse ühise vibuga
-            const noteheadRx = getNoteheadRx(spacing);
-            const beamable = (dur) => ['1/8', '1/16', '1/32'].includes(dur || '');
-            const beamGroups = (() => {
-              const out = [];
-              let i = 0;
-              while (i < measure.notes.length) {
-                const note = measure.notes[i];
-                if (note.isRest || !beamable(note.durationLabel)) { i++; continue; }
-                const beat0 = Math.floor(note.beat - measure.startBeat);
-                let j = i;
-                while (j < measure.notes.length) {
-                  const n = measure.notes[j];
-                  if (n.isRest || !beamable(n.durationLabel)) break;
-                  if (Math.floor(n.beat - measure.startBeat) !== beat0) break;
-                  j++;
-                }
-                if (j > i + 1) {
-                  let beamY = 0, xLeft = 0, xRight = 0, stemUp = true, numBeams = 1;
-                  for (let k = i; k < j; k++) {
-                    const n = measure.notes[k];
-                    const nx = getNoteSlotCenterX(n);
-                    const py = getPitchY(n.pitch, n.octave);
-                    if (k === i) stemUp = py > middleLineY;
-                    const stemX = stemUp ? nx + noteheadRx : nx - noteheadRx;
-                    const topY = stemUp ? py - 32 : py + 32;
-                    if (k === i) { beamY = topY; xLeft = stemX; xRight = stemX; }
-                    else {
-                      beamY = stemUp ? Math.min(beamY, topY) : Math.max(beamY, topY);
-                      xLeft = Math.min(xLeft, stemX);
-                      xRight = Math.max(xRight, stemX);
-                    }
-                    const dur = n.durationLabel || '';
-                    if (dur === '1/32') numBeams = 3; else if (dur === '1/16') numBeams = Math.max(numBeams, 2);
-                  }
-                  out.push({ start: i, end: j - 1, beamY: beamY + sys.yOffset, xLeft, xRight, stemUp, numBeams });
-                }
-                i = j;
-              }
-              return out;
-            })();
-            const getBeamGroup = (noteIdx) => beamGroups.find(g => noteIdx >= g.start && noteIdx <= g.end);
-
-            return (
-          <g key={measureIdx}>
-            {isFigurenotesMode && (
-              <>
-                {Array.from({ length: Math.max(1, Math.ceil(beatsInMeasure)) }, (_, b) => {
-                  const numBoxes = Math.max(1, Math.ceil(beatsInMeasure));
-                  const boxWidth = measureWidth / numBoxes;
-                  return (
-                    <rect
-                      key={`beat-${b}`}
-                      x={measureX + b * boxWidth}
-                      y={sys.yOffset + 10}
-                      width={boxWidth}
-                      height={timelineHeight - 20}
-                      fill="transparent"
-                      stroke={BEAT_BOX_STROKE}
-                      strokeWidth="1"
-                    />
-                  );
-                })}
-              </>
-            )}
-
-            {/* Iga rea esimese takti ees taktijooni ei joonistata (traditsiooniline ja figuurnotatsioon) */}
-            {j !== 0 && (
-              <line x1={measureX} y1={sys.yOffset + (isFigurenotesMode ? 5 : staffLinePositions[0])} x2={measureX} y2={sys.yOffset + (isFigurenotesMode ? timelineHeight - 5 : staffLinePositions[staffLinePositions.length - 1])} stroke="#1a1a1a" strokeWidth={barLineWidth} />
-            )}
-            {measureIdx === sys.measureIndices[sys.measureIndices.length - 1] && (
-              <line x1={measureX + measureWidth} y1={sys.yOffset + (isFigurenotesMode ? 5 : staffLinePositions[0])} x2={measureX + measureWidth} y2={sys.yOffset + (isFigurenotesMode ? timelineHeight - 5 : staffLinePositions[staffLinePositions.length - 1])} stroke="#1a1a1a" strokeWidth={barLineWidth} />
-            )}
-
-            {/* Akordid: traditsiooniline sümbol (ja valikuline figuurnotatsioon) noodijoonestiku või võrgu kohal */}
-            {chords.filter(c => c.beatPosition >= measure.startBeat && c.beatPosition < measure.endBeat).map((chord) => {
-              const chordX = measureX + (chord.beatPosition - measure.startBeat) * beatWidth;
-              const chordY = sys.yOffset + (isFigurenotesMode ? 8 : staffLinePositions[0] - 18);
-              return (
-                <g key={chord.id}>
-                  <text
-                    x={chordX}
-                    y={chordY}
-                    textAnchor="start"
-                    fontSize="14"
-                    fontWeight="bold"
-                    fill="#1a1a1a"
-                    fontFamily="sans-serif"
-                  >
-                    {chord.chord}
-                  </text>
-                  {chord.figuredBass && (
-                    <text
-                      x={chordX}
-                      y={chordY + 14}
-                      textAnchor="start"
-                      fontSize="11"
-                      fill="#555"
-                      fontFamily="serif"
-                    >
-                      {chord.figuredBass}
-                    </text>
-                  )}
-                </g>
-              );
-            })}
-
-            {measure.notes.map((note, noteIdx) => {
-              const noteX = getNoteSlotCenterX(note);
-              let globalNoteIndex = 0;
-              for (let i = 0; i < measureIdx; i++) {
-                globalNoteIndex += effectiveMeasures[i].notes.length;
-              }
-              globalNoteIndex += noteIdx;
-              const pitchY = getPitchY(note.pitch, note.octave);
-              const noteY = sys.yOffset + (notationMode === 'figurenotes' ? centerY : pitchY);
-              const stemUp = pitchY > middleLineY;
-
-              const noteGroupProps = {
-                onClick: (e) => { e.stopPropagation(); onNoteClick?.(globalNoteIndex); },
-                style: { cursor: onNoteClick ? 'pointer' : undefined }
-              };
-              if (note.isRest) {
-                const restLabelY = sys.yOffset + staffLinePositions[staffLinePositions.length - 1] + spacing * 1.8;
-                const restSyllable = showRhythmSyllables ? getRhythmSyllableForNote(note) : '';
-                if (isFigurenotesMode && !figurenotesStems) {
-                  const boxW = getRestBoxWidth(note);
-                  const zSize = Math.min(boxW * 0.55, 26);
-                  return (
-                    <g key={noteIdx} {...noteGroupProps}>
-                      <text x={noteX} y={sys.yOffset + centerY + zSize * 0.2} textAnchor="middle" fontSize={zSize} fontWeight="bold" fill="#1a1a1a" fontFamily="serif">Z</text>
-                      {restSyllable && <RhythmSyllableLabel x={noteX} y={restLabelY} text={restSyllable} staffSpace={spacing} />}
-                    </g>
-                  );
-                }
-                if (isFigurenotesMode && figurenotesStems) {
-                  return (
-                    <g key={noteIdx} {...noteGroupProps}>
-                      {renderStandardRest(note, noteX, sys.yOffset + centerY)}
-                      {restSyllable && <RhythmSyllableLabel x={noteX} y={restLabelY} text={restSyllable} staffSpace={spacing} />}
-                    </g>
-                  );
-                }
-                return (
-                  <g key={noteIdx} {...noteGroupProps}>
-                    {renderStandardRest(note, noteX, sys.yOffset + centerY)}
-                    {restSyllable && <RhythmSyllableLabel x={noteX} y={restLabelY} text={restSyllable} staffSpace={spacing} />}
-                  </g>
-                );
-              }
-
-              if (isTabMode && tabTuning.length > 0) {
-                const { stringIndex, fret } = pitchToTab(note.pitch, note.octave, tabTuning);
-                const lineY = staffLinePositions[stringIndex];
-                const isSelected = isNoteSelected(globalNoteIndex);
-                return (
-                  <g key={noteIdx} {...noteGroupProps}>
-                    {isSelected && (
-                      <rect x={noteX - 14} y={sys.yOffset + lineY - 12} width={28} height={24} fill="#93c5fd" opacity="0.3" rx="4" />
-                    )}
-                    <text x={noteX} y={sys.yOffset + lineY + 4} textAnchor="middle" fontSize="14" fontWeight="bold" fill="#1a1a1a">{fret}</text>
-                  </g>
-                );
-              }
-
-              if (notationMode === 'figurenotes') {
-                const labelFontSize = Math.max(8, Math.round(figurenotesSize * 0.625));
-                const dur = note.durationLabel || '1/4';
-                const tailLen = (dur === '1/1') ? Math.max(20, figurenotesSize * 1.4) : (dur === '1/2') ? Math.max(12, figurenotesSize * 0.85) : 0;
-                const labelY = noteY + figurenotesSize * 0.5 + labelFontSize + tailLen;
-                const accidentalNudge = (note.accidental === 1 || note.accidental === -1)
-                  ? (note.accidental === 1 ? 1 : -1) * Math.max(2, figurenotesSize * 0.2)
-                  : 0;
-                const figureX = noteX + accidentalNudge;
-                return (
-                  <g key={noteIdx} {...noteGroupProps}>
-                    {renderFigurenote(note, figureX, noteY, globalNoteIndex)}
-                    {(note.lyric != null && String(note.lyric).trim() !== '') && (
-                      <text
-                        x={noteX}
-                        y={labelY + 14}
-                        textAnchor="middle"
-                        fontSize="11"
-                        fill="#333"
-                        fontFamily={lyricFontFamily}
-                      >
-                        {note.lyric}
-                      </text>
-                    )}
-                  </g>
-                );
-              } else if (notationMode === 'traditional' || notationMode === 'vabanotatsioon') {
-                const isSelected = isNoteSelected(globalNoteIndex);
-                const noteheadRx = getNoteheadRx(spacing);
-                const beamGroup = getBeamGroup(noteIdx);
-                const fingering = isFingeringMode ? getFingeringForNote(note.pitch, note.octave, instrument) : null;
-                const fingerY = noteY + (stemUp ? 38 : 42);
-                const ledgerHalfWidth = getLedgerHalfWidth(spacing);
-                const firstLineY = staffLinePositions[0];
-                const lastLineY = staffLinePositions[staffLinePositions.length - 1];
-                const { above: nLedgerAbove, below: nLedgerBelow } = staffLines === 5
-                  ? getLedgerLineCountExact(pitchY, firstLineY, lastLineY, spacing)
-                  : { above: 0, below: 0 };
-                return (
-                  <g key={noteIdx} {...noteGroupProps}>
-                    {nLedgerAbove > 0 && Array.from({ length: nLedgerAbove }, (_, i) => (
-                      <line
-                        key={`ledger-above-${i}`}
-                        x1={noteX - ledgerHalfWidth}
-                        y1={sys.yOffset + firstLineY - (i + 1) * spacing}
-                        x2={noteX + ledgerHalfWidth}
-                        y2={sys.yOffset + firstLineY - (i + 1) * spacing}
-                        stroke="#333"
-                        strokeWidth="1.5"
-                      />
-                    ))}
-                    {nLedgerBelow > 0 && Array.from({ length: nLedgerBelow }, (_, i) => (
-                      <line
-                        key={`ledger-below-${i}`}
-                        x1={noteX - ledgerHalfWidth}
-                        y1={sys.yOffset + lastLineY + (i + 1) * spacing}
-                        x2={noteX + ledgerHalfWidth}
-                        y2={sys.yOffset + lastLineY + (i + 1) * spacing}
-                        stroke="#333"
-                        strokeWidth="1.5"
-                      />
-                    ))}
-                    {isSelected && (
-                      <rect
-                        x={noteX - 18}
-                        y={noteY - 22}
-                        width={36}
-                        height={fingering ? 62 : 44}
-                        fill="#93c5fd"
-                        opacity="0.3"
-                        rx="4"
-                      />
-                    )}
-                    <g transform={`translate(${noteX}, ${noteY})`}>
-                      <NoteSymbol
-                        type={durationLabelToNoteSymbolType(note.durationLabel)}
-                        cx={0}
-                        cy={0}
-                        staffSpace={spacing}
-                        stemUp={stemUp}
-                      />
-                    </g>
-                    {beamGroup && noteIdx === beamGroup.start && (
-                      <g stroke="#1a1a1a" strokeWidth="2" strokeLinecap="round">
-                        {Array.from({ length: beamGroup.numBeams }, (_, i) => (
-                          <line
-                            key={i}
-                            x1={beamGroup.xLeft}
-                            y1={beamGroup.beamY + i * 4}
-                            x2={beamGroup.xRight}
-                            y2={beamGroup.beamY + i * 4}
-                          />
-                        ))}
-                      </g>
-                    )}
-                    {fingering && fingering.length > 0 && (
-                      <g transform={`translate(${noteX - (fingering.length * 5)}, ${fingerY})`}>
-                        {fingering.map((closed, i) => (
-                          <circle key={i} cx={i * 10 + 5} cy={0} r={4} fill={closed ? '#1a1a1a' : 'none'} stroke="#333" strokeWidth="1" />
-                        ))}
-                      </g>
-                    )}
-                    {(note.lyric != null && String(note.lyric).trim() !== '') && (
-                      <text
-                        x={noteX}
-                        y={sys.yOffset + staffLinePositions[staffLinePositions.length - 1] + 18}
-                        textAnchor="middle"
-                        fontSize="12"
-                        fill="#333"
-                        fontFamily={lyricFontFamily}
-                      >
-                        {note.lyric}
-                      </text>
-                    )}
-                    {showRhythmSyllables && (() => {
-                      const labelY = sys.yOffset + staffLinePositions[staffLinePositions.length - 1] + spacing * 1.8;
-                      if (beamGroup && noteIdx === beamGroup.start) {
-                        const groupNotes = measure.notes.slice(beamGroup.start, beamGroup.end + 1);
-                        const syllable = getRhythmSyllableForNote(note, { beamGroupNotes: groupNotes });
-                        const xCenter = (beamGroup.xLeft + beamGroup.xRight) / 2;
-                        return <RhythmSyllableLabel key="syl" x={xCenter} y={labelY} text={syllable} staffSpace={spacing} />;
-                      }
-                      if (!beamGroup) {
-                        const syllable = getRhythmSyllableForNote(note);
-                        return <RhythmSyllableLabel key="syl" x={noteX} y={labelY} text={syllable} staffSpace={spacing} />;
-                      }
-                      return null;
-                    })()}
-                    {enableEmojiOverlays && !note.isRest && (notationMode === 'traditional' || notationMode === 'vabanotatsioon') && (() => {
-                      const labelAboveY = sys.yOffset + noteY - spacing * 2.2;
-                      const hasCustom = note.teacherLabel != null && note.teacherLabel !== '';
-                      const displayText = hasCustom ? expandEmojiShortcuts(note.teacherLabel) : (showAllNoteLabels && notationMode === 'vabanotatsioon' ? getJoName(note.pitch, note.octave, keySignature) : '');
-                      const canEdit = typeof onNoteLabelClick === 'function';
-                      return (
-                        <g
-                          key="teacher-label"
-                          data-teacher-label
-                          style={{ cursor: canEdit ? 'pointer' : undefined }}
-                          onClick={canEdit ? (ev) => { ev.stopPropagation(); onNoteLabelClick(globalNoteIndex); } : undefined}
-                          title={canEdit ? (typeof translateLabel === 'function' ? translateLabel('teacher.noteLabelHint') : null) || 'Klõpsa valimiseks, Delete kustutab' : undefined}
-                        >
-                          {displayText ? (
-                            <text x={noteX} y={labelAboveY} textAnchor="middle" dominantBaseline="auto" fontSize={Math.max(10, spacing * 1.0)} fill="#333" fontFamily="sans-serif" fontWeight="600">{displayText}</text>
-                          ) : (
-                            <rect x={noteX - 14} y={labelAboveY - 12} width={28} height={14} fill="transparent" />
-                          )}
-                        </g>
-                      );
-                    })()}
-                  </g>
-                );
-              } else {
-                const isSelected = isNoteSelected(globalNoteIndex);
-                return (
-                  <g key={noteIdx} {...noteGroupProps}>
-                    {isSelected && (
-                      <rect
-                        x={noteX - 18}
-                        y={noteY - 22}
-                        width={36}
-                        height={44}
-                        fill="#93c5fd"
-                        opacity="0.3"
-                        rx="4"
-                      />
-                    )}
-                    <g transform={`translate(${noteX}, ${noteY})`}>
-                      <NoteSymbol
-                        type={durationLabelToNoteSymbolType(note.durationLabel)}
-                        cx={0}
-                        cy={0}
-                        staffSpace={spacing}
-                        stemUp={stemUp}
-                      />
-                    </g>
-                    {showRhythmSyllables && (() => {
-                      const labelY = sys.yOffset + staffLinePositions[staffLinePositions.length - 1] + spacing * 1.8;
-                      const syllable = getRhythmSyllableForNote(note);
-                      return <RhythmSyllableLabel key="syl" x={noteX} y={labelY} text={syllable} staffSpace={spacing} />;
-                    })()}
-                  </g>
-                );
-              }
-            })}
-          </g>
-            );
-          })
-          }
-
-          {/* Final barline – only in TRADITIONAL (FIGURENOTES already has thick bar at measure end) */}
-            {!isFigurenotesMode && (
-            <line
-              x1={marginLeft + (sys.measureWidths ?? []).reduce((a, b) => a + b, 0)}
-              y1={sys.yOffset + staffLinePositions[0] - 5}
-              x2={marginLeft + (sys.measureWidths ?? []).reduce((a, b) => a + b, 0)}
-              y2={sys.yOffset + staffLinePositions[staffLinePositions.length - 1] + 5}
-              stroke="#333"
-              strokeWidth="2"
-            />
-          )}
-        </g>
-      ); })}
 
       {/* Cursor + Ghost note (only visible when note input mode is ON) – slot center. Dünaamiline: tühi väli = joon, muidu emoji. Rütmiline hüpe: y = base_y - |A·sin(π·beat_progress)| */}
       {noteInputMode && cursorInfo && cursorSlotCenterX != null && (() => {
@@ -6495,13 +6264,14 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
               const cy = cursorInfo.system.yOffset + (notationMode === 'figurenotes' ? centerY : pitchY);
               const stemUp = pitchY > middleLineY;
               if (notationMode === 'figurenotes') {
-                const color = FIGURENOTES_COLORS[ghostPitch] || '#000';
-                const shape = FIGURENOTES_SHAPES[ghostOctave] || 'circle';
+                const { color, shape } = getFigureSymbol(ghostPitch, ghostOctave);
                 const size = figurenotesSize;
                 const r = size / 2;
+                const strokeW = Math.max(2, size * 0.38);
                 let el;
-                if (shape === 'cross') {
-                  const strokeW = Math.max(2, size * 0.38);
+                if (shape === 'none') {
+                  el = <rect x={cx - r} y={cy - r} width={size} height={size} fill="none" stroke="#2563eb" strokeWidth="2" strokeDasharray="2 2" opacity="0.9" />;
+                } else if (shape === 'cross') {
                   el = (
                     <g stroke={color} strokeWidth={strokeW} strokeLinecap="round">
                       <line x1={cx - r} y1={cy - r} x2={cx + r} y2={cy + r} />
@@ -6510,11 +6280,15 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
                     </g>
                   );
                 } else if (shape === 'square') {
-                  el = <rect x={cx - size/2} y={cy - size/2} width={size} height={size} fill={color} stroke="#2563eb" strokeWidth="2" opacity="0.9"/>;
+                  el = <rect x={cx - r} y={cy - r} width={size} height={size} fill={color} stroke="#2563eb" strokeWidth="2" opacity="0.9" />;
                 } else if (shape === 'triangle') {
-                  el = <path d={`M ${cx} ${cy - size*0.43} L ${cx + size/2} ${cy + size/2} L ${cx - size/2} ${cy + size/2} Z`} fill={color} stroke="#2563eb" strokeWidth="2" opacity="0.9"/>;
+                  const h = size * 0.866;
+                  el = <path d={`M ${cx} ${cy - h/2} L ${cx + size/2} ${cy + h/2} L ${cx - size/2} ${cy + h/2} Z`} fill={color} stroke="#2563eb" strokeWidth="2" opacity="0.9" />;
+                } else if (shape === 'triangleDown') {
+                  const h = size * 0.866;
+                  el = <path d={`M ${cx} ${cy + h/2} L ${cx + size/2} ${cy - h/2} L ${cx - size/2} ${cy - h/2} Z`} fill={color} stroke="#2563eb" strokeWidth="2" opacity="0.9" />;
                 } else {
-                  el = <circle cx={cx} cy={cy} r={size/2} fill={color} stroke="#2563eb" strokeWidth="2" opacity="0.9"/>;
+                  el = <circle cx={cx} cy={cy} r={r} fill={color} stroke="#2563eb" strokeWidth="2" opacity="0.9" />;
                 }
                 return <g opacity="0.9">{el}</g>;
               }
@@ -6532,19 +6306,19 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
                 return (
                   <g opacity="0.85">
                     {nLedgerAbove > 0 && Array.from({ length: nLedgerAbove }, (_, i) => (
-                      <line key={`ghost-ledger-above-${i}`} x1={cx - ledgerHalfWidth} y1={sysY + firstLineY - (i + 1) * spacing} x2={cx + ledgerHalfWidth} y2={sysY + firstLineY - (i + 1) * spacing} stroke="#333" strokeWidth="1.5" />
+                      <line key={`ghost-ledger-above-${i}`} x1={cx - ledgerHalfWidth} y1={sysY + firstLineY - (i + 1) * spacing} x2={cx + ledgerHalfWidth} y2={sysY + firstLineY - (i + 1) * spacing} stroke={themeColors.staffLineColor} strokeWidth="1.5" />
                     ))}
                     {nLedgerBelow > 0 && Array.from({ length: nLedgerBelow }, (_, i) => (
-                      <line key={`ghost-ledger-below-${i}`} x1={cx - ledgerHalfWidth} y1={sysY + lastLineY + (i + 1) * spacing} x2={cx + ledgerHalfWidth} y2={sysY + lastLineY + (i + 1) * spacing} stroke="#333" strokeWidth="1.5" />
+                      <line key={`ghost-ledger-below-${i}`} x1={cx - ledgerHalfWidth} y1={sysY + lastLineY + (i + 1) * spacing} x2={cx + ledgerHalfWidth} y2={sysY + lastLineY + (i + 1) * spacing} stroke={themeColors.staffLineColor} strokeWidth="1.5" />
                     ))}
-                    <NoteHead cx={cx} cy={cy} staffSpace={spacing} filled stemUp={stemUp} selected />
-                    <line x1={stemX} y1={cy} x2={stemX} y2={stemY2} stroke="#1a1a1a" strokeWidth="1.5"/>
+                    <NoteHead cx={cx} cy={cy} staffSpace={spacing} filled stemUp={stemUp} selected fill={themeColors.noteFill} />
+                    <line x1={stemX} y1={cy} x2={stemX} y2={stemY2} stroke={themeColors.noteFill} strokeWidth="1.5"/>
                   </g>
                 );
               }
               const stemX = stemUp ? cx + 10 : cx - 10;
               const stemY2 = stemUp ? cy - 24 : cy + 24;
-              return <g opacity="0.85"><circle cx={cx} cy={cy} r="9" fill="none" stroke="#333"/><text x={cx} y={cy+3} textAnchor="middle" fontSize="11" fontWeight="bold" fill="#333">{ghostPitch}</text><line x1={stemX} y1={cy} x2={stemX} y2={stemY2} stroke="#333" strokeWidth="1.5"/></g>;
+              return <g opacity="0.85"><circle cx={cx} cy={cy} r="9" fill="none" stroke={themeColors.textColor}/><text x={cx} y={cy+3} textAnchor="middle" fontSize="11" fontWeight="bold" fill={themeColors.textColor}>{ghostPitch}</text><line x1={stemX} y1={cy} x2={stemX} y2={stemY2} stroke={themeColors.textColor} strokeWidth="1.5"/></g>;
             })()
           ) : (
             <circle cx={cursorSlotCenterX} cy={cursorInfo.system.yOffset + centerY} r="6" fill="#2563eb" stroke="white" strokeWidth="2">

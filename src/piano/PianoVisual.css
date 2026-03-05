@@ -84,8 +84,13 @@
   border-color: #92400e !important;
   color: var(--piano-figurenotes-text) !important;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 2px;
+}
+.PianoVisual__key-figure {
+  flex-shrink: 0;
 }
 .PianoVisual__key--white.PianoVisual__key--figurenotes:hover {
   background: linear-gradient(180deg, #fef9c3 0%, var(--piano-figurenotes-color) 100%) !important;
@@ -107,6 +112,7 @@
   background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%) !important;
 }
 .PianoVisual__black-figure {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -118,10 +124,18 @@
   border: 1px solid rgba(255,255,255,0.3);
   box-sizing: border-box;
 }
+.PianoVisual__black-shape {
+  flex-shrink: 0;
+}
 .PianoVisual__black-arrow {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
   font-size: clamp(10px, 2.5vw, 18px);
   line-height: 1;
   color: #fff;
   text-shadow: 0 0 1px #000, 0 1px 2px rgba(0,0,0,0.8);
   font-weight: bold;
+  pointer-events: none;
 }
