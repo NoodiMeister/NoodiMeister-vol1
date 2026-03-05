@@ -39,20 +39,21 @@ import { LOCALE_STORAGE_KEY, DEFAULT_LOCALE, LOCALES, createT } from './i18n';
 import html2canvas from 'html2canvas';
 import Soundfont from 'soundfont-player';
 
-// Globaalne konfiguratsioon KÕIGE ALGUSES – välistab "Cannot access before initialization" (YA/JA) Vercel/minifitseerimisel
+// Noodijoonestiku globaalsed seaded – KÕIGE ALGUSES, et Vercel minifier (YA/JA) ei põhjustaks "before initialization"
+var globalStaffSettings = { JO_VOTI: 0, STAFF_HEIGHT: 140, EMOJIS: true };
 if (typeof window !== 'undefined') {
-  window.NOODIMEISTER_CONFIG = window.NOODIMEISTER_CONFIG || { JO_VOTI: 0, STAFF_HEIGHT: 100, EMOJIS: true };
-}
-function getNoodimeisterConfig() {
-  return (typeof window !== 'undefined' && window.NOODIMEISTER_CONFIG) ? window.NOODIMEISTER_CONFIG : { JO_VOTI: 0, STAFF_HEIGHT: 100, EMOJIS: true };
-}
-function getStaffHeight() {
-  const cfg = getNoodimeisterConfig();
-  return (cfg.STAFF_HEIGHT != null && cfg.STAFF_HEIGHT > 0) ? cfg.STAFF_HEIGHT : 140;
+  var wc = window.NOODIMEISTER_CONFIG;
+  if (wc) {
+    if (wc.JO_VOTI != null) globalStaffSettings.JO_VOTI = wc.JO_VOTI;
+    if (wc.STAFF_HEIGHT != null && wc.STAFF_HEIGHT > 0) globalStaffSettings.STAFF_HEIGHT = wc.STAFF_HEIGHT;
+    if (wc.EMOJIS !== undefined) globalStaffSettings.EMOJIS = wc.EMOJIS;
+  }
+  window.NOODIMEISTER_CONFIG = globalStaffSettings;
 }
 
-// Moduli-taseme YA – alati initsialiseeritud kohe pärast getNoodimeisterConfig(), vältib "ReferenceError: YA is not initialized" (graafika enne seadete laadimist)
-var YA = getNoodimeisterConfig();
+function getStaffHeight() {
+  return (globalStaffSettings.STAFF_HEIGHT != null && globalStaffSettings.STAFF_HEIGHT > 0) ? globalStaffSettings.STAFF_HEIGHT : 140;
+}
 
 // var = hoisted, vältib "before initialization" vigu faili keskosa komponentide puhul
 var LAYOUT = {
@@ -70,7 +71,7 @@ var DEMO_MAX_MEASURES = 2;
 var PAGE_BREAK_GAP = 80;
 var KEY_ORDER = ['C', 'G', 'D', 'A', 'E', 'B', 'F', 'Bb', 'Eb'];
 
-// Graafika ja app konstandid var'iga faili alguses – vältivad YA "before initialization" / sisselogimise vigu
+// Graafika ja app konstandid var'iga faili alguses (globalStaffSettings on noodijoonestiku seaded)
 var LUCIDE_ICONS = [
   'Music2', 'Clock', 'Hash', 'Type', 'Piano', 'Palette', 'Layout', 'Check', 'Save', 'FolderOpen',
   'Plus', 'Settings', 'Key', 'Repeat', 'Cloud', 'LogOut', 'User', 'CloudUpload', 'CloudDownload', 'FolderPlus', 'ChevronDown',
@@ -97,7 +98,7 @@ var FIGURENOTES_SHAPES = { 2: 'cross', 3: 'square', 4: 'circle', 5: 'triangle' }
 var PITCH_TO_SEMI = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
 var PITCH_NAME_TO_NATURAL = { C: 'C', 'C#': 'C', Db: 'C', D: 'D', 'D#': 'D', Eb: 'D', E: 'E', F: 'F', 'F#': 'F', Gb: 'F', G: 'G', 'G#': 'G', Ab: 'G', A: 'A', 'A#': 'A', Bb: 'A', B: 'B' };
 
-// Joonestiku/instrumentide konstandid var'iga KÕIGE ALGUSES – vältib YA "before initialization" (Vercel minifier Kx/TDZ)
+// Joonestiku/instrumentide konstandid var'iga faili alguses
 var INSTRUMENT_CATEGORIES = [
   { id: 'singleStaff', labelKey: 'cat.singleStaff', instruments: ['single-staff-treble', 'single-staff-bass'] },
   { id: 'keyboard', labelKey: 'cat.keyboard', instruments: ['piano', 'organ', 'harpsichord', 'accordion'] },
@@ -847,9 +848,9 @@ function midiToNoteWithAccidental(midiNumber) {
 }
 // FINGERING_TIN_WHISTLE, FINGERING_RECORDER on faili alguses var'iga
 function NoodiMeisterCore({ icons }) {
-  if (typeof YA === 'undefined' || !YA || YA.EMOJIS === undefined) return null;
+  if (typeof globalStaffSettings === 'undefined' || !globalStaffSettings || globalStaffSettings.EMOJIS === undefined) return null;
 
-  // Lazy loading: isReady muutub true 500ms pärast konstantide laadimist – vältib Initialization vigu (Staff/Timeline renderdatakse alles siis)
+  // Sisselogimise järgne suunamine /app peale: oota 100ms, kuni noodijoonestiku seaded on mälus valmis
   const [isReady, setIsReady] = useState(false);
   const [locale, setLocale] = useState(() => {
     try {
@@ -864,13 +865,12 @@ function NoodiMeisterCore({ icons }) {
     } catch (_) { /* ignore */ }
   }, [locale]);
 
-  // Vercel build fix: oota kõik seaded laetud, siis luba Staff/Timeline (Kx) render – sisselogimise järgne suunamine ei kutsu Kx enne initsialiseerimist
   useEffect(() => {
-    if (typeof YA === 'undefined' || !YA) return;
+    if (typeof globalStaffSettings === 'undefined' || !globalStaffSettings) return;
     const t = setTimeout(() => {
       setIsReady(true);
       if (typeof window !== 'undefined') window.NOODIMEISTER_APP_READY = true;
-    }, 500);
+    }, 100);
     return () => clearTimeout(t);
   }, []);
 
@@ -878,7 +878,7 @@ function NoodiMeisterCore({ icons }) {
   const instrumentConfig = useMemo(() => getInstrumentConfig(t), [t]);
   const toolboxes = useMemo(() => getToolboxes(t, instrumentConfig), [t, instrumentConfig]);
 
-  // JO-võti ja noodigraafika state esimesena (konfiguratsioon tuleb window.NOODIMEISTER_CONFIG-ist)
+  // JO-võti ja noodigraafika state (globalStaffSettings on faili alguses)
   const [joClefFocused, setJoClefFocused] = useState(false);
   const [joClefStaffPosition, setJoClefStaffPosition] = useState(DEFAULT_JO_CLEF_STAFF_POSITION);
 
@@ -1032,7 +1032,7 @@ function NoodiMeisterCore({ icons }) {
   const instrument = activeStaff?.instrumentId ?? 'piano';
   const setInstrument = useCallback((instId) => {
     setStaves((prev) => {
-      if (typeof YA === 'undefined' || !YA || typeof INSTRUMENT_CONFIG_BASE === 'undefined' || !INSTRUMENT_CONFIG_BASE) return prev;
+      if (typeof globalStaffSettings === 'undefined' || !globalStaffSettings || typeof INSTRUMENT_CONFIG_BASE === 'undefined' || !INSTRUMENT_CONFIG_BASE) return prev;
       const idx = typeof activeStaffIndex === 'number' ? activeStaffIndex : 0;
       if (idx < 0 || idx >= prev.length) return prev;
       const cfg = INSTRUMENT_CONFIG_BASE[instId];
@@ -5476,7 +5476,7 @@ function getFingeringForNote(pitch, octave, instrumentId) {
 
 // Timeline Component – multi-system layout (VexFlow loogika). (PAGE_BREAK_GAP on defineeritud üleval.)
 function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, pageWidth, cursorPosition, notationMode, staffLines, clefType, keySignature = 'C', relativeNotationShowKeySignature = false, relativeNotationShowTraditionalClef = false, onJoClefPositionChange, joClefFocused = false, onJoClefFocus, instrument = 'piano', instrumentNotationVariant = 'standard', instrumentConfig = {}, showBarNumbers = true, showRhythmSyllables = false, joClefStaffPosition: joClefStaffPositionProp, showAllNoteLabels = false, enableEmojiOverlays = true, onNoteTeacherLabelChange, onNoteLabelClick, chords = [], isDotted, isRest, selectedDuration, noteInputMode, selectedNoteIndex, isNoteSelected, notes: allNotes, onStaffAddNote, onNoteClick, ghostPitch, ghostOctave, notationStyle, layoutMeasuresPerLine = 4, layoutLineBreakBefore = [], layoutPageBreakBefore = [], layoutSystemGap = 120, systems: systemsProp, baseYOffset = 0, staffCount = 1, staffHeight: staffHeightProp, figurenotesSize = 16, figurenotesStems = false, pedagogicalPlayheadStyle = 'line', pedagogicalPlayheadEmoji = '🎵', pedagogicalPlayheadEmojiSize = 32, isPedagogicalAudioPlaying = false, isExportingAnimation = false, exportCursorRef, scoreContainerRef, pageFlowDirection = 'vertical', isFirstInBraceGroup = false, braceGroupSize = 0, lyricFontFamily = 'sans-serif' }) {
-  if (typeof YA === 'undefined' || !YA || YA.EMOJIS === false) return null;
+  if (typeof globalStaffSettings === 'undefined' || !globalStaffSettings || globalStaffSettings.EMOJIS === false) return null;
   const safeKey = keySignature ?? 'C';
   const joClefStaffPosition = typeof joClefStaffPositionProp === 'number' ? joClefStaffPositionProp : getTonicStaffPosition(safeKey);
   if (typeof joClefStaffPosition !== 'number') return null;
