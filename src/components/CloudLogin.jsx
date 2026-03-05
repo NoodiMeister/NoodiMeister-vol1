@@ -85,7 +85,8 @@ function useCloudLoginWithProvider(mode = 'login', stayLoggedIn = false, onError
                 localStorage.setItem('noodimeister-users', JSON.stringify(users));
               }
             }
-            // Vercel fix: suuna alles siis, kui auth andmed on kinnitatud (loe tagasi), et /app ei laadi enne kui isLoggedIn() töötab
+            // Vercel fix: suuna alles siis, kui auth andmed on kinnitatud (loe tagasi), et /app ei laadi enne kui isLoggedIn() töötab.
+            // COOP: ära kasuta window.close() – sisselogimine suunab /app poole; close() põhjustaks Cross-Origin-Opener-Policy vigu.
             const readStorage = getStorageForRead();
             const confirmedUser = getLoggedInUser();
             const loggedIn = isLoggedIn();

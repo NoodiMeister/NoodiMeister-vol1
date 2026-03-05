@@ -39,11 +39,14 @@ const LUCIDE_ICONS = [
 
 const STORAGE_KEY = 'noodimeister-data';
 
-// Garanteeritud algväärtused – ei sõltu sisselogimisest ega storage'ist (vältib TDZ/ReferenceError)
+// Garanteeritud algväärtused – kõik noodigraafika konstandid päises (vältib TDZ/ReferenceError Vercelil)
 const DEFAULT_JO_CLEF_STAFF_POSITION = -2;   // JO (toonika) staff-positsioon: -2=C, 2=G, 4=D
 const DEFAULT_SHOW_EMOJI_OVERLAYS = true;    // Õpetaja: noodipeal märgistused (JO-nimed, emojid)
 const DEFAULT_SHOW_RHYTHM_SYLLABLES = false; // Kodály rütmisilbid (TA, TI-TI jne)
 const DEFAULT_SHOW_ALL_NOTE_LABELS = false;  // Kuva kõikidel nootidel JO-nimed
+// JO-võtme ja noodigraafika väärtused – kasutatakse Timeline'i ja Fx-laadsetes kohtades; peavad olema päises
+const JO_CLEF_POSITION_MIN = -2;
+const JO_CLEF_POSITION_MAX = 10;
 
 function LoggedInUser({ icons, t }) {
   const navigate = useNavigate();
@@ -866,6 +869,10 @@ function NoodiMeisterCore({ icons }) {
   const instrumentConfig = useMemo(() => getInstrumentConfig(t), [t]);
   const toolboxes = useMemo(() => getToolboxes(t, instrumentConfig), [t, instrumentConfig]);
 
+  // JO-võti ja noodigraafika state esimesena (vältib "Cannot access 'JA' before initialization" Fx/Timeline minifitseerimisel)
+  const [joClefFocused, setJoClefFocused] = useState(false);
+  const [joClefStaffPosition, setJoClefStaffPosition] = useState(DEFAULT_JO_CLEF_STAFF_POSITION);
+
   // Core state
   const [notationMode, setNotationMode] = useState('traditional');
   // Kas projekt on loodud pedagoogilise notatsiooni viisardiga (JO-võti, TAB/sõrmitsus, animatsioon jm)?
@@ -878,8 +885,6 @@ function NoodiMeisterCore({ icons }) {
   const [pixelsPerBeat, setPixelsPerBeat] = useState(80);
   const [cursorPosition, setCursorPosition] = useState(3);
   const [keySignature, setKeySignature] = useState('C');
-  const [joClefFocused, setJoClefFocused] = useState(false); // JO-võti valitud → nooltega ↑↓ võtme nihutamine
-  const [joClefStaffPosition, setJoClefStaffPosition] = useState(DEFAULT_JO_CLEF_STAFF_POSITION);
   const [staffLines, setStaffLines] = useState(5);
   const [notationStyle, setNotationStyle] = useState('TRADITIONAL'); // 'TRADITIONAL' | 'FIGURENOTES' – staff vs grid
   const [instrumentNotationVariant, setInstrumentNotationVariant] = useState('standard'); // 'standard' | 'tab' | 'fingering'
@@ -1735,7 +1740,7 @@ function NoodiMeisterCore({ icons }) {
       if (data.showRhythmSyllables != null) setShowRhythmSyllables(data.showRhythmSyllables);
       if (data.showAllNoteLabels != null) setShowAllNoteLabels(data.showAllNoteLabels);
       if (data.enableEmojiOverlays != null) setEnableEmojiOverlays(data.enableEmojiOverlays);
-      if (data.joClefStaffPosition != null && typeof data.joClefStaffPosition === 'number') setJoClefStaffPosition(Math.max(-2, Math.min(10, data.joClefStaffPosition)));
+      if (data.joClefStaffPosition != null && typeof data.joClefStaffPosition === 'number') setJoClefStaffPosition(Math.max(JO_CLEF_POSITION_MIN, Math.min(JO_CLEF_POSITION_MAX, data.joClefStaffPosition)));
       else if (data.keySignature) setJoClefStaffPosition(getTonicStaffPosition(data.keySignature));
       if (data.relativeNotationShowKeySignature != null) setRelativeNotationShowKeySignature(data.relativeNotationShowKeySignature);
       if (data.relativeNotationShowTraditionalClef != null) setRelativeNotationShowTraditionalClef(data.relativeNotationShowTraditionalClef);
@@ -1838,7 +1843,7 @@ function NoodiMeisterCore({ icons }) {
       if (data.showRhythmSyllables != null) setShowRhythmSyllables(data.showRhythmSyllables);
       if (data.showAllNoteLabels != null) setShowAllNoteLabels(data.showAllNoteLabels);
       if (data.enableEmojiOverlays != null) setEnableEmojiOverlays(data.enableEmojiOverlays);
-      if (data.joClefStaffPosition != null && typeof data.joClefStaffPosition === 'number') setJoClefStaffPosition(Math.max(-2, Math.min(10, data.joClefStaffPosition)));
+      if (data.joClefStaffPosition != null && typeof data.joClefStaffPosition === 'number') setJoClefStaffPosition(Math.max(JO_CLEF_POSITION_MIN, Math.min(JO_CLEF_POSITION_MAX, data.joClefStaffPosition)));
       else if (data.keySignature) setJoClefStaffPosition(getTonicStaffPosition(data.keySignature));
         if (data.relativeNotationShowKeySignature != null) setRelativeNotationShowKeySignature(data.relativeNotationShowKeySignature);
         if (data.relativeNotationShowTraditionalClef != null) setRelativeNotationShowTraditionalClef(data.relativeNotationShowTraditionalClef);
@@ -2024,7 +2029,7 @@ function NoodiMeisterCore({ icons }) {
       if (data.showRhythmSyllables != null) setShowRhythmSyllables(data.showRhythmSyllables);
       if (data.showAllNoteLabels != null) setShowAllNoteLabels(data.showAllNoteLabels);
       if (data.enableEmojiOverlays != null) setEnableEmojiOverlays(data.enableEmojiOverlays);
-      if (data.joClefStaffPosition != null && typeof data.joClefStaffPosition === 'number') setJoClefStaffPosition(Math.max(-2, Math.min(10, data.joClefStaffPosition)));
+      if (data.joClefStaffPosition != null && typeof data.joClefStaffPosition === 'number') setJoClefStaffPosition(Math.max(JO_CLEF_POSITION_MIN, Math.min(JO_CLEF_POSITION_MAX, data.joClefStaffPosition)));
       else if (data.keySignature) setJoClefStaffPosition(getTonicStaffPosition(data.keySignature));
           if (data.relativeNotationShowKeySignature != null) setRelativeNotationShowKeySignature(data.relativeNotationShowKeySignature);
           if (data.relativeNotationShowTraditionalClef != null) setRelativeNotationShowTraditionalClef(data.relativeNotationShowTraditionalClef);
@@ -2607,7 +2612,7 @@ function NoodiMeisterCore({ icons }) {
         if (e.code === 'ArrowUp' || e.code === 'ArrowDown') {
           e.preventDefault();
           const step = e.code === 'ArrowUp' ? 1 : -1;
-          const nextPos = Math.max(-2, Math.min(10, joClefStaffPosition + step));
+          const nextPos = Math.max(JO_CLEF_POSITION_MIN, Math.min(JO_CLEF_POSITION_MAX, joClefStaffPosition + step));
           const newKey = getKeyFromStaffPosition(nextPos);
           if (newKey !== keySignature) {
             const semitones = (KEY_TO_SEMITONE[newKey] ?? 0) - (KEY_TO_SEMITONE[keySignature] ?? 0);
@@ -4341,7 +4346,7 @@ function NoodiMeisterCore({ icons }) {
                       value={notes[selectedNoteIndex]?.teacherLabel ?? ''}
                       onChange={(e) => updateNoteTeacherLabel(selectedNoteIndex, e.target.value)}
                       onBlur={(e) => { const v = e.target.value; if (v && v.includes(':')) updateNoteTeacherLabel(selectedNoteIndex, expandEmojiShortcuts(v)); }}
-                      placeholder=":joy: või vabatekst"
+                      placeholder=":star: :joy: või vabatekst"
                       className="px-2 py-1 rounded text-sm bg-amber-100 text-amber-900 border border-amber-300 w-32 focus:ring-1 focus:ring-amber-500"
                       title={t('teacher.noteLabelHint')}
                     />
@@ -5388,7 +5393,10 @@ function getFingeringForNote(pitch, octave, instrumentId) {
 
 // Timeline Component – multi-system layout (VexFlow loogika). (PAGE_BREAK_GAP on defineeritud üleval.)
 function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, pageWidth, cursorPosition, notationMode, staffLines, clefType, keySignature = 'C', relativeNotationShowKeySignature = false, relativeNotationShowTraditionalClef = false, onJoClefPositionChange, joClefFocused = false, onJoClefFocus, instrument = 'piano', instrumentNotationVariant = 'standard', instrumentConfig = {}, showBarNumbers = true, showRhythmSyllables = false, joClefStaffPosition: joClefStaffPositionProp, showAllNoteLabels = false, enableEmojiOverlays = true, onNoteTeacherLabelChange, onNoteLabelClick, chords = [], isDotted, isRest, selectedDuration, noteInputMode, selectedNoteIndex, isNoteSelected, notes: allNotes, onStaffAddNote, onNoteClick, ghostPitch, ghostOctave, notationStyle, layoutMeasuresPerLine = 4, layoutLineBreakBefore = [], layoutPageBreakBefore = [], layoutSystemGap = 120, systems: systemsProp, baseYOffset = 0, staffCount = 1, staffHeight: staffHeightProp, figurenotesSize = 16, figurenotesStems = false, pedagogicalPlayheadStyle = 'line', pedagogicalPlayheadEmoji = '🎵', pedagogicalPlayheadEmojiSize = 32, isPedagogicalAudioPlaying = false, isExportingAnimation = false, exportCursorRef, scoreContainerRef, pageFlowDirection = 'vertical', isFirstInBraceGroup = false, braceGroupSize = 0, lyricFontFamily = 'sans-serif' }) {
-  const joClefStaffPosition = joClefStaffPositionProp ?? getTonicStaffPosition(keySignature);
+  // Fx/Vercel TDZ parandus: kindel JO-võtme väärtus kohe, et vältida "Cannot access 'JA' before initialization"
+  const safeKey = keySignature ?? 'C';
+  const joClefStaffPosition = typeof joClefStaffPositionProp === 'number' ? joClefStaffPositionProp : getTonicStaffPosition(safeKey);
+  if (typeof joClefStaffPosition !== 'number') return null;
   const isFigurenotesMode = notationStyle === 'FIGURENOTES';
   const instCfg = instrumentConfig[instrument];
   const isTabMode = instCfg?.type === 'tab' && instrumentNotationVariant === 'tab';
