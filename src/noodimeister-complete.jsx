@@ -4966,11 +4966,40 @@ function NoodiMeisterCore({ icons }) {
                       ))}
                     </div>
                   )}
+                  <div className="flex flex-wrap items-start gap-2 border-l border-amber-300 pl-3">
+                    <span className="text-xs font-semibold text-amber-800">{t('teacher.intermissionLabels')}</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        dirtyRef.current = true;
+                        const totalBeats = Math.max(0, ...staves.map((s) => s.notes.reduce((a, n) => a + n.duration, 0)));
+                        setIntermissionLabels((prev) => [...prev, { id: (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `int-${Date.now()}`, startBeat: Math.max(0, totalBeats - 4), endBeat: totalBeats + 2, text: t('intermission.placeholder') }]);
+                      }}
+                      className="px-2 py-1 rounded text-sm bg-amber-200 text-amber-900 hover:bg-amber-300 border border-amber-300"
+                    >
+                      {t('teacher.addIntermission')}
+                    </button>
+                    {intermissionLabels.length > 0 && (
+                      <div className="flex flex-col gap-1.5 w-full max-w-md">
+                        {intermissionLabels.map((lab) => (
+                          <div key={lab.id} className="flex flex-wrap items-center gap-2 p-2 rounded bg-amber-100/80 border border-amber-200">
+                            <input type="number" min={0} step={0.5} value={lab.startBeat} onChange={(e) => { dirtyRef.current = true; setIntermissionLabels((prev) => prev.map((l) => l.id === lab.id ? { ...l, startBeat: Number(e.target.value) || 0 } : l)); }} className="w-14 rounded border border-amber-400 px-1 text-xs" title={t('intermission.startBeat')} />
+                            <span className="text-amber-700">–</span>
+                            <input type="number" min={0} step={0.5} value={lab.endBeat} onChange={(e) => { dirtyRef.current = true; setIntermissionLabels((prev) => prev.map((l) => l.id === lab.id ? { ...l, endBeat: Number(e.target.value) || 0 } : l)); }} className="w-14 rounded border border-amber-400 px-1 text-xs" title={t('intermission.endBeat')} />
+                            <input type="text" value={lab.text} onChange={(e) => { dirtyRef.current = true; setIntermissionLabels((prev) => prev.map((l) => l.id === lab.id ? { ...l, text: e.target.value } : l)); }} placeholder={t('intermission.placeholder')} className="flex-1 min-w-[8rem] rounded border border-amber-400 px-2 py-0.5 text-sm" />
+                            <button type="button" onClick={() => { dirtyRef.current = true; setIntermissionLabels((prev) => prev.filter((l) => l.id !== lab.id)); }} className="text-red-600 hover:text-red-700 font-bold text-lg leading-none" title={t('teacher.clearAllAnnotations')}>×</button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
-              {staves.map((staff, staffIdx) => {
+              {(visibleStaffList.length > 0 ? visibleStaffList : staves.map((staff, i) => ({ staff, staffIdx: i, visibleIndex: i }))).map(({ staff, staffIdx, visibleIndex }) => {
                 const isFirstInBraceGroup = staff.braceGroupId && staves[staffIdx + 1]?.braceGroupId === staff.braceGroupId;
                 const braceGroupSize = isFirstInBraceGroup ? 2 : 0;
+                const baseYOffset = visibleIndex * (effectiveStaffHeight + layoutSystemGap) + (staffYOffsets[staffIdx] ?? 0);
+                const isFirstVisible = visibleIndex === 0;
                 return (
                 <Timeline
                   key={staff.id}
@@ -5029,8 +5058,9 @@ function NoodiMeisterCore({ icons }) {
                   layoutPageBreakBefore={effectiveLayoutPageBreakBefore}
                   layoutSystemGap={layoutSystemGap}
                   systems={systemsForScore}
-                  baseYOffset={staffIdx * LAYOUT.STAFF_HEIGHT + (staffYOffsets[staffIdx] ?? 0)}
-                  staffCount={staves.length}
+                  baseYOffset={baseYOffset}
+                  staffCount={visibleStaffList.length > 0 ? visibleStaffList.length : staves.length}
+                  staffHeight={effectiveStaffHeight}
                   showBarNumbers={showBarNumbers}
                   showRhythmSyllables={showRhythmSyllables}
                   showAllNoteLabels={showAllNoteLabels}
@@ -5045,13 +5075,21 @@ function NoodiMeisterCore({ icons }) {
                   pedagogicalPlayheadEmojiSize={pedagogicalPlayheadEmojiSize}
                   isPedagogicalAudioPlaying={isPedagogicalAudioPlaying}
                   isExportingAnimation={isExportingAnimation}
-                  exportCursorRef={staffIdx === 0 ? exportCursorRef : undefined}
-                  scoreContainerRef={staffIdx === 0 ? scoreContainerRef : undefined}
+                  exportCursorRef={isFirstVisible ? exportCursorRef : undefined}
+                  scoreContainerRef={isFirstVisible ? scoreContainerRef : undefined}
                   pageFlowDirection={pageFlowDirection}
                   lyricFontFamily={lyricFontFamily}
                 />
               );})}
           </div>
+          {/* Puhkehetkede sildid: suur tekst, kui kursor on antud löökide vahel (video/animatsioon) */}
+          {intermissionLabels.some((lab) => cursorPosition >= lab.startBeat && cursorPosition < lab.endBeat) && (
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none bg-amber-50/95 z-10" aria-hidden="true">
+              <p className="text-2xl sm:text-4xl font-bold text-center text-amber-900 px-4 py-6 max-w-2xl" style={{ fontFamily: documentFontFamily }}>
+                {intermissionLabels.find((lab) => cursorPosition >= lab.startBeat && cursorPosition < lab.endBeat)?.text || ''}
+              </p>
+            </div>
+          )}
           {/* Teksti kastid overlay – vabalt paigutatavad laulutekstid, kommentaarid ja tempo */}
           <div className="absolute inset-0 pointer-events-none" aria-hidden="true">
             {textBoxes.map((box) => (
@@ -5336,7 +5374,7 @@ function getFingeringForNote(pitch, octave, instrumentId) {
 }
 
 // Timeline Component – multi-system layout (VexFlow loogika). (PAGE_BREAK_GAP on defineeritud üleval.)
-function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, pageWidth, cursorPosition, notationMode, staffLines, clefType, keySignature = 'C', relativeNotationShowKeySignature = false, relativeNotationShowTraditionalClef = false, onJoClefPositionChange, joClefFocused = false, onJoClefFocus, instrument = 'piano', instrumentNotationVariant = 'standard', instrumentConfig = {}, showBarNumbers = true, showRhythmSyllables = false, joClefStaffPosition: joClefStaffPositionProp, showAllNoteLabels = false, enableEmojiOverlays = true, onNoteTeacherLabelChange, onNoteLabelClick, chords = [], isDotted, isRest, selectedDuration, noteInputMode, selectedNoteIndex, isNoteSelected, notes: allNotes, onStaffAddNote, onNoteClick, ghostPitch, ghostOctave, notationStyle, layoutMeasuresPerLine = 4, layoutLineBreakBefore = [], layoutPageBreakBefore = [], layoutSystemGap = 120, systems: systemsProp, baseYOffset = 0, staffCount = 1, figurenotesSize = 16, figurenotesStems = false, pedagogicalPlayheadStyle = 'line', pedagogicalPlayheadEmoji = '🎵', pedagogicalPlayheadEmojiSize = 32, isPedagogicalAudioPlaying = false, isExportingAnimation = false, exportCursorRef, scoreContainerRef, pageFlowDirection = 'vertical', isFirstInBraceGroup = false, braceGroupSize = 0, lyricFontFamily = 'sans-serif' }) {
+function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, pageWidth, cursorPosition, notationMode, staffLines, clefType, keySignature = 'C', relativeNotationShowKeySignature = false, relativeNotationShowTraditionalClef = false, onJoClefPositionChange, joClefFocused = false, onJoClefFocus, instrument = 'piano', instrumentNotationVariant = 'standard', instrumentConfig = {}, showBarNumbers = true, showRhythmSyllables = false, joClefStaffPosition: joClefStaffPositionProp, showAllNoteLabels = false, enableEmojiOverlays = true, onNoteTeacherLabelChange, onNoteLabelClick, chords = [], isDotted, isRest, selectedDuration, noteInputMode, selectedNoteIndex, isNoteSelected, notes: allNotes, onStaffAddNote, onNoteClick, ghostPitch, ghostOctave, notationStyle, layoutMeasuresPerLine = 4, layoutLineBreakBefore = [], layoutPageBreakBefore = [], layoutSystemGap = 120, systems: systemsProp, baseYOffset = 0, staffCount = 1, staffHeight: staffHeightProp, figurenotesSize = 16, figurenotesStems = false, pedagogicalPlayheadStyle = 'line', pedagogicalPlayheadEmoji = '🎵', pedagogicalPlayheadEmojiSize = 32, isPedagogicalAudioPlaying = false, isExportingAnimation = false, exportCursorRef, scoreContainerRef, pageFlowDirection = 'vertical', isFirstInBraceGroup = false, braceGroupSize = 0, lyricFontFamily = 'sans-serif' }) {
   const joClefStaffPosition = joClefStaffPositionProp ?? getTonicStaffPosition(keySignature);
   const isFigurenotesMode = notationStyle === 'FIGURENOTES';
   const instCfg = instrumentConfig[instrument];
@@ -5363,13 +5401,13 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
   }, [measures, allNotes]);
   const effectiveMeasures = React.useMemo(() => (measures || []).map((m, i) => ({ ...m, notes: notesByMeasure[i] || [] })), [measures, notesByMeasure]);
   const timelineSvgRef = useRef(null);
+  const timelineHeight = staffHeightProp ?? LAYOUT.STAFF_HEIGHT;
   const totalHeight = systemsComputed.length > 0
-    ? systemsComputed[systemsComputed.length - 1].yOffset + (staffCount || 1) * LAYOUT.STAFF_HEIGHT + 40
-    : (staffCount || 1) * LAYOUT.STAFF_HEIGHT + 40;
+    ? systemsComputed[systemsComputed.length - 1].yOffset + (staffCount || 1) * timelineHeight + 40
+    : (staffCount || 1) * timelineHeight + 40;
   const isHorizontal = pageFlowDirection === 'horizontal';
   const a4PageHeight = (pageWidth || LAYOUT.PAGE_WIDTH_MIN) * LAYOUT.A4_HEIGHT_RATIO;
   const totalPages = Math.max(1, Math.ceil(totalHeight / a4PageHeight));
-  const timelineHeight = LAYOUT.STAFF_HEIGHT;
   const centerY = timelineHeight / 2;
   const marginLeft = LAYOUT.MARGIN_LEFT;
 
