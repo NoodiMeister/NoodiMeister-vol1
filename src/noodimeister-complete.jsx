@@ -51,6 +51,9 @@ function getStaffHeight() {
   return (cfg.STAFF_HEIGHT != null && cfg.STAFF_HEIGHT > 0) ? cfg.STAFF_HEIGHT : 140;
 }
 
+// Moduli-taseme YA – alati initsialiseeritud kohe pärast getNoodimeisterConfig(), vältib "ReferenceError: YA is not initialized" (graafika enne seadete laadimist)
+var YA = getNoodimeisterConfig();
+
 // var = hoisted, vältib "before initialization" vigu faili keskosa komponentide puhul
 var LAYOUT = {
   PAGE_WIDTH_MIN: 800,
@@ -161,6 +164,91 @@ var INSTRUMENT_TO_SOUNDFONT_NAME = {
   flute: 'flute', recorder: 'recorder', clarinet: 'clarinet', oboe: 'oboe', bassoon: 'bassoon',
   trumpet: 'trumpet', trombone: 'trombone', tuba: 'tuba', 'french-horn': 'french_horn',
   'tin-whistle': 'whistle', saxophone: 'alto_sax', voice: 'choir_aahs'
+};
+
+// Noodivõtmete SVG path-id (var faili alguses – TDZ/vältimine)
+var TREBLE_CLEF_PATH = 'M14 2v2c0 2-1 4-3 5-2 1-4 1-5 0-1-1-1-3 0-4 1-1 2-2 2-3 1-2-1-2-3 0-4 2-1 4-1 6 0 2 1 3 2 4 3 1 2 2 3 2 5 0 2-1 4-3 5-2 1-4 1-6-1-2-2-2-5 0-7 2-2 4-2 7 0 3 2 4 4 4 7 0 2-2 4-4 5-2 1-4 0-5-2-1-2-1-4 0-6 1-2 3-2 5 0 2 2 3 4 3 6 0 1-1 2-2 2-3 0-1-1-1-2 0-2 1 0 2 0 3-1 1-1 2-2 2-4 0-2-1-3-2-4-1-1-3-1-4 0-1 1-1 2 0 3 1 1 2 1 3 0 1-1 2-1 3 0 1 1 2 1 3 0';
+var BASS_CLEF_PATH = 'M8 4c0 2 1 3 2 3 1 0 2-1 2-3 0-2-1-3-2-3-1 0-2 1-2 3zm8 0c0 2 1 3 2 3 1 0 2-1 2-3 0-2-1-3-2-3-1 0-2 1-2 3zm-10 4v12c0 1 1 2 2 2 1 0 2-1 2-2V8c0-1-1-2-2-2-1 0-2 1-2 2zm12 0v12c0 1 1 2 2 2 1 0 2-1 2-2V8c0-1-1-2-2-2-1 0-2 1-2 2zM10 6c-1 0-2 1-2 2v8c0 1 1 2 2 2 1 0 2-1 2-2V8c0-1-1-2-2-2zm4 0c-1 0-2 1-2 2v8c0 1 1 2 2 2 1 0 2-1 2-2V8c0-1-1-2-2-2z';
+var ALTO_TENOR_CLEF_PATH = 'M8 4c-2 0-4 2-4 5s2 5 4 5 4-2 4-5-2-5-4-5zm0 6c-1 0-2-1-2-1 0 0 1-1 2-1s2 1 2 1c0 0-1 1-2 1zm8-6c2 0 4 2 4 5s-2 5-4 5-4-2-4-5 2-5 4-5zm0 6c1 0 2-1 2-1 0 0-1-1-2-1s-2 1-2 1c0 0 1 1 2 1z';
+
+// Rütmipatternite ikoonid (JSX) – var faili alguses
+var RHYTHM_PATTERN_ICONS = {
+  '2/8': (
+    <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5" stroke="currentColor" strokeWidth="1.2">
+      <ellipse cx="6" cy="17" rx="2.2" ry="1.8" fill="currentColor"/><ellipse cx="18" cy="17" rx="2.2" ry="1.8" fill="currentColor"/>
+      <line x1="7.5" y1="17" x2="7.5" y2="5" strokeWidth="1.2"/><line x1="16.5" y1="17" x2="16.5" y2="5" strokeWidth="1.2"/>
+      <line x1="5" y1="5" x2="19" y2="5" strokeWidth="1.5" strokeLinecap="round"/>
+    </svg>
+  ),
+  '4/16': (
+    <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5" stroke="currentColor" strokeWidth="1.1">
+      {[4, 8, 14, 20].map((cx, i) => <ellipse key={i} cx={cx} cy="17" rx="1.8" ry="1.5" fill="currentColor"/>)}
+      {[5, 11, 17, 23].map((x, i) => <line key={i} x1={x} y1="17" x2={x} y2="3" strokeWidth="1.1"/>)}
+      <line x1="3" y1="3" x2="21" y2="3" strokeWidth="1.3" strokeLinecap="round"/>
+      <line x1="3" y1="4.5" x2="21" y2="4.5" strokeWidth="1" strokeLinecap="round"/>
+    </svg>
+  ),
+  '8/16': (
+    <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5" stroke="currentColor" strokeWidth="1">
+      {[2.5, 5.5, 8.5, 11.5, 14.5, 17.5, 20.5, 23.5].map((cx, i) => <ellipse key={i} cx={cx} cy="17" rx="1.4" ry="1.2" fill="currentColor"/>)}
+      {[3.5, 6.5, 9.5, 12.5, 15.5, 18.5, 21.5].map((x, i) => <line key={i} x1={x} y1="17" x2={x} y2="2" strokeWidth="1"/>)}
+      <line x1="1" y1="2" x2="23" y2="2" strokeWidth="1.2" strokeLinecap="round"/>
+      <line x1="1" y1="3.5" x2="23" y2="3.5" strokeWidth="0.9" strokeLinecap="round"/>
+    </svg>
+  ),
+  '1/8+2/16': (
+    <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5" stroke="currentColor" strokeWidth="1.1">
+      <ellipse cx="5" cy="17" rx="2.2" ry="1.8" fill="currentColor"/><ellipse cx="12" cy="17" rx="1.8" ry="1.5" fill="currentColor"/><ellipse cx="19" cy="17" rx="1.8" ry="1.5" fill="currentColor"/>
+      <line x1="6.5" y1="17" x2="6.5" y2="5" strokeWidth="1.1"/><line x1="12" y1="17" x2="12" y2="3" strokeWidth="1.1"/><line x1="17.5" y1="17" x2="17.5" y2="3" strokeWidth="1.1"/>
+      <line x1="4" y1="5" x2="20" y2="5" strokeWidth="1.4" strokeLinecap="round"/>
+      <line x1="10" y1="3" x2="19" y2="3" strokeWidth="1.1" strokeLinecap="round"/>
+    </svg>
+  ),
+  '2/16+1/8': (
+    <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5" stroke="currentColor" strokeWidth="1.1">
+      <ellipse cx="5" cy="17" rx="1.8" ry="1.5" fill="currentColor"/><ellipse cx="12" cy="17" rx="1.8" ry="1.5" fill="currentColor"/><ellipse cx="19" cy="17" rx="2.2" ry="1.8" fill="currentColor"/>
+      <line x1="6.5" y1="17" x2="6.5" y2="3" strokeWidth="1.1"/><line x1="12" y1="17" x2="12" y2="3" strokeWidth="1.1"/><line x1="17.5" y1="17" x2="17.5" y2="5" strokeWidth="1.1"/>
+      <line x1="4" y1="3" x2="20" y2="3" strokeWidth="1.1" strokeLinecap="round"/>
+      <line x1="5" y1="5" x2="19" y2="5" strokeWidth="1.4" strokeLinecap="round"/>
+    </svg>
+  ),
+  'triplet': (
+    <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5" stroke="currentColor" strokeWidth="1.1">
+      <ellipse cx="5" cy="17" rx="2" ry="1.6" fill="currentColor"/><ellipse cx="12" cy="17" rx="2" ry="1.6" fill="currentColor"/><ellipse cx="19" cy="17" rx="2" ry="1.6" fill="currentColor"/>
+      <line x1="6.5" y1="17" x2="6.5" y2="5" strokeWidth="1.1"/><line x1="12" y1="17" x2="12" y2="5" strokeWidth="1.1"/><line x1="17.5" y1="17" x2="17.5" y2="5" strokeWidth="1.1"/>
+      <line x1="4" y1="5" x2="20" y2="5" strokeWidth="1.3" strokeLinecap="round"/>
+      <text x="12" y="2" textAnchor="middle" fontSize="5.5" fontWeight="bold" fill="currentColor">3</text>
+    </svg>
+  )
+};
+
+var FONT_OPTIONS = [
+  { value: 'Georgia, serif', label: 'Georgia' },
+  { value: 'system-ui, sans-serif', label: 'System' },
+  { value: 'Arial, Helvetica, sans-serif', label: 'Arial' },
+  { value: '"Times New Roman", Times, serif', label: 'Times New Roman' },
+  { value: 'Verdana, sans-serif', label: 'Verdana' },
+  { value: 'sans-serif', label: 'Sans-serif' },
+  { value: 'serif', label: 'Serif' }
+];
+
+var TEMPO_TERMS = [
+  { id: 'largo', key: 'tempo.largo', bpm: 40 },
+  { id: 'adagio', key: 'tempo.adagio', bpm: 66 },
+  { id: 'andante', key: 'tempo.andante', bpm: 76 },
+  { id: 'moderato', key: 'tempo.moderato', bpm: 108 },
+  { id: 'allegro', key: 'tempo.allegro', bpm: 120 },
+  { id: 'vivace', key: 'tempo.vivace', bpm: 144 },
+  { id: 'presto', key: 'tempo.presto', bpm: 168 }
+];
+
+var FINGERING_TIN_WHISTLE = {
+  'D5': [1,1,1,1,1,1], 'E5': [0,1,1,1,1,1], 'F#5': [0,0,1,1,1,1], 'G5': [0,0,0,1,1,1], 'A5': [0,0,0,0,1,1], 'B5': [0,0,0,0,0,1], 'C#6': [0,0,0,0,0,0],
+  'D6': [1,1,1,1,1,1], 'E6': [0,1,1,1,1,1], 'F#6': [0,0,1,1,1,1], 'G6': [0,0,0,1,1,1], 'A6': [0,0,0,0,1,1], 'B6': [0,0,0,0,0,1], 'C#7': [0,0,0,0,0,0]
+};
+var FINGERING_RECORDER = {
+  'C5': [1,1,1,1,1,1,1], 'D5': [1,1,1,1,1,1,0], 'E5': [1,1,1,1,1,0,0], 'F5': [1,1,1,1,0,0,0], 'G5': [1,1,1,0,0,0,0], 'A5': [1,1,0,0,0,0,0], 'B5': [1,0,0,0,0,0,0], 'C6': [0,0,0,0,0,0,0],
+  'D6': [1,1,1,1,1,1,0], 'E6': [1,1,1,1,1,0,0], 'F6': [1,1,1,1,0,0,0], 'G6': [1,1,1,0,0,0,0], 'A6': [1,1,0,0,0,0,0], 'B6': [1,0,0,0,0,0,0], 'C7': [0,0,0,0,0,0,0]
 };
 
 function LoggedInUser({ icons, t }) {
@@ -350,57 +438,7 @@ const RhythmIcon = ({ duration, isDotted = false, isRest = false }) => {
   return <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">{noteIcons[d] || noteIcons['1/4']}</svg>;
 };
 
-// Liitrütmide pildid – standard noodivibu (beam) ikoonid: noodipead all, ühine või ühendatud vibu üleval
-const RHYTHM_PATTERN_ICONS = {
-  '2/8': (
-    <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5" stroke="currentColor" strokeWidth="1.2">
-      <ellipse cx="6" cy="17" rx="2.2" ry="1.8" fill="currentColor"/><ellipse cx="18" cy="17" rx="2.2" ry="1.8" fill="currentColor"/>
-      <line x1="7.5" y1="17" x2="7.5" y2="5" strokeWidth="1.2"/><line x1="16.5" y1="17" x2="16.5" y2="5" strokeWidth="1.2"/>
-      <line x1="5" y1="5" x2="19" y2="5" strokeWidth="1.5" strokeLinecap="round"/>
-    </svg>
-  ),
-  '4/16': (
-    <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5" stroke="currentColor" strokeWidth="1.1">
-      {[4, 8, 14, 20].map((cx, i) => <ellipse key={i} cx={cx} cy="17" rx="1.8" ry="1.5" fill="currentColor"/>)}
-      {[5, 11, 17, 23].map((x, i) => <line key={i} x1={x} y1="17" x2={x} y2="3" strokeWidth="1.1"/>)}
-      <line x1="3" y1="3" x2="21" y2="3" strokeWidth="1.3" strokeLinecap="round"/>
-      <line x1="3" y1="4.5" x2="21" y2="4.5" strokeWidth="1" strokeLinecap="round"/>
-    </svg>
-  ),
-  '8/16': (
-    <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5" stroke="currentColor" strokeWidth="1">
-      {[2.5, 5.5, 8.5, 11.5, 14.5, 17.5, 20.5, 23.5].map((cx, i) => <ellipse key={i} cx={cx} cy="17" rx="1.4" ry="1.2" fill="currentColor"/>)}
-      {[3.5, 6.5, 9.5, 12.5, 15.5, 18.5, 21.5].map((x, i) => <line key={i} x1={x} y1="17" x2={x} y2="2" strokeWidth="1"/>)}
-      <line x1="1" y1="2" x2="23" y2="2" strokeWidth="1.2" strokeLinecap="round"/>
-      <line x1="1" y1="3.5" x2="23" y2="3.5" strokeWidth="0.9" strokeLinecap="round"/>
-    </svg>
-  ),
-  '1/8+2/16': (
-    <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5" stroke="currentColor" strokeWidth="1.1">
-      <ellipse cx="5" cy="17" rx="2.2" ry="1.8" fill="currentColor"/><ellipse cx="12" cy="17" rx="1.8" ry="1.5" fill="currentColor"/><ellipse cx="19" cy="17" rx="1.8" ry="1.5" fill="currentColor"/>
-      <line x1="6.5" y1="17" x2="6.5" y2="5" strokeWidth="1.1"/><line x1="12" y1="17" x2="12" y2="3" strokeWidth="1.1"/><line x1="17.5" y1="17" x2="17.5" y2="3" strokeWidth="1.1"/>
-      <line x1="4" y1="5" x2="20" y2="5" strokeWidth="1.4" strokeLinecap="round"/>
-      <line x1="10" y1="3" x2="19" y2="3" strokeWidth="1.1" strokeLinecap="round"/>
-    </svg>
-  ),
-  '2/16+1/8': (
-    <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5" stroke="currentColor" strokeWidth="1.1">
-      <ellipse cx="5" cy="17" rx="1.8" ry="1.5" fill="currentColor"/><ellipse cx="12" cy="17" rx="1.8" ry="1.5" fill="currentColor"/><ellipse cx="19" cy="17" rx="2.2" ry="1.8" fill="currentColor"/>
-      <line x1="6.5" y1="17" x2="6.5" y2="3" strokeWidth="1.1"/><line x1="12" y1="17" x2="12" y2="3" strokeWidth="1.1"/><line x1="17.5" y1="17" x2="17.5" y2="5" strokeWidth="1.1"/>
-      <line x1="4" y1="3" x2="20" y2="3" strokeWidth="1.1" strokeLinecap="round"/>
-      <line x1="5" y1="5" x2="19" y2="5" strokeWidth="1.4" strokeLinecap="round"/>
-    </svg>
-  ),
-  'triplet': (
-    <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5" stroke="currentColor" strokeWidth="1.1">
-      <ellipse cx="5" cy="17" rx="2" ry="1.6" fill="currentColor"/><ellipse cx="12" cy="17" rx="2" ry="1.6" fill="currentColor"/><ellipse cx="19" cy="17" rx="2" ry="1.6" fill="currentColor"/>
-      <line x1="6.5" y1="17" x2="6.5" y2="5" strokeWidth="1.1"/><line x1="12" y1="17" x2="12" y2="5" strokeWidth="1.1"/><line x1="17.5" y1="17" x2="17.5" y2="5" strokeWidth="1.1"/>
-      <line x1="4" y1="5" x2="20" y2="5" strokeWidth="1.3" strokeLinecap="round"/>
-      <text x="12" y="2" textAnchor="middle" fontSize="5.5" fontWeight="bold" fill="currentColor">3</text>
-    </svg>
-  )
-};
-
+// RHYTHM_PATTERN_ICONS on faili alguses var'iga
 const RhythmPatternIcon = ({ pattern }) => (
   <span className="inline-flex items-center text-amber-900">{RHYTHM_PATTERN_ICONS[pattern] || null}</span>
 );
@@ -465,10 +503,7 @@ const PedagogicalMeterIcon = ({ beats, beatUnit }) => {
   );
 };
 
-// Noodivõtmed SVG-ga (Unicode 𝄞𝄢 ei pruugi fondiga kuvada) – SMuFL/Bravura stiilis lihtsustatud
-const TREBLE_CLEF_PATH = 'M14 2v2c0 2-1 4-3 5-2 1-4 1-5 0-1-1-1-3 0-4 1-1 2-2 2-3 1-2-1-2-3 0-4 2-1 4-1 6 0 2 1 3 2 4 3 1 2 2 3 2 5 0 2-1 4-3 5-2 1-4 1-6-1-2-2-2-5 0-7 2-2 4-2 7 0 3 2 4 4 4 7 0 2-2 4-4 5-2 1-4 0-5-2-1-2-1-4 0-6 1-2 3-2 5 0 2 2 3 4 3 6 0 1-1 2-2 2-3 0-1-1-1-2 0-2 1 0 2 0 3-1 1-1 2-2 2-4 0-2-1-3-2-4-1-1-3-1-4 0-1 1-1 2 0 3 1 1 2 1 3 0 1-1 2-1 3 0 1 1 2 1 3 0';
-const BASS_CLEF_PATH = 'M8 4c0 2 1 3 2 3 1 0 2-1 2-3 0-2-1-3-2-3-1 0-2 1-2 3zm8 0c0 2 1 3 2 3 1 0 2-1 2-3 0-2-1-3-2-3-1 0-2 1-2 3zm-10 4v12c0 1 1 2 2 2 1 0 2-1 2-2V8c0-1-1-2-2-2-1 0-2 1-2 2zm12 0v12c0 1 1 2 2 2 1 0 2-1 2-2V8c0-1-1-2-2-2-1 0-2 1-2 2zM10 6c-1 0-2 1-2 2v8c0 1 1 2 2 2 1 0 2-1 2-2V8c0-1-1-2-2-2zm4 0c-1 0-2 1-2 2v8c0 1 1 2 2 2 1 0 2-1 2-2V8c0-1-1-2-2-2z';
-const ALTO_TENOR_CLEF_PATH = 'M8 4c-2 0-4 2-4 5s2 5 4 5 4-2 4-5-2-5-4-5zm0 6c-1 0-2-1-2-1 0 0 1-1 2-1s2 1 2 1c0 0-1 1-2 1zm8-6c2 0 4 2 4 5s-2 5-4 5-4-2-4-5 2-5 4-5zm0 6c1 0 2-1 2-1 0 0-1-1-2-1s-2 1-2 1c0 0 1 1 2 1z';
+// TREBLE_CLEF_PATH, BASS_CLEF_PATH, ALTO_TENOR_CLEF_PATH on faili alguses var'iga
 const ClefIcon = ({ clefType }) => {
   if (clefType === 'do' || clefType === 'jo') {
     return (
@@ -517,6 +552,7 @@ function StaffClefSymbol({ x, y, height, clefType, fill = '#333' }) {
     return <BassClefSymbol x={x} y={y} height={height} fill={fill} />;
   }
   if (clefType === 'alto' || clefType === 'tenor') {
+    const scale = (height && height > 0) ? height / 24 : 0.4;
     return (
       <g transform={`translate(${x}, ${y}) scale(${scale}) translate(-12, -12)`} fill="none" stroke={fill} strokeWidth="1.4" strokeLinecap="round">
         <path d="M7 5.5c-1.8 0-3.2 1.4-3.2 3.2s1.4 3.2 3.2 3.2 3.2-1.4 3.2-3.2S8.8 5.5 7 5.5z"/>
@@ -607,28 +643,7 @@ const ChordIcon = () => (
   </svg>
 );
 
-// TOOLBOX_ORDER on faili alguses var'iga
-const FONT_OPTIONS = [
-  { value: 'Georgia, serif', label: 'Georgia' },
-  { value: 'system-ui, sans-serif', label: 'System' },
-  { value: 'Arial, Helvetica, sans-serif', label: 'Arial' },
-  { value: '"Times New Roman", Times, serif', label: 'Times New Roman' },
-  { value: 'Verdana, sans-serif', label: 'Verdana' },
-  { value: 'sans-serif', label: 'Sans-serif' },
-  { value: 'serif', label: 'Serif' }
-];
-
-// Tempo terminid (nimetus, tüüpiline BPM)
-const TEMPO_TERMS = [
-  { id: 'largo', key: 'tempo.largo', bpm: 40 },
-  { id: 'adagio', key: 'tempo.adagio', bpm: 66 },
-  { id: 'andante', key: 'tempo.andante', bpm: 76 },
-  { id: 'moderato', key: 'tempo.moderato', bpm: 108 },
-  { id: 'allegro', key: 'tempo.allegro', bpm: 120 },
-  { id: 'vivace', key: 'tempo.vivace', bpm: 144 },
-  { id: 'presto', key: 'tempo.presto', bpm: 168 }
-];
-
+// FONT_OPTIONS, TEMPO_TERMS on faili alguses var'iga
 function getToolboxes(t, instrumentConfig) {
   return {
     rhythm: {
@@ -830,17 +845,9 @@ function midiToNoteWithAccidental(midiNumber) {
     return { pitch: 'C', octave: 4, accidental: 0 };
   }
 }
-const FINGERING_TIN_WHISTLE = {
-  'D5': [1,1,1,1,1,1], 'E5': [0,1,1,1,1,1], 'F#5': [0,0,1,1,1,1], 'G5': [0,0,0,1,1,1], 'A5': [0,0,0,0,1,1], 'B5': [0,0,0,0,0,1], 'C#6': [0,0,0,0,0,0],
-  'D6': [1,1,1,1,1,1], 'E6': [0,1,1,1,1,1], 'F#6': [0,0,1,1,1,1], 'G6': [0,0,0,1,1,1], 'A6': [0,0,0,0,1,1], 'B6': [0,0,0,0,0,1], 'C#7': [0,0,0,0,0,0]
-};
-const FINGERING_RECORDER = {
-  'C5': [1,1,1,1,1,1,1], 'D5': [1,1,1,1,1,1,0], 'E5': [1,1,1,1,1,0,0], 'F5': [1,1,1,1,0,0,0], 'G5': [1,1,1,0,0,0,0], 'A5': [1,1,0,0,0,0,0], 'B5': [1,0,0,0,0,0,0], 'C6': [0,0,0,0,0,0,0],
-  'D6': [1,1,1,1,1,1,0], 'E6': [1,1,1,1,1,0,0], 'F6': [1,1,1,1,0,0,0], 'G6': [1,1,1,0,0,0,0], 'A6': [1,1,0,0,0,0,0], 'B6': [1,0,0,0,0,0,0], 'C7': [0,0,0,0,0,0,0]
-};
-
+// FINGERING_TIN_WHISTLE, FINGERING_RECORDER on faili alguses var'iga
 function NoodiMeisterCore({ icons }) {
-  if (!getNoodimeisterConfig() || getNoodimeisterConfig().EMOJIS === undefined) return null;
+  if (typeof YA === 'undefined' || !YA || YA.EMOJIS === undefined) return null;
 
   // Lazy loading: isReady muutub true 500ms pärast konstantide laadimist – vältib Initialization vigu (Staff/Timeline renderdatakse alles siis)
   const [isReady, setIsReady] = useState(false);
@@ -859,8 +866,7 @@ function NoodiMeisterCore({ icons }) {
 
   // Vercel build fix: oota kõik seaded laetud, siis luba Staff/Timeline (Kx) render – sisselogimise järgne suunamine ei kutsu Kx enne initsialiseerimist
   useEffect(() => {
-    var cfg = getNoodimeisterConfig();
-    if (!cfg) return;
+    if (typeof YA === 'undefined' || !YA) return;
     const t = setTimeout(() => {
       setIsReady(true);
       if (typeof window !== 'undefined') window.NOODIMEISTER_APP_READY = true;
@@ -1026,8 +1032,6 @@ function NoodiMeisterCore({ icons }) {
   const instrument = activeStaff?.instrumentId ?? 'piano';
   const setInstrument = useCallback((instId) => {
     setStaves((prev) => {
-      // Kx/TDZ kaitse: ära kasuta joonestiku konstantide väärtusi enne initsialiseerimist (Vercel YA "before initialization")
-      var YA = getNoodimeisterConfig();
       if (typeof YA === 'undefined' || !YA || typeof INSTRUMENT_CONFIG_BASE === 'undefined' || !INSTRUMENT_CONFIG_BASE) return prev;
       const idx = typeof activeStaffIndex === 'number' ? activeStaffIndex : 0;
       if (idx < 0 || idx >= prev.length) return prev;
@@ -5472,7 +5476,6 @@ function getFingeringForNote(pitch, octave, instrumentId) {
 
 // Timeline Component – multi-system layout (VexFlow loogika). (PAGE_BREAK_GAP on defineeritud üleval.)
 function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, pageWidth, cursorPosition, notationMode, staffLines, clefType, keySignature = 'C', relativeNotationShowKeySignature = false, relativeNotationShowTraditionalClef = false, onJoClefPositionChange, joClefFocused = false, onJoClefFocus, instrument = 'piano', instrumentNotationVariant = 'standard', instrumentConfig = {}, showBarNumbers = true, showRhythmSyllables = false, joClefStaffPosition: joClefStaffPositionProp, showAllNoteLabels = false, enableEmojiOverlays = true, onNoteTeacherLabelChange, onNoteLabelClick, chords = [], isDotted, isRest, selectedDuration, noteInputMode, selectedNoteIndex, isNoteSelected, notes: allNotes, onStaffAddNote, onNoteClick, ghostPitch, ghostOctave, notationStyle, layoutMeasuresPerLine = 4, layoutLineBreakBefore = [], layoutPageBreakBefore = [], layoutSystemGap = 120, systems: systemsProp, baseYOffset = 0, staffCount = 1, staffHeight: staffHeightProp, figurenotesSize = 16, figurenotesStems = false, pedagogicalPlayheadStyle = 'line', pedagogicalPlayheadEmoji = '🎵', pedagogicalPlayheadEmojiSize = 32, isPedagogicalAudioPlaying = false, isExportingAnimation = false, exportCursorRef, scoreContainerRef, pageFlowDirection = 'vertical', isFirstInBraceGroup = false, braceGroupSize = 0, lyricFontFamily = 'sans-serif' }) {
-  var YA = getNoodimeisterConfig();
   if (typeof YA === 'undefined' || !YA || YA.EMOJIS === false) return null;
   const safeKey = keySignature ?? 'C';
   const joClefStaffPosition = typeof joClefStaffPositionProp === 'number' ? joClefStaffPositionProp : getTonicStaffPosition(safeKey);
