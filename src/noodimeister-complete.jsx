@@ -94,6 +94,75 @@ var FIGURENOTES_SHAPES = { 2: 'cross', 3: 'square', 4: 'circle', 5: 'triangle' }
 var PITCH_TO_SEMI = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
 var PITCH_NAME_TO_NATURAL = { C: 'C', 'C#': 'C', Db: 'C', D: 'D', 'D#': 'D', Eb: 'D', E: 'E', F: 'F', 'F#': 'F', Gb: 'F', G: 'G', 'G#': 'G', Ab: 'G', A: 'A', 'A#': 'A', Bb: 'A', B: 'B' };
 
+// Joonestiku/instrumentide konstandid var'iga KÕIGE ALGUSES – vältib YA "before initialization" (Vercel minifier Kx/TDZ)
+var INSTRUMENT_CATEGORIES = [
+  { id: 'singleStaff', labelKey: 'cat.singleStaff', instruments: ['single-staff-treble', 'single-staff-bass'] },
+  { id: 'keyboard', labelKey: 'cat.keyboard', instruments: ['piano', 'organ', 'harpsichord', 'accordion'] },
+  { id: 'stringsPlucked', labelKey: 'cat.stringsPlucked', instruments: ['guitar', 'ukulele-sopran', 'ukulele-tenor', 'ukulele-bariton', 'ukulele-bass'] },
+  { id: 'stringsBowed', labelKey: 'cat.stringsBowed', instruments: ['violin', 'viola', 'cello', 'double-bass'] },
+  { id: 'woodwinds', labelKey: 'cat.woodwinds', instruments: ['flute', 'recorder', 'clarinet', 'oboe', 'bassoon'] },
+  { id: 'brass', labelKey: 'cat.brass', instruments: ['trumpet', 'trombone', 'tuba', 'french-horn'] },
+  { id: 'nonOrchestral', labelKey: 'cat.nonOrchestral', instruments: ['tin-whistle', 'saxophone'] },
+  { id: 'other', labelKey: 'cat.other', instruments: ['voice'] }
+];
+var INSTRUMENT_CONFIG_BASE = {
+  'single-staff-treble': { value: 'single-staff-treble', range: 'E3-A7', type: 'standard', defaultClef: 'treble' },
+  'single-staff-bass':   { value: 'single-staff-bass', range: 'E2-G4', type: 'standard', defaultClef: 'bass' },
+  organ:      { value: 'organ', range: 'C2-C6', type: 'figuredBass', defaultClef: 'treble' },
+  harpsichord:{ value: 'harpsichord', range: 'F1-F6', type: 'figuredBass', defaultClef: 'treble' },
+  accordion:  { value: 'accordion', range: 'F3-C6', type: 'accordion', defaultClef: 'treble' },
+  piano:      { value: 'piano', range: 'A0-C8', type: 'grandStaff', defaultClef: 'treble' },
+  guitar:     { value: 'guitar', range: 'E2-E6', type: 'tab', strings: 6, tuning: ['E2','A2','D3','G3','B3','E4'], defaultClef: 'treble' },
+  'ukulele-sopran': { value: 'ukulele-sopran', range: 'G4-A5', type: 'tab', strings: 4, tuning: ['G4','C4','E4','A4'], defaultClef: 'treble' },
+  'ukulele-tenor':  { value: 'ukulele-tenor', range: 'G3-A5', type: 'tab', strings: 4, tuning: ['G3','C4','E4','A4'], defaultClef: 'treble' },
+  'ukulele-bariton':{ value: 'ukulele-bariton', range: 'D3-E5', type: 'tab', strings: 4, tuning: ['D3','G3','B3','E4'], defaultClef: 'treble' },
+  'ukulele-bass':   { value: 'ukulele-bass', range: 'E2-A4', type: 'tab', strings: 4, tuning: ['E2','A2','D3','G3'], defaultClef: 'treble' },
+  violin:     { value: 'violin', range: 'G3-A7', type: 'standard', defaultClef: 'treble' },
+  viola:      { value: 'viola', range: 'C3-E6', type: 'standard', defaultClef: 'alto' },
+  cello:      { value: 'cello', range: 'C2-A5', type: 'standard', defaultClef: 'bass' },
+  'double-bass': { value: 'double-bass', range: 'E1-G4', type: 'standard', defaultClef: 'bass' },
+  flute:      { value: 'flute', range: 'C4-C7', type: 'wind', fingering: true, defaultClef: 'treble' },
+  recorder:   { value: 'recorder', range: 'C5-D6', type: 'wind', fingering: true, defaultClef: 'treble' },
+  clarinet:   { value: 'clarinet', range: 'E3-G6', type: 'wind', fingering: true, defaultClef: 'treble' },
+  oboe:       { value: 'oboe', range: 'Bb3-A6', type: 'wind', fingering: true, defaultClef: 'treble' },
+  bassoon:    { value: 'bassoon', range: 'Bb1-E5', type: 'wind', fingering: true, defaultClef: 'bass' },
+  trumpet:    { value: 'trumpet', range: 'F#3-E6', type: 'standard', defaultClef: 'treble' },
+  trombone:   { value: 'trombone', range: 'E2-F5', type: 'standard', defaultClef: 'bass' },
+  tuba:       { value: 'tuba', range: 'D1-F4', type: 'standard', defaultClef: 'bass' },
+  'french-horn': { value: 'french-horn', range: 'B1-F5', type: 'standard', defaultClef: 'treble' },
+  'tin-whistle': { value: 'tin-whistle', range: 'D5-C#7', type: 'wind', fingering: true, defaultClef: 'treble' },
+  saxophone:  { value: 'saxophone', range: 'Bb2-F5', type: 'wind', fingering: true, defaultClef: 'treble' },
+  voice:      { value: 'voice', range: 'C3-C6', type: 'standard', defaultClef: 'treble' }
+};
+var INSTRUMENT_I18N_KEYS = {
+  'single-staff-treble': 'inst.singleStaffTreble', 'single-staff-bass': 'inst.singleStaffBass',
+  organ: 'inst.organ', harpsichord: 'inst.harpsichord', accordion: 'inst.accordion', piano: 'inst.piano',
+  guitar: 'inst.guitar', 'ukulele-sopran': 'inst.ukuleleSopran', 'ukulele-tenor': 'inst.ukuleleTenor',
+  'ukulele-bariton': 'inst.ukuleleBariton', 'ukulele-bass': 'inst.ukuleleBass',
+  violin: 'inst.violin', viola: 'inst.viola', cello: 'inst.cello', 'double-bass': 'inst.doubleBass',
+  flute: 'inst.flute', recorder: 'inst.recorder', clarinet: 'inst.clarinet', oboe: 'inst.oboe', bassoon: 'inst.bassoon',
+  trumpet: 'inst.trumpet', trombone: 'inst.trombone', tuba: 'inst.tuba', 'french-horn': 'inst.frenchHorn',
+  'tin-whistle': 'inst.tinWhistle', saxophone: 'inst.saxophone', voice: 'inst.voice'
+};
+var INSTRUMENT_TO_GM_PROGRAM = {
+  'single-staff-treble': 0, 'single-staff-bass': 0,
+  piano: 0, organ: 19, harpsichord: 6, accordion: 21,
+  guitar: 24, 'ukulele-sopran': 24, 'ukulele-tenor': 24, 'ukulele-bariton': 24, 'ukulele-bass': 32,
+  violin: 40, viola: 41, cello: 42, 'double-bass': 43,
+  flute: 73, recorder: 74, clarinet: 71, oboe: 68, bassoon: 70,
+  trumpet: 56, trombone: 57, tuba: 58, 'french-horn': 60,
+  'tin-whistle': 75, saxophone: 65, voice: 52
+};
+var INSTRUMENT_TO_SOUNDFONT_NAME = {
+  'single-staff-treble': 'acoustic_grand_piano', 'single-staff-bass': 'acoustic_grand_piano',
+  piano: 'acoustic_grand_piano', organ: 'church_organ', harpsichord: 'harpsichord', accordion: 'accordion',
+  guitar: 'acoustic_guitar_nylon', 'ukulele-sopran': 'acoustic_guitar_nylon', 'ukulele-tenor': 'acoustic_guitar_nylon', 'ukulele-bariton': 'acoustic_guitar_nylon', 'ukulele-bass': 'acoustic_bass',
+  violin: 'violin', viola: 'viola', cello: 'cello', 'double-bass': 'contrabass',
+  flute: 'flute', recorder: 'recorder', clarinet: 'clarinet', oboe: 'oboe', bassoon: 'bassoon',
+  trumpet: 'trumpet', trombone: 'trombone', tuba: 'tuba', 'french-horn': 'french_horn',
+  'tin-whistle': 'whistle', saxophone: 'alto_sax', voice: 'choir_aahs'
+};
+
 function LoggedInUser({ icons, t }) {
   const navigate = useNavigate();
   const [user, setUser] = useState(() => authStorage.getLoggedInUser());
@@ -489,87 +558,7 @@ const LayoutIcon = ({ staffLines }) => (
   </svg>
 );
 
-// Instrument categories for toolbox and wizard (order + grouping)
-const INSTRUMENT_CATEGORIES = [
-  { id: 'singleStaff', labelKey: 'cat.singleStaff', instruments: ['single-staff-treble', 'single-staff-bass'] },
-  { id: 'keyboard', labelKey: 'cat.keyboard', instruments: ['piano', 'organ', 'harpsichord', 'accordion'] },
-  { id: 'stringsPlucked', labelKey: 'cat.stringsPlucked', instruments: ['guitar', 'ukulele-sopran', 'ukulele-tenor', 'ukulele-bariton', 'ukulele-bass'] },
-  { id: 'stringsBowed', labelKey: 'cat.stringsBowed', instruments: ['violin', 'viola', 'cello', 'double-bass'] },
-  { id: 'woodwinds', labelKey: 'cat.woodwinds', instruments: ['flute', 'recorder', 'clarinet', 'oboe', 'bassoon'] },
-  { id: 'brass', labelKey: 'cat.brass', instruments: ['trumpet', 'trombone', 'tuba', 'french-horn'] },
-  { id: 'nonOrchestral', labelKey: 'cat.nonOrchestral', instruments: ['tin-whistle', 'saxophone'] },
-  { id: 'other', labelKey: 'cat.other', instruments: ['voice'] }
-];
-
-// Instrument metadata: type 'standard' | 'tab' | 'wind' | 'figuredBass' | 'accordion' | 'grandStaff'
-const INSTRUMENT_CONFIG_BASE = {
-  // Üks rida, võti valitud instrumendi järgi
-  'single-staff-treble': { value: 'single-staff-treble', range: 'E3-A7', type: 'standard', defaultClef: 'treble' },
-  'single-staff-bass':   { value: 'single-staff-bass', range: 'E2-G4', type: 'standard', defaultClef: 'bass' },
-  // Klahvpillid
-  organ:      { value: 'organ', range: 'C2-C6', type: 'figuredBass', defaultClef: 'treble' },
-  harpsichord:{ value: 'harpsichord', range: 'F1-F6', type: 'figuredBass', defaultClef: 'treble' },
-  accordion:  { value: 'accordion', range: 'F3-C6', type: 'accordion', defaultClef: 'treble' },
-  piano:      { value: 'piano', range: 'A0-C8', type: 'grandStaff', defaultClef: 'treble' },
-  // Näppekeelpillid
-  guitar:     { value: 'guitar', range: 'E2-E6', type: 'tab', strings: 6, tuning: ['E2','A2','D3','G3','B3','E4'], defaultClef: 'treble' },
-  'ukulele-sopran': { value: 'ukulele-sopran', range: 'G4-A5', type: 'tab', strings: 4, tuning: ['G4','C4','E4','A4'], defaultClef: 'treble' },
-  'ukulele-tenor':  { value: 'ukulele-tenor', range: 'G3-A5', type: 'tab', strings: 4, tuning: ['G3','C4','E4','A4'], defaultClef: 'treble' },
-  'ukulele-bariton':{ value: 'ukulele-bariton', range: 'D3-E5', type: 'tab', strings: 4, tuning: ['D3','G3','B3','E4'], defaultClef: 'treble' },
-  'ukulele-bass':   { value: 'ukulele-bass', range: 'E2-A4', type: 'tab', strings: 4, tuning: ['E2','A2','D3','G3'], defaultClef: 'treble' },
-  // Poogenkeelpillid
-  violin:     { value: 'violin', range: 'G3-A7', type: 'standard', defaultClef: 'treble' },
-  viola:      { value: 'viola', range: 'C3-E6', type: 'standard', defaultClef: 'alto' },
-  cello:      { value: 'cello', range: 'C2-A5', type: 'standard', defaultClef: 'bass' },
-  'double-bass': { value: 'double-bass', range: 'E1-G4', type: 'standard', defaultClef: 'bass' },
-  // Puupuhkpillid
-  flute:      { value: 'flute', range: 'C4-C7', type: 'wind', fingering: true, defaultClef: 'treble' },
-  recorder:   { value: 'recorder', range: 'C5-D6', type: 'wind', fingering: true, defaultClef: 'treble' },
-  clarinet:   { value: 'clarinet', range: 'E3-G6', type: 'wind', fingering: true, defaultClef: 'treble' },
-  oboe:       { value: 'oboe', range: 'Bb3-A6', type: 'wind', fingering: true, defaultClef: 'treble' },
-  bassoon:    { value: 'bassoon', range: 'Bb1-E5', type: 'wind', fingering: true, defaultClef: 'bass' },
-  // Vaskpuhkpillid
-  trumpet:    { value: 'trumpet', range: 'F#3-E6', type: 'standard', defaultClef: 'treble' },
-  trombone:   { value: 'trombone', range: 'E2-F5', type: 'standard', defaultClef: 'bass' },
-  tuba:       { value: 'tuba', range: 'D1-F4', type: 'standard', defaultClef: 'bass' },
-  'french-horn': { value: 'french-horn', range: 'B1-F5', type: 'standard', defaultClef: 'treble' },
-  // Mitte orkestri
-  'tin-whistle': { value: 'tin-whistle', range: 'D5-C#7', type: 'wind', fingering: true, defaultClef: 'treble' },
-  saxophone:  { value: 'saxophone', range: 'Bb2-F5', type: 'wind', fingering: true, defaultClef: 'treble' },
-  // Muud
-  voice:      { value: 'voice', range: 'C3-C6', type: 'standard', defaultClef: 'treble' }
-};
-const INSTRUMENT_I18N_KEYS = {
-  'single-staff-treble': 'inst.singleStaffTreble', 'single-staff-bass': 'inst.singleStaffBass',
-  organ: 'inst.organ', harpsichord: 'inst.harpsichord', accordion: 'inst.accordion', piano: 'inst.piano',
-  guitar: 'inst.guitar', 'ukulele-sopran': 'inst.ukuleleSopran', 'ukulele-tenor': 'inst.ukuleleTenor',
-  'ukulele-bariton': 'inst.ukuleleBariton', 'ukulele-bass': 'inst.ukuleleBass',
-  violin: 'inst.violin', viola: 'inst.viola', cello: 'inst.cello', 'double-bass': 'inst.doubleBass',
-  flute: 'inst.flute', recorder: 'inst.recorder', clarinet: 'inst.clarinet', oboe: 'inst.oboe', bassoon: 'inst.bassoon',
-  trumpet: 'inst.trumpet', trombone: 'inst.trombone', tuba: 'inst.tuba', 'french-horn': 'inst.frenchHorn',
-  'tin-whistle': 'inst.tinWhistle', saxophone: 'inst.saxophone', voice: 'inst.voice'
-};
-
-// MuseScore / General MIDI vastendus: Noodimeisteri instrument → GM program (0–127) ja FluidR3_GM SoundFont nimi
-// Vt docs/MUSESCORE-SOUNDS.md
-const INSTRUMENT_TO_GM_PROGRAM = {
-  'single-staff-treble': 0, 'single-staff-bass': 0,
-  piano: 0, organ: 19, harpsichord: 6, accordion: 21,
-  guitar: 24, 'ukulele-sopran': 24, 'ukulele-tenor': 24, 'ukulele-bariton': 24, 'ukulele-bass': 32,
-  violin: 40, viola: 41, cello: 42, 'double-bass': 43,
-  flute: 73, recorder: 74, clarinet: 71, oboe: 68, bassoon: 70,
-  trumpet: 56, trombone: 57, tuba: 58, 'french-horn': 60,
-  'tin-whistle': 75, saxophone: 65, voice: 52
-};
-const INSTRUMENT_TO_SOUNDFONT_NAME = {
-  'single-staff-treble': 'acoustic_grand_piano', 'single-staff-bass': 'acoustic_grand_piano',
-  piano: 'acoustic_grand_piano', organ: 'church_organ', harpsichord: 'harpsichord', accordion: 'accordion',
-  guitar: 'acoustic_guitar_nylon', 'ukulele-sopran': 'acoustic_guitar_nylon', 'ukulele-tenor': 'acoustic_guitar_nylon', 'ukulele-bariton': 'acoustic_guitar_nylon', 'ukulele-bass': 'acoustic_bass',
-  violin: 'violin', viola: 'viola', cello: 'cello', 'double-bass': 'contrabass',
-  flute: 'flute', recorder: 'recorder', clarinet: 'clarinet', oboe: 'oboe', bassoon: 'bassoon',
-  trumpet: 'trumpet', trombone: 'trombone', tuba: 'tuba', 'french-horn': 'french_horn',
-  'tin-whistle': 'whistle', saxophone: 'alto_sax', voice: 'choir_aahs'
-};
+// INSTRUMENT_* on faili alguses var'iga (YA/TDZ fix)
 function getInstrumentConfig(t) {
   return Object.fromEntries(
     Object.entries(INSTRUMENT_CONFIG_BASE).map(([id, cfg]) => [
@@ -868,11 +857,14 @@ function NoodiMeisterCore({ icons }) {
     } catch (_) { /* ignore */ }
   }, [locale]);
 
-  // 500ms pärast konstantide laadimist: luba Staff/Timeline render – vältib Initialization vigu
+  // Vercel build fix: oota kõik seaded laetud, siis luba Staff/Timeline (Kx) render – sisselogimise järgne suunamine ei kutsu Kx enne initsialiseerimist
   useEffect(() => {
-    const cfg = getNoodimeisterConfig();
+    var cfg = getNoodimeisterConfig();
     if (!cfg) return;
-    const t = setTimeout(() => setIsReady(true), 500);
+    const t = setTimeout(() => {
+      setIsReady(true);
+      if (typeof window !== 'undefined') window.NOODIMEISTER_APP_READY = true;
+    }, 500);
     return () => clearTimeout(t);
   }, []);
 
@@ -1034,6 +1026,9 @@ function NoodiMeisterCore({ icons }) {
   const instrument = activeStaff?.instrumentId ?? 'piano';
   const setInstrument = useCallback((instId) => {
     setStaves((prev) => {
+      // Kx/TDZ kaitse: ära kasuta joonestiku konstantide väärtusi enne initsialiseerimist (Vercel YA "before initialization")
+      var YA = getNoodimeisterConfig();
+      if (typeof YA === 'undefined' || !YA || typeof INSTRUMENT_CONFIG_BASE === 'undefined' || !INSTRUMENT_CONFIG_BASE) return prev;
       const idx = typeof activeStaffIndex === 'number' ? activeStaffIndex : 0;
       if (idx < 0 || idx >= prev.length) return prev;
       const cfg = INSTRUMENT_CONFIG_BASE[instId];
@@ -5477,8 +5472,8 @@ function getFingeringForNote(pitch, octave, instrumentId) {
 
 // Timeline Component – multi-system layout (VexFlow loogika). (PAGE_BREAK_GAP on defineeritud üleval.)
 function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, pageWidth, cursorPosition, notationMode, staffLines, clefType, keySignature = 'C', relativeNotationShowKeySignature = false, relativeNotationShowTraditionalClef = false, onJoClefPositionChange, joClefFocused = false, onJoClefFocus, instrument = 'piano', instrumentNotationVariant = 'standard', instrumentConfig = {}, showBarNumbers = true, showRhythmSyllables = false, joClefStaffPosition: joClefStaffPositionProp, showAllNoteLabels = false, enableEmojiOverlays = true, onNoteTeacherLabelChange, onNoteLabelClick, chords = [], isDotted, isRest, selectedDuration, noteInputMode, selectedNoteIndex, isNoteSelected, notes: allNotes, onStaffAddNote, onNoteClick, ghostPitch, ghostOctave, notationStyle, layoutMeasuresPerLine = 4, layoutLineBreakBefore = [], layoutPageBreakBefore = [], layoutSystemGap = 120, systems: systemsProp, baseYOffset = 0, staffCount = 1, staffHeight: staffHeightProp, figurenotesSize = 16, figurenotesStems = false, pedagogicalPlayheadStyle = 'line', pedagogicalPlayheadEmoji = '🎵', pedagogicalPlayheadEmojiSize = 32, isPedagogicalAudioPlaying = false, isExportingAnimation = false, exportCursorRef, scoreContainerRef, pageFlowDirection = 'vertical', isFirstInBraceGroup = false, braceGroupSize = 0, lyricFontFamily = 'sans-serif' }) {
-  const cfg = getNoodimeisterConfig();
-  if (!cfg || cfg.EMOJIS === false) return null;
+  var YA = getNoodimeisterConfig();
+  if (typeof YA === 'undefined' || !YA || YA.EMOJIS === false) return null;
   const safeKey = keySignature ?? 'C';
   const joClefStaffPosition = typeof joClefStaffPositionProp === 'number' ? joClefStaffPositionProp : getTonicStaffPosition(safeKey);
   if (typeof joClefStaffPosition !== 'number') return null;
@@ -5970,10 +5965,10 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
                 <text x={18} y={sys.yOffset + centerY + 6} fontSize="14" fontWeight="bold" fill="#333">TAB</text>
               ) : staffLines === 5 ? (
                 (() => {
-                  // Viiulivõti: G-joon on teine joon ülevalt [1].
-                  const trebleGLine = staffLinePositions[1];
-                  // Bassivõti: F-joon (võtme kese) on neljas joon ülevalt [3].
-                  const bassFLine = staffLinePositions[3];
+                  // Viiulivõti: G4 on teine joon alt = neljas joon ülevalt [3].
+                  const trebleGLine = staffLinePositions[3];
+                  // Bassivõti: F3 on neljas joon alt (F-clef), teine joon ülevalt [1].
+                  const bassFLine = staffLinePositions[1];
                   const bassClefYOffset = 0;
                   const middleLineYStaff = centerY;
                   const staffSpace = spacing;
