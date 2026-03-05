@@ -10,6 +10,36 @@ const KEY_LOGGED_IN = 'noodimeister-logged-in';
 const KEY_GOOGLE_TOKEN = 'noodimeister-google-token';
 const KEY_GOOGLE_EXPIRY = 'noodimeister-google-token-expiry';
 
+/** Vercel/sisselogimise eelne kontroll: kas salvestus on kirjutatav ja loetav (vältib "kinnitamine ebaõnnestus"). */
+function canUseStorageForLogin(stayLoggedIn) {
+  if (typeof window === 'undefined') return false;
+  try {
+    const storage = stayLoggedIn ? window.localStorage : window.sessionStorage;
+    if (!storage) return false;
+    const testKey = 'noodimeister-storage-check';
+    storage.setItem(testKey, '1');
+    const ok = storage.getItem(testKey) === '1';
+    storage.removeItem(testKey);
+    return ok;
+  } catch {
+    return false;
+  }
+}
+
+/** Suuna /app poole Vercelil korrektselt (arvestab BASE_URL). */
+function redirectToApp() {
+  if (typeof window === 'undefined') return;
+  try {
+    const base = (typeof import.meta !== 'undefined' && import.meta.env?.BASE_URL) || '';
+    const path = (base.replace(/\/$/, '') || '') + '/app';
+    const url = window.location.origin + path;
+    window.location.assign(url);
+  } catch (e) {
+    console.warn('[CloudLogin] redirectToApp viga:', e);
+    window.location.assign('/app');
+  }
+}
+
 function useCloudLoginWithProvider(mode = 'login', stayLoggedIn = false, onError) {
   const navigate = useNavigate();
 
@@ -64,6 +94,12 @@ function useCloudLoginWithProvider(mode = 'login', stayLoggedIn = false, onError
               return;
             }
             const user = { email: profile.email, name: profile.name || profile.given_name || profile.email?.split('@')[0], provider: 'google' };
+            if (!canUseStorageForLogin(stayLoggedIn)) {
+              const msg = 'brauser ei luba andmeid salvestada (nt privaatne režiim). Proovi teist brauserit.';
+              alert('Sisselogimise viga: ' + msg);
+              if (onError) onError(formatAuthError('brauser', { message: msg }));
+              return;
+            }
             const storage = getStorageForLogin(stayLoggedIn);
             if (!storage) {
               const msg = 'brauser ei luba andmeid salvestada (nt privaatne režiim). Proovi teist brauserit.';
@@ -97,13 +133,9 @@ function useCloudLoginWithProvider(mode = 'login', stayLoggedIn = false, onError
               if (onError) onError(payload);
               return;
             }
-            console.log('[CloudLogin] Auth kinnitatud, suuname /app poole (COOP: ainult location.assign, mitte window.close)');
+            console.log('[CloudLogin] Auth kinnitatud, suuname /app poole (Vercel: redirectToApp)');
             requestAnimationFrame(() => {
-              try {
-                if (typeof window !== 'undefined') window.location.assign('/app');
-              } catch (navErr) {
-                console.warn('[CloudLogin] location.assign viga:', navErr);
-              }
+              setTimeout(redirectToApp, 50);
             });
           } catch (e) {
             alert('Sisselogimise viga: ' + (e?.message ?? String(e)));
@@ -140,6 +172,12 @@ function useCloudLoginWithProvider(mode = 'login', stayLoggedIn = false, onError
       alert('Sisselogimise viga: ' + msg);
       const payload = formatAuthError('konfiguratsioon', { message: msg });
       if (onError) onError(payload);
+      return;
+    }
+    if (!canUseStorageForLogin(false) && !canUseStorageForLogin(true)) {
+      const msg = 'Brauser ei luba andmeid salvestada (nt privaatne režiim või kolmandate küpsiste blokeerimine). Proovi teist brauserit või lülita privaatne režiim välja.';
+      alert('Sisselogimise viga: ' + msg);
+      if (onError) onError(formatAuthError('brauser', { message: msg }));
       return;
     }
     googleLogin();

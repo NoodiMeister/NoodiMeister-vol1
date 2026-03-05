@@ -51,7 +51,8 @@ function getStaffHeight() {
   return (cfg.STAFF_HEIGHT != null && cfg.STAFF_HEIGHT > 0) ? cfg.STAFF_HEIGHT : 140;
 }
 
-const LAYOUT = {
+// var = hoisted, vältib "before initialization" vigu faili keskosa komponentide puhul
+var LAYOUT = {
   PAGE_WIDTH_MIN: 800,
   PAGE_WIDTH_MAX: 1000,
   PAGE_WIDTH_MAX_LANDSCAPE: 1400,
@@ -61,17 +62,37 @@ const LAYOUT = {
   MARGIN_RIGHT: 40,
   CLEF_WIDTH: 45
 };
-const DEMO_MAX_BEATS = 8;
-const DEMO_MAX_MEASURES = 2;
+var DEMO_MAX_BEATS = 8;
+var DEMO_MAX_MEASURES = 2;
+var PAGE_BREAK_GAP = 80;
+var KEY_ORDER = ['C', 'G', 'D', 'A', 'E', 'B', 'F', 'Bb', 'Eb'];
 
-// Ikoonid laetakse dünaamiliselt, et vältida "Cannot access 'Tt' before initialization" (lucide-react bundle)
-const LUCIDE_ICONS = [
+// Graafika ja app konstandid var'iga faili alguses – vältivad YA "before initialization" / sisselogimise vigu
+var LUCIDE_ICONS = [
   'Music2', 'Clock', 'Hash', 'Type', 'Piano', 'Palette', 'Layout', 'Check', 'Save', 'FolderOpen',
   'Plus', 'Settings', 'Key', 'Repeat', 'Cloud', 'LogOut', 'User', 'CloudUpload', 'CloudDownload', 'FolderPlus', 'ChevronDown',
   'Play', 'Pause', 'Video', 'Eye', 'ArrowDown', 'ArrowRight', 'ArrowUpDown', 'X'
 ];
+var STORAGE_KEY = 'noodimeister-data';
 
-const STORAGE_KEY = 'noodimeister-data';
+// Rütmiõppe režiim: Kodály silpide pildid (public/) – kui rütmirežiim on sisse lülitatud, kasutatakse neid faile
+var RHYTHM_SYLLABLE_IMAGES = {
+  '1/4': '/ta.svg',      // veerandnoot
+  '1/8': '/ti-ti.svg',    // kaks kaheksandiknooti
+  '1/2': '/ta-a.svg',     // poolnoot
+  'rest': '/sh-sh.svg',   // veerandpaus
+  '1/16': '/ti-ri-ti-ri.svg',
+  '1/1': '/ta-a-a-a.svg',
+  '1/32': '/ri.svg'
+};
+
+var VALID_DENOMINATORS = [1, 2, 4, 8, 16, 32, 64, 128];
+var MAX_NUMERATOR = 99;
+var TOOLBOX_ORDER = ['rhythm', 'timeSignature', 'clefs', 'keySignatures', 'transpose', 'pitchInput', 'pianoKeyboard', 'notehead', 'instruments', 'repeatsJumps', 'layout', 'textBox', 'chords'];
+var FIGURENOTES_COLORS = { 'C': '#E31E24', 'D': '#8B5A2B', 'E': '#BDBDBD', 'F': '#0091DA', 'G': '#000000', 'A': '#FFEF00', 'B': '#32CD32' };
+var FIGURENOTES_SHAPES = { 2: 'cross', 3: 'square', 4: 'circle', 5: 'triangle' };
+var PITCH_TO_SEMI = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
+var PITCH_NAME_TO_NATURAL = { C: 'C', 'C#': 'C', Db: 'C', D: 'D', 'D#': 'D', Eb: 'D', E: 'E', F: 'F', 'F#': 'F', Gb: 'F', G: 'G', 'G#': 'G', Ab: 'G', A: 'A', 'A#': 'A', Bb: 'A', B: 'B' };
 
 function LoggedInUser({ icons, t }) {
   const navigate = useNavigate();
@@ -315,10 +336,7 @@ const RhythmPatternIcon = ({ pattern }) => (
   <span className="inline-flex items-center text-amber-900">{RHYTHM_PATTERN_ICONS[pattern] || null}</span>
 );
 
-// Kehtivad taktimõõdu nimetajad: astmed kahest (1, 2, 4, 8, 16, 32, 64, 128, ...)
-const VALID_DENOMINATORS = [1, 2, 4, 8, 16, 32, 64, 128];
-const MAX_NUMERATOR = 99; // Löökide arv vaba 1–MAX_NUMERATOR
-
+// VALID_DENOMINATORS, MAX_NUMERATOR on faili alguses var'iga
 const MeterIcon = ({ beats, beatUnit }) => (
   <svg viewBox="0 0 24 24" className="w-5 h-5">
     <text x="12" y="10" textAnchor="middle" fontSize="10" fontWeight="bold" fill="currentColor">{beats}</text>
@@ -600,9 +618,7 @@ const ChordIcon = () => (
   </svg>
 );
 
-// Toolbox definitions – tõlgitud getToolboxes(t, instrumentConfig)
-const TOOLBOX_ORDER = ['rhythm', 'timeSignature', 'clefs', 'keySignatures', 'transpose', 'pitchInput', 'pianoKeyboard', 'notehead', 'instruments', 'repeatsJumps', 'layout', 'textBox', 'chords'];
-
+// TOOLBOX_ORDER on faili alguses var'iga
 const FONT_OPTIONS = [
   { value: 'Georgia, serif', label: 'Georgia' },
   { value: 'system-ui, sans-serif', label: 'System' },
@@ -798,29 +814,13 @@ function getToolboxes(t, instrumentConfig) {
   };
 }
 
-// Figurenotes color and shape mappings (värvid ja kujundid pildi järgi)
-const FIGURENOTES_COLORS = {
-  'C': '#E31E24', 'D': '#8B5A2B', 'E': '#BDBDBD', 'F': '#0091DA',
-  'G': '#000000', 'A': '#FFEF00', 'B': '#32CD32'
-};
-
-// Madal oktav = rist (X), järgmine = ruut, keskmine = ring, kõrge = kolmnurk
-const FIGURENOTES_SHAPES = {
-  2: 'cross', 3: 'square', 4: 'circle', 5: 'triangle'
-};
-
+// FIGURENOTES_COLORS, FIGURENOTES_SHAPES on faili alguses var'iga
 /** Teksti värv kujundi sees: valge, välja arvatud A (kollane) ja E (hall) – must loetavuse jaoks */
 function getFigurenoteTextColor(pitch) {
   return (pitch === 'A' || pitch === 'E') ? '#000000' : '#ffffff';
 }
 
-// Pitch/octave ↔ MIDI; fingering; timeline – defineeritud enne NoodiMeisterit, et vältida TDZ minifitseerimisel
-const PITCH_TO_SEMI = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
-const PAGE_BREAK_GAP = 80;
-// JO-võtme nooltega liigutamine: järjestus üles (↑) / alla (↓)
-const KEY_ORDER = ['C', 'G', 'D', 'A', 'E', 'B', 'F', 'Bb', 'Eb'];
-// MIDI → noodinimi + oktaav (react-piano); looduslik noot sisestamiseks (C#, Db → C, D jne)
-const PITCH_NAME_TO_NATURAL = { C: 'C', 'C#': 'C', Db: 'C', D: 'D', 'D#': 'D', Eb: 'D', E: 'E', F: 'F', 'F#': 'F', Gb: 'F', G: 'G', 'G#': 'G', Ab: 'G', A: 'A', 'A#': 'A', Bb: 'A', B: 'B' };
+// PITCH_TO_SEMI, PITCH_NAME_TO_NATURAL on faili alguses var'iga
 function midiToPitchOctave(midiNumber) {
   try {
     const attrs = MidiNumbers.getAttributes(midiNumber);
@@ -852,6 +852,9 @@ const FINGERING_RECORDER = {
 
 function NoodiMeisterCore({ icons }) {
   if (!getNoodimeisterConfig() || getNoodimeisterConfig().EMOJIS === undefined) return null;
+
+  // Lazy loading: isReady muutub true 500ms pärast konstantide laadimist – vältib Initialization vigu (Staff/Timeline renderdatakse alles siis)
+  const [isReady, setIsReady] = useState(false);
   const [locale, setLocale] = useState(() => {
     try {
       return localStorage.getItem(LOCALE_STORAGE_KEY) || DEFAULT_LOCALE;
@@ -864,6 +867,14 @@ function NoodiMeisterCore({ icons }) {
       localStorage.setItem(LOCALE_STORAGE_KEY, locale);
     } catch (_) { /* ignore */ }
   }, [locale]);
+
+  // 500ms pärast konstantide laadimist: luba Staff/Timeline render – vältib Initialization vigu
+  useEffect(() => {
+    const cfg = getNoodimeisterConfig();
+    if (!cfg) return;
+    const t = setTimeout(() => setIsReady(true), 500);
+    return () => clearTimeout(t);
+  }, []);
 
   const t = useMemo(() => createT(locale), [locale]);
   const instrumentConfig = useMemo(() => getInstrumentConfig(t), [t]);
@@ -3262,6 +3273,7 @@ function NoodiMeisterCore({ icons }) {
       }
     };
 
+    // Globaalne window keydown: JO-võti nooltega ↑↓ muudab võtme asukohta ja transponeerib kõik noodid reaalajas (mõlemal joonestikul)
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [activeToolbox, selectedOptionIndex, handleToolboxSelection, noteInputMode, selectedDuration, isDotted, isRest, notes, getEffectiveDuration, selectedNoteIndex, selectionStart, selectionEnd, clipboard, undo, saveToHistory, getSelectedNotes, shiftPitch, shiftOctave, addMeasure, ghostPitch, ghostOctave, cursorPosition, joClefFocused, joClefStaffPosition, keySignature, setNotes, setKeySignature]);
@@ -3392,6 +3404,7 @@ function NoodiMeisterCore({ icons }) {
     { label: '5/4', value: [5, 4] }
   ];
 
+  if (!isReady) return <div className="loading-screen min-h-screen flex items-center justify-center bg-amber-950 text-amber-100"><span className="animate-pulse">Laen noodijoonestikku…</span></div>;
   if (!icons) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-amber-900/95 text-amber-100">
@@ -4514,7 +4527,12 @@ function NoodiMeisterCore({ icons }) {
                         title={`${option.label}. Lohistage noodilehele.`}
                       >
                         <span className="flex items-center justify-center gap-0.5 text-amber-900">
-                          {option.value === 'rest' ? <RhythmIcon duration={selectedDuration} isRest={true} /> : option.value === 'dotted' ? <RhythmIcon duration={selectedDuration} isDotted={true} /> : ['2/8','4/16','8/16','1/8+2/16','2/16+1/8'].includes(option.value) ? <RhythmPatternIcon pattern={option.value} /> : ['1/1','1/2','1/4','1/8','1/16','1/32'].includes(option.value) ? (<><RhythmIcon duration={option.value} /><RhythmIcon duration={option.value} isRest={true} /></>) : null}
+                          {RHYTHM_SYLLABLE_IMAGES[option.value] ? (
+                            <>
+                              <img src={RHYTHM_SYLLABLE_IMAGES[option.value]} alt={option.label} className="w-5 h-5 object-contain" onError={(e) => { e.target.style.display = 'none'; e.target.nextElementSibling?.classList.remove('hidden'); }} />
+                              <span className="hidden"><RhythmIcon duration={option.value} /></span>
+                            </>
+                          ) : option.value === 'rest' ? <RhythmIcon duration={selectedDuration} isRest={true} /> : option.value === 'dotted' ? <RhythmIcon duration={selectedDuration} isDotted={true} /> : ['2/8','4/16','8/16','1/8+2/16','2/16+1/8'].includes(option.value) ? <RhythmPatternIcon pattern={option.value} /> : ['1/1','1/2','1/4','1/8','1/16','1/32'].includes(option.value) ? (<><RhythmIcon duration={option.value} /><RhythmIcon duration={option.value} isRest={true} /></>) : null}
                         </span>
                         {option.key != null && <kbd className="text-[10px] font-mono bg-amber-200/80 text-amber-900 px-1.5 py-0.5 rounded">{option.key}</kbd>}
                       </button>
@@ -5921,6 +5939,7 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
           {sys.pageBreakBefore && (
             <line x1={0} y1={sys.yOffset - PAGE_BREAK_GAP / 2} x2={pageWidth || LAYOUT.PAGE_WIDTH_MIN} y2={sys.yOffset - PAGE_BREAK_GAP / 2} stroke="#c4b896" strokeWidth={1} strokeDasharray="4 4" />
           )}
+          {/* MuseScore klaverisüsteem: kaks rida (viiulivõti + bassivõti, F täpselt 4. joonel), vasakult ühendatud Brace sümboliga */}
           {!isFigurenotesMode && isFirstInBraceGroup && braceGroupSize >= 2 && (() => {
             const braceH = braceGroupSize * getStaffHeight();
             const top = sys.yOffset + 2;

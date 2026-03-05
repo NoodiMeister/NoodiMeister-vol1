@@ -17,61 +17,54 @@ function safeStorage(storage) {
   }
 }
 
-/** Tagastab salvestuse, kuhu sisselogimise andmed kirjutada (rememberMe = linnuke "Jää sisse logituks"). */
+/** Tagastab salvestuse, kuhu sisselogimise andmed kirjutada (rememberMe = linnuke "Jää sisse logituks"). Vercel: ei viska kunagi. */
 export function getStorageForLogin(rememberMe) {
-  if (typeof window === 'undefined') {
-    console.error('[authStorage] getStorageForLogin: window on undefined');
+  try {
+    if (typeof window === 'undefined') return null;
+    const storage = rememberMe ? safeStorage(window.localStorage) : safeStorage(window.sessionStorage);
+    if (!storage) return null;
+    return storage;
+  } catch (e) {
+    console.error('[authStorage] getStorageForLogin:', e?.message);
     return null;
   }
-  const storage = rememberMe ? safeStorage(window.localStorage) : safeStorage(window.sessionStorage);
-  if (!storage) {
-    console.error('[authStorage] getStorageForLogin: storage puudub', { rememberMe, hasLocalStorage: !!window.localStorage, hasSessionStorage: !!window.sessionStorage });
-  }
-  return storage;
 }
 
-/** Tagastab salvestuse, kust praegu sisselogimist lugeda (sessionStorage eelneb, siis localStorage). */
+/** Tagastab salvestuse, kust praegu sisselogimist lugeda (sessionStorage eelneb, siis localStorage). Vercel: ei viska kunagi. */
 export function getStorageForRead() {
-  if (typeof window === 'undefined') {
-    console.error('[authStorage] getStorageForRead: window on undefined');
-    return null;
-  }
   try {
+    if (typeof window === 'undefined') return null;
     if (window.sessionStorage?.getItem(KEY_LOGGED_IN)) return window.sessionStorage;
     if (window.localStorage?.getItem(KEY_LOGGED_IN)) return window.localStorage;
   } catch (e) {
-    console.error('[authStorage] getStorageForRead viga:', e?.message, { sessionStorage: typeof window?.sessionStorage, localStorage: typeof window?.localStorage });
+    console.error('[authStorage] getStorageForRead:', e?.message);
   }
   return null;
 }
 
 export function isLoggedIn() {
-  const storage = getStorageForRead();
-  if (!storage) return false;
   try {
+    const storage = getStorageForRead();
+    if (!storage) return false;
     const raw = storage.getItem(KEY_LOGGED_IN);
     if (!raw) return false;
     const parsed = JSON.parse(raw);
-    if (!parsed?.email) {
-      console.error('[authStorage] isLoggedIn: parsed.email puudub', { hasParsed: !!parsed, keys: parsed && typeof parsed === 'object' ? Object.keys(parsed) : [] });
-      return false;
-    }
-    return true;
+    return !!(parsed && parsed.email);
   } catch (e) {
-    console.error('[authStorage] isLoggedIn: lugemis-/parse viga', e?.message);
+    console.error('[authStorage] isLoggedIn:', e?.message);
     return false;
   }
 }
 
 export function getLoggedInUser() {
-  const storage = getStorageForRead();
-  if (!storage) return null;
   try {
+    const storage = getStorageForRead();
+    if (!storage) return null;
     const raw = storage.getItem(KEY_LOGGED_IN);
     if (!raw) return null;
     return JSON.parse(raw);
   } catch (e) {
-    console.error('[authStorage] getLoggedInUser: parse viga', e?.message);
+    console.error('[authStorage] getLoggedInUser:', e?.message);
     return null;
   }
 }

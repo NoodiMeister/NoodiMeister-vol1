@@ -24,8 +24,16 @@ export default function LoginPage() {
     setMessage('');
     setErrorDetail(null);
     try {
+      if (typeof window === 'undefined') {
+        setError('Brauser ei toeta salvestust. Proovi teist brauserit.', null);
+        return;
+      }
+      const storageOk = getStorageForLogin(stayLoggedIn);
+      if (!storageOk) {
+        setError('Brauser ei luba andmeid salvestada (nt privaatne režiim). Proovi teist brauserit või lülita privaatne režiim välja.', null);
+        return;
+      }
       if (typeof localStorage === 'undefined') {
-        console.error('[LoginPage] Sisselogimise hetkel: localStorage on undefined');
         setError('Brauser ei toeta salvestust. Proovi teist brauserit.', null);
         return;
       }
@@ -69,7 +77,15 @@ export default function LoginPage() {
       setMessage('Sisselogimine õnnestus.');
       setErrorDetail(null);
       requestAnimationFrame(() => {
-        setTimeout(() => navigate('/app'), 400);
+        setTimeout(() => {
+          try {
+            navigate('/app', { replace: true });
+          } catch (navErr) {
+            const base = (typeof import.meta !== 'undefined' && import.meta.env?.BASE_URL) || '';
+            const path = (base.replace(/\/$/, '') || '') + '/app';
+            window.location.assign(window.location.origin + path);
+          }
+        }, 400);
       });
     } catch (err) {
       console.error('[LoginPage] Ootamata viga sisselogimisel:', err?.message, err);
