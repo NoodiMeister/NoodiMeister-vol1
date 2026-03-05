@@ -1,26 +1,44 @@
 /**
- * JO-LE-MI (Kodály) noodinimed: toonikast lähtuva diatoonilise astme järgi.
- * JO = I, LE = II, MI = III, FA = IV, SOL = V, LA = VI, SI = VII.
+ * JO-LE-MI süsteemi noodinimed vastavalt kasutaja sisendile:
+ * JO, LE, MI, NA, SO, RA, DI
  */
 
 import { getRelativeHalfStepsFromTonic } from './StaffConstants';
 
-const JO_NAMES = ['JO', 'LE', 'MI', 'FA', 'SOL', 'LA', 'SI'];
+// Defineerime 7 unikaalset astet (8. aste ehk oktaav on jälle 'JO')
+const JO_NAMES = ['JO', 'LE', 'MI', 'NA', 'SO', 'RA', 'DI'];
 
 /**
- * Diatoniline aste C-duuri skaalas (0=C, 1=D, ..., 6=B).
- * Võtab arvesse helistiku: toonika määrab, milline täht on 0. aste.
+ * Diatooniline aste helistikust lähtuvalt.
+ * 0 = I aste (JO), 1 = II aste (LE), ..., 6 = VII aste (DI).
  */
 function getDiatonicDegree(pitch, octave, keySignature = 'C') {
   const halfSteps = getRelativeHalfStepsFromTonic(pitch, octave, keySignature);
+
+  // Normaliseerime pooltoonid oktaavi piires (0-11)
   const mod = ((halfSteps % 12) + 12) % 12;
-  const diatonicFromC = { 0: 0, 2: 1, 4: 2, 5: 3, 7: 4, 9: 5, 11: 6 };
-  const degree = diatonicFromC[mod];
-  return degree != null ? degree : 0;
+
+  // Kaardistame pooltoonid diatoonilisteks astmeteks (duur-skaala loogika)
+  // 0: JO (I), 2: LE (II), 4: MI (III), 5: NA (IV), 7: SO (V), 9: RA (VI), 11: DI (VII)
+  const diatonicMap = {
+    0: 0, // JO
+    2: 1, // LE
+    4: 2, // MI
+    5: 3, // NA
+    7: 4, // SO
+    9: 5, // RA
+    11: 6, // DI
+  };
+
+  const degree = diatonicMap[mod];
+
+  // Kui on altereeritud noot (nt pooltoon, mida mapis pole),
+  // tagastame lähima astme või vaikimisi 0
+  return degree !== undefined ? degree : 0;
 }
 
 /**
- * Tagastab noodi JO-süsteemi nime (JO, LE, MI, FA, SOL, LA, SI) helistiku järgi.
+ * Tagastab noodi nime (JO, LE, MI, NA, SO, RA, DI) helistiku järgi.
  */
 export function getJoName(pitch, octave, keySignature = 'C') {
   const degree = getDiatonicDegree(pitch, octave, keySignature);

@@ -161,7 +161,7 @@ export default function LoginPage() {
                 onChange={(e) => setStayLoggedIn(e.target.checked)}
                 className="w-4 h-4 rounded border-amber-300 text-amber-600 focus:ring-amber-500"
               />
-              <span className="text-sm text-amber-800">Jää sisse logituks (soovitame välja jätta ühise arvuti puhul)</span>
+              <span className="text-sm text-amber-800">Jäta mind meelde</span>
             </label>
             <button
               type="submit"

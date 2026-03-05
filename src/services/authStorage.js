@@ -1,7 +1,9 @@
 /**
- * Sisselogimise salvestus: vaikimisi sessionStorage (tabi sulgemisel väljalogimine),
- * kui kasutaja valib "Jää sisse logituks" → localStorage.
- * Koolide stsenaarium: ühise arvuti puhul jäetakse linnuke vaikimisi välja.
+ * Sisselogimise ja seansihaldus:
+ * - "Jäta mind meelde" valimata (vaikimisi): sessionStorage → brauseri akna/tabi sulgemisel logitakse välja.
+ * - "Jäta mind meelde" valitud: localStorage → kasutaja jääb sisse logituks ka pärast brauseri sulgemist.
+ * Vaikimisi on märkeruut valimata (ühiskasutatavate arvutite turvalisus, nt kooliklass).
+ * Väljalogimine (clearAuth) kasutab ainult nupp "Logi välja"; uue faili loomine ei tühjenda salvestust.
  */
 
 const KEY_LOGGED_IN = 'noodimeister-logged-in';
@@ -17,7 +19,7 @@ function safeStorage(storage) {
   }
 }
 
-/** Tagastab salvestuse, kuhu sisselogimise andmed kirjutada (rememberMe = linnuke "Jää sisse logituks"). Vercel: ei viska kunagi. */
+/** Tagastab salvestuse, kuhu sisselogimise andmed kirjutada (rememberMe = linnuke "Jäta mind meelde"). Vercel: ei viska kunagi. */
 export function getStorageForLogin(rememberMe) {
   try {
     if (typeof window === 'undefined') return null;

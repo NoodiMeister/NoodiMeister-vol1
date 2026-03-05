@@ -29,10 +29,11 @@ export function getFigureShape(octave) {
   const o = Number(octave);
   if (!Number.isFinite(o)) return 'circle';
   if (o <= 1) return 'none';
-  if (o <= 3) return 'cross';
-  if (o === 4) return 'square';
-  if (o === 5) return 'circle';
-  if (o === 6) return 'triangle';
+  if (o === 2) return 'cross';
+  if (o === 3) return 'square';
+  if (o === 4) return 'circle';
+  if (o === 5) return 'triangle';
+  if (o === 6) return 'triangleDown';
   return 'triangleDown';
 }
 

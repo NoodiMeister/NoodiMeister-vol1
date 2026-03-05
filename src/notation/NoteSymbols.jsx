@@ -4,20 +4,17 @@ import {
   getNoteheadRx,
   getNoteheadRy,
   getStemLength,
-  getFlagHeight,
-  getFlagWidth,
 } from './StaffConstants';
 
-const TILT_DEG = 24; // Noodipea kaldenurk (kraadi)
+const TILT_DEG = -24; // Traditsiooniline noodipea kalle
 
 /**
- * Üksik noodipea (ovaal) – kasutatakse kõigil nooditüüpidel.
- * Kõrgus = 1 staff-space (2*ry), laius ≈ 1.4 staff-space (2*rx).
+ * Täiustatud noodipea: paksem ja õige kaldega.
  */
-function NoteHeadShape({ cx, cy, staffSpace, filled, stemUp }) {
-  const rx = getNoteheadRx(staffSpace);
-  const ry = getNoteheadRy(staffSpace);
-  const tiltDeg = stemUp ? -TILT_DEG : TILT_DEG;
+function NoteHeadShape({ cx, cy, staffSpace, filled }) {
+  const rx = getNoteheadRx(staffSpace) * 1.1; // Veidi laiemaks
+  const ry = getNoteheadRy(staffSpace) * 0.9; // Veidi madalamaks
+
   return (
     <ellipse
       cx={cx}
@@ -26,62 +23,72 @@ function NoteHeadShape({ cx, cy, staffSpace, filled, stemUp }) {
       ry={ry}
       fill={filled ? 'var(--note-fill, #1a1a1a)' : 'none'}
       stroke="var(--note-fill, #1a1a1a)"
-      strokeWidth={filled ? 0 : Math.max(0.8, staffSpace * 0.12)}
-      transform={`rotate(${tiltDeg} ${cx} ${cy})`}
+      strokeWidth={staffSpace * 0.18} // Paksem stroke annab "trükitud" ilme
+      transform={`rotate(${TILT_DEG} ${cx} ${cy})`}
     />
   );
 }
 
 /**
- * Vars: vertikaalne joon noodipea küljest kuni varre otsani.
- * stemUp = true → vars ülespoole; false → allapoole.
+ * Vars: Parandatud asukoht, et vars ja pea liituksid sujuvalt.
+ * stemLength: valikuline (talatud nootidel dünaamiline pikkus talani).
  */
-function Stem({ cx, cy, staffSpace, stemUp }) {
+function Stem({ cx, cy, staffSpace, stemUp, stemLength }) {
   const rx = getNoteheadRx(staffSpace);
-  const stemLen = getStemLength(staffSpace);
-  const x = stemUp ? cx + rx : cx - rx;
+  const stemLen = stemLength != null ? stemLength : getStemLength(staffSpace);
+  const strokeW = staffSpace * 0.12;
+
+  // MuseScore'i reegel: Üles-vars paremal, alla-vars vasakul
+  // Nihutame vart pool stroke-laiust sissepoole, et ühendus oleks puhas
+  const x = stemUp ? cx + rx - strokeW / 2 : cx - rx + strokeW / 2;
+  const y1 = cy;
   const y2 = stemUp ? cy - stemLen : cy + stemLen;
+
   return (
     <line
       x1={x}
-      y1={cy}
+      y1={y1}
       x2={x}
       y2={y2}
       stroke="var(--note-fill, #1a1a1a)"
-      strokeWidth={staffSpace * 0.12}
-      strokeLinecap="round"
+      strokeWidth={strokeW}
+      strokeLinecap="butt" // "butt" tagab puhta ühenduse noodipeaga
     />
   );
 }
 
 /**
- * Üks lipp (kaheksandiknoot): varre otsast paremale kumer kurv.
- * Kaks lippu (kuueteistkümnendik): kaks paralleelset kurvi.
+ * Lipud (Flags): MuseScore'i stiilis kumerad lipud, alati paremale suunatud.
+ * stemLength: valikuline (kui talatud nootidel kasutatakse kohandatud varre pikkust).
  */
-function Flags({ cx, cy, staffSpace, stemUp, count = 1 }) {
+function Flags({ cx, cy, staffSpace, stemUp, count = 1, stemLength }) {
   const rx = getNoteheadRx(staffSpace);
-  const stemLen = getStemLength(staffSpace);
-  const fh = getFlagHeight(staffSpace);
-  const fw = getFlagWidth(staffSpace);
-  const strokeW = staffSpace * 0.14;
-  const stemX = stemUp ? cx + rx : cx - rx;
+  const stemLen = stemLength != null ? stemLength : getStemLength(staffSpace);
+  const strokeW = staffSpace * 0.12;
+
+  const stemX = stemUp ? cx + rx - strokeW / 2 : cx - rx + strokeW / 2;
   const stemEndY = stemUp ? cy - stemLen : cy + stemLen;
-  const direction = stemUp ? 1 : -1;
+
   const elements = [];
-  const step = staffSpace * 0.5;
+  const flagGap = staffSpace * 0.8; // Lippude vahe
+
   for (let i = 0; i < count; i++) {
-    const y0 = stemEndY + i * step * direction;
-    const x1 = stemX + fw * (stemUp ? 1 : -1);
-    const y1 = y0 + fh * direction;
-    // Lipp: varre otsast kumer kurv välja (paremale ülespoole / vasakule allapoole)
-    const d = `M ${stemX} ${y0} Q ${x1} ${y0} ${x1} ${y1}`;
+    const yOffset = i * flagGap * (stemUp ? 1 : -1);
+    const startY = stemEndY + yOffset;
+
+    // MuseScore'i lipp on "S" kujuline ja alati tüvest paremal
+    // d-string: M (start) c (relative cubic bezier)
+    const curve = stemUp
+      ? `M ${stemX} ${startY} c ${staffSpace * 0.8} ${staffSpace * 0.2} ${staffSpace * 1.2} ${staffSpace * 1.5} ${staffSpace * 1.2} ${staffSpace * 2.5}`
+      : `M ${stemX} ${startY} c ${staffSpace * 0.8} ${-staffSpace * 0.2} ${staffSpace * 1.2} ${-staffSpace * 1.5} ${staffSpace * 1.2} ${-staffSpace * 2.5}`;
+
     elements.push(
       <path
         key={i}
-        d={d}
+        d={curve}
         fill="none"
         stroke="var(--note-fill, #1a1a1a)"
-        strokeWidth={strokeW}
+        strokeWidth={staffSpace * 0.15}
         strokeLinecap="round"
       />
     );
@@ -89,109 +96,67 @@ function Flags({ cx, cy, staffSpace, stemUp, count = 1 }) {
   return <g>{elements}</g>;
 }
 
-/**
- * Täisnoot: seest tühi ovaal, ilma varreta.
- */
+// --- Eksporditavad sümbolid ---
+
 export function WholeNoteSymbol({ cx = 0, cy = 0, staffSpace = STAFF_SPACE }) {
-  return (
-    <g>
-      <NoteHeadShape cx={cx} cy={cy} staffSpace={staffSpace} filled={false} stemUp={true} />
-    </g>
-  );
+  return <NoteHeadShape cx={cx} cy={cy} staffSpace={staffSpace} filled={false} />;
 }
 
-/**
- * Poolnoot: seest tühi ovaal + vars.
- */
-export function HalfNoteSymbol({
-  cx = 0,
-  cy = 0,
-  staffSpace = STAFF_SPACE,
-  stemUp = true,
-}) {
+export function HalfNoteSymbol({ cx = 0, cy = 0, staffSpace = STAFF_SPACE, stemUp = true }) {
   return (
     <g>
-      <NoteHeadShape cx={cx} cy={cy} staffSpace={staffSpace} filled={false} stemUp={stemUp} />
+      <NoteHeadShape cx={cx} cy={cy} staffSpace={staffSpace} filled={false} />
       <Stem cx={cx} cy={cy} staffSpace={staffSpace} stemUp={stemUp} />
     </g>
   );
 }
 
-/**
- * Veerandnoot: täidetud ovaal + vars.
- */
-export function QuarterNoteSymbol({
-  cx = 0,
-  cy = 0,
-  staffSpace = STAFF_SPACE,
-  stemUp = true,
-}) {
+export function QuarterNoteSymbol({ cx = 0, cy = 0, staffSpace = STAFF_SPACE, stemUp = true, stemLength }) {
   return (
     <g>
-      <NoteHeadShape cx={cx} cy={cy} staffSpace={staffSpace} filled={true} stemUp={stemUp} />
-      <Stem cx={cx} cy={cy} staffSpace={staffSpace} stemUp={stemUp} />
+      <NoteHeadShape cx={cx} cy={cy} staffSpace={staffSpace} filled={true} />
+      <Stem cx={cx} cy={cy} staffSpace={staffSpace} stemUp={stemUp} stemLength={stemLength} />
+    </g>
+  );
+}
+
+export function EighthNoteSymbol({ cx = 0, cy = 0, staffSpace = STAFF_SPACE, stemUp = true, stemLength, hideFlags }) {
+  return (
+    <g>
+      <QuarterNoteSymbol cx={cx} cy={cy} staffSpace={staffSpace} stemUp={stemUp} stemLength={stemLength} />
+      {!hideFlags && <Flags cx={cx} cy={cy} staffSpace={staffSpace} stemUp={stemUp} count={1} stemLength={stemLength} />}
+    </g>
+  );
+}
+
+export function SixteenthNoteSymbol({ cx = 0, cy = 0, staffSpace = STAFF_SPACE, stemUp = true, stemLength, hideFlags }) {
+  return (
+    <g>
+      <QuarterNoteSymbol cx={cx} cy={cy} staffSpace={staffSpace} stemUp={stemUp} stemLength={stemLength} />
+      {!hideFlags && <Flags cx={cx} cy={cy} staffSpace={staffSpace} stemUp={stemUp} count={2} stemLength={stemLength} />}
     </g>
   );
 }
 
 /**
- * Kaheksandiknoot: täidetud ovaal + vars + üks lipp.
+ * Peamine komponent, mis valib õige sümboli.
+ * hideFlags / stemLength: talatud nootidel – lipud peidetud, vars ulatub talani.
  */
-export function EighthNoteSymbol({
-  cx = 0,
-  cy = 0,
-  staffSpace = STAFF_SPACE,
-  stemUp = true,
-}) {
-  return (
-    <g>
-      <NoteHeadShape cx={cx} cy={cy} staffSpace={staffSpace} filled={true} stemUp={stemUp} />
-      <Stem cx={cx} cy={cy} staffSpace={staffSpace} stemUp={stemUp} />
-      <Flags cx={cx} cy={cy} staffSpace={staffSpace} stemUp={stemUp} count={1} />
-    </g>
-  );
-}
-
-/**
- * Kuueteistkümnendiknoot: täidetud ovaal + vars + kaks lippu.
- */
-export function SixteenthNoteSymbol({
-  cx = 0,
-  cy = 0,
-  staffSpace = STAFF_SPACE,
-  stemUp = true,
-}) {
-  return (
-    <g>
-      <NoteHeadShape cx={cx} cy={cy} staffSpace={staffSpace} filled={true} stemUp={stemUp} />
-      <Stem cx={cx} cy={cy} staffSpace={staffSpace} stemUp={stemUp} />
-      <Flags cx={cx} cy={cy} staffSpace={staffSpace} stemUp={stemUp} count={2} />
-    </g>
-  );
-}
-
-const NOTE_SYMBOLS = {
-  whole: WholeNoteSymbol,
-  half: HalfNoteSymbol,
-  quarter: QuarterNoteSymbol,
-  eighth: EighthNoteSymbol,
-  sixteenth: SixteenthNoteSymbol,
-};
-
-/**
- * Ühtne nootisümbol valitud tüübiga.
- * type: 'whole' | 'half' | 'quarter' | 'eighth' | 'sixteenth'
- */
-export function NoteSymbol({ type, cx = 0, cy = 0, staffSpace = STAFF_SPACE, stemUp = true }) {
-  const Symbol = NOTE_SYMBOLS[type] || QuarterNoteSymbol;
-  return (
-    <Symbol
-      cx={cx}
-      cy={cy}
-      staffSpace={staffSpace}
-      stemUp={type === 'whole' ? true : stemUp}
-    />
-  );
+export function NoteSymbol({ type, cx = 0, cy = 0, staffSpace = STAFF_SPACE, stemUp = true, stemLength, hideFlags }) {
+  const props = { cx, cy, staffSpace, stemUp, stemLength, hideFlags };
+  switch (type) {
+    case 'whole':
+      return <WholeNoteSymbol cx={cx} cy={cy} staffSpace={staffSpace} />;
+    case 'half':
+      return <HalfNoteSymbol cx={cx} cy={cy} staffSpace={staffSpace} stemUp={stemUp} />;
+    case 'eighth':
+      return <EighthNoteSymbol {...props} />;
+    case 'sixteenth':
+      return <SixteenthNoteSymbol {...props} />;
+    case 'quarter':
+    default:
+      return <QuarterNoteSymbol cx={cx} cy={cy} staffSpace={staffSpace} stemUp={stemUp} stemLength={stemLength} />;
+  }
 }
 
 export default NoteSymbol;

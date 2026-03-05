@@ -2,158 +2,91 @@ import React from 'react';
 import { STAFF_SPACE } from './StaffConstants';
 
 /**
- * Kõik pausid on proportsioonis staff-space ühikuga.
- * x, y = pausi vertikaalne keskpunkt (või ankurpunkt, kus dokumenteeritud).
+ * Kasutame ühtset värvi muutujat, mis toetab teemasid.
  */
+const DEFAULT_FILL = 'var(--note-fill, #1a1a1a)';
 
-/** Täispaus: täidetud ristkülik, kõrgus 1 staff-space, laius ~1,5 staff-space. Asub neljanda joone all. */
-export function WholeRestSymbol({
-  x = 0,
-  y = 0,
-  staffSpace = STAFF_SPACE,
-  fill = '#1a1a1a',
-}) {
-  const w = staffSpace * 1.5;
-  const h = staffSpace;
+/** Täispaus (Whole Rest): Rippuv ristkülik 4. joone all. */
+export function WholeRestSymbol({ x = 0, y = 0, staffSpace = STAFF_SPACE }) {
+  const w = staffSpace * 1.2;
+  const h = staffSpace * 0.5; // Täispaus on tegelikult pool staff-space'i paks
   return (
     <rect
-      x={x}
-      y={y - h / 2}
+      x={x - w / 2}
+      y={y}
       width={w}
       height={h}
-      fill={fill}
-      rx={staffSpace * 0.08}
+      fill={DEFAULT_FILL}
     />
   );
 }
 
-/** Poolpaus: sama kujuga kui täispaus, asub kolmanda joone peal. */
-export function HalfRestSymbol({
-  x = 0,
-  y = 0,
-  staffSpace = STAFF_SPACE,
-  fill = '#1a1a1a',
-}) {
-  const w = staffSpace * 1.5;
-  const h = staffSpace;
+/** Poolpaus (Half Rest): Seisev ristkülik 3. joone peal. */
+export function HalfRestSymbol({ x = 0, y = 0, staffSpace = STAFF_SPACE }) {
+  const w = staffSpace * 1.2;
+  const h = staffSpace * 0.5;
   return (
     <rect
-      x={x}
-      y={y - h / 2}
+      x={x - w / 2}
+      y={y - h}
       width={w}
       height={h}
-      fill={fill}
-      rx={staffSpace * 0.08}
+      fill={DEFAULT_FILL}
     />
   );
 }
 
-/**
- * Veerandpaus: tagurpidi Z + C-kujuline kurv, kõrgus ~3,5 staff-space.
- * Path lähendab standardse veerandpausi kuju.
- */
-export function QuarterRestSymbol({
-  x = 0,
-  y = 0,
-  staffSpace = STAFF_SPACE,
-  stroke = '#1a1a1a',
-  strokeWidth = null,
-}) {
+/** Veerandpaus (Quarter Rest): MuseScore'i stiilis "siksak" sabaga. */
+export function QuarterRestSymbol({ x = 0, y = 0, staffSpace = STAFF_SPACE }) {
   const s = staffSpace;
-  const w = s * 0.9;
-  const h = s * 3.5;
-  const sw = strokeWidth ?? s * 0.18;
-  // Tagurpidi Z + alumine konks; keskpunkt y
-  const x0 = x;
-  const x1 = x + w;
-  const y0 = y - h / 2;
-  const y1 = y + h / 2;
-  const d = [
-    `M ${x1} ${y0}`,
-    `C ${x0} ${y0} ${x0} ${y} ${x1} ${y}`,
-    `C ${x0} ${y} ${x0} ${y1} ${x1} ${y1}`,
-  ].join(' ');
-  return (
-    <path
-      d={d}
-      fill="none"
-      stroke={stroke}
-      strokeWidth={sw}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
-  );
+  // Keeruline path, mis imiteerib klassikalist veerandpausi kuju
+  const d = `
+    M ${x - s * 0.4} ${y - s * 1.5}
+    L ${x + s * 0.3} ${y - s * 0.5}
+    L ${x - s * 0.2} ${y + s * 0.3}
+    C ${x - s * 0.5} ${y + s * 0.6} ${x - s * 0.2} ${y + s * 1.2} ${x + s * 0.2} ${y + s * 1.4}
+    C ${x + s * 0.1} ${y + s * 1.1} ${x - s * 0.1} ${y + s * 0.9} ${x - s * 0.1} ${y + s * 0.6}
+    L ${x + s * 0.4} ${y - s * 0.3}
+    L ${x - s * 0.1} ${y - s * 1.3}
+    Z
+  `;
+  return <path d={d} fill={DEFAULT_FILL} />;
 }
 
-/**
- * Kaheksandikpaus: konks (tagurpidi 7) + punkt konksu all, kõrgus ~2,5 staff-space.
- */
-export function EighthRestSymbol({
-  x = 0,
-  y = 0,
-  staffSpace = STAFF_SPACE,
-  fill = '#1a1a1a',
-  stroke = '#1a1a1a',
-}) {
+/** Kaheksandikpaus (Eighth Rest): Klassikaline "nupp" ja kaldjalg. */
+export function EighthRestSymbol({ x = 0, y = 0, staffSpace = STAFF_SPACE }) {
   const s = staffSpace;
-  const h = s * 2.5;
-  const dotR = s * 0.2;
-  const sw = s * 0.16;
-  const y0 = y - h / 2;
-  const y1 = y + h / 2;
-  const x1 = x + s * 0.55;
-  const pathD = `M ${x1} ${y0} L ${x} ${y} Q ${x1} ${y} ${x1} ${y1}`;
+  // Nupp (pea) ja kumer vars
+  const d = `
+    M ${x - s * 0.3} ${y - s * 0.5}
+    a ${s * 0.2} ${s * 0.2} 0 1 1 ${s * 0.1} ${s * 0.3}
+    c ${s * 0.3} 0 ${s * 0.5} ${s * 0.5} ${s * 0.7} ${s * 1.5}
+    l ${s * 0.1} ${-s * 0.1}
+    c ${-s * 0.3} ${-s * 1.2} ${-s * 0.7} ${-s * 1.5} ${-s * 1.2} ${-s * 1.7}
+    Z
+  `;
+  return <path d={d} fill={DEFAULT_FILL} />;
+}
+
+/** Kuueteistkümnendikpaus (Sixteenth Rest): Kahe nupuga versioon. */
+export function SixteenthRestSymbol({ x = 0, y = 0, staffSpace = STAFF_SPACE }) {
+  const s = staffSpace;
   return (
     <g>
+      {/* Ülemine nupp ja osa varrest */}
+      <EighthRestSymbol x={x} y={y - s * 0.5} staffSpace={staffSpace} />
+      {/* Alumine nupp */}
       <path
-        d={pathD}
-        fill="none"
-        stroke={stroke}
-        strokeWidth={sw}
-        strokeLinecap="round"
-        strokeLinejoin="round"
+        d={`
+        M ${x - s * 0.5} ${y + s * 0.2}
+        a ${s * 0.18} ${s * 0.18} 0 1 1 ${s * 0.1} ${s * 0.3}
+        L ${x + s * 0.3} ${y + s * 0.8}
+        Z
+      `}
+        fill={DEFAULT_FILL}
       />
-      <circle cx={x1} cy={y1 + dotR} r={dotR} fill={fill} />
     </g>
   );
-}
-
-/**
- * Kuueteistkümnendikpaus: kaks paralleelset konksu koos punktidega, kõrgus ~2,5 staff-space.
- */
-export function SixteenthRestSymbol({
-  x = 0,
-  y = 0,
-  staffSpace = STAFF_SPACE,
-  fill = '#1a1a1a',
-  stroke = '#1a1a1a',
-}) {
-  const s = staffSpace;
-  const h = s * 2.5;
-  const step = s * 0.5;
-  const sw = s * 0.16;
-  const dotR = s * 0.18;
-  const x1 = x + s * 0.55;
-  const elements = [];
-  for (let i = 0; i < 2; i++) {
-    const y0 = y - h / 2 + i * step;
-    const yEnd = y0 + step;
-    const yMid = y0 + step * 0.5;
-    const pathD = `M ${x1} ${y0} L ${x} ${yMid} Q ${x} ${yEnd} ${x1} ${yEnd}`;
-    elements.push(
-      <path
-        key={i}
-        d={pathD}
-        fill="none"
-        stroke={stroke}
-        strokeWidth={sw}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    );
-    elements.push(<circle key={`d-${i}`} cx={x1} cy={yEnd + dotR} r={dotR} fill={fill} />);
-  }
-  return <g>{elements}</g>;
 }
 
 const REST_SYMBOLS = {
@@ -164,27 +97,12 @@ const REST_SYMBOLS = {
   sixteenth: SixteenthRestSymbol,
 };
 
-/**
- * Ühtne pausisümbol valitud tüübiga.
- * type: 'whole' | 'half' | 'quarter' | 'eighth' | 'sixteenth'
- */
-export function RestSymbol({
-  type,
-  x = 0,
-  y = 0,
-  staffSpace = STAFF_SPACE,
-  fill = '#1a1a1a',
-  stroke = '#1a1a1a',
-}) {
+export function RestSymbol({ type, x = 0, y = 0, staffSpace = STAFF_SPACE }) {
   const Symbol = REST_SYMBOLS[type] || QuarterRestSymbol;
   return (
-    <Symbol
-      x={x}
-      y={y}
-      staffSpace={staffSpace}
-      fill={fill}
-      stroke={stroke}
-    />
+    <g className="music-rest">
+      <Symbol x={x} y={y} staffSpace={staffSpace} />
+    </g>
   );
 }
 

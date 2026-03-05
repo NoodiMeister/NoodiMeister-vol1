@@ -19,6 +19,12 @@ import {
   getNoteheadRx,
   getLedgerHalfWidth,
 } from '../notation/StaffConstants';
+import {
+  computeBeamGroups,
+  computeBeamGeometry,
+  getBeamThickness,
+  getBeamGap,
+} from '../notation/BeamCalculation';
 
 const LAYOUT = { MARGIN_LEFT: 60, CLEF_WIDTH: 45, MEASURE_MIN_WIDTH: 28 };
 const PAGE_BREAK_GAP = 80;
@@ -191,7 +197,7 @@ export function TraditionalNotationView({
               />
             ))}
 
-            {/* JO-võti või traditsiooniline võti – IGA REA ALGUSES (system) */}
+            {/* Üks aktiivne noodivõti per staff: kas JO (vabanotatsioon) või clefType (traditsiooniline). IGA REA ALGUSES (system). */}
             {staffLines === 5 && (
               (() => {
                 let xOffset = clefX;
@@ -300,37 +306,23 @@ export function TraditionalNotationView({
                 };
 
                 const noteheadRx = getNoteheadRx(spacing);
-                const beamable = (dur) => ['1/8', '1/16', '1/32'].includes(dur || '');
-                const beamGroups = (() => {
-                  const out = [];
-                  let i = 0;
-                  while (i < measure.notes.length) {
-                    const note = measure.notes[i];
-                    if (note.isRest || !beamable(note.durationLabel)) { i++; continue; }
-                    const beat0 = Math.floor(note.beat - measure.startBeat);
-                    let jj = i;
-                    while (jj < measure.notes.length) {
-                      const n = measure.notes[jj];
-                      if (n.isRest || !beamable(n.durationLabel)) break;
-                      if (Math.floor(n.beat - measure.startBeat) !== beat0) break;
-                      jj++;
-                    }
-                    if (jj > i + 1) {
-                      const stemUp = true;
-                      const beamY = sys.yOffset + firstLineY - 4;
-                      const xLeft = getNoteSlotCenterX(measure.notes[i]);
-                      const xRight = getNoteSlotCenterX(measure.notes[jj - 1]);
-                      let numBeams = 1;
-                      for (let k = i; k < jj; k++) {
-                        const dur = measure.notes[k].durationLabel || '';
-                        if (dur === '1/32') numBeams = 3; else if (dur === '1/16') numBeams = Math.max(numBeams, 2);
-                      }
-                      out.push({ start: i, end: jj - 1, beamY, xLeft, xRight, stemUp, numBeams });
-                    }
-                    i = jj;
+                const beamGroupsRaw = computeBeamGroups(measure.notes, measure.startBeat, timeSignature);
+                const beamGroups = beamGroupsRaw.map((gr) => {
+                  const noteXs = [];
+                  const noteCys = [];
+                  for (let k = gr.start; k <= gr.end; k++) {
+                    const n = measure.notes[k];
+                    noteXs.push(getNoteSlotCenterX(n));
+                    const py = n.pitch && typeof n.octave === 'number' ? resolvePitchY(n.pitch, n.octave) : centerY;
+                    noteCys.push(py);
                   }
-                  return out;
-                })();
+                  let stemUp = noteCys[0] > middleLineY ? false : true;
+                  if (noteCys.length > 0 && noteCys.every((cy) => (stemUp ? cy <= middleLineY : cy >= middleLineY)) === false) {
+                    stemUp = noteCys.reduce((s, cy) => s + cy, 0) / noteCys.length > middleLineY ? false : true;
+                  }
+                  const geom = computeBeamGeometry(gr, measure.notes, noteXs, noteCys, stemUp, spacing);
+                  return { ...gr, ...geom, noteXs, noteCys };
+                });
                 const getBeamGroup = (noteIdx) => beamGroups.find(g => noteIdx >= g.start && noteIdx <= g.end);
 
                 return (
@@ -361,7 +353,8 @@ export function TraditionalNotationView({
                       globalNoteIndex += noteIdx;
                       const pitchY = note.pitch && typeof note.octave === 'number' ? resolvePitchY(note.pitch, note.octave) : centerY;
                       const noteY = sys.yOffset + pitchY;
-                      const stemUp = pitchY > middleLineY;
+                      const beamGroup = getBeamGroup(noteIdx);
+                      const stemUp = beamGroup ? beamGroup.stemUp : (pitchY > middleLineY);
                       const noteGroupProps = { onClick: (e) => { e.stopPropagation(); onNoteClick?.(globalNoteIndex); }, style: { cursor: onNoteClick ? 'pointer' : undefined } };
                       const restLabelY = sys.yOffset + lastLineY + spacing * 1.8;
 
@@ -378,7 +371,6 @@ export function TraditionalNotationView({
                       const isSelected = isNoteSelected ? isNoteSelected(globalNoteIndex) : false;
                       const ledgerHalfWidth = getLedgerHalfWidth(spacing);
                       const { above: nLedgerAbove, below: nLedgerBelow } = getLedgerLineCountExact(pitchY, firstLineY, lastLineY, spacing);
-                      const beamGroup = getBeamGroup(noteIdx);
 
                       return (
                         <g key={noteIdx} {...noteGroupProps}>
@@ -393,15 +385,51 @@ export function TraditionalNotationView({
                             <text x={noteX - (noteheadRx + spacing * 0.5)} y={noteY} textAnchor="middle" dominantBaseline="central" fontSize={Math.round(spacing * 1.4)} fill="#1a1a1a" fontFamily="serif">{note.accidental === 1 ? '♯' : '♭'}</text>
                           )}
                           <g transform={`translate(${noteX}, ${noteY})`}>
-                            <NoteSymbol type={durationLabelToNoteSymbolType(note.durationLabel)} cx={0} cy={0} staffSpace={spacing} stemUp={stemUp} />
+                            <NoteSymbol
+                              type={durationLabelToNoteSymbolType(note.durationLabel)}
+                              cx={0}
+                              cy={0}
+                              staffSpace={spacing}
+                              stemUp={stemUp}
+                              hideFlags={!!beamGroup}
+                              stemLength={beamGroup ? beamGroup.stemLengths[noteIdx - beamGroup.start] : undefined}
+                            />
                           </g>
-                          {beamGroup && noteIdx === beamGroup.start && (
-                            <g stroke="#1a1a1a" strokeWidth="2" strokeLinecap="round">
-                              {Array.from({ length: beamGroup.numBeams }, (_, i) => (
-                                <line key={i} x1={beamGroup.xLeft} y1={beamGroup.beamY + i * 4} x2={beamGroup.xRight} y2={beamGroup.beamY + i * 4} />
-                              ))}
-                            </g>
-                          )}
+                          {beamGroup && noteIdx === beamGroup.start && (() => {
+                            const thick = getBeamThickness(spacing);
+                            const gap = getBeamGap(spacing);
+                            const offset = thick + gap;
+                            const y1 = sys.yOffset + beamGroup.beamY1;
+                            const y2 = sys.yOffset + beamGroup.beamY2;
+                            const dir = beamGroup.stemUp ? -1 : 1;
+                            const beams = [];
+                            for (let b = 0; b < beamGroup.numBeams; b++) {
+                              let xL = beamGroup.xLeft;
+                              let xR = beamGroup.xRight;
+                              if (b >= 1 && beamGroup.beamLevels && beamGroup.noteXs) {
+                                const idxMin = beamGroup.beamLevels.findIndex((lev) => lev >= b + 1);
+                                const idxMax = beamGroup.beamLevels.length - 1 - [...beamGroup.beamLevels].reverse().findIndex((lev) => lev >= b + 1);
+                                if (idxMin >= 0 && idxMax >= 0) {
+                                  xL = beamGroup.noteXs[idxMin];
+                                  xR = beamGroup.noteXs[idxMax];
+                                }
+                              }
+                              const dy = b * offset * dir;
+                              beams.push(
+                                <line
+                                  key={b}
+                                  x1={xL}
+                                  y1={y1 + dy}
+                                  x2={xR}
+                                  y2={y2 + dy}
+                                  stroke="#1a1a1a"
+                                  strokeWidth={thick}
+                                  strokeLinecap="round"
+                                />
+                              );
+                            }
+                            return <g>{beams}</g>;
+                          })()}
                           {(note.lyric != null && String(note.lyric).trim() !== '') && (
                             <text x={noteX} y={sys.yOffset + lastLineY + 18} textAnchor="middle" fontSize="12" fill="#333" fontFamily={lyricFontFamily}>{note.lyric}</text>
                           )}

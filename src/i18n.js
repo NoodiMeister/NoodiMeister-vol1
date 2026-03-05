@@ -120,6 +120,7 @@ const translations = {
     'timesig.78': '7/8 (keeruline)',
     'timesig.128': '12/8 (liit)',
     // Noodivõtid
+    'clef.jo': 'JO-võti',
     'clef.treble': 'Viiulivõti',
     'clef.bass': 'Bassivõti',
     'clef.alto': 'Altvõti',
@@ -515,6 +516,7 @@ const translations = {
     'timesig.54': '5/4 Irregular',
     'timesig.78': '7/8 Complex',
     'timesig.128': '12/8 Compound',
+    'clef.jo': 'JO clef',
     'clef.treble': 'Treble clef',
     'clef.bass': 'Bass clef',
     'clef.alto': 'Alto clef',

@@ -1,3 +1,4 @@
+// Version 1.0.5 - Final Graphics Fix
 import React, { useState, useEffect, useLayoutEffect, useCallback, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
@@ -38,6 +39,9 @@ import { FIGURENOTES_COLORS, getFigureSymbol } from './utils/figurenotes';
 import { FigurenotesView } from './views/FigurenotesView';
 import { TraditionalNotationView } from './views/TraditionalNotationView';
 import { LOCALE_STORAGE_KEY, DEFAULT_LOCALE, LOCALES, createT } from './i18n';
+import { computeLayout, getStaffHeight, LAYOUT, PAGE_BREAK_GAP } from './layout/LayoutManager';
+import { transposeNotes } from './musical/transpose';
+import { useNoodimeisterOptional } from './store/NoodimeisterContext';
 import html2canvas from 'html2canvas';
 import Soundfont from 'soundfont-player';
 
@@ -64,27 +68,9 @@ if (typeof window !== 'undefined') {
   window.NOODIMEISTER_CONFIG = GLOBAL_NOTATION_CONFIG;
 }
 
-function getStaffHeight() {
-  var h = GLOBAL_NOTATION_CONFIG.STAFF_HEIGHT;
-  return (h != null && h > 0) ? h : 140;
-}
-
-// var = hoisted, vältib "before initialization" vigu faili keskosa komponentide puhul
-var LAYOUT = {
-  PAGE_WIDTH_MIN: 800,
-  PAGE_WIDTH_MAX: 1000,
-  PAGE_WIDTH_MAX_LANDSCAPE: 1400,
-  A4_HEIGHT_RATIO: 297 / 210,
-  SYSTEM_GAP: 120,
-  MARGIN_LEFT: 60,
-  MARGIN_RIGHT: 40,
-  CLEF_WIDTH: 45,
-  /** Takti miinimumlaius (px); alla selle joonistatakse rea raam punase hoiatusena. */
-  MEASURE_MIN_WIDTH: 28
-};
+// getStaffHeight, LAYOUT, PAGE_BREAK_GAP imporditud layout/LayoutManager.js
 var DEMO_MAX_BEATS = 8;
 var DEMO_MAX_MEASURES = 2;
-var PAGE_BREAK_GAP = 80;
 var KEY_ORDER = ['C', 'G', 'D', 'A', 'E', 'B', 'F', 'Bb', 'Eb'];
 
 // Graafika ja app konstandid var'iga faili alguses (GLOBAL_NOTATION_CONFIG on noodijoonestiku seaded)
@@ -289,11 +275,16 @@ var FINGERING_RECORDER = {
 
 function LoggedInUser({ icons, t }) {
   const navigate = useNavigate();
-  const [user, setUser] = useState(() => authStorage.getLoggedInUser());
+  const store = useNoodimeisterOptional();
+  const [localUser, setLocalUser] = useState(() => authStorage.getLoggedInUser());
+  const user = store ? store.user : localUser;
 
   const handleLogout = () => {
-    authStorage.clearAuth();
-    setUser(null);
+    if (store) store.logout();
+    else {
+      authStorage.clearAuth();
+      setLocalUser(null);
+    }
     navigate('/');
   };
 
@@ -317,146 +308,7 @@ function LoggedInUser({ icons, t }) {
   );
 }
 
-// Arvuta süsteemid (read) – iga rida = eraldi Stave; toetab eeltakti, taktide arv rea kohta ja käsitsi rea/lehevahetused
-function computeLayout(measures, timeSignature, pixelsPerBeat, pageWidth, layoutOptions = {}) {
-  const w = Number(pageWidth) || LAYOUT.PAGE_WIDTH_MIN;
-  const availableWidth = Math.max(200, w - LAYOUT.MARGIN_LEFT - LAYOUT.MARGIN_RIGHT);
-  const beatsPerMeasure = timeSignature.beats;
-  const {
-    measuresPerLine = 0,
-    lineBreakBefore = [],
-    pageBreakBefore = [],
-    systemGap = LAYOUT.SYSTEM_GAP,
-    staffCount = 1,
-    measureStretchFactors = []
-  } = layoutOptions;
-  const step = (staffCount || 1) * getStaffHeight() + systemGap;
-  const lineSet = new Set(Array.isArray(lineBreakBefore) ? lineBreakBefore : []);
-  const pageSet = new Set(Array.isArray(pageBreakBefore) ? pageBreakBefore : []);
-  const getFactor = (i) => (Array.isArray(measureStretchFactors) && typeof measureStretchFactors[i] === 'number') ? measureStretchFactors[i] : 1;
-
-  const buildSystem = (rowIndices, systemIndex, nextPageBreak) => {
-    if (rowIndices.length === 0) return null;
-    // Taktide laiuse täppisjuhtimine: kaal = beatCount * stretchFactor; rida täidab ikkagi 100% laiust
-    const totalWeight = rowIndices.reduce((sum, i) => sum + (measures[i].beatCount ?? beatsPerMeasure) * getFactor(i), 0);
-    if (totalWeight <= 0) return null;
-    const measureWidths = rowIndices.map(i => {
-      const beats = measures[i].beatCount ?? beatsPerMeasure;
-      return (beats * getFactor(i) / totalWeight) * availableWidth;
-    });
-    const totalBeatCount = rowIndices.reduce((sum, i) => sum + (measures[i].beatCount ?? beatsPerMeasure), 0);
-    const pixelsPerBeatForRow = totalBeatCount > 0 ? availableWidth / totalBeatCount : pixelsPerBeat;
-    return {
-      systemIndex,
-      measureIndices: rowIndices,
-      measureWidths,
-      yOffset: 0, // filled below
-      pixelsPerBeat: pixelsPerBeatForRow,
-      measureWidth: measureWidths[0],
-      pageBreakBefore: !!nextPageBreak
-    };
-  };
-
-  // Kasutaja paigutus (taktide arv rea kohta või käsitsi rea/lehevahetused)
-  if (measuresPerLine > 0 || lineSet.size > 0 || pageSet.size > 0) {
-    const systems = [];
-    let currentRow = [];
-    let nextPageBreak = false;
-    let yAcc = 0;
-    const PAGE_GAP = 80; // lisavahe uue lehe alguses
-
-    for (let i = 0; i < measures.length; i++) {
-      const forceLine = lineSet.has(i);
-      const forcePage = pageSet.has(i);
-      const forceBreak = forceLine || forcePage || (measuresPerLine > 0 && currentRow.length >= measuresPerLine && currentRow.length > 0);
-      if (forceBreak && currentRow.length > 0) {
-        const sys = buildSystem([...currentRow], systems.length, nextPageBreak);
-        if (sys) {
-          sys.yOffset = yAcc;
-          yAcc += step;
-          if (nextPageBreak) {
-            yAcc += PAGE_GAP;
-            nextPageBreak = false;
-          }
-          systems.push(sys);
-        }
-        currentRow = [];
-      }
-      if (forcePage) nextPageBreak = true;
-      currentRow.push(i);
-    }
-    if (currentRow.length > 0) {
-      const sys = buildSystem(currentRow, systems.length, nextPageBreak);
-      if (sys) {
-        sys.yOffset = yAcc;
-        systems.push(sys);
-      }
-    }
-    if (systems.length === 0) {
-      systems.push({
-        systemIndex: 0,
-        measureIndices: [],
-        measureWidths: [],
-        yOffset: 0,
-        pixelsPerBeat,
-        measureWidth: beatsPerMeasure * pixelsPerBeat,
-        pageBreakBefore: false
-      });
-    }
-    return systems;
-  }
-
-  // Automaatne paigutus (vanem loogika – täidab rea laiuse järgi)
-  const systems = [];
-  let measureIdx = 0;
-  let systemIndex = 0;
-  while (measureIdx < measures.length) {
-    let totalBeatCount = 0;
-    const rowIndices = [];
-    while (measureIdx + rowIndices.length < measures.length) {
-      const nextIdx = measureIdx + rowIndices.length;
-      const nextBeatCount = measures[nextIdx].beatCount ?? beatsPerMeasure;
-      const wouldBeTotal = totalBeatCount + nextBeatCount;
-      const wouldBePixelsPerBeat = availableWidth / wouldBeTotal;
-      const nextMeasureWidth = nextBeatCount * wouldBePixelsPerBeat;
-      if (rowIndices.length > 0 && nextMeasureWidth < (LAYOUT.MEASURE_MIN_WIDTH || 28)) break;
-      rowIndices.push(nextIdx);
-      totalBeatCount = wouldBeTotal;
-    }
-    if (rowIndices.length === 0) {
-      rowIndices.push(measureIdx);
-      totalBeatCount = measures[measureIdx].beatCount ?? beatsPerMeasure;
-    }
-    const totalWeight = rowIndices.reduce((sum, i) => sum + (measures[i].beatCount ?? beatsPerMeasure) * getFactor(i), 0);
-    const measureWidths = totalWeight > 0
-      ? rowIndices.map(i => ((measures[i].beatCount ?? beatsPerMeasure) * getFactor(i) / totalWeight) * availableWidth)
-      : rowIndices.map(i => (measures[i].beatCount ?? beatsPerMeasure) * (availableWidth / totalBeatCount));
-    const pixelsPerBeatForRow = totalBeatCount > 0 ? availableWidth / totalBeatCount : pixelsPerBeat;
-    systems.push({
-      systemIndex,
-      measureIndices: rowIndices,
-      measureWidths,
-      yOffset: systemIndex * step,
-      pixelsPerBeat: pixelsPerBeatForRow,
-      measureWidth: measureWidths[0],
-      pageBreakBefore: false
-    });
-    measureIdx += rowIndices.length;
-    systemIndex++;
-  }
-  if (systems.length === 0) {
-    systems.push({
-      systemIndex: 0,
-      measureIndices: [],
-      measureWidths: [],
-      yOffset: 0,
-      pixelsPerBeat,
-      measureWidth: beatsPerMeasure * pixelsPerBeat,
-      pageBreakBefore: false
-    });
-  }
-  return systems;
-}
+// computeLayout imporditud layout/LayoutManager.js
 
 // Rütmipildid (noodid ja pausid) – standardnotatsioon (SMuFL / Gould Behind Bars)
 // Tervikpaus rippub 4. joone alt; poolikpaus istub 3. joone peal; veerandpaus = squiggle; 8/16/32 = blobi(d) + vars.
@@ -742,6 +594,7 @@ function getToolboxes(t, instrumentConfig) {
     clefs: {
       id: 'clefs', name: t('toolbox.clefs'), icon: 'Type', shortcut: 'Shift+3',
       options: [
+        { id: 'jo', label: t('clef.jo'), value: 'jo', key: '0' },
         { id: 'treble', label: t('clef.treble'), value: 'treble', key: '1' },
         { id: 'bass', label: t('clef.bass'), value: 'bass', key: '2' },
         { id: 'alto', label: t('clef.alto'), value: 'alto', key: '3' }
@@ -2648,7 +2501,12 @@ function NoodiMeisterCore({ icons }) {
         }
         break;
       case 'clefs':
-        setClefType(option.value);
+        if (option.value === 'jo') {
+          setNotationMode('vabanotatsioon');
+        } else {
+          setNotationMode('traditional');
+          setClefType(option.value);
+        }
         break;
       case 'keySignatures':
         setKeySignature(option.value);
@@ -2713,7 +2571,7 @@ function NoodiMeisterCore({ icons }) {
     }
     setActiveToolbox(null);
     setSelectedOptionIndex(0);
-  }, [activeToolbox, selectedOptionIndex, noteInputMode, addNoteAtCursor, ghostOctave, instrumentNotationVariant, addChordAt, getChordInsertBeat, getSelectedNotes, notes, keySignature, setNotes, saveToHistory, selectedNoteIndex, selectionStart, selectionEnd, durations, insertPatternAtCursor, addStaff, addPianoStaff, instrumentConfig]);
+  }, [activeToolbox, selectedOptionIndex, noteInputMode, addNoteAtCursor, ghostOctave, instrumentNotationVariant, addChordAt, getChordInsertBeat, getSelectedNotes, notes, keySignature, setNotes, saveToHistory, selectedNoteIndex, selectionStart, selectionEnd, durations, insertPatternAtCursor, addStaff, addPianoStaff, instrumentConfig, setNotationMode, setClefType]);
 
   // Keyboard handler
   useEffect(() => {
@@ -3200,12 +3058,37 @@ function NoodiMeisterCore({ icons }) {
         if (durationMap[e.code] && selectedNoteIndex >= 0) {
           e.preventDefault();
           const newDurationLabel = durationMap[e.code];
+          lastDurationRef.current = newDurationLabel;
+          setSelectedDuration(newDurationLabel);
           const baseDuration = durations[newDurationLabel];
           applyToSelectedNotes(n => ({
             ...n,
             durationLabel: newDurationLabel,
             duration: n.isDotted ? baseDuration * 1.5 : baseDuration
           }));
+          return;
+        }
+
+        // Valikurežiim: A–G muudab valitud nooti(de) kõla ja rakendab aktiivse rütmi
+        const noteLetterSel = e.key?.toLowerCase();
+        if (['c', 'd', 'e', 'f', 'g', 'a', 'b'].includes(noteLetterSel) && selectedNoteIndex >= 0) {
+          e.preventDefault();
+          const pitch = noteLetterSel.toUpperCase();
+          const durationLabel = lastDurationRef.current ?? selectedDuration;
+          const effectiveDuration = getEffectiveDuration(durationLabel);
+          const baseDuration = durations[durationLabel];
+          const newDuration = isDotted && baseDuration != null ? baseDuration * 1.5 : effectiveDuration;
+          applyToSelectedNotes(n => ({
+            ...n,
+            pitch,
+            octave: ghostOctave,
+            durationLabel,
+            duration: newDuration,
+            isDotted,
+            isRest
+          }));
+          setGhostPitch(pitch);
+          setGhostOctave(ghostOctave);
           return;
         }
 
@@ -3324,18 +3207,19 @@ function NoodiMeisterCore({ icons }) {
           return;
         }
 
-        // Note input (C-G)
+        // Note input (C-G) – kasuta globaalset aktiivset rütmi (lastDurationRef), et rütmipaneelist valimine kehtiks kohe
         const noteLetter = e.key.toLowerCase();
         if (['c', 'd', 'e', 'f', 'g', 'a', 'b'].includes(noteLetter)) {
           restNextRef.current = false;
-          const effectiveDuration = getEffectiveDuration(selectedDuration);
+          const durationLabel = lastDurationRef.current ?? selectedDuration;
+          const effectiveDuration = getEffectiveDuration(durationLabel);
           const pitch = noteLetter.toUpperCase();
           const newNote = {
             id: Date.now(),
             pitch,
             octave: ghostOctave,
             duration: effectiveDuration,
-            durationLabel: selectedDuration,
+            durationLabel,
             isDotted: isDotted,
             isRest: isRest
           };
@@ -4306,12 +4190,11 @@ function NoodiMeisterCore({ icons }) {
                       type="button"
                       onClick={() => {
                         setHeaderMenuOpen(null);
-                        const base = (typeof import.meta !== 'undefined' && import.meta.env?.BASE_URL) || '';
-                        const path = base.replace(/\/$/, '') + '/app?new=1';
-                        window.open(`${window.location.origin}${path}`, '_blank', 'noopener,noreferrer');
+                        setSearchParams({ new: '1' });
+                        setNewWorkSetupOpen(true);
                       }}
                       className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-amber-50 hover:bg-slate-600"
-                      title="Ava uus töö teises aknas (sama kasutaja)"
+                      title={t('file.newWorkTitle')}
                     >
                       <Plus className="w-4 h-4" /> {t('file.newWork')}
                     </button>
@@ -4695,7 +4578,7 @@ function NoodiMeisterCore({ icons }) {
                         onDragStart={(e) => { e.dataTransfer.setData('text/plain', 'rhythm:' + idx); e.dataTransfer.effectAllowed = 'copy'; e.currentTarget.classList.add('opacity-70'); }}
                         onDragEnd={(e) => e.currentTarget.classList.remove('opacity-70')}
                         onClick={() => handleToolboxSelection(idx)}
-                        className={`flex flex-col items-center gap-0.5 p-2 rounded-lg min-w-[3rem] transition-all cursor-grab active:cursor-grabbing ${isActive ? 'bg-amber-400 ring-2 ring-amber-600 shadow-md' : 'bg-white/80 hover:bg-amber-100 border border-amber-200'}`}
+                        className={`flex flex-col items-center gap-0.5 p-2 rounded-lg min-w-[3rem] transition-all cursor-grab active:cursor-grabbing ${isActive ? 'bg-amber-400 ring-2 shadow-md ring-[var(--primary-color)]' : 'bg-white/80 hover:bg-amber-100 border border-amber-200'}`}
                         title={`${option.label}. Lohistage noodilehele.`}
                       >
                         <span className="flex items-center justify-center gap-0.5 text-amber-900">
@@ -4850,11 +4733,40 @@ function NoodiMeisterCore({ icons }) {
                       </button>
                     </div>
                   )}
-                  {activeToolbox && activeToolbox !== 'pianoKeyboard' && activeToolbox !== 'rhythm' && activeToolbox !== 'textBox' && toolboxes[activeToolbox]?.options?.map((option, idx) => {
+                  {activeToolbox === 'clefs' && toolboxes.clefs?.options && (
+                    <div className="grid grid-cols-2 gap-2" role="group" aria-label={t('toolbox.clefs')}>
+                      {toolboxes.clefs.options.map((option, idx) => {
+                        const isClefActive = option.value === 'jo' ? notationMode === 'vabanotatsioon' : notationMode === 'traditional' && option.value === clefType;
+                        const boxSize = 56;
+                        const center = boxSize / 2;
+                        return (
+                          <button
+                            key={option.id}
+                            type="button"
+                            onClick={() => handleToolboxSelection(idx)}
+                            aria-pressed={isClefActive}
+                            aria-label={option.label}
+                            className={`min-w-[56px] min-h-[56px] rounded-lg flex flex-col items-center justify-center gap-0.5 p-2 transition-all border-2 ${isClefActive ? 'border-[var(--primary-color)] bg-amber-100 shadow-md' : 'border-amber-200 bg-white hover:bg-amber-50 hover:border-amber-300'}`}
+                          >
+                            <svg viewBox={`0 0 ${boxSize} ${boxSize}`} className="w-12 h-12 shrink-0 text-amber-900" aria-hidden="true">
+                              {option.value === 'jo' && <JoClefSymbol x={8} centerY={center} staffSpacing={6} stroke="currentColor" />}
+                              {option.value === 'treble' && <TrebleClefSymbol x={center} y={center} height={36} fill="currentColor" />}
+                              {option.value === 'bass' && <BassClefSymbol x={center} y={center} height={28} fill="currentColor" staffSpace={6} />}
+                              {option.value === 'alto' && (
+                                <text x={center} y={center + 2} textAnchor="middle" dominantBaseline="middle" fontSize="28" fontFamily="serif" fontWeight="bold" fill="currentColor">C</text>
+                              )}
+                            </svg>
+                            <span className="text-xs font-medium text-amber-900 truncate max-w-full">{option.label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                  {activeToolbox && activeToolbox !== 'pianoKeyboard' && activeToolbox !== 'rhythm' && activeToolbox !== 'textBox' && activeToolbox !== 'clefs' && toolboxes[activeToolbox]?.options?.map((option, idx) => {
                     if (activeToolbox === 'instruments' && option.type === 'category') return <div key={option.id} className="pt-1.5 pb-0.5 px-1.5 text-xs font-bold text-amber-800 uppercase tracking-wide border-b border-amber-200 first:pt-0">{option.label}</div>;
-                    const isActive = activeToolbox === 'timeSignature' && option.value === 'mode-toggle' ? false : activeToolbox === 'clefs' ? option.value === clefType : activeToolbox === 'keySignatures' ? option.value === keySignature : activeToolbox === 'transpose' ? option.value === keySignature : activeToolbox === 'notehead' ? option.value === notationMode : activeToolbox === 'instruments' ? option.type === 'option' && option.value === instrument : activeToolbox === 'layout' ? (option.value === 'gridOnly' && notationStyle === 'FIGURENOTES') || (option.id === 'staff-5' && notationStyle === 'TRADITIONAL' && staffLines === 5) || (option.id === 'staff-1' && notationStyle === 'TRADITIONAL' && staffLines === 1) || (option.id?.startsWith('spacing-') && pixelsPerBeat === option.value) : selectedOptionIndex === idx;
+                    const isActive = activeToolbox === 'timeSignature' && option.value === 'mode-toggle' ? false : activeToolbox === 'keySignatures' ? option.value === keySignature : activeToolbox === 'transpose' ? option.value === keySignature : activeToolbox === 'notehead' ? option.value === notationMode : activeToolbox === 'instruments' ? option.type === 'option' && option.value === instrument : activeToolbox === 'layout' ? (option.value === 'gridOnly' && notationStyle === 'FIGURENOTES') || (option.id === 'staff-5' && notationStyle === 'TRADITIONAL' && staffLines === 5) || (option.id === 'staff-1' && notationStyle === 'TRADITIONAL' && staffLines === 1) || (option.id?.startsWith('spacing-') && pixelsPerBeat === option.value) : selectedOptionIndex === idx;
                     return (
-                      <button key={option.id} onClick={() => handleToolboxSelection(idx)} className={`w-fit max-w-full px-2 py-1 rounded text-left text-sm transition-all flex items-center gap-2 flex-wrap ${(['layout', 'keySignatures', 'transpose', 'instruments', 'clefs', 'notehead'].includes(activeToolbox) ? isActive : selectedOptionIndex === idx) ? 'bg-amber-200 border-l-2 border-amber-600' : 'hover:bg-amber-100'}`}>
+                      <button key={option.id} onClick={() => handleToolboxSelection(idx)} className={`w-fit max-w-full px-2 py-1 rounded text-left text-sm transition-all flex items-center gap-2 flex-wrap ${(['layout', 'keySignatures', 'transpose', 'instruments', 'notehead'].includes(activeToolbox) ? isActive : selectedOptionIndex === idx) ? 'bg-amber-200 border-l-2 border-amber-600' : 'hover:bg-amber-100'}`}>
                         <span className="font-medium truncate">{option.label}</span>
                         {isActive && <Check className="w-3.5 h-3.5 text-amber-600 shrink-0" />}
                         {activeToolbox === 'timeSignature' && option.value === 'mode-toggle' && <span className="text-xs text-amber-600">({timeSignatureMode === 'pedagogical' ? t('timesig.pedagogical') : t('timesig.classic')})</span>}
@@ -4997,7 +4909,7 @@ function NoodiMeisterCore({ icons }) {
                     return timeSignatureMode === 'pedagogical'
                       ? <PedagogicalMeterIcon beats={timeSignature.beats} beatUnit={timeSignature.beatUnit} />
                       : <MeterIcon beats={timeSignature.beats} beatUnit={timeSignature.beatUnit} />;
-                  case 'clefs': return <ClefIcon clefType={clefType} />;
+                  case 'clefs': return <ClefIcon clefType={notationMode === 'vabanotatsioon' ? 'jo' : clefType} />;
                   case 'keySignatures': return <Key className="w-5 h-5" />;
                   case 'transpose': {
                     const ArrowUpDown = icons?.ArrowUpDown;
@@ -5542,17 +5454,7 @@ function pitchOctaveToMidi(pitch, octave) {
 }
 
 /** Transponeerib kõik noodid etteantud pooltoonide võrra. Pausid jäävad muutmata. */
-function transposeNotes(notes, semitones) {
-  if (!semitones) return notes;
-  return notes.map((note) => {
-    if (note.isRest) return { ...note };
-    const acc = note.accidental ?? 0;
-    const midi = pitchOctaveToMidi(note.pitch, note.octave) + acc;
-    const newMidi = Math.max(0, Math.min(127, midi + semitones));
-    const { pitch, octave, accidental } = midiToNoteWithAccidental(newMidi);
-    return { ...note, pitch, octave, accidental };
-  });
-}
+// transposeNotes imporditud musical/transpose.js
 
 function tuningStringToMidi(s) {
   const m = s.match(/^([A-G])(#|b)?(\d+)$/i);

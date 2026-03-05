@@ -1,12 +1,13 @@
 import React, { Suspense, lazy } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { NoodimeisterProvider } from './store/NoodimeisterContext';
 import LandingPage from './pages/LandingPage';
 // Lazy load, et vältida TDZ-viga ühes suures bundle'is
 const RegisterPage = lazy(() => import('./pages/RegisterPage'));
 const LoginPage = lazy(() => import('./pages/LoginPage'));
 const HinnakiriPage = lazy(() => import('./pages/HinnakiriPage'));
 const ToetaPage = lazy(() => import('./pages/ToetaPage'));
-const MinuToodPage = lazy(() => import('./pages/MinuTöödPage'));
+const UserDashboard = lazy(() => import('./components/UserDashboard'));
 const NoodiMeister = lazy(() => import('./noodimeister-complete'));
 const PianoDemoPage = lazy(() => import('./pages/PianoDemoPage'));
 
@@ -37,7 +38,7 @@ function RegisterOrRedirect() {
 /** Minu tööd on sisselogimise järgne vaade – suuna sisselogimata kasutaja loginile. */
 function MinuToodOrRedirect() {
   if (!isLoggedIn()) return <Navigate to="/login" replace />;
-  return <MinuToodPage />;
+  return <UserDashboard />;
 }
 
 function ErrorFallback({ error }) {
@@ -169,9 +170,11 @@ function AppRoutes() {
 export default function App() {
   return (
     <ErrorBoundary>
-      <BrowserRouter basename={import.meta.env.BASE_URL || '/'}>
-        <AppRoutes />
-      </BrowserRouter>
+      <NoodimeisterProvider>
+        <BrowserRouter basename={import.meta.env.BASE_URL || '/'}>
+          <AppRoutes />
+        </BrowserRouter>
+      </NoodimeisterProvider>
     </ErrorBoundary>
   );
 }
