@@ -967,6 +967,7 @@ function NoodiMeisterCore({ icons }) {
   const lyricInputRef = useRef(null);
   const [history, setHistory] = useState([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
+  const saveToHistoryRef = useRef(null);
 
   // Rütmi viimane väärtus (ref), et kohe pärast rütmi valimist lisatud noot kasutaks uut rütmi
   const lastDurationRef = useRef(selectedDuration);
@@ -1045,15 +1046,15 @@ function NoodiMeisterCore({ icons }) {
     });
   }, [activeStaffIndex]);
   const updateNoteTeacherLabel = useCallback((noteIndex, value) => {
-    saveToHistory(notes);
+    if (saveToHistoryRef.current) saveToHistoryRef.current(notes);
     setNotes((prev) => prev.map((n, i) => (i === noteIndex ? { ...n, teacherLabel: value } : n)));
     dirtyRef.current = true;
-  }, [notes, saveToHistory]);
+  }, [notes]);
   const clearAllNoteLabels = useCallback(() => {
-    saveToHistory(notes);
+    if (saveToHistoryRef.current) saveToHistoryRef.current(notes);
     setNotes((prev) => prev.map((n) => ({ ...n, teacherLabel: '' })));
     dirtyRef.current = true;
-  }, [notes, saveToHistory]);
+  }, [notes]);
   const instrument = activeStaff?.instrumentId ?? 'piano';
   const setInstrument = useCallback((instId) => {
     setStaves((prev) => {
@@ -2214,7 +2215,7 @@ function NoodiMeisterCore({ icons }) {
     return isDotted ? base * 1.5 : base;
   };
 
-  // Stage V: History management for undo/redo
+  // Stage V: History management for undo/redo (ref vältib TDZ – saveToHistory kasutatakse updateNoteTeacherLabel/clearAllNoteLabels juba varem)
   const saveToHistory = useCallback((newNotes) => {
     dirtyRef.current = true;
     setHistory(prev => {
@@ -2224,6 +2225,7 @@ function NoodiMeisterCore({ icons }) {
     });
     setHistoryIndex(prev => Math.min(prev + 1, 49));
   }, [historyIndex]);
+  saveToHistoryRef.current = saveToHistory;
 
   const undo = useCallback(() => {
     if (historyIndex > 0) {
