@@ -1,13 +1,12 @@
 import React, { useState, useEffect, useLayoutEffect, useCallback, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { Piano, KeyboardShortcuts, MidiNumbers } from 'react-piano';
-import 'react-piano/dist/styles.css';
-import './piano-overrides.css';
+import { InteractivePiano } from './piano';
 import * as googleDrive from './services/googleDrive';
 import * as authStorage from './services/authStorage';
 import { JoClefSymbol, TrebleClefSymbol, BassClefSymbol } from './components/ClefSymbols';
 import { NoteHead } from './components/NoteHead';
+import { NoteSymbol } from './notation/NoteSymbols';
 import {
   STAFF_SPACE,
   getStaffLinePositions as getStaffLinePositionsFromConstants,
@@ -47,6 +46,7 @@ var GLOBAL_NOTATION_CONFIG = {
   DEFAULT_JO_STAFF_POSITION: 7,
   CLEF_WIDTH: 45,
   SYSTEM_GAP: 120,
+  GRAND_STAFF_GAP_MIN: 100,
   STAFF_SPACE: 10,
   MARGIN_LEFT: 60,
   MARGIN_RIGHT: 40
@@ -104,7 +104,7 @@ var RHYTHM_SYLLABLE_IMAGES = {
 var VALID_DENOMINATORS = [1, 2, 4, 8, 16, 32, 64, 128];
 var MAX_NUMERATOR = 99;
 var TOOLBOX_ORDER = ['rhythm', 'timeSignature', 'clefs', 'keySignatures', 'transpose', 'pitchInput', 'pianoKeyboard', 'notehead', 'instruments', 'repeatsJumps', 'layout', 'textBox', 'chords'];
-var FIGURENOTES_COLORS = { 'C': '#E31E24', 'D': '#8B5A2B', 'E': '#BDBDBD', 'F': '#0091DA', 'G': '#000000', 'A': '#FFEF00', 'B': '#32CD32' };
+var FIGURENOTES_COLORS = { 'C': '#FF0000', 'D': '#8B4513', 'E': '#808080', 'F': '#0000FF', 'G': '#000000', 'A': '#FFFF00', 'B': '#008000' };
 var FIGURENOTES_SHAPES = { 2: 'cross', 3: 'square', 4: 'circle', 5: 'triangle' };
 var PITCH_TO_SEMI = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
 var PITCH_NAME_TO_NATURAL = { C: 'C', 'C#': 'C', Db: 'C', D: 'D', 'D#': 'D', Eb: 'D', E: 'E', F: 'F', 'F#': 'F', Gb: 'F', G: 'G', 'G#': 'G', Ab: 'G', A: 'A', 'A#': 'A', Bb: 'A', B: 'B' };
@@ -850,26 +850,36 @@ function getFigurenoteTextColor(pitch) {
   return (pitch === 'A' || pitch === 'E') ? '#000000' : '#ffffff';
 }
 
-// PITCH_TO_SEMI, PITCH_NAME_TO_NATURAL on faili alguses var'iga
+// MIDI ↔ note string ilma react-piano sõltuvuseta (C4 = 60).
+var MIDI_PITCH_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+function noteStringToMidi(str) {
+  const m = String(str).trim().toLowerCase().match(/^([a-g])(#|b)?(\d+)$/);
+  if (!m) return 60;
+  const pitchIndex = { c: 0, d: 2, e: 4, f: 5, g: 7, a: 9, b: 11 }[m[1]];
+  const octave = parseInt(m[3], 10);
+  const semi = pitchIndex + (m[2] === '#' ? 1 : m[2] === 'b' ? -1 : 0);
+  return (octave + 1) * 12 + ((semi % 12) + 12) % 12;
+}
+function getMidiAttributes(midiNumber) {
+  const n = Number(midiNumber);
+  if (!Number.isFinite(n) || n < 0 || n > 127) return { pitchName: 'C', octave: 4, isAccidental: false };
+  const octave = Math.floor(n / 12) - 1;
+  const pitchName = MIDI_PITCH_NAMES[n % 12];
+  const isAccidental = [1, 3, 6, 8, 10].includes(n % 12);
+  return { pitchName, octave, isAccidental };
+}
+// PITCH_NAME_TO_NATURAL on faili alguses var'iga
 function midiToPitchOctave(midiNumber) {
-  try {
-    const attrs = MidiNumbers.getAttributes(midiNumber);
-    const naturalPitch = PITCH_NAME_TO_NATURAL[attrs.pitchName] || attrs.pitchName.charAt(0);
-    return { pitch: naturalPitch, octave: attrs.octave, isAccidental: attrs.isAccidental };
-  } catch {
-    return { pitch: 'C', octave: 4, isAccidental: false };
-  }
+  const attrs = getMidiAttributes(midiNumber);
+  const naturalPitch = PITCH_NAME_TO_NATURAL[attrs.pitchName] || attrs.pitchName.charAt(0);
+  return { pitch: naturalPitch, octave: attrs.octave, isAccidental: attrs.isAccidental };
 }
 /** MIDI number → noodivorm (pitch, octave, accidental) transponeerimise tulemuse jaoks */
 function midiToNoteWithAccidental(midiNumber) {
-  try {
-    const attrs = MidiNumbers.getAttributes(midiNumber);
-    const naturalPitch = PITCH_NAME_TO_NATURAL[attrs.pitchName] || attrs.pitchName.charAt(0);
-    const accidental = attrs.pitchName && attrs.pitchName.includes('#') ? 1 : attrs.pitchName && attrs.pitchName.includes('b') ? -1 : 0;
-    return { pitch: naturalPitch, octave: attrs.octave, accidental };
-  } catch {
-    return { pitch: 'C', octave: 4, accidental: 0 };
-  }
+  const attrs = getMidiAttributes(midiNumber);
+  const naturalPitch = PITCH_NAME_TO_NATURAL[attrs.pitchName] || attrs.pitchName.charAt(0);
+  const accidental = attrs.pitchName && attrs.pitchName.includes('#') ? 1 : attrs.pitchName && attrs.pitchName.includes('b') ? -1 : 0;
+  return { pitch: naturalPitch, octave: attrs.octave, accidental };
 }
 // FINGERING_TIN_WHISTLE, FINGERING_RECORDER on faili alguses var'iga
 function NoodiMeisterCore({ icons }) {
@@ -944,12 +954,6 @@ function NoodiMeisterCore({ icons }) {
   const pianoStripWrapperRef = useRef(null); // klaviatuuri wrapper – laius mõõdetakse ResizeObserveriga
   const [pianoRange, setPianoRange] = useState('C3-C5'); // nagu muted.io piano: C3-C5 (vaikimisi), laiendatav
   const [pianoStripVisible, setPianoStripVisible] = useState(false); // klaviatuuri riba all – nähtav ka siis, kui avatud on Rütm vms
-  const midiAccessRef = useRef(null);
-  const [midiInputs, setMidiInputs] = useState([]);
-  const [selectedMidiInputId, setSelectedMidiInputId] = useState(null);
-  const [activeMidiNotes, setActiveMidiNotes] = useState([]);
-  const [midiSupported] = useState(() => typeof navigator !== 'undefined' && !!navigator.requestMIDIAccess);
-  const [midiError, setMidiError] = useState(null);
 
   // Stage V: Time signature display mode
   const [timeSignatureMode, setTimeSignatureMode] = useState('pedagogical'); // 'classic' or 'pedagogical'
@@ -1210,38 +1214,6 @@ function NoodiMeisterCore({ icons }) {
     ro.observe(el);
     return () => ro.disconnect();
   }, [pianoStripVisible]);
-
-  // Web MIDI API: taotle juurdepääsu ja uuenda sisendite nimekirja (klaviatuuri tööriista avamisel)
-  useEffect(() => {
-    if (!midiSupported || activeToolbox !== 'pianoKeyboard') return;
-    let cancelled = false;
-    navigator.requestMIDIAccess({ sysex: false })
-      .then((access) => {
-        if (cancelled) return;
-        midiAccessRef.current = access;
-        const updateInputs = () => {
-          const inputs = Array.from(access.inputs.values()).map((input) => ({ id: input.id, name: input.name || input.id }));
-          setMidiInputs(inputs);
-          setSelectedMidiInputId((prev) => {
-            if (inputs.length === 0) return null;
-            if (prev && inputs.some((i) => i.id === prev)) return prev;
-            return inputs[0].id;
-          });
-        };
-        updateInputs();
-        setMidiError(null);
-        access.addEventListener('statechange', updateInputs);
-        return () => access.removeEventListener('statechange', updateInputs);
-      })
-      .catch((err) => {
-        if (!cancelled) setMidiError(err?.message || 'MIDI ei ole saadaval');
-      });
-    return () => {
-      cancelled = true;
-      midiAccessRef.current = null;
-      setActiveMidiNotes([]);
-    };
-  }, [midiSupported, pianoStripVisible]);
 
   const [saveCloudNewFolderName, setSaveCloudNewFolderName] = useState('NoodiMeister');
   const [setupCompleted, setSetupCompleted] = useState(() => {
@@ -2378,7 +2350,7 @@ function NoodiMeisterCore({ icons }) {
   }, []);
 
   // Handle toolbox selection (clickedIndex = option index when clicking, else uses selectedOptionIndex for keyboard)
-  const addNoteAtCursor = useCallback((pitch, octave, accidental = 0) => {
+  const addNoteAtCursor = useCallback((pitch, octave, accidental = 0, options = {}) => {
     const totalBeatsNow = notes.reduce((acc, n) => acc + n.duration, 0);
     const oct = octave ?? ghostOctave;
     const durationLabel = lastDurationRef.current ?? selectedDuration;
@@ -2410,44 +2382,27 @@ function NoodiMeisterCore({ icons }) {
       ...(tupletPayload && { tuplet: tupletPayload })
     };
     saveToHistory(notes);
-    setNotes(prev => [...prev, newNote]);
+    const midiForStaff = (oct + 1) * 12 + (PITCH_TO_SEMI[pitch] ?? 0);
+    const isGrandStaff = staves.length >= 2 && staves[0].braceGroupId && staves[0].braceGroupId === staves[1]?.braceGroupId;
+    const targetStaffIndex = isGrandStaff ? (midiForStaff < 60 ? 1 : 0) : activeStaffIndex;
+    if (isGrandStaff && targetStaffIndex !== activeStaffIndex) {
+      setStaves((prev) => {
+        const next = prev.slice();
+        const staff = next[targetStaffIndex];
+        next[targetStaffIndex] = { ...staff, notes: [...(staff.notes || []), newNote] };
+        return next;
+      });
+    } else {
+      setNotes((prev) => [...prev, newNote]);
+    }
     setCursorPosition(prev => prev + effectiveDuration);
     setGhostPitch(pitch);
     setGhostOctave(oct);
-    if (!isRest && playNoteOnInsert) {
+    if (!isRest && playNoteOnInsert && !options.skipPlay) {
       const semitones = accidental === 1 ? 1 : accidental === -1 ? -1 : 0;
       playPianoNote(pitch, oct, semitones);
     }
-  }, [selectedDuration, getEffectiveDuration, isDotted, isRest, notes, saveToHistory, ghostOctave, playPianoNote, playNoteOnInsert, tupletMode, durations]);
-
-  // MIDI sisendi valimine: kuula note on/off ja sünkroni virtuaalse klaviatuuriga (heli + esiletoomine). Siin pärast addNoteAtCursor/playPianoNote, et vältida TDZ.
-  useEffect(() => {
-    if (!midiAccessRef.current || selectedMidiInputId == null) return;
-    const input = midiAccessRef.current.inputs.get(selectedMidiInputId);
-    if (!input) return;
-    const onMidiMessage = (e) => {
-      const [cmd, note, velocity] = e.data;
-      const isNoteOn = cmd === 0x90 && velocity > 0;
-      const isNoteOff = cmd === 0x80 || (cmd === 0x90 && velocity === 0);
-      if (isNoteOn) {
-        setActiveMidiNotes((prev) => (prev.includes(note) ? prev : [...prev, note]));
-        const { pitch, octave } = midiToPitchOctave(note);
-        const attrs = MidiNumbers.getAttributes(note);
-        const accidental = attrs.pitchName && attrs.pitchName.includes('#') ? 1 : attrs.pitchName && attrs.pitchName.includes('b') ? -1 : 0;
-        const pitchForPlay = attrs.pitchName && attrs.pitchName.includes('b') ? attrs.pitchName.charAt(0) : pitch;
-        setGhostPitch(pitch);
-        setGhostOctave(octave);
-        if (noteInputMode) addNoteAtCursor(pitch, octave, accidental);
-        else playPianoNote(pitchForPlay, octave, accidental);
-      }
-      if (isNoteOff) setActiveMidiNotes((prev) => prev.filter((n) => n !== note));
-    };
-    input.addEventListener('midimessage', onMidiMessage);
-    return () => {
-      input.removeEventListener('midimessage', onMidiMessage);
-      setActiveMidiNotes([]);
-    };
-  }, [selectedMidiInputId, noteInputMode, addNoteAtCursor, playPianoNote]);
+  }, [selectedDuration, getEffectiveDuration, isDotted, isRest, notes, saveToHistory, ghostOctave, playPianoNote, playNoteOnInsert, tupletMode, durations, staves, activeStaffIndex]);
 
   // Liitrütmimustrid: iga element { durationLabel, duration }
   const RHYTHM_PATTERN_NOTES = useMemo(() => ({
@@ -5127,7 +5082,8 @@ function NoodiMeisterCore({ icons }) {
               {(visibleStaffList.length > 0 ? visibleStaffList : staves.map((staff, i) => ({ staff, staffIdx: i, visibleIndex: i }))).map(({ staff, staffIdx, visibleIndex }) => {
                 const isFirstInBraceGroup = staff.braceGroupId && staves[staffIdx + 1]?.braceGroupId === staff.braceGroupId;
                 const braceGroupSize = isFirstInBraceGroup ? 2 : 0;
-                const baseYOffset = visibleIndex * (effectiveStaffHeight + layoutSystemGap) + (staffYOffsets[staffIdx] ?? 0);
+                var grandStaffGap = (visibleStaffList.length >= 2 || braceGroupSize >= 2) ? Math.max(layoutSystemGap, GLOBAL_NOTATION_CONFIG.GRAND_STAFF_GAP_MIN || 100) : layoutSystemGap;
+                const baseYOffset = visibleIndex * (effectiveStaffHeight + grandStaffGap) + (staffYOffsets[staffIdx] ?? 0);
                 const isFirstVisible = visibleIndex === 0;
                 return (
                 <Timeline
@@ -5285,19 +5241,22 @@ function NoodiMeisterCore({ icons }) {
           );
         })()}
 
-        {/* Klaveri klaviatuur – virtuaalne klaver muted.io/piano stiilis; portaal body-sse */}
+        {/* Klaveri klaviatuur – täisfunktsionaalne interaktiivne klaver (vähemalt 2 oktaavi), heli + MIDI */}
         {pianoStripVisible && typeof document !== 'undefined' && createPortal(
           (() => {
             const rangeMap = { 'C3-C5': ['c3', 'c5'], 'C2-C5': ['c2', 'c5'], 'C1-C5': ['c1', 'c5'], 'C1-C7': ['c1', 'c7'] };
             const [firstStr, lastStr] = rangeMap[pianoRange] || ['c3', 'c5'];
-            const firstNote = MidiNumbers.fromNote(firstStr);
-            const lastNote = MidiNumbers.fromNote(lastStr);
-            const noteRange = { first: firstNote, last: lastNote };
-            const keyboardShortcuts = KeyboardShortcuts.create({
-              firstNote,
-              lastNote,
-              keyboardConfig: KeyboardShortcuts.HOME_ROW
-            });
+            const firstNote = noteStringToMidi(firstStr);
+            const lastNote = noteStringToMidi(lastStr);
+            const handleNotePlay = (midiNumber) => {
+              const { pitch, octave } = midiToPitchOctave(midiNumber);
+              const attrs = getMidiAttributes(midiNumber);
+              const accidental = attrs.pitchName && attrs.pitchName.includes('#') ? 1 : attrs.pitchName && attrs.pitchName.includes('b') ? -1 : 0;
+              setGhostPitch(pitch);
+              setGhostOctave(octave);
+              if (noteInputMode) addNoteAtCursor(pitch, octave, accidental, { skipPlay: true });
+              /* Väljaspool sisestusrežiimi heli teeb juba InteractivePiano (Oscillator) */
+            };
             return (
               <div className="fixed bottom-0 left-0 right-0 z-[100] min-h-[140px] bg-gradient-to-t from-amber-100 to-amber-50 border-t-2 border-amber-300 shadow-[0_-4px_12px_rgba(0,0,0,0.12)] py-3 px-4" style={{ isolation: 'isolate' }}>
                 <div className="mx-auto max-w-4xl" style={{ minHeight: 120 }}>
@@ -5306,21 +5265,21 @@ function NoodiMeisterCore({ icons }) {
                       <span className="text-xs font-semibold text-amber-800 uppercase tracking-wider">
                         {t('toolbox.pianoKeyboard')}
                       </span>
-                      <span className="text-xs text-amber-600">({t('midi.mouseKeyboardHint') || 'Hiirega või arvutiklahvidega (numbrid) mängi noote.'})</span>
+                      <span className="text-xs text-amber-600">({t('midi.mouseKeyboardHint') || 'Hiirega või arvutiklahvidega mängi noote. Noot ilmub noodijoonestikule.'})</span>
                     </div>
                     <div className="flex items-center gap-2">
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <span className="text-xs text-amber-700 font-medium">{t('layout.range') || 'Vahemik'}:</span>
-                      {(['C3-C5', 'C2-C5', 'C1-C5', 'C1-C7']).map((r) => (
-                        <button
-                          key={r}
-                          type="button"
-                          onClick={() => setPianoRange(r)}
-                          className={`px-2 py-1 rounded text-xs font-medium transition-colors ${pianoRange === r ? 'bg-amber-600 text-white' : 'bg-amber-200/80 text-amber-900 hover:bg-amber-300'}`}
-                        >
-                          {r}
-                        </button>
-                      ))}
+                        {(['C3-C5', 'C2-C5', 'C1-C5', 'C1-C7']).map((r) => (
+                          <button
+                            key={r}
+                            type="button"
+                            onClick={() => setPianoRange(r)}
+                            className={`px-2 py-1 rounded text-xs font-medium transition-colors ${pianoRange === r ? 'bg-amber-600 text-white' : 'bg-amber-200/80 text-amber-900 hover:bg-amber-300'}`}
+                          >
+                            {r}
+                          </button>
+                        ))}
                       </div>
                       <button
                         type="button"
@@ -5332,84 +5291,17 @@ function NoodiMeisterCore({ icons }) {
                       </button>
                     </div>
                   </div>
-                  <div className="flex flex-wrap items-center gap-3 mb-2">
-                    <span className="text-xs text-amber-800 font-medium">{t('midi.title') || 'MIDI klaviatuur'}:</span>
-                    {!midiSupported ? (
-                      <span className="text-xs text-amber-700">{t('midi.unsupported') || 'Brauser ei toeta MIDI (soovitus: Chrome, Edge)'}</span>
-                    ) : midiError ? (
-                      <span className="text-xs text-red-600">{midiError}</span>
-                    ) : midiInputs.length === 0 ? (
-                      <span className="text-xs text-amber-700">{t('midi.noDevices') || 'Seadmeid pole. Ühenda MIDI klaviatuur ja värskenda lehte.'}</span>
-                    ) : (
-                      <select
-                        value={selectedMidiInputId ?? ''}
-                        onChange={(e) => setSelectedMidiInputId(e.target.value || null)}
-                        className="text-xs rounded border border-amber-400 bg-amber-50 text-amber-900 px-2 py-1"
-                      >
-                        <option value="">{t('midi.selectDevice') || 'Vali seade…'}</option>
-                        {midiInputs.map((inp) => (
-                          <option key={inp.id} value={inp.id}>{inp.name}</option>
-                        ))}
-                      </select>
-                    )}
-                    {activeMidiNotes.length > 0 && (
-                      <span className="text-xs text-blue-600 font-medium">
-                        {t('midi.playing') || 'Mängib'} ({activeMidiNotes.length})
-                      </span>
-                    )}
-                  </div>
                   <div ref={pianoStripWrapperRef} className="NoodiMeisterPianoWrapper" style={{ width: '100%', minHeight: 100, height: 100 }}>
-                  <Piano
-                    className={`NoodiMeisterPiano ${activeMidiNotes.length > 0 ? 'midi-keys-active' : ''}`}
-                    noteRange={noteRange}
-                    playNote={(midiNumber) => {
-                      const { pitch, octave, isAccidental } = midiToPitchOctave(midiNumber);
-                      const attrs = MidiNumbers.getAttributes(midiNumber);
-                      const accidental = attrs.pitchName && attrs.pitchName.includes('#') ? 1 : attrs.pitchName && attrs.pitchName.includes('b') ? -1 : 0;
-                      const pitchForPlay = attrs.pitchName && attrs.pitchName.includes('b') ? attrs.pitchName.charAt(0) : pitch;
-                      const semiForPlay = accidental;
-                      setGhostPitch(pitch);
-                      setGhostOctave(octave);
-                      if (noteInputMode) addNoteAtCursor(pitch, octave, accidental);
-                      else playPianoNote(pitchForPlay, octave, semiForPlay);
-                    }}
-                    stopNote={() => {}}
-                    width={pianoStripWidth}
-                    keyboardShortcuts={keyboardShortcuts}
-                    activeNotes={activeMidiNotes.length > 0 ? activeMidiNotes : [pitchOctaveToMidi(ghostPitch, ghostOctave)]}
-                    renderNoteLabel={({ midiNumber, isActive, isAccidental }) => {
-                      const { pitch, octave } = midiToPitchOctave(midiNumber);
-                      const attrs = MidiNumbers.getAttributes(midiNumber);
-                      const pitchName = attrs.pitchName;
-                      if (notationMode === 'traditional' || notationMode === 'vabanotatsioon') {
-                        return (
-                          <span>
-                            {pitchName}{octave}
-                          </span>
-                        );
-                      }
-                      const color = FIGURENOTES_COLORS[pitch] || '#666';
-                      const shapeKey = FIGURENOTES_SHAPES[octave];
-                      const shapeChar = shapeKey === 'cross' ? '×' : shapeKey === 'square' ? '□' : shapeKey === 'circle' ? '○' : '△';
-                      const labelTextColor = getFigurenoteTextColor(pitch);
-                      return (
-                        <span
-                          className="NoodiMeisterFigurenotesKeyLabel inline-block rounded border border-amber-800 flex items-center justify-center text-[10px] font-bold"
-                          style={{
-                            backgroundColor: color,
-                            color: labelTextColor,
-                            width: '65%',
-                            height: '65%',
-                            minWidth: 14,
-                            minHeight: 14,
-                          }}
-                          title={`${pitch} ${shapeKey || ''}`}
-                        >
-                          {shapeChar}
-                        </span>
-                      );
-                    }}
-                  />
+                    <InteractivePiano
+                      firstNote={firstNote}
+                      lastNote={lastNote}
+                      width={pianoStripWidth}
+                      height={100}
+                      showMidiSelect={true}
+                      onNotePlay={handleNotePlay}
+                      figurenotesColors={notationStyle === 'FIGURENOTES' ? FIGURENOTES_COLORS : null}
+                      keySignature={keySignature}
+                    />
                   </div>
                 </div>
               </div>
@@ -5422,7 +5314,7 @@ function NoodiMeisterCore({ icons }) {
   );
 }
 
-// Pitch/octave ↔ MIDI. Ühilduv react-piano MidiNumbers.getAttributes/fromNote-ga: C4 = 60, C0 = 12.
+// Pitch/octave ↔ MIDI (C4 = 60, C0 = 12). getMidiAttributes / noteStringToMidi.
 function pitchOctaveToMidi(pitch, octave) {
   const semi = PITCH_TO_SEMI[pitch] ?? 0;
   const oct = Number(octave);
@@ -5532,6 +5424,11 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
     });
     return out;
   }, [measures, allNotes]);
+
+  const durationLabelToNoteSymbolType = (dur) => {
+    const map = { '1/1': 'whole', '1/2': 'half', '1/4': 'quarter', '1/8': 'eighth', '1/16': 'sixteenth', '1/32': 'sixteenth' };
+    return map[dur] || 'quarter';
+  };
   const effectiveMeasures = React.useMemo(() => (measures || []).map((m, i) => ({ ...m, notes: notesByMeasure[i] || [] })), [measures, notesByMeasure]);
   const timelineSvgRef = useRef(null);
   const timelineHeight = staffHeightProp ?? getStaffHeight();
@@ -5831,9 +5728,9 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
           />
         )}
         {shapeElement}
-        {/* Noodi nimi kujundi sees (valge või must A/E korral) */}
+        {/* Noodi nimi kujundi sees: JO, LE, MI (Kodály solfeeg) */}
         <text x={x} y={y} textAnchor="middle" dominantBaseline="central" fill={textColor} fontSize={Math.max(8, size * 0.5)} fontWeight="bold">
-          {note.pitch}
+          {getJoName(note.pitch, note.octave, keySignature)}
         </text>
         {/* Pikkade nootide (1/2, 1/1) alumine saba – visuaalselt näitab noodi pikkust */}
         {tailLength > 0 && (
@@ -5869,22 +5766,23 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
             )}
           </g>
         )}
-        {/* Alteratsiooninool figuuri kohal: kõrgendamine (♯) = nool paremale üles (↗), madaldamine (♭) = nool vasakule üles (↖) */}
+        {/* Alteratsiooninool: ♯ = nool paremale üles (↗), ♭ = nool vasakule üles (↖). Skaleeritud figurenotesSize-ga, et oleks nähtav ka suurendatud režiimis. */}
         {(note.accidental === 1 || note.accidental === -1) && (() => {
-          const arrowY = y - size / 2 - 10;
-          const arrowLen = 14;
-          const head = 5;
+          const arrowY = y - size / 2 - Math.max(8, figurenotesSize * 0.4);
+          const arrowLen = Math.max(14, figurenotesSize * 0.85);
+          const head = Math.max(5, figurenotesSize * 0.32);
+          const strokeW = Math.max(1.5, figurenotesSize * 0.1);
           const stroke = '#1a1a1a';
           if (note.accidental === 1) {
             return (
-              <g stroke={stroke} fill="none" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <g stroke={stroke} fill="none" strokeWidth={strokeW} strokeLinecap="round" strokeLinejoin="round">
                 <line x1={x - arrowLen / 2} y1={arrowY + arrowLen / 2} x2={x + arrowLen / 2} y2={arrowY - arrowLen / 2} />
                 <path d={`M ${x + arrowLen / 2} ${arrowY - arrowLen / 2} L ${x + arrowLen / 2 - head} ${arrowY - arrowLen / 2 + head * 0.6} M ${x + arrowLen / 2} ${arrowY - arrowLen / 2} L ${x + arrowLen / 2 - head * 0.6} ${arrowY - arrowLen / 2 + head}`} />
               </g>
             );
           }
           return (
-            <g stroke={stroke} fill="none" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <g stroke={stroke} fill="none" strokeWidth={strokeW} strokeLinecap="round" strokeLinejoin="round">
               <line x1={x + arrowLen / 2} y1={arrowY + arrowLen / 2} x2={x - arrowLen / 2} y2={arrowY - arrowLen / 2} />
               <path d={`M ${x - arrowLen / 2} ${arrowY - arrowLen / 2} L ${x - arrowLen / 2 + head} ${arrowY - arrowLen / 2 + head * 0.6} M ${x - arrowLen / 2} ${arrowY - arrowLen / 2} L ${x - arrowLen / 2 + head * 0.6} ${arrowY - arrowLen / 2 + head}`} />
             </g>
@@ -5946,12 +5844,16 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
 
   const svgWidth = isHorizontal ? totalPages * (pageWidth || LAYOUT.PAGE_WIDTH_MIN) : '100%';
   const svgHeight = isHorizontal ? a4PageHeight : totalHeight;
+  var viewBoxW = typeof svgWidth === 'number' ? svgWidth : (pageWidth || LAYOUT.PAGE_WIDTH_MIN);
+  var viewBoxH = typeof svgHeight === 'number' ? svgHeight : totalHeight;
 
   return (
     <svg
       ref={timelineSvgRef}
       width={svgWidth}
       height={svgHeight}
+      viewBox={`0 0 ${viewBoxW} ${viewBoxH}`}
+      preserveAspectRatio="xMidYMin meet"
       className={`overflow-visible ${noteInputMode ? 'cursor-pointer' : ''}`}
       onClick={handleStaffClick}
       style={isHorizontal ? { display: 'block', minWidth: svgWidth } : undefined}
@@ -5966,15 +5868,16 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
           {sys.pageBreakBefore && (
             <line x1={0} y1={sys.yOffset - PAGE_BREAK_GAP / 2} x2={pageWidth || LAYOUT.PAGE_WIDTH_MIN} y2={sys.yOffset - PAGE_BREAK_GAP / 2} stroke="#c4b896" strokeWidth={1} strokeDasharray="4 4" />
           )}
-          {/* MuseScore klaverisüsteem: kaks rida (viiulivõti + bassivõti, F täpselt 4. joonel), vasakult ühendatud Brace sümboliga */}
+          {/* Klaveriklamber (Brace): vasakul servas, ühendab viiuli- ja bassijoonestiku (MuseScore stiilis) */}
           {!isFigurenotesMode && isFirstInBraceGroup && braceGroupSize >= 2 && (() => {
-            const braceH = braceGroupSize * getStaffHeight();
-            const top = sys.yOffset + 2;
-            const bottom = sys.yOffset + braceH - 2;
-            const mid = sys.yOffset + braceH / 2;
-            const braceW = 14;
-            const pathD = `M ${braceW} ${top} C 4 ${top} 0 ${top} 0 ${top + braceH / 4} C 0 ${mid} 4 ${mid} 0 ${top + braceH * 3 / 4} C 0 ${bottom} 4 ${bottom} ${braceW} ${bottom}`;
-            return <path d={pathD} fill="none" stroke="#333" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />;
+            const staffH = getStaffHeight();
+            const braceH = braceGroupSize * staffH + (GLOBAL_NOTATION_CONFIG.GRAND_STAFF_GAP_MIN || 100);
+            const top = sys.yOffset + 4;
+            const bottom = sys.yOffset + braceH - 4;
+            const q = braceH * 0.25;
+            const braceW = 18;
+            const pathD = `M ${braceW} ${top} C 2 ${top} 0 ${top + q} 0 ${top + braceH / 2} C 0 ${bottom - q} 2 ${bottom} ${braceW} ${bottom}`;
+            return <path d={pathD} fill="none" stroke="#1a1a1a" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />;
           })()}
           {isFigurenotesMode ? (
             /* FIGURENOTES: drawRhythmGrid() – no staff, grid only */
@@ -5997,15 +5900,14 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
                 <text x={18} y={sys.yOffset + centerY + 6} fontSize="14" fontWeight="bold" fill="#333">TAB</text>
               ) : staffLines === 5 ? (
                 (() => {
-                  // Viiulivõti: G4 on teine joon alt = neljas joon ülevalt [3].
+                  // Viiulivõti: G algab 2. joonelt (ülalt); bassivõti: F on neljas joon ülevalt (MuseScore/Grand Staff).
                   const trebleGLine = staffLinePositions[3];
-                  // Bassivõti: F3 on neljas joon alt (F-clef), teine joon ülevalt [1].
-                  const bassFLine = staffLinePositions[1];
+                  const bassFLine = staffLinePositions[3];
                   const bassClefYOffset = 0;
                   const middleLineYStaff = centerY;
                   const staffSpace = spacing;
                   const clefFontSize = staffSpace * 6;
-                  const clefX = 12;
+                  const clefX = 22;
                   let xOffset = clefX;
                   const g = [];
                   const clefBaseline = 'middle';
@@ -6304,9 +6206,13 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
                 const dur = note.durationLabel || '1/4';
                 const tailLen = (dur === '1/1') ? Math.max(20, figurenotesSize * 1.4) : (dur === '1/2') ? Math.max(12, figurenotesSize * 0.85) : 0;
                 const labelY = noteY + figurenotesSize * 0.5 + labelFontSize + tailLen;
+                const accidentalNudge = (note.accidental === 1 || note.accidental === -1)
+                  ? (note.accidental === 1 ? 1 : -1) * Math.max(2, figurenotesSize * 0.2)
+                  : 0;
+                const figureX = noteX + accidentalNudge;
                 return (
                   <g key={noteIdx} {...noteGroupProps}>
-                    {renderFigurenote(note, noteX, noteY, globalNoteIndex)}
+                    {renderFigurenote(note, figureX, noteY, globalNoteIndex)}
                     {(note.lyric != null && String(note.lyric).trim() !== '') && (
                       <text
                         x={noteX}
@@ -6324,10 +6230,7 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
               } else if (notationMode === 'traditional' || notationMode === 'vabanotatsioon') {
                 const isSelected = isNoteSelected(globalNoteIndex);
                 const noteheadRx = getNoteheadRx(spacing);
-                const noteheadRy = getNoteheadRy(spacing);
-                const stemX = stemUp ? noteX + noteheadRx : noteX - noteheadRx;
                 const beamGroup = getBeamGroup(noteIdx);
-                const stemY2 = beamGroup ? beamGroup.beamY : (stemUp ? noteY - 32 : noteY + 32);
                 const fingering = isFingeringMode ? getFingeringForNote(note.pitch, note.octave, instrument) : null;
                 const fingerY = noteY + (stemUp ? 38 : 42);
                 const ledgerHalfWidth = getLedgerHalfWidth(spacing);
@@ -6371,22 +6274,15 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
                         rx="4"
                       />
                     )}
-                    <NoteHead
-                      cx={noteX}
-                      cy={noteY}
-                      staffSpace={spacing}
-                      filled
-                      stemUp={stemUp}
-                      selected={isSelected}
-                    />
-                    <line 
-                      x1={stemX} 
-                      y1={noteY} 
-                      x2={stemX} 
-                      y2={stemY2} 
-                      stroke="#1a1a1a" 
-                      strokeWidth="1.5" 
-                    />
+                    <g transform={`translate(${noteX}, ${noteY})`}>
+                      <NoteSymbol
+                        type={durationLabelToNoteSymbolType(note.durationLabel)}
+                        cx={0}
+                        cy={0}
+                        staffSpace={spacing}
+                        stemUp={stemUp}
+                      />
+                    </g>
                     {beamGroup && noteIdx === beamGroup.start && (
                       <g stroke="#1a1a1a" strokeWidth="2" strokeLinecap="round">
                         {Array.from({ length: beamGroup.numBeams }, (_, i) => (
@@ -6458,8 +6354,6 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
                 );
               } else {
                 const isSelected = isNoteSelected(globalNoteIndex);
-                const stemX = stemUp ? noteX + 10 : noteX - 10;
-                const stemY2 = stemUp ? noteY - 28 : noteY + 28;
                 return (
                   <g key={noteIdx} {...noteGroupProps}>
                     {isSelected && (
@@ -6473,32 +6367,15 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
                         rx="4"
                       />
                     )}
-                    <circle
-                      cx={noteX}
-                      cy={noteY}
-                      r="10"
-                      fill="none"
-                      stroke="#333"
-                      strokeWidth="2"
-                    />
-                    <text
-                      x={noteX}
-                      y={noteY + 4}
-                      textAnchor="middle"
-                      fontSize="12"
-                      fontWeight="bold"
-                      fill="#333"
-                    >
-                      {note.pitch}
-                    </text>
-                    <line 
-                      x1={stemX} 
-                      y1={noteY} 
-                      x2={stemX} 
-                      y2={stemY2} 
-                      stroke="#333" 
-                      strokeWidth="1.5" 
-                    />
+                    <g transform={`translate(${noteX}, ${noteY})`}>
+                      <NoteSymbol
+                        type={durationLabelToNoteSymbolType(note.durationLabel)}
+                        cx={0}
+                        cy={0}
+                        staffSpace={spacing}
+                        stemUp={stemUp}
+                      />
+                    </g>
                     {showRhythmSyllables && (() => {
                       const labelY = sys.yOffset + staffLinePositions[staffLinePositions.length - 1] + spacing * 1.8;
                       const syllable = getRhythmSyllableForNote(note);

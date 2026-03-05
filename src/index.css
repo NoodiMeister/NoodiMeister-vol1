@@ -1,4 +1,4 @@
-/* Globaalsed alusstiilid. Klaveri ülekirjutused: noodimeister-complete laeb piano-overrides.css. */
+/* Globaalsed alusstiilid. */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -21,4 +21,10 @@ html, body, #root {
   font-weight: 500;
   color: #92400e;
   background: linear-gradient(to bottom right, #fffbeb, #fef3c7);
+}
+
+/* Klaveri klaviatuuri wrapper (allriba) */
+.NoodiMeisterPianoWrapper {
+  display: block;
+  min-height: 100px;
 }

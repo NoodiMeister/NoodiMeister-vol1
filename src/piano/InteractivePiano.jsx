@@ -1,9 +1,10 @@
 /**
- * InteractivePiano – ühendab PianoEngine, PianoVisual ja sisendihaldurid.
- * Hiir, arvutiklaviatuur ja MIDI kutsub ühiseid playNote/stopNote.
+ * InteractivePiano – dünaamiline klaveriklaviatuur (vähemalt 2 oktaavi).
+ * Iga klahv on interaktiivne (klikitav), saadab sündmuse onNotePlay.
+ * Heli: AudioContext Oscillator. MIDI: reageerib välisele MIDI-klaviatuurile.
  */
 
-import React from 'react';
+import React, { useCallback } from 'react';
 import { usePianoEngine } from './PianoEngine.js';
 import './InteractivePiano.css';
 import { PianoVisual } from './PianoVisual.jsx';
@@ -19,11 +20,33 @@ export function InteractivePiano({
   className = '',
   showMidiSelect = true,
   engineOptions = {},
+  onNotePlay,
+  onNoteStop,
+  /** Figuurnotatsioon: klahvide värvid { C: '#FF0000', D: '#8B4513', ... } */
+  figurenotesColors = null,
+  /** Helistik JO/LE ja mustade klahvide noole jaoks (nt 'C') */
+  keySignature = 'C',
 }) {
   const { activeNotes, playNote, stopNote } = usePianoEngine(engineOptions);
 
-  useKeyboardHandler(firstNote, lastNote, playNote, stopNote, true);
-  const midi = useMidiHandler(playNote, stopNote, true);
+  const handlePlayNote = useCallback(
+    (midi) => {
+      playNote(midi);
+      onNotePlay?.(midi);
+    },
+    [playNote, onNotePlay]
+  );
+
+  const handleStopNote = useCallback(
+    (midi) => {
+      stopNote(midi);
+      onNoteStop?.(midi);
+    },
+    [stopNote, onNoteStop]
+  );
+
+  useKeyboardHandler(firstNote, lastNote, handlePlayNote, handleStopNote, true);
+  const midi = useMidiHandler(handlePlayNote, handleStopNote, true);
 
   return (
     <div className={`InteractivePiano ${className}`.trim()}>
@@ -53,10 +76,12 @@ export function InteractivePiano({
         firstNote={firstNote}
         lastNote={lastNote}
         activeNotes={activeNotes}
-        onPlayNote={playNote}
-        onStopNote={stopNote}
+        onPlayNote={handlePlayNote}
+        onStopNote={handleStopNote}
         width={width}
         height={height}
+        figurenotesColors={figurenotesColors}
+        keySignature={keySignature}
       />
     </div>
   );
