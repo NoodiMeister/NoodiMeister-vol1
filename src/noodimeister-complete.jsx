@@ -17,6 +17,7 @@ import {
   getNoteheadRy,
   getLedgerHalfWidth,
   getTonicStaffPosition,
+  getKeyFromStaffPosition,
   getYFromStaffPosition,
   getVerticalPositionFromJoAnchor,
   getPitchFromJoClick,
@@ -37,6 +38,12 @@ const LUCIDE_ICONS = [
 ];
 
 const STORAGE_KEY = 'noodimeister-data';
+
+// Garanteeritud algväärtused – ei sõltu sisselogimisest ega storage'ist (vältib TDZ/ReferenceError)
+const DEFAULT_JO_CLEF_STAFF_POSITION = -2;   // JO (toonika) staff-positsioon: -2=C, 2=G, 4=D
+const DEFAULT_SHOW_EMOJI_OVERLAYS = true;    // Õpetaja: noodipeal märgistused (JO-nimed, emojid)
+const DEFAULT_SHOW_RHYTHM_SYLLABLES = false; // Kodály rütmisilbid (TA, TI-TI jne)
+const DEFAULT_SHOW_ALL_NOTE_LABELS = false;  // Kuva kõikidel nootidel JO-nimed
 
 function LoggedInUser({ icons, t }) {
   const navigate = useNavigate();
@@ -872,7 +879,7 @@ function NoodiMeisterCore({ icons }) {
   const [cursorPosition, setCursorPosition] = useState(3);
   const [keySignature, setKeySignature] = useState('C');
   const [joClefFocused, setJoClefFocused] = useState(false); // JO-võti valitud → nooltega ↑↓ võtme nihutamine
-  const [joClefStaffPosition, setJoClefStaffPosition] = useState(() => getTonicStaffPosition('C')); // JO (toonika) staff-positsioon (0–8 või abijoontega -2…10)
+  const [joClefStaffPosition, setJoClefStaffPosition] = useState(DEFAULT_JO_CLEF_STAFF_POSITION);
   const [staffLines, setStaffLines] = useState(5);
   const [notationStyle, setNotationStyle] = useState('TRADITIONAL'); // 'TRADITIONAL' | 'FIGURENOTES' – staff vs grid
   const [instrumentNotationVariant, setInstrumentNotationVariant] = useState('standard'); // 'standard' | 'tab' | 'fingering'
@@ -1042,9 +1049,9 @@ function NoodiMeisterCore({ icons }) {
   const [figurenotesSize, setFigurenotesSize] = useState(16); // Figuurnotatsiooni figuuride suurus (nagu fonti suurus), 10–32
   const [figurenotesStems, setFigurenotesStems] = useState(false); // Figuurnotatsioonis rütmi näitamine noodivartega (vaikimisi välja)
   const [showBarNumbers, setShowBarNumbers] = useState(true); // Taktide numbrid iga rea alguses noodivõtme kohal
-  const [showRhythmSyllables, setShowRhythmSyllables] = useState(false); // Õpetaja režiim: Kodály rütmisilbid (TA, TI-TI jne) noodi/grubi all
-  const [showAllNoteLabels, setShowAllNoteLabels] = useState(false); // Õpetaja: kuva kõikidel nootidel JO-nimed (kui pole teacherLabel)
-  const [enableEmojiOverlays, setEnableEmojiOverlays] = useState(true); // Õpetaja: luba noodipeal märgistused (JO-nimed, emojid, vabatekst)
+  const [showRhythmSyllables, setShowRhythmSyllables] = useState(DEFAULT_SHOW_RHYTHM_SYLLABLES);
+  const [showAllNoteLabels, setShowAllNoteLabels] = useState(DEFAULT_SHOW_ALL_NOTE_LABELS);
+  const [enableEmojiOverlays, setEnableEmojiOverlays] = useState(DEFAULT_SHOW_EMOJI_OVERLAYS);
   // Relatiivnotatsioon (Kodály): võtmemärk ja traditsiooniline noodivõti on valikulised; Do (Jo) võti on kohustuslik.
   const [relativeNotationShowKeySignature, setRelativeNotationShowKeySignature] = useState(false);
   const [relativeNotationShowTraditionalClef, setRelativeNotationShowTraditionalClef] = useState(false);
@@ -2590,7 +2597,7 @@ function NoodiMeisterCore({ icons }) {
       }
       if (e.key === 'Escape') setSelectedTextboxId(null);
 
-      // JO-võti valitud: nooltega ↑↓ võtme nihutamine (joon/vahe + vajadusel abijooned), noodid liiguvad koos. Escape = lõpeta
+      // JO-võti valitud: nooltega ↑↓ võtme nihutamine; noodid transponeeritakse vastavalt uuele helistikule
       if (joClefFocused) {
         if (e.code === 'Escape') {
           e.preventDefault();
@@ -2600,10 +2607,17 @@ function NoodiMeisterCore({ icons }) {
         if (e.code === 'ArrowUp' || e.code === 'ArrowDown') {
           e.preventDefault();
           const step = e.code === 'ArrowUp' ? 1 : -1;
-          setJoClefStaffPosition((prev) => {
-            const next = prev + step;
-            return Math.max(-2, Math.min(10, next)); // -2…10 (abijooned all ja üleval)
-          });
+          const nextPos = Math.max(-2, Math.min(10, joClefStaffPosition + step));
+          const newKey = getKeyFromStaffPosition(nextPos);
+          if (newKey !== keySignature) {
+            const semitones = (KEY_TO_SEMITONE[newKey] ?? 0) - (KEY_TO_SEMITONE[keySignature] ?? 0);
+            if (semitones !== 0) {
+              saveToHistory(notes);
+              setNotes(transposeNotes(notes, semitones));
+            }
+            setKeySignature(newKey);
+          }
+          setJoClefStaffPosition(nextPos);
           dirtyRef.current = true;
           return;
         }
@@ -3207,7 +3221,7 @@ function NoodiMeisterCore({ icons }) {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [activeToolbox, selectedOptionIndex, handleToolboxSelection, noteInputMode, selectedDuration, isDotted, isRest, notes, getEffectiveDuration, selectedNoteIndex, selectionStart, selectionEnd, clipboard, undo, saveToHistory, getSelectedNotes, shiftPitch, shiftOctave, addMeasure, ghostPitch, ghostOctave, cursorPosition, joClefFocused, keySignature]);
+  }, [activeToolbox, selectedOptionIndex, handleToolboxSelection, noteInputMode, selectedDuration, isDotted, isRest, notes, getEffectiveDuration, selectedNoteIndex, selectionStart, selectionEnd, clipboard, undo, saveToHistory, getSelectedNotes, shiftPitch, shiftOctave, addMeasure, ghostPitch, ghostOctave, cursorPosition, joClefFocused, joClefStaffPosition, keySignature, setNotes, setKeySignature]);
 
   // JO-võti: klõps väljaspool võtit lõpetab valiku
   useEffect(() => {
@@ -4031,9 +4045,8 @@ function NoodiMeisterCore({ icons }) {
         <div className="w-full pl-3 pr-4 py-3 flex flex-col gap-3">
           {/* Rida 1: ainult logo */}
           <div>
-            <Link to="/" className="inline-flex items-center gap-2 text-amber-50 hover:text-white transition-colors">
-              <Music2 className="w-6 h-6" />
-              <span className="text-xl font-bold" style={{ fontFamily: 'Georgia, serif' }}>NoodiMeister</span>
+            <Link to="/" className="inline-flex items-center text-amber-50 hover:opacity-90 transition-opacity">
+              <img src="/logo.png" alt="NoodiMeister" className="h-9 w-auto" />
             </Link>
           </div>
           {/* Rida 2: rippmenüüd ja kõik käsud */}
@@ -6551,6 +6564,34 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
   );
 }
 
+// Error Boundary: tööriista sisu – kui viga, punane kast (vältib tühjade muutujatega töötamist)
+class AppRunErrorBoundary extends React.Component {
+  state = { error: null };
+  static getDerivedStateFromError(e) { return { error: e }; }
+  render() {
+    if (this.state.error) {
+      const msg = this.state.error?.message || String(this.state.error);
+      return (
+        <div
+          className="loading-screen"
+          style={{
+            background: '#fef2f2',
+            color: '#991b1b',
+            border: '2px solid #dc2626',
+            padding: 24,
+            margin: 24,
+            borderRadius: 8,
+            fontFamily: 'sans-serif',
+          }}
+        >
+          <strong>Viga rakenduse käivitamisel:</strong> {msg}
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 function NoodiMeister() {
   const [icons, setIcons] = useState(null);
   useEffect(() => {
@@ -6560,7 +6601,14 @@ function NoodiMeister() {
       setIcons(obj);
     });
   }, []);
-  return <NoodiMeisterCore icons={icons} />;
+  if (!icons) {
+    return <div className="loading-screen">Laen Noodimeistrit…</div>;
+  }
+  return (
+    <AppRunErrorBoundary>
+      <NoodiMeisterCore icons={icons} />
+    </AppRunErrorBoundary>
+  );
 }
 
 export default NoodiMeister;

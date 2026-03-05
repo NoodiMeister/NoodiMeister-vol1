@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Music2, FileMusic, Cloud, UserPlus, LogIn, PenTool, Save, Share2 } from 'lucide-react';
+import { FileMusic, Cloud, UserPlus, LogIn, PenTool, Save, Share2 } from 'lucide-react';
 
 export default function LandingPage() {
   return (
@@ -8,14 +8,9 @@ export default function LandingPage() {
       {/* Header */}
       <header className="flex-shrink-0 border-b border-amber-200/60 bg-white/70 backdrop-blur-sm sticky top-0 z-10">
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center shadow-md">
-              <Music2 className="w-6 h-6 text-white" />
-            </div>
-            <span className="text-xl font-bold text-amber-900" style={{ fontFamily: 'Georgia, serif' }}>
-              NoodiMeister
-            </span>
-          </div>
+          <Link to="/" className="flex items-center">
+            <img src="/logo.png" alt="NoodiMeister" className="h-9 w-auto" />
+          </Link>
           <nav className="flex items-center gap-3">
             <Link
               to="/hinnakiri"

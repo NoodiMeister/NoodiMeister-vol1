@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { Music2, Heart, LogIn, UserPlus } from 'lucide-react';
+import { Heart, LogIn, UserPlus } from 'lucide-react';
 
 const PRICE_PER_MONTH = 5;
 const DISCOUNT_12_MONTHS = 55; // 12 kuud soodushinnaga 55 €
@@ -33,13 +33,8 @@ export default function ToetaPage() {
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-amber-50 via-orange-50 to-amber-100">
       <header className="flex-shrink-0 border-b border-amber-200/60 bg-white/70 backdrop-blur-sm sticky top-0 z-10">
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
-          <Link to="/" className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center shadow-md">
-              <Music2 className="w-6 h-6 text-white" />
-            </div>
-            <span className="text-xl font-bold text-amber-900" style={{ fontFamily: 'Georgia, serif' }}>
-              NoodiMeister
-            </span>
+          <Link to="/" className="flex items-center">
+            <img src="/logo.png" alt="NoodiMeister" className="h-9 w-auto" />
           </Link>
           <nav className="flex items-center gap-3">
             <Link to="/hinnakiri" className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-amber-800 font-medium hover:bg-amber-100 transition-colors">

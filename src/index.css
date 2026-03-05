@@ -10,3 +10,14 @@ html, body, #root {
   font-family: system-ui, -apple-system, sans-serif;
   background: #fef3c7;
 }
+
+.loading-screen {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  font-size: 1.125rem;
+  font-weight: 500;
+  color: #92400e;
+  background: linear-gradient(to bottom right, #fffbeb, #fef3c7);
+}

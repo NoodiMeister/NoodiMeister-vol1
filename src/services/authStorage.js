@@ -19,17 +19,29 @@ function safeStorage(storage) {
 
 /** Tagastab salvestuse, kuhu sisselogimise andmed kirjutada (rememberMe = linnuke "Jää sisse logituks"). */
 export function getStorageForLogin(rememberMe) {
-  if (typeof window === 'undefined') return null;
-  return rememberMe ? safeStorage(window.localStorage) : safeStorage(window.sessionStorage);
+  if (typeof window === 'undefined') {
+    console.error('[authStorage] getStorageForLogin: window on undefined');
+    return null;
+  }
+  const storage = rememberMe ? safeStorage(window.localStorage) : safeStorage(window.sessionStorage);
+  if (!storage) {
+    console.error('[authStorage] getStorageForLogin: storage puudub', { rememberMe, hasLocalStorage: !!window.localStorage, hasSessionStorage: !!window.sessionStorage });
+  }
+  return storage;
 }
 
 /** Tagastab salvestuse, kust praegu sisselogimist lugeda (sessionStorage eelneb, siis localStorage). */
 export function getStorageForRead() {
-  if (typeof window === 'undefined') return null;
+  if (typeof window === 'undefined') {
+    console.error('[authStorage] getStorageForRead: window on undefined');
+    return null;
+  }
   try {
     if (window.sessionStorage?.getItem(KEY_LOGGED_IN)) return window.sessionStorage;
     if (window.localStorage?.getItem(KEY_LOGGED_IN)) return window.localStorage;
-  } catch (_) {}
+  } catch (e) {
+    console.error('[authStorage] getStorageForRead viga:', e?.message, { sessionStorage: typeof window?.sessionStorage, localStorage: typeof window?.localStorage });
+  }
   return null;
 }
 
@@ -38,8 +50,15 @@ export function isLoggedIn() {
   if (!storage) return false;
   try {
     const raw = storage.getItem(KEY_LOGGED_IN);
-    return !!raw && !!JSON.parse(raw)?.email;
-  } catch {
+    if (!raw) return false;
+    const parsed = JSON.parse(raw);
+    if (!parsed?.email) {
+      console.error('[authStorage] isLoggedIn: parsed.email puudub', { hasParsed: !!parsed, keys: parsed && typeof parsed === 'object' ? Object.keys(parsed) : [] });
+      return false;
+    }
+    return true;
+  } catch (e) {
+    console.error('[authStorage] isLoggedIn: lugemis-/parse viga', e?.message);
     return false;
   }
 }
@@ -49,8 +68,10 @@ export function getLoggedInUser() {
   if (!storage) return null;
   try {
     const raw = storage.getItem(KEY_LOGGED_IN);
-    return raw ? JSON.parse(raw) : null;
-  } catch {
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch (e) {
+    console.error('[authStorage] getLoggedInUser: parse viga', e?.message);
     return null;
   }
 }

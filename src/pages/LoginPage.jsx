@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Music2, LogIn, Mail, Lock } from 'lucide-react';
+import { LogIn, Mail, Lock } from 'lucide-react';
 import { CloudLoginButtons } from '../components/CloudLogin';
 import { AuthErrorBlock } from '../components/AuthErrorBlock';
-import { getStorageForLogin } from '../services/authStorage';
+import { getStorageForLogin, getLoggedInUser, isLoggedIn } from '../services/authStorage';
 import { formatAuthError } from '../utils/authError';
 
 export default function LoginPage() {
@@ -24,32 +24,55 @@ export default function LoginPage() {
     setMessage('');
     setErrorDetail(null);
     try {
+      if (typeof localStorage === 'undefined') {
+        console.error('[LoginPage] Sisselogimise hetkel: localStorage on undefined');
+        setError('Brauser ei toeta salvestust. Proovi teist brauserit.', null);
+        return;
+      }
       let users = [];
+      let raw;
       try {
-        users = JSON.parse(localStorage.getItem('noodimeister-users') || '[]');
-      } catch (_) {
+        raw = localStorage.getItem('noodimeister-users');
+        users = JSON.parse(raw || '[]');
+      } catch (parseErr) {
+        console.error('[LoginPage] localStorage.getItem või JSON.parse viga:', parseErr?.message, { rawType: typeof raw });
         const payload = formatAuthError('e-mail/parool', { message: 'Andmeid ei saanud lugeda. Proovi uuesti või tühjenda brauseri andmed.' });
         setError(payload.fullMessage, payload);
         return;
       }
-      if (!Array.isArray(users)) users = [];
+      if (!Array.isArray(users)) {
+        console.error('[LoginPage] users ei ole massiiv:', typeof users);
+        users = [];
+      }
       const user = users.find(u => u && u.email === email && u.password === password);
-      if (user) {
-        const storage = getStorageForLogin(stayLoggedIn);
-        if (!storage) {
-          const payload = formatAuthError('brauser', { message: 'Salvestamine ebaõnnestus (brauser võib blokeerida andmeid). Proovi teist brauserit või lülita privaatse režiimi välja.' });
-          setError(payload.fullMessage, payload);
-          return;
-        }
-        storage.setItem('noodimeister-logged-in', JSON.stringify({ email: user.email, name: user.name }));
-        setMessage('Sisselogimine õnnestus.');
-        setErrorDetail(null);
-        setTimeout(() => navigate('/app'), 800);
-      } else {
+      if (!user) {
         const payload = formatAuthError('e-mail/parool', { code: 'invalid_credentials', message: 'Vale e-mail või parool.' });
         setError(payload.fullMessage, payload);
+        return;
       }
+      const storage = getStorageForLogin(stayLoggedIn);
+      if (!storage) {
+        console.error('[LoginPage] getStorageForLogin tagastas null. stayLoggedIn:', stayLoggedIn, 'window:', typeof window);
+        const payload = formatAuthError('brauser', { message: 'Salvestamine ebaõnnestus (brauser võib blokeerida andmeid). Proovi teist brauserit või lülita privaatse režiimi välja.' });
+        setError(payload.fullMessage, payload);
+        return;
+      }
+      storage.setItem('noodimeister-logged-in', JSON.stringify({ email: user.email, name: user.name }));
+      // Vercel fix: suuna alles siis, kui auth on kinnitatud (loe tagasi), et /app ei laadi enne kui isLoggedIn() töötab
+      const confirmedUser = getLoggedInUser();
+      const loggedIn = isLoggedIn();
+      if (!confirmedUser?.email || !loggedIn) {
+        console.error('[LoginPage] Pärast salvestust auth ei kinnitunud:', { confirmedUser: !!confirmedUser, hasEmail: !!confirmedUser?.email, isLoggedIn: loggedIn });
+        setError('Sisselogimine salvestati, kuid kinnitamine ebaõnnestus. Proovi uuesti.', null);
+        return;
+      }
+      setMessage('Sisselogimine õnnestus.');
+      setErrorDetail(null);
+      requestAnimationFrame(() => {
+        setTimeout(() => navigate('/app'), 400);
+      });
     } catch (err) {
+      console.error('[LoginPage] Ootamata viga sisselogimisel:', err?.message, err);
       const payload = formatAuthError('e-mail/parool', err);
       setError(payload.fullMessage, payload);
     }
@@ -59,11 +82,8 @@ export default function LoginPage() {
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-amber-50 via-orange-50 to-amber-100">
       <header className="flex-shrink-0 border-b border-amber-200/60 bg-white/70 backdrop-blur-sm">
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
-          <Link to="/" className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center shadow-md">
-              <Music2 className="w-6 h-6 text-white" />
-            </div>
-            <span className="text-xl font-bold text-amber-900" style={{ fontFamily: 'Georgia, serif' }}>NoodiMeister</span>
+          <Link to="/" className="flex items-center">
+            <img src="/logo.png" alt="NoodiMeister" className="h-9 w-auto" />
           </Link>
           <Link to="/" className="text-amber-700 hover:text-amber-900 font-medium">Tagasi esilehele</Link>
         </div>

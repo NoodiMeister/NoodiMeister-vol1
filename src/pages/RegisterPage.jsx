@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Music2, UserPlus, Mail, Lock, User } from 'lucide-react';
+import { UserPlus, Mail, Lock, User } from 'lucide-react';
 import { CloudLoginButtons } from '../components/CloudLogin';
 import { AuthErrorBlock } from '../components/AuthErrorBlock';
 import { formatAuthError } from '../utils/authError';
@@ -63,11 +63,8 @@ export default function RegisterPage() {
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-amber-50 via-orange-50 to-amber-100">
       <header className="flex-shrink-0 border-b border-amber-200/60 bg-white/70 backdrop-blur-sm">
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
-          <Link to="/" className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center shadow-md">
-              <Music2 className="w-6 h-6 text-white" />
-            </div>
-            <span className="text-xl font-bold text-amber-900" style={{ fontFamily: 'Georgia, serif' }}>NoodiMeister</span>
+          <Link to="/" className="flex items-center">
+            <img src="/logo.png" alt="NoodiMeister" className="h-9 w-auto" />
           </Link>
           <Link to="/" className="text-amber-700 hover:text-amber-900 font-medium">Tagasi esilehele</Link>
         </div>

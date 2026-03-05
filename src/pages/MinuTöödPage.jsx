@@ -1,7 +1,35 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Music2, FilePlus, FolderOpen, Cloud, LogIn, Loader2 } from 'lucide-react';
+import { FilePlus, FolderOpen, Cloud, LogIn, Loader2 } from 'lucide-react';
 import * as googleDrive from '../services/googleDrive';
+import * as authStorage from '../services/authStorage';
+
+/** Error Boundary: sisselogimise järgne vaade – punane kast veateatega */
+class MinuToodErrorBoundary extends React.Component {
+  state = { error: null };
+  static getDerivedStateFromError(e) { return { error: e }; }
+  render() {
+    if (this.state.error) {
+      const msg = this.state.error?.message || String(this.state.error);
+      return (
+        <div
+          style={{
+            background: '#fef2f2',
+            color: '#991b1b',
+            border: '2px solid #dc2626',
+            padding: 24,
+            margin: 24,
+            borderRadius: 8,
+            fontFamily: 'sans-serif',
+          }}
+        >
+          <strong>Viga rakenduse käivitamisel:</strong> {msg}
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 function formatDate(iso) {
   if (!iso) return '—';
@@ -18,6 +46,17 @@ export default function MinuTöödPage() {
   const [files, setFiles] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [user, setUser] = useState(null);
+  const [authReady, setAuthReady] = useState(false);
+
+  useEffect(() => {
+    try {
+      setUser(authStorage.getLoggedInUser());
+    } catch (_) {
+      setUser(null);
+    }
+    setAuthReady(true);
+  }, []);
 
   const token = googleDrive.getStoredToken();
   const hasGoogle = !!token;
@@ -45,6 +84,14 @@ export default function MinuTöödPage() {
     loadFiles();
   }, [loadFiles]);
 
+  useEffect(() => {
+    if (authReady && !user) navigate('/login', { replace: true });
+  }, [authReady, user, navigate]);
+
+  if (!authReady || !user) {
+    return <div className="loading-screen">Laen Noodimeistrit…</div>;
+  }
+
   const openNew = () => {
     const base = (typeof import.meta !== 'undefined' && import.meta.env?.BASE_URL) || '';
     const path = base.replace(/\/$/, '') + '/app?new=1';
@@ -60,14 +107,12 @@ export default function MinuTöödPage() {
   };
 
   return (
+    <MinuToodErrorBoundary>
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-amber-50 via-orange-50 to-amber-100">
       <header className="flex-shrink-0 border-b border-amber-200/60 bg-white/70 backdrop-blur-sm">
         <div className="max-w-4xl mx-auto px-6 py-4 flex items-center justify-between">
-          <Link to="/" className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center shadow-md">
-              <Music2 className="w-6 h-6 text-white" />
-            </div>
-            <span className="text-xl font-bold text-amber-900" style={{ fontFamily: 'Georgia, serif' }}>NoodiMeister</span>
+          <Link to="/" className="flex items-center">
+            <img src="/logo.png" alt="NoodiMeister" className="h-9 w-auto" />
           </Link>
           <nav className="flex items-center gap-3">
             <Link to="/app" className="text-amber-700 hover:text-amber-900 font-medium">Tööriist</Link>
@@ -157,5 +202,6 @@ export default function MinuTöödPage() {
         )}
       </main>
     </div>
+    </MinuToodErrorBoundary>
   );
 }

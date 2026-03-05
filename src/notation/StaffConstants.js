@@ -81,6 +81,13 @@ export function getTonicStaffPosition(keySignature = 'C') {
   return TONIC_STAFF_POSITION[keySignature] ?? TONIC_STAFF_POSITION.C;
 }
 
+/** Staff-positsioon → helistik (JO-võtme liigutamise tulemus). */
+export function getKeyFromStaffPosition(position) {
+  const pos = Number(position);
+  const entry = Object.entries(TONIC_STAFF_POSITION).find(([, p]) => p === pos);
+  return entry ? entry[0] : 'C';
+}
+
 /**
  * Noodi staff-positsioon viiulivõtme skaalas (poolspace sammud, E4=0).
  */
