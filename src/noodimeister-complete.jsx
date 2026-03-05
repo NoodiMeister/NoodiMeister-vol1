@@ -6,6 +6,25 @@ import 'react-piano/dist/styles.css';
 import './piano-overrides.css';
 import * as googleDrive from './services/googleDrive';
 import * as authStorage from './services/authStorage';
+import { JoClefSymbol, TrebleClefSymbol } from './components/ClefSymbols';
+import { NoteHead } from './components/NoteHead';
+import {
+  STAFF_SPACE,
+  getStaffLinePositions as getStaffLinePositionsFromConstants,
+  getVerticalPosition,
+  getLedgerLineCountExact,
+  getNoteheadRx,
+  getNoteheadRy,
+  getLedgerHalfWidth,
+  getTonicStaffPosition,
+  getYFromStaffPosition,
+  getVerticalPositionFromJoAnchor,
+  getPitchFromJoClick,
+} from './notation/StaffConstants';
+import { getRhythmSyllableForNote } from './notation/rhythmSyllables';
+import { RhythmSyllableLabel } from './components/RhythmSyllableLabel';
+import { getJoName } from './notation/joNames';
+import { expandEmojiShortcuts } from './utils/emojiShortcuts';
 import { LOCALE_STORAGE_KEY, DEFAULT_LOCALE, LOCALES, createT } from './i18n';
 import html2canvas from 'html2canvas';
 import Soundfont from 'soundfont-player';
@@ -341,36 +360,6 @@ const PedagogicalMeterIcon = ({ beats, beatUnit }) => {
   );
 };
 
-// Jo võti – JO-LE-MI notatsiooni sümbol: paks vertikaalne joon + kaks horisontaalset joont.
-// Kahe horisontaalse joone vahe = täpselt kahe noodijoone kõrgune (2×staffSpacing). Abijoon (showLedgerLine) = I aste (toonika).
-// ledgerLinesAbove/Below = lisa abijooned vastavalt valitud noodile (helistikule).
-const JoClefSymbol = ({ x = 0, centerY, staffSpacing = 10, stroke = '#000', strokeWidth = 2, barLength = 14, verticalWidth = 4, showLedgerLine = true, ledgerLinesAbove = 0, ledgerLinesBelow = 0 }) => {
-  const twoSpaces = 2 * staffSpacing;
-  const topBarY = centerY - staffSpacing;
-  const bottomBarY = centerY + staffSpacing;
-  const vertTop = centerY - twoSpaces;
-  const vertBottom = centerY + twoSpaces;
-  const t = strokeWidth;
-  const ledgerLength = Math.max(4, barLength - verticalWidth - 2);
-  const ledgerStrokeW = 1.2;
-  return (
-    <g>
-      <rect x={x} y={vertTop} width={verticalWidth} height={vertBottom - vertTop} fill={stroke} />
-      <rect x={x} y={topBarY - t/2} width={barLength} height={t} fill={stroke} />
-      <rect x={x} y={bottomBarY - t/2} width={barLength} height={t} fill={stroke} />
-      {showLedgerLine && (
-        <line x1={x + verticalWidth} y1={centerY} x2={x + verticalWidth + ledgerLength} y2={centerY} stroke={stroke} strokeWidth={ledgerStrokeW} strokeLinecap="round" />
-      )}
-      {Array.from({ length: ledgerLinesAbove }, (_, i) => (
-        <line key={`la-${i}`} x1={x + verticalWidth} y1={topBarY - (i + 1) * staffSpacing} x2={x + verticalWidth + ledgerLength} y2={topBarY - (i + 1) * staffSpacing} stroke={stroke} strokeWidth={ledgerStrokeW} strokeLinecap="round" />
-      ))}
-      {Array.from({ length: ledgerLinesBelow }, (_, i) => (
-        <line key={`lb-${i}`} x1={x + verticalWidth} y1={bottomBarY + (i + 1) * staffSpacing} x2={x + verticalWidth + ledgerLength} y2={bottomBarY + (i + 1) * staffSpacing} stroke={stroke} strokeWidth={ledgerStrokeW} strokeLinecap="round" />
-      ))}
-    </g>
-  );
-};
-
 // Noodivõtmed SVG-ga (Unicode 𝄞𝄢 ei pruugi fondiga kuvada) – SMuFL/Bravura stiilis lihtsustatud
 const TREBLE_CLEF_PATH = 'M14 2v2c0 2-1 4-3 5-2 1-4 1-5 0-1-1-1-3 0-4 1-1 2-2 2-3 1-2-1-2-3 0-4 2-1 4-1 6 0 2 1 3 2 4 3 1 2 2 3 2 5 0 2-1 4-3 5-2 1-4 1-6-1-2-2-2-5 0-7 2-2 4-2 7 0 3 2 4 4 4 7 0 2-2 4-4 5-2 1-4 0-5-2-1-2-1-4 0-6 1-2 3-2 5 0 2 2 3 4 3 6 0 1-1 2-2 2-3 0-1-1-1-2 0-2 1 0 2 0 3-1 1-1 2-2 2-4 0-2-1-3-2-4-1-1-3-1-4 0-1 1-1 2 0 3 1 1 2 1 3 0 1-1 2-1 3 0 1 1 2 1 3 0';
 const BASS_CLEF_PATH = 'M8 4c0 2 1 3 2 3 1 0 2-1 2-3 0-2-1-3-2-3-1 0-2 1-2 3zm8 0c0 2 1 3 2 3 1 0 2-1 2-3 0-2-1-3-2-3-1 0-2 1-2 3zm-10 4v12c0 1 1 2 2 2 1 0 2-1 2-2V8c0-1-1-2-2-2-1 0-2 1-2 2zm12 0v12c0 1 1 2 2 2 1 0 2-1 2-2V8c0-1-1-2-2-2-1 0-2 1-2 2zM10 6c-1 0-2 1-2 2v8c0 1 1 2 2 2 1 0 2-1 2-2V8c0-1-1-2-2-2zm4 0c-1 0-2 1-2 2v8c0 1 1 2 2 2 1 0 2-1 2-2V8c0-1-1-2-2-2z';
@@ -414,13 +403,12 @@ const ClefIcon = ({ clefType }) => {
   );
 };
 
-// Noodijoonestikul kasutatav võtme sümbol (sama kujundus kui ClefIcon, skaleeritav)
+// Noodijoonestikul kasutatav võtme sümbol. Viiulivõti: G-joon ankurdatud (TrebleClefSymbol).
 function StaffClefSymbol({ x, y, height, clefType, fill = '#333' }) {
-  const scale = height / 24;
   if (clefType === 'treble') {
-    const treblePath = "M14 2.2c-.2 0-.4 0-.6.1-.5.2-.9.6-1.1 1.1-.2.5-.1 1 .2 1.4.3.4.8.6 1.3.6.4 0 .8-.2 1.1-.5.3-.3.4-.7.4-1.1 0-.1 0-.2-.1-.3V5.2c0-.4.2-.7.5-.9.3-.2.7-.2 1 0 .3.2.5.5.5.9v12.2c0 .5.4.9.9.9.5 0 .9-.4.9-.9V3.8c0-.5-.4-.9-.9-.9-.3 0-.6.1-.8.3-.2.2-.3.5-.3.8v1.2c0 .3.2.6.5.7.3.1.6 0 .8-.3.2-.3.2-.6 0-.9l.1-10.5c0-.2-.1-.4-.2-.5-.2-.2-.4-.3-.7-.3z";
-    return <g transform={`translate(${x}, ${y}) scale(${scale}) translate(-12, -12)`}><path fill={fill} d={treblePath}/></g>;
+    return <TrebleClefSymbol x={x} y={y} height={height} fill={fill} />;
   }
+  const scale = height / 24;
   if (clefType === 'bass') {
     return (
       <g transform={`translate(${x}, ${y}) scale(${scale}) translate(-12, -12)`} fill={fill}>
@@ -799,15 +787,21 @@ function getToolboxes(t, instrumentConfig) {
   };
 }
 
-// Figurenotes color and shape mappings
+// Figurenotes color and shape mappings (värvid ja kujundid pildi järgi)
 const FIGURENOTES_COLORS = {
-  'C': '#EF4444', 'D': '#92400E', 'E': '#6B7280', 'F': '#3B82F6',
-  'G': '#000000', 'A': '#EAB308', 'B': '#10B981'
+  'C': '#E31E24', 'D': '#8B5A2B', 'E': '#BDBDBD', 'F': '#0091DA',
+  'G': '#000000', 'A': '#FFEF00', 'B': '#32CD32'
 };
 
+// Madal oktav = rist (X), järgmine = ruut, keskmine = ring, kõrge = kolmnurk
 const FIGURENOTES_SHAPES = {
-  3: 'square', 4: 'circle', 5: 'triangle'
+  2: 'cross', 3: 'square', 4: 'circle', 5: 'triangle'
 };
+
+/** Teksti värv kujundi sees: valge, välja arvatud A (kollane) ja E (hall) – must loetavuse jaoks */
+function getFigurenoteTextColor(pitch) {
+  return (pitch === 'A' || pitch === 'E') ? '#000000' : '#ffffff';
+}
 
 // Pitch/octave ↔ MIDI; fingering; timeline – defineeritud enne NoodiMeisterit, et vältida TDZ minifitseerimisel
 const PITCH_TO_SEMI = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
@@ -877,7 +871,8 @@ function NoodiMeisterCore({ icons }) {
   const [pixelsPerBeat, setPixelsPerBeat] = useState(80);
   const [cursorPosition, setCursorPosition] = useState(3);
   const [keySignature, setKeySignature] = useState('C');
-  const [joClefFocused, setJoClefFocused] = useState(false); // JO-võti valitud → nooltega ↑↓ helistiku muutmine
+  const [joClefFocused, setJoClefFocused] = useState(false); // JO-võti valitud → nooltega ↑↓ võtme nihutamine
+  const [joClefStaffPosition, setJoClefStaffPosition] = useState(() => getTonicStaffPosition('C')); // JO (toonika) staff-positsioon (0–8 või abijoontega -2…10)
   const [staffLines, setStaffLines] = useState(5);
   const [notationStyle, setNotationStyle] = useState('TRADITIONAL'); // 'TRADITIONAL' | 'FIGURENOTES' – staff vs grid
   const [instrumentNotationVariant, setInstrumentNotationVariant] = useState('standard'); // 'standard' | 'tab' | 'fingering'
@@ -977,6 +972,17 @@ function NoodiMeisterCore({ icons }) {
       return next.length > staves.length ? next.slice(0, staves.length) : next;
     });
   }, [staves.length]);
+  /** Nutikas partituuri fookus: õpetaja märgib, millised read on lindistatavas harjutuses aktiivsed. Vaikimisi kõik nähtavad. */
+  const [visibleStaves, setVisibleStaves] = useState([]);
+  useEffect(() => {
+    setVisibleStaves((prev) => {
+      const next = [...prev];
+      while (next.length < staves.length) next.push(true);
+      return next.length > staves.length ? next.slice(0, staves.length) : next;
+    });
+  }, [staves.length]);
+  /** Puhkehetkede sildid: ridade vahetusel või pausi ajal kuvatakse suur tekst (nt "Nüüd loevad ainult poisid!"). */
+  const [intermissionLabels, setIntermissionLabels] = useState([]); // { id, startBeat, endBeat, text }
   // Aktiivse rea noodid ja instrumendid (tuletatud staves[activeStaffIndex]-ist)
   const activeStaff = staves[activeStaffIndex];
   const notes = activeStaff?.notes ?? [];
@@ -990,6 +996,16 @@ function NoodiMeisterCore({ icons }) {
       return next;
     });
   }, [activeStaffIndex]);
+  const updateNoteTeacherLabel = useCallback((noteIndex, value) => {
+    saveToHistory(notes);
+    setNotes((prev) => prev.map((n, i) => (i === noteIndex ? { ...n, teacherLabel: value } : n)));
+    dirtyRef.current = true;
+  }, [notes, saveToHistory]);
+  const clearAllNoteLabels = useCallback(() => {
+    saveToHistory(notes);
+    setNotes((prev) => prev.map((n) => ({ ...n, teacherLabel: '' })));
+    dirtyRef.current = true;
+  }, [notes, saveToHistory]);
   const instrument = activeStaff?.instrumentId ?? 'piano';
   const setInstrument = useCallback((instId) => {
     setStaves((prev) => {
@@ -1026,6 +1042,9 @@ function NoodiMeisterCore({ icons }) {
   const [figurenotesSize, setFigurenotesSize] = useState(16); // Figuurnotatsiooni figuuride suurus (nagu fonti suurus), 10–32
   const [figurenotesStems, setFigurenotesStems] = useState(false); // Figuurnotatsioonis rütmi näitamine noodivartega (vaikimisi välja)
   const [showBarNumbers, setShowBarNumbers] = useState(true); // Taktide numbrid iga rea alguses noodivõtme kohal
+  const [showRhythmSyllables, setShowRhythmSyllables] = useState(false); // Õpetaja režiim: Kodály rütmisilbid (TA, TI-TI jne) noodi/grubi all
+  const [showAllNoteLabels, setShowAllNoteLabels] = useState(false); // Õpetaja: kuva kõikidel nootidel JO-nimed (kui pole teacherLabel)
+  const [enableEmojiOverlays, setEnableEmojiOverlays] = useState(true); // Õpetaja: luba noodipeal märgistused (JO-nimed, emojid, vabatekst)
   // Relatiivnotatsioon (Kodály): võtmemärk ja traditsiooniline noodivõti on valikulised; Do (Jo) võti on kohustuslik.
   const [relativeNotationShowKeySignature, setRelativeNotationShowKeySignature] = useState(false);
   const [relativeNotationShowTraditionalClef, setRelativeNotationShowTraditionalClef] = useState(false);
@@ -1047,7 +1066,8 @@ function NoodiMeisterCore({ icons }) {
   const [isPedagogicalAudioPlaying, setIsPedagogicalAudioPlaying] = useState(false);
   // Animeeritud notatsioon: nooti lugeva kursori kuju (püstine joon, emoji)
   const [pedagogicalPlayheadStyle, setPedagogicalPlayheadStyle] = useState('line'); // 'line' | 'violin' | 'smiley' | 'custom'
-  const [pedagogicalPlayheadEmoji, setPedagogicalPlayheadEmoji] = useState('🎵'); // kasutub kui style === 'custom'
+  const [pedagogicalPlayheadEmoji, setPedagogicalPlayheadEmoji] = useState('🎵'); // kasutub kui style === 'custom'; seadetes "Kursori karakter"
+  const [pedagogicalPlayheadEmojiSize, setPedagogicalPlayheadEmojiSize] = useState(32); // HEV: 20–60 px
   const [isExportingAnimation, setIsExportingAnimation] = useState(false);
   const pedagogicalAudioRef = useRef(null); // HTMLAudioElement
   const pedagogicalPlaybackIntervalRef = useRef(null);
@@ -1392,32 +1412,35 @@ function NoodiMeisterCore({ icons }) {
     const startTime = Date.now();
     exportAudio?.play().catch(() => {});
 
-    const cursorInterval = setInterval(() => {
-      const elapsed = (Date.now() - startTime) / 1000;
-      const beat = (elapsed * bpm) / 60;
-      const totalBeatsNow = notes.reduce((acc, n) => acc + n.duration, 0);
-      setCursorPosition(prev => Math.max(0, Math.min(totalBeatsNow, beat)));
-      if (elapsed >= durationSec) {
-        clearInterval(cursorInterval);
-        exportAudio?.pause();
-      }
-    }, 50);
-
     const captureFrame = () => {
       if (Date.now() - startTime >= durationSec * 1000 + 500) {
         clearInterval(frameInterval);
         recorder.stop();
         return;
       }
-      html2canvas(container, { scale: 1, useCORS: true, logging: false }).then((captureCanvas) => {
-        ctx.drawImage(captureCanvas, 0, 0, w, h);
-      }).catch(() => {});
+      const elapsed = (Date.now() - startTime) / 1000;
+      const beat = (elapsed * bpm) / 60;
+      const totalBeatsNow = notes.reduce((acc, n) => acc + n.duration, 0);
+      setCursorPosition(Math.max(0, Math.min(totalBeatsNow, beat)));
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          html2canvas(container, { scale: 1, useCORS: true, logging: false }).then((captureCanvas) => {
+            ctx.drawImage(captureCanvas, 0, 0, w, h);
+            const cur = exportCursorRef.current;
+            if (cur && cur.emoji) {
+              ctx.font = `${cur.size}px sans-serif`;
+              ctx.textAlign = 'center';
+              ctx.textBaseline = 'middle';
+              ctx.fillText(cur.emoji, cur.x, cur.y);
+            }
+          }).catch(() => {});
+        });
+      });
     };
     const frameInterval = setInterval(captureFrame, 1000 / fps);
     captureFrame();
 
     const onStop = async () => {
-      clearInterval(cursorInterval);
       clearInterval(frameInterval);
       exportAudio?.pause();
       const blob = new Blob(chunks, { type: mimeType });
@@ -1457,7 +1480,6 @@ function NoodiMeisterCore({ icons }) {
     recorder.onstop = onStop;
     setTimeout(() => {
       if (recorder.state === 'recording') {
-        clearInterval(cursorInterval);
         clearInterval(frameInterval);
         exportAudio?.pause();
         recorder.stop();
@@ -1505,6 +1527,10 @@ function NoodiMeisterCore({ icons }) {
     figurenotesSize,
     figurenotesStems,
     showBarNumbers,
+    showRhythmSyllables,
+    showAllNoteLabels,
+    enableEmojiOverlays,
+    joClefStaffPosition,
     relativeNotationShowKeySignature,
     relativeNotationShowTraditionalClef,
     isPedagogicalProject,
@@ -1512,11 +1538,14 @@ function NoodiMeisterCore({ icons }) {
     pedagogicalAudioData: pedagogicalAudioDataRef.current || undefined,
     pedagogicalPlayheadStyle,
     pedagogicalPlayheadEmoji,
+    pedagogicalPlayheadEmojiSize,
     chords,
     textBoxes,
     documentFontFamily,
-    lyricFontFamily
-  }), [staves, activeStaffIndex, staffYOffsets, timeSignature, timeSignatureMode, keySignature, staffLines, notationStyle, pixelsPerBeat, notationMode, instrumentNotationVariant, cursorPosition, addedMeasures, setupCompleted, songTitle, author, pickupEnabled, pickupQuantity, pickupDuration, pageOrientation, layoutMeasuresPerLine, layoutLineBreakBefore, layoutPageBreakBefore, layoutSystemGap, viewMode, partLayoutMeasuresPerLine, partLayoutLineBreakBefore, partLayoutPageBreakBefore, showPageNavigator, pageFlowDirection, visibleToolIds, tuningReferenceNote, tuningReferenceOctave, tuningReferenceHz, playNoteOnInsert, figurenotesSize, figurenotesStems, showBarNumbers, relativeNotationShowKeySignature, relativeNotationShowTraditionalClef, isPedagogicalProject, pedagogicalAudioBpm, pedagogicalPlayheadStyle, pedagogicalPlayheadEmoji, chords, textBoxes, documentFontFamily, lyricFontFamily]);
+    lyricFontFamily,
+    visibleStaves: visibleStaves.length === staves.length ? visibleStaves : staves.map(() => true),
+    intermissionLabels
+  }), [staves, activeStaffIndex, staffYOffsets, visibleStaves, intermissionLabels, timeSignature, timeSignatureMode, keySignature, staffLines, notationStyle, pixelsPerBeat, notationMode, instrumentNotationVariant, cursorPosition, addedMeasures, setupCompleted, songTitle, author, pickupEnabled, pickupQuantity, pickupDuration, pageOrientation, layoutMeasuresPerLine, layoutLineBreakBefore, layoutPageBreakBefore, layoutSystemGap, viewMode, partLayoutMeasuresPerLine, partLayoutLineBreakBefore, partLayoutPageBreakBefore, showPageNavigator, pageFlowDirection, visibleToolIds, tuningReferenceNote, tuningReferenceOctave, tuningReferenceHz, playNoteOnInsert, figurenotesSize, figurenotesStems, showBarNumbers, showRhythmSyllables, showAllNoteLabels, enableEmojiOverlays, joClefStaffPosition, relativeNotationShowKeySignature, relativeNotationShowTraditionalClef, isPedagogicalProject, pedagogicalAudioBpm, pedagogicalPlayheadStyle, pedagogicalPlayheadEmoji, pedagogicalPlayheadEmojiSize, chords, textBoxes, documentFontFamily, lyricFontFamily]);
 
   const saveToStorageSync = useCallback(() => {
     try {
@@ -1584,6 +1613,10 @@ function NoodiMeisterCore({ icons }) {
     figurenotesSize,
     figurenotesStems,
     showBarNumbers,
+    showRhythmSyllables,
+    showAllNoteLabels,
+    enableEmojiOverlays,
+    joClefStaffPosition,
     relativeNotationShowKeySignature,
     relativeNotationShowTraditionalClef,
     pedagogicalAudioBpm,
@@ -1595,8 +1628,10 @@ function NoodiMeisterCore({ icons }) {
     staffYOffsets,
     scoreData: staves[0]?.notes,
     chords,
-    textBoxes
-  }), [songTitle, author, notationStyle, notationMode, isPedagogicalProject, timeSignature, timeSignatureMode, keySignature, staffLines, pixelsPerBeat, instrumentNotationVariant, pickupEnabled, pickupQuantity, pickupDuration, setupCompleted, cursorPosition, addedMeasures, pageOrientation, layoutMeasuresPerLine, layoutLineBreakBefore, layoutPageBreakBefore, layoutSystemGap, viewMode, partLayoutMeasuresPerLine, partLayoutLineBreakBefore, partLayoutPageBreakBefore, showPageNavigator, pageFlowDirection, visibleToolIds, tuningReferenceNote, tuningReferenceOctave, tuningReferenceHz, playNoteOnInsert, figurenotesSize, figurenotesStems, showBarNumbers, relativeNotationShowKeySignature, relativeNotationShowTraditionalClef, pedagogicalAudioBpm, pedagogicalPlayheadStyle, pedagogicalPlayheadEmoji, staves, activeStaffIndex, staffYOffsets, chords, textBoxes]);
+    textBoxes,
+    visibleStaves: visibleStaves.length === staves.length ? visibleStaves : staves.map(() => true),
+    intermissionLabels
+  }), [songTitle, author, notationStyle, notationMode, isPedagogicalProject, timeSignature, timeSignatureMode, keySignature, staffLines, pixelsPerBeat, instrumentNotationVariant, pickupEnabled, pickupQuantity, pickupDuration, setupCompleted, cursorPosition, addedMeasures, pageOrientation, layoutMeasuresPerLine, layoutLineBreakBefore, layoutPageBreakBefore, layoutSystemGap, viewMode, partLayoutMeasuresPerLine, partLayoutLineBreakBefore, partLayoutPageBreakBefore, showPageNavigator, pageFlowDirection, visibleToolIds, tuningReferenceNote, tuningReferenceOctave, tuningReferenceHz, playNoteOnInsert, figurenotesSize, figurenotesStems, showBarNumbers, showRhythmSyllables, showAllNoteLabels, enableEmojiOverlays, joClefStaffPosition, relativeNotationShowKeySignature, relativeNotationShowTraditionalClef, pedagogicalAudioBpm, pedagogicalPlayheadStyle, pedagogicalPlayheadEmoji, pedagogicalPlayheadEmojiSize, staves, activeStaffIndex, staffYOffsets, visibleStaves, intermissionLabels, chords, textBoxes]);
 
   // Download project file (future: replace with upload to Google Drive / OneDrive)
   const downloadProject = useCallback(() => {
@@ -1647,6 +1682,7 @@ function NoodiMeisterCore({ icons }) {
       if (data.pedagogicalAudioBpm != null) setPedagogicalAudioBpm(Math.max(20, Math.min(300, data.pedagogicalAudioBpm)));
       if (data.pedagogicalPlayheadStyle) setPedagogicalPlayheadStyle(data.pedagogicalPlayheadStyle);
       if (data.pedagogicalPlayheadEmoji != null) setPedagogicalPlayheadEmoji(data.pedagogicalPlayheadEmoji);
+      if (data.pedagogicalPlayheadEmojiSize != null) setPedagogicalPlayheadEmojiSize(Math.max(20, Math.min(60, data.pedagogicalPlayheadEmojiSize)));
       if (data.pedagogicalAudioData) {
         try {
           const binary = atob(data.pedagogicalAudioData);
@@ -1689,11 +1725,18 @@ function NoodiMeisterCore({ icons }) {
       if (data.tuningReferenceHz != null) setTuningReferenceHz(data.tuningReferenceHz);
       if (data.playNoteOnInsert != null) setPlayNoteOnInsert(data.playNoteOnInsert);
       if (data.showBarNumbers != null) setShowBarNumbers(data.showBarNumbers);
+      if (data.showRhythmSyllables != null) setShowRhythmSyllables(data.showRhythmSyllables);
+      if (data.showAllNoteLabels != null) setShowAllNoteLabels(data.showAllNoteLabels);
+      if (data.enableEmojiOverlays != null) setEnableEmojiOverlays(data.enableEmojiOverlays);
+      if (data.joClefStaffPosition != null && typeof data.joClefStaffPosition === 'number') setJoClefStaffPosition(Math.max(-2, Math.min(10, data.joClefStaffPosition)));
+      else if (data.keySignature) setJoClefStaffPosition(getTonicStaffPosition(data.keySignature));
       if (data.relativeNotationShowKeySignature != null) setRelativeNotationShowKeySignature(data.relativeNotationShowKeySignature);
       if (data.relativeNotationShowTraditionalClef != null) setRelativeNotationShowTraditionalClef(data.relativeNotationShowTraditionalClef);
       if (data.isPedagogicalProject != null) setIsPedagogicalProject(!!data.isPedagogicalProject);
       if (Array.isArray(data.chords)) setChords(data.chords);
       if (Array.isArray(data.textBoxes)) setTextBoxes(data.textBoxes);
+      if (Array.isArray(data.visibleStaves)) setVisibleStaves(data.visibleStaves);
+      if (Array.isArray(data.intermissionLabels)) setIntermissionLabels(data.intermissionLabels);
       if (data.documentFontFamily) setDocumentFontFamily(data.documentFontFamily);
       if (data.lyricFontFamily) setLyricFontFamily(data.lyricFontFamily);
       clearDirty();
@@ -1785,12 +1828,18 @@ function NoodiMeisterCore({ icons }) {
         if (data.tuningReferenceHz != null) setTuningReferenceHz(data.tuningReferenceHz);
         if (data.playNoteOnInsert != null) setPlayNoteOnInsert(data.playNoteOnInsert);
         if (data.showBarNumbers != null) setShowBarNumbers(data.showBarNumbers);
+      if (data.showRhythmSyllables != null) setShowRhythmSyllables(data.showRhythmSyllables);
+      if (data.showAllNoteLabels != null) setShowAllNoteLabels(data.showAllNoteLabels);
+      if (data.enableEmojiOverlays != null) setEnableEmojiOverlays(data.enableEmojiOverlays);
+      if (data.joClefStaffPosition != null && typeof data.joClefStaffPosition === 'number') setJoClefStaffPosition(Math.max(-2, Math.min(10, data.joClefStaffPosition)));
+      else if (data.keySignature) setJoClefStaffPosition(getTonicStaffPosition(data.keySignature));
         if (data.relativeNotationShowKeySignature != null) setRelativeNotationShowKeySignature(data.relativeNotationShowKeySignature);
         if (data.relativeNotationShowTraditionalClef != null) setRelativeNotationShowTraditionalClef(data.relativeNotationShowTraditionalClef);
         if (data.isPedagogicalProject != null) setIsPedagogicalProject(!!data.isPedagogicalProject);
         if (data.pedagogicalAudioBpm != null) setPedagogicalAudioBpm(Math.max(20, Math.min(300, data.pedagogicalAudioBpm)));
         if (data.pedagogicalPlayheadStyle) setPedagogicalPlayheadStyle(data.pedagogicalPlayheadStyle);
         if (data.pedagogicalPlayheadEmoji != null) setPedagogicalPlayheadEmoji(data.pedagogicalPlayheadEmoji);
+        if (data.pedagogicalPlayheadEmojiSize != null) setPedagogicalPlayheadEmojiSize(Math.max(20, Math.min(60, data.pedagogicalPlayheadEmojiSize)));
         if (data.pedagogicalAudioData) {
           try {
             const binary = atob(data.pedagogicalAudioData);
@@ -1809,6 +1858,8 @@ function NoodiMeisterCore({ icons }) {
         }
         if (Array.isArray(data.chords)) setChords(data.chords);
         if (Array.isArray(data.textBoxes)) setTextBoxes(data.textBoxes);
+        if (Array.isArray(data.visibleStaves)) setVisibleStaves(data.visibleStaves);
+        if (Array.isArray(data.intermissionLabels)) setIntermissionLabels(data.intermissionLabels);
         if (data.documentFontFamily) setDocumentFontFamily(data.documentFontFamily);
         if (data.lyricFontFamily) setLyricFontFamily(data.lyricFontFamily);
         clearDirty();
@@ -1963,12 +2014,18 @@ function NoodiMeisterCore({ icons }) {
           if (data.tuningReferenceHz != null) setTuningReferenceHz(data.tuningReferenceHz);
           if (data.playNoteOnInsert != null) setPlayNoteOnInsert(data.playNoteOnInsert);
           if (data.showBarNumbers != null) setShowBarNumbers(data.showBarNumbers);
+      if (data.showRhythmSyllables != null) setShowRhythmSyllables(data.showRhythmSyllables);
+      if (data.showAllNoteLabels != null) setShowAllNoteLabels(data.showAllNoteLabels);
+      if (data.enableEmojiOverlays != null) setEnableEmojiOverlays(data.enableEmojiOverlays);
+      if (data.joClefStaffPosition != null && typeof data.joClefStaffPosition === 'number') setJoClefStaffPosition(Math.max(-2, Math.min(10, data.joClefStaffPosition)));
+      else if (data.keySignature) setJoClefStaffPosition(getTonicStaffPosition(data.keySignature));
           if (data.relativeNotationShowKeySignature != null) setRelativeNotationShowKeySignature(data.relativeNotationShowKeySignature);
           if (data.relativeNotationShowTraditionalClef != null) setRelativeNotationShowTraditionalClef(data.relativeNotationShowTraditionalClef);
           if (data.isPedagogicalProject != null) setIsPedagogicalProject(!!data.isPedagogicalProject);
           if (data.pedagogicalAudioBpm != null) setPedagogicalAudioBpm(Math.max(20, Math.min(300, data.pedagogicalAudioBpm)));
           if (data.pedagogicalPlayheadStyle) setPedagogicalPlayheadStyle(data.pedagogicalPlayheadStyle);
           if (data.pedagogicalPlayheadEmoji != null) setPedagogicalPlayheadEmoji(data.pedagogicalPlayheadEmoji);
+          if (data.pedagogicalPlayheadEmojiSize != null) setPedagogicalPlayheadEmojiSize(Math.max(20, Math.min(60, data.pedagogicalPlayheadEmojiSize)));
           if (data.pedagogicalAudioData) {
             try {
               const binary = atob(data.pedagogicalAudioData);
@@ -2038,7 +2095,7 @@ function NoodiMeisterCore({ icons }) {
     return () => {
       if (autoSaveTimeoutRef.current) clearTimeout(autoSaveTimeoutRef.current);
     };
-  }, [staves, activeStaffIndex, timeSignature, timeSignatureMode, keySignature, staffLines, notationStyle, pixelsPerBeat, notationMode, cursorPosition, addedMeasures, setupCompleted, songTitle, author, pickupEnabled, pickupQuantity, pickupDuration, layoutSystemGap, tuningReferenceNote, tuningReferenceOctave, tuningReferenceHz, playNoteOnInsert, figurenotesSize, figurenotesStems, showBarNumbers, chords, textBoxes, getPersistedState]);
+  }, [staves, activeStaffIndex, timeSignature, timeSignatureMode, keySignature, staffLines, notationStyle, pixelsPerBeat, notationMode, cursorPosition, addedMeasures, setupCompleted, songTitle, author, pickupEnabled, pickupQuantity, pickupDuration, layoutSystemGap, tuningReferenceNote, tuningReferenceOctave, tuningReferenceHz, playNoteOnInsert, figurenotesSize, figurenotesStems, showBarNumbers, joClefStaffPosition, chords, textBoxes, getPersistedState]);
 
   // Hoiatus ja salvestamine enne sulgemist (tab/akna sulg, värskendus, navigeerimine)
   useEffect(() => {
@@ -2533,7 +2590,7 @@ function NoodiMeisterCore({ icons }) {
       }
       if (e.key === 'Escape') setSelectedTextboxId(null);
 
-      // JO-võti valitud: nooltega ↑↓ liigutamine (transpositsioon), Escape = lõpeta
+      // JO-võti valitud: nooltega ↑↓ võtme nihutamine (joon/vahe + vajadusel abijooned), noodid liiguvad koos. Escape = lõpeta
       if (joClefFocused) {
         if (e.code === 'Escape') {
           e.preventDefault();
@@ -2542,22 +2599,12 @@ function NoodiMeisterCore({ icons }) {
         }
         if (e.code === 'ArrowUp' || e.code === 'ArrowDown') {
           e.preventDefault();
-          const idx = KEY_ORDER.indexOf(keySignature);
-          if (idx >= 0) {
-            const newIdx = e.code === 'ArrowUp' ? Math.min(idx + 1, KEY_ORDER.length - 1) : Math.max(idx - 1, 0);
-            if (newIdx !== idx) {
-              const newKey = KEY_ORDER[newIdx];
-              const fromSemi = KEY_TO_SEMITONE[keySignature] ?? 0;
-              const toSemi = KEY_TO_SEMITONE[newKey] ?? 0;
-              let semitones = (toSemi - fromSemi) % 12;
-              if (semitones < 0) semitones += 12;
-              if (semitones !== 0) {
-                saveToHistory(notes);
-                setNotes(transposeNotes(notes, semitones));
-              }
-              setKeySignature(newKey);
-            }
-          }
+          const step = e.code === 'ArrowUp' ? 1 : -1;
+          setJoClefStaffPosition((prev) => {
+            const next = prev + step;
+            return Math.max(-2, Math.min(10, next)); // -2…10 (abijooned all ja üleval)
+          });
+          dirtyRef.current = true;
           return;
         }
       }
@@ -2978,6 +3025,20 @@ function NoodiMeisterCore({ icons }) {
           return;
         }
 
+        // Õpetaja: Delete/Backspace kustutab valitud nooti(de) märgistuse (teacherLabel), mitte nooti ennast
+        if ((e.code === 'Backspace' || e.code === 'Delete') && selectedNoteIndex >= 0 && enableEmojiOverlays) {
+          const start = selectionStart >= 0 && selectionEnd >= 0 ? Math.min(selectionStart, selectionEnd) : selectedNoteIndex;
+          const end = selectionStart >= 0 && selectionEnd >= 0 ? Math.max(selectionStart, selectionEnd) : selectedNoteIndex;
+          const indices = Array.from({ length: end - start + 1 }, (_, k) => start + k);
+          const hasLabel = indices.some((i) => notes[i] && (notes[i].teacherLabel != null && notes[i].teacherLabel !== ''));
+          if (hasLabel && !['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName)) {
+            e.preventDefault();
+            saveToHistory(notes);
+            setNotes((prev) => prev.map((n, i) => (indices.includes(i) ? { ...n, teacherLabel: '' } : n)));
+            return;
+          }
+        }
+
         // Stage V: Delete selected note(s) – replace with rest(s) of same duration (no shifting)
         if ((e.code === 'Backspace' || e.code === 'Delete') && selectedNoteIndex >= 0) {
           e.preventDefault();
@@ -3165,6 +3226,7 @@ function NoodiMeisterCore({ icons }) {
   const effectiveLayoutLineBreakBefore = viewMode === 'score' ? layoutLineBreakBefore : partLayoutLineBreakBefore;
   const effectiveLayoutPageBreakBefore = viewMode === 'score' ? layoutPageBreakBefore : partLayoutPageBreakBefore;
   const scoreContainerRef = useRef(null);
+  const exportCursorRef = useRef(null); // { x, y, emoji, size } container-relative, for MP4 fillText
   const [pageWidth, setPageWidth] = useState(LAYOUT.PAGE_WIDTH_MIN);
   const effectivePageWidthMax = pageOrientation === 'landscape' ? LAYOUT.PAGE_WIDTH_MAX_LANDSCAPE : LAYOUT.PAGE_WIDTH_MAX;
   useEffect(() => {
@@ -3188,6 +3250,18 @@ function NoodiMeisterCore({ icons }) {
     const opts = { measuresPerLine: effectiveLayoutMeasuresPerLine, lineBreakBefore: effectiveLayoutLineBreakBefore, pageBreakBefore: effectiveLayoutPageBreakBefore, systemGap: layoutSystemGap, staffCount: staves.length };
     return computeLayout(measures, timeSignature, pixelsPerBeat, pageWidth || LAYOUT.PAGE_WIDTH_MIN, opts);
   }, [measures, timeSignature, pixelsPerBeat, pageWidth, effectiveLayoutMeasuresPerLine, effectiveLayoutLineBreakBefore, effectiveLayoutPageBreakBefore, layoutSystemGap, staves.length]);
+  // Nutikas fookus: ainult valitud read; vähem ridu = suurem rea kõrgus (HEV/solfedž)
+  const visibleStaffList = useMemo(() => {
+    const list = [];
+    staves.forEach((staff, staffIdx) => {
+      if (visibleStaves[staffIdx] !== false) list.push({ staff, staffIdx, visibleIndex: list.length });
+    });
+    return list;
+  }, [staves, visibleStaves]);
+  const FOCUS_STAFF_HEIGHT = 280; // Kui osa ridu peidetud, suurendatakse nähtavad read (HEV/solfedž)
+  const effectiveStaffHeight = visibleStaffList.length > 0 && visibleStaffList.length < staves.length
+    ? FOCUS_STAFF_HEIGHT
+    : LAYOUT.STAFF_HEIGHT;
   const cursorMeasureIndex = measures.length > 0
     ? (() => {
         const i = measures.findIndex(m => cursorPosition >= m.startBeat && cursorPosition < m.endBeat);
@@ -3644,6 +3718,45 @@ function NoodiMeisterCore({ icons }) {
                   />
                   <span className="text-sm font-semibold text-amber-900">Taktiloendur (näita taktinumbreid iga rea alguses; maha võtmise korral takte ei loendata)</span>
                 </label>
+              </div>
+              <div className="flex flex-wrap items-center gap-3">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={showRhythmSyllables}
+                    onChange={(e) => { dirtyRef.current = true; setShowRhythmSyllables(e.target.checked); }}
+                    className="w-4 h-4 rounded border-amber-300 text-amber-600"
+                  />
+                  <span className="text-sm font-semibold text-amber-900">{t('teacher.rhythmSyllables')}</span>
+                </label>
+              </div>
+              <p className="text-xs text-amber-700 -mt-2">{t('teacher.rhythmSyllablesHint')}</p>
+              {/* Kursori karakter (õpetaja): emoji sisestusväli + HEV emoji suurus */}
+              <div className="border-t border-amber-200 pt-4 mt-4">
+                <h3 className="text-sm font-bold text-amber-900 mb-2">{t('settings.cursorCharacter')}</h3>
+                <input
+                  type="text"
+                  value={pedagogicalPlayheadEmoji}
+                  onChange={(e) => { dirtyRef.current = true; setPedagogicalPlayheadEmoji(e.target.value.slice(0, 4)); }}
+                  placeholder="🎵"
+                  className="w-full px-3 py-2 rounded-lg border-2 border-amber-200 bg-amber-50 text-amber-900 text-xl text-center"
+                  maxLength={4}
+                />
+                <p className="text-xs text-amber-700 mt-1">{t('settings.cursorCharacterHint')}</p>
+                <div className="flex items-center gap-3 mt-3">
+                  <label htmlFor="emoji-size" className="text-sm font-semibold text-amber-900">{t('settings.emojiSize')}</label>
+                  <input
+                    id="emoji-size"
+                    type="range"
+                    min={20}
+                    max={60}
+                    value={pedagogicalPlayheadEmojiSize}
+                    onChange={(e) => { dirtyRef.current = true; setPedagogicalPlayheadEmojiSize(Math.max(20, Math.min(60, Number(e.target.value)))); }}
+                    className="flex-1 h-2 rounded-lg appearance-none bg-amber-200 accent-amber-600"
+                  />
+                  <span className="text-sm text-amber-800 w-10">{pedagogicalPlayheadEmojiSize} px</span>
+                </div>
+                <p className="text-xs text-amber-600 mt-1">Suurem suurus aitab vaegnägijatel ja tähelepanuhäiretega õpilastel.</p>
               </div>
               <div className="border-t border-amber-200 pt-4 mt-4">
                 <label className="block text-sm font-semibold text-amber-900 mb-1">{t('layout.pageOrientation')}</label>
@@ -4207,6 +4320,25 @@ function NoodiMeisterCore({ icons }) {
                       : t('toolbar.oneNote')}
                   </span>
                 </div>
+                {notationMode === 'vabanotatsioon' && enableEmojiOverlays && (
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <label className="text-xs font-medium text-amber-100 whitespace-nowrap">{t('teacher.noteLabel')}:</label>
+                    <input
+                      type="text"
+                      value={notes[selectedNoteIndex]?.teacherLabel ?? ''}
+                      onChange={(e) => updateNoteTeacherLabel(selectedNoteIndex, e.target.value)}
+                      onBlur={(e) => { const v = e.target.value; if (v && v.includes(':')) updateNoteTeacherLabel(selectedNoteIndex, expandEmojiShortcuts(v)); }}
+                      placeholder=":joy: või vabatekst"
+                      className="px-2 py-1 rounded text-sm bg-amber-100 text-amber-900 border border-amber-300 w-32 focus:ring-1 focus:ring-amber-500"
+                      title={t('teacher.noteLabelHint')}
+                    />
+                    {['😊', '⭐', '❤️', '🎵', '✅', '❓', '⬜'].map((emo) => (
+                      <button key={emo} type="button" onClick={() => updateNoteTeacherLabel(selectedNoteIndex, (notes[selectedNoteIndex]?.teacherLabel ?? '') + emo)} className="text-lg leading-none p-0.5 rounded hover:bg-amber-200" title={emo}>{emo}</button>
+                    ))}
+                    <button type="button" onClick={() => updateNoteTeacherLabel(selectedNoteIndex, (notes[selectedNoteIndex]?.teacherLabel ?? '') + '?')} className="text-sm font-bold text-amber-900 px-1.5 py-0.5 rounded hover:bg-amber-200" title={t('teacher.symbolQuestion')}>?</button>
+                    <button type="button" onClick={() => updateNoteTeacherLabel(selectedNoteIndex, (notes[selectedNoteIndex]?.teacherLabel ?? '') + '□')} className="text-sm font-bold text-amber-900 px-1 py-0.5 rounded hover:bg-amber-200" title={t('teacher.symbolBox')}>□</button>
+                  </div>
+                )}
                 <div className="flex items-center gap-2">
                   <label className="text-xs font-medium text-amber-100 whitespace-nowrap">{t('toolbar.lyricLabel')}:</label>
                   <input
@@ -4715,7 +4847,12 @@ function NoodiMeisterCore({ icons }) {
                       <button
                         key={value}
                         type="button"
-                        onClick={() => setPedagogicalPlayheadStyle(value)}
+                        onClick={() => {
+                          setPedagogicalPlayheadStyle(value);
+                          if (value === 'line') setPedagogicalPlayheadEmoji('');
+                          else if (value === 'violin') setPedagogicalPlayheadEmoji('🎻');
+                          else if (value === 'smiley') setPedagogicalPlayheadEmoji('😊');
+                        }}
                         className={`px-3 py-1.5 rounded-lg text-sm font-medium ${pedagogicalPlayheadStyle === value ? 'bg-violet-600 text-white' : 'bg-violet-100 text-violet-800 hover:bg-violet-200'}`}
                       >
                         {label}
@@ -4789,6 +4926,48 @@ function NoodiMeisterCore({ icons }) {
                   <p className="text-sm text-amber-700 text-right mt-1" style={{ fontFamily: documentFontFamily }}>{author}</p>
                 )}
               </div>
+              {/* Õpetaja režiimi tööriistariba (vabanotatsioon) */}
+              {notationMode === 'vabanotatsioon' && (
+                <div className="mb-3 flex flex-wrap items-center gap-3 px-2 py-2 rounded-lg bg-amber-50 border border-amber-200">
+                  <span className="text-xs font-semibold text-amber-800 uppercase tracking-wider">Õpetaja</span>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" checked={showAllNoteLabels} onChange={(e) => { dirtyRef.current = true; setShowAllNoteLabels(e.target.checked); }} className="rounded border-amber-400 text-amber-600" />
+                    <span className="text-sm text-amber-900">{t('teacher.showAllLabels')}</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" checked={enableEmojiOverlays} onChange={(e) => { dirtyRef.current = true; setEnableEmojiOverlays(e.target.checked); }} className="rounded border-amber-400 text-amber-600" />
+                    <span className="text-sm text-amber-900">{t('teacher.enableEmojiOverlays')}</span>
+                  </label>
+                  <button type="button" onClick={() => { clearAllNoteLabels(); }} className="px-2 py-1 rounded text-sm bg-amber-200 text-amber-900 hover:bg-amber-300 border border-amber-300">
+                    {t('teacher.clearAllAnnotations')}
+                  </button>
+                  {staves.length > 1 && (
+                    <div className="flex flex-wrap items-center gap-2 border-l border-amber-300 pl-3">
+                      <span className="text-xs font-semibold text-amber-800">{t('teacher.showStaves')}:</span>
+                      <span className="text-xs text-amber-700 hidden sm:inline">{t('teacher.showStavesHint')}</span>
+                      {staves.map((_, i) => (
+                        <label key={i} className="flex items-center gap-1 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={visibleStaves[i] !== false}
+                            onChange={(e) => {
+                              dirtyRef.current = true;
+                              setVisibleStaves((prev) => {
+                                const next = [...(prev.length === staves.length ? prev : staves.map(() => true))];
+                                next[i] = e.target.checked;
+                                if (!next[i] && activeStaffIndex === i) setActiveStaffIndex(Math.max(0, i - 1));
+                                return next;
+                              });
+                            }}
+                            className="rounded border-amber-400 text-amber-600"
+                          />
+                          <span className="text-sm text-amber-900">{i + 1}</span>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
               {staves.map((staff, staffIdx) => {
                 const isFirstInBraceGroup = staff.braceGroupId && staves[staffIdx + 1]?.braceGroupId === staff.braceGroupId;
                 const braceGroupSize = isFirstInBraceGroup ? 2 : 0;
@@ -4820,7 +4999,9 @@ function NoodiMeisterCore({ icons }) {
                       setNotes(transposeNotes(notes, semitones));
                     }
                     setKeySignature(newKey);
+                    setJoClefStaffPosition(getTonicStaffPosition(newKey));
                   } : undefined}
+                  joClefStaffPosition={joClefStaffPosition}
                   joClefFocused={joClefFocused}
                   onJoClefFocus={notationMode === 'vabanotatsioon' ? setJoClefFocused : undefined}
                   instrument={staff.instrumentId}
@@ -4851,12 +5032,21 @@ function NoodiMeisterCore({ icons }) {
                   baseYOffset={staffIdx * LAYOUT.STAFF_HEIGHT + (staffYOffsets[staffIdx] ?? 0)}
                   staffCount={staves.length}
                   showBarNumbers={showBarNumbers}
+                  showRhythmSyllables={showRhythmSyllables}
+                  showAllNoteLabels={showAllNoteLabels}
+                  enableEmojiOverlays={enableEmojiOverlays}
+                  onNoteTeacherLabelChange={staffIdx === activeStaffIndex ? updateNoteTeacherLabel : undefined}
+                  onNoteLabelClick={staffIdx === activeStaffIndex ? (index) => { setSelectedNoteIndex(index); setSelectionStart(-1); setSelectionEnd(-1); } : undefined}
                   chords={chords}
                   figurenotesSize={figurenotesSize}
                   figurenotesStems={figurenotesStems}
                   pedagogicalPlayheadStyle={pedagogicalPlayheadStyle}
                   pedagogicalPlayheadEmoji={pedagogicalPlayheadEmoji}
+                  pedagogicalPlayheadEmojiSize={pedagogicalPlayheadEmojiSize}
                   isPedagogicalAudioPlaying={isPedagogicalAudioPlaying}
+                  isExportingAnimation={isExportingAnimation}
+                  exportCursorRef={staffIdx === 0 ? exportCursorRef : undefined}
+                  scoreContainerRef={staffIdx === 0 ? scoreContainerRef : undefined}
                   pageFlowDirection={pageFlowDirection}
                   lyricFontFamily={lyricFontFamily}
                 />
@@ -5031,14 +5221,23 @@ function NoodiMeisterCore({ icons }) {
                         );
                       }
                       const color = FIGURENOTES_COLORS[pitch] || '#666';
-                      const shape = FIGURENOTES_SHAPES[octave] === 'square' ? '□' : FIGURENOTES_SHAPES[octave] === 'circle' ? '○' : '△';
+                      const shapeKey = FIGURENOTES_SHAPES[octave];
+                      const shapeChar = shapeKey === 'cross' ? '×' : shapeKey === 'square' ? '□' : shapeKey === 'circle' ? '○' : '△';
+                      const labelTextColor = getFigurenoteTextColor(pitch);
                       return (
                         <span
-                          className="inline-block w-4 h-4 rounded border border-amber-800 flex items-center justify-center text-[10px] font-bold"
-                          style={{ backgroundColor: color, color: octave === 3 ? '#fff' : '#000' }}
-                          title={`${pitch} ${FIGURENOTES_SHAPES[octave] || ''}`}
+                          className="NoodiMeisterFigurenotesKeyLabel inline-block rounded border border-amber-800 flex items-center justify-center text-[10px] font-bold"
+                          style={{
+                            backgroundColor: color,
+                            color: labelTextColor,
+                            width: '65%',
+                            height: '65%',
+                            minWidth: 14,
+                            minHeight: 14,
+                          }}
+                          title={`${pitch} ${shapeKey || ''}`}
                         >
-                          {shape}
+                          {shapeChar}
                         </span>
                       );
                     }}
@@ -5137,7 +5336,8 @@ function getFingeringForNote(pitch, octave, instrumentId) {
 }
 
 // Timeline Component – multi-system layout (VexFlow loogika). (PAGE_BREAK_GAP on defineeritud üleval.)
-function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, pageWidth, cursorPosition, notationMode, staffLines, clefType, keySignature = 'C', relativeNotationShowKeySignature = false, relativeNotationShowTraditionalClef = false, onJoClefPositionChange, joClefFocused = false, onJoClefFocus, instrument = 'piano', instrumentNotationVariant = 'standard', instrumentConfig = {}, showBarNumbers = true, chords = [], isDotted, isRest, selectedDuration, noteInputMode, selectedNoteIndex, isNoteSelected, notes: allNotes, onStaffAddNote, onNoteClick, ghostPitch, ghostOctave, notationStyle, layoutMeasuresPerLine = 4, layoutLineBreakBefore = [], layoutPageBreakBefore = [], layoutSystemGap = 120, systems: systemsProp, baseYOffset = 0, staffCount = 1, figurenotesSize = 16, figurenotesStems = false, pedagogicalPlayheadStyle = 'line', pedagogicalPlayheadEmoji = '🎵', isPedagogicalAudioPlaying = false, pageFlowDirection = 'vertical', isFirstInBraceGroup = false, braceGroupSize = 0, lyricFontFamily = 'sans-serif' }) {
+function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, pageWidth, cursorPosition, notationMode, staffLines, clefType, keySignature = 'C', relativeNotationShowKeySignature = false, relativeNotationShowTraditionalClef = false, onJoClefPositionChange, joClefFocused = false, onJoClefFocus, instrument = 'piano', instrumentNotationVariant = 'standard', instrumentConfig = {}, showBarNumbers = true, showRhythmSyllables = false, joClefStaffPosition: joClefStaffPositionProp, showAllNoteLabels = false, enableEmojiOverlays = true, onNoteTeacherLabelChange, onNoteLabelClick, chords = [], isDotted, isRest, selectedDuration, noteInputMode, selectedNoteIndex, isNoteSelected, notes: allNotes, onStaffAddNote, onNoteClick, ghostPitch, ghostOctave, notationStyle, layoutMeasuresPerLine = 4, layoutLineBreakBefore = [], layoutPageBreakBefore = [], layoutSystemGap = 120, systems: systemsProp, baseYOffset = 0, staffCount = 1, figurenotesSize = 16, figurenotesStems = false, pedagogicalPlayheadStyle = 'line', pedagogicalPlayheadEmoji = '🎵', pedagogicalPlayheadEmojiSize = 32, isPedagogicalAudioPlaying = false, isExportingAnimation = false, exportCursorRef, scoreContainerRef, pageFlowDirection = 'vertical', isFirstInBraceGroup = false, braceGroupSize = 0, lyricFontFamily = 'sans-serif' }) {
+  const joClefStaffPosition = joClefStaffPositionProp ?? getTonicStaffPosition(keySignature);
   const isFigurenotesMode = notationStyle === 'FIGURENOTES';
   const instCfg = instrumentConfig[instrument];
   const isTabMode = instCfg?.type === 'tab' && instrumentNotationVariant === 'tab';
@@ -5173,23 +5373,17 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
   const centerY = timelineHeight / 2;
   const marginLeft = LAYOUT.MARGIN_LEFT;
 
+  const spacing = STAFF_SPACE;
   const getStaffLinePositions = () => {
     if (isTabMode && tabStrings >= 1) {
-      const spacing = 12;
-      const startY = centerY - (tabStrings - 1) * spacing / 2;
-      return Array.from({ length: tabStrings }, (_, i) => startY + i * spacing);
+      const tabSpace = 12;
+      const startY = centerY - (tabStrings - 1) * tabSpace / 2;
+      return Array.from({ length: tabStrings }, (_, i) => startY + i * tabSpace);
     }
-    if (staffLines === 1) return [centerY];
-    if (staffLines === 5) {
-      const spacing = 10;
-      const startY = centerY - (spacing * 2);
-      return Array.from({ length: 5 }, (_, i) => startY + i * spacing);
-    }
-    return [centerY];
+    return getStaffLinePositionsFromConstants(centerY, staffLines, spacing);
   };
 
   const staffLinePositions = getStaffLinePositions();
-  const spacing = 10;
   const middleLineY = centerY; // B4 treble / D3 bass
 
   // Helistiku toonika (I aste) noodijoonestiku positsiooni jaoks: [pitch, octave]. Kõik helistikud.
@@ -5200,28 +5394,31 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
   // JO-võtme lohistamisel: (pitch, octave) → helistik (looduslikud astmed C,D,E,F,G,A,B).
   const STAFF_PITCH_TO_KEY = { C: 'C', D: 'D', E: 'E', F: 'F', G: 'G', A: 'A', B: 'B' };
 
-  // Pitch+octave → staff Y. JO-võti on vastavuses traditsioonilise noodikirja helikõrgustega (sama skaala kui viiulivõti).
+  // JO-võti on rakenduse nullpunkt: noteY = joKeyY + relativeIntervalOffset (StaffConstants.getVerticalPositionFromJoAnchor).
+  const joKeyY = getYFromStaffPosition(joClefStaffPosition, centerY, 5, spacing);
+  const effectiveClefForPitch = notationMode === 'vabanotatsioon' ? 'jo' : clefType;
   const getPitchY = (pitch, octave) => {
     if (staffLines !== 5) return centerY;
-    const rel = { C: 0, D: 1, E: 2, F: 3, G: 4, A: 5, B: 6 };
-    const bottomY = centerY + spacing * 2;
-    // Nii vabanotatsioon (Jo võti) kui viiulivõti: E4 = alumine joon (sama helikõrgused)
-    if (notationMode === 'vabanotatsioon' || clefType === 'treble') {
-      const index = (octave - 4) * 7 + rel[pitch] - 2;
-      return bottomY - index * (spacing / 2);
+    if (notationMode === 'vabanotatsioon') {
+      return getVerticalPositionFromJoAnchor(joKeyY, pitch, octave, keySignature, spacing);
     }
-    const index = (octave - 3) * 7 + rel[pitch] - 4;
-    return bottomY - index * (spacing / 2);
+    return getVerticalPosition(pitch, octave, effectiveClefForPitch, {
+      centerY,
+      staffSpace: spacing,
+      keySignature,
+    });
   };
 
-  // Map staff Y position to pitch (pöördväärtus getPitchY-st). Viiulivõti ja bassivõti erinevad.
+  // Map staff Y position to pitch (pöördväärtus getPitchY-st). JO-režiimis: getPitchFromJoClick(joKeyY ankur).
   const getPitchFromY = (clickY) => {
     if (staffLines !== 5 || !onStaffAddNote) return null;
-    const spacing = 10;
+    if (notationMode === 'vabanotatsioon') {
+      return getPitchFromJoClick(clickY, joKeyY, keySignature, spacing);
+    }
     const bottomY = centerY + spacing * 2;
     const relToPitch = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
     const index = Math.round((bottomY - clickY) * 2 / spacing);
-    if (notationMode === 'vabanotatsioon' || clefType === 'treble') {
+    if (clefType === 'treble') {
       const x = index + 2;
       const q = Math.floor(x / 7);
       const r = ((x % 7) + 7) % 7;
@@ -5393,7 +5590,19 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
     const stemY1 = y;
     const stemY2 = y - stemLength;
 
+    const textColor = getFigurenoteTextColor(note.pitch);
     const shapeElement = (() => {
+      if (shape === 'cross') {
+        const r = size / 2;
+        const strokeW = Math.max(2, size * 0.38);
+        return (
+          <g stroke={color} strokeWidth={strokeW} strokeLinecap="round">
+            <line x1={x - r} y1={y - r} x2={x + r} y2={y + r} />
+            <line x1={x + r} y1={y - r} x2={x - r} y2={y + r} />
+            <rect x={x - r} y={y - r} width={size} height={size} fill="none" stroke={isSelected ? "#2563eb" : "#000"} strokeWidth={isSelected ? "3" : "2"} />
+          </g>
+        );
+      }
       if (shape === 'circle') {
         return (
           <circle
@@ -5405,7 +5614,8 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
             strokeWidth={isSelected ? "3" : "2"}
           />
         );
-      } else if (shape === 'square') {
+      }
+      if (shape === 'square') {
         return (
           <rect
             x={x - size / 2}
@@ -5417,7 +5627,8 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
             strokeWidth={isSelected ? "3" : "2"}
           />
         );
-      } else if (shape === 'triangle') {
+      }
+      if (shape === 'triangle') {
         const h = size * 0.866;
         return (
           <path
@@ -5428,6 +5639,7 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
           />
         );
       }
+      return null;
     })();
 
     const pad = Math.max(4, size * 0.25);
@@ -5448,6 +5660,10 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
           />
         )}
         {shapeElement}
+        {/* Noodi nimi kujundi sees (valge või must A/E korral) */}
+        <text x={x} y={y} textAnchor="middle" dominantBaseline="central" fill={textColor} fontSize={Math.max(8, size * 0.5)} fontWeight="bold">
+          {note.pitch}
+        </text>
         {/* Pikkade nootide (1/2, 1/1) alumine saba – visuaalselt näitab noodi pikkust */}
         {tailLength > 0 && (
           <line
@@ -5622,19 +5838,20 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
                   const clefBaseline = 'middle';
                   const clefMiddle = 'middle';
                   if (notationMode === 'vabanotatsioon') {
-                    const [tonicPitch, tonicOctave] = KEY_TONIC_FOR_STAFF[keySignature] || ['C', 4];
-                    const joClefCenterY = getPitchY(tonicPitch, tonicOctave);
+                    const joClefCenterY = sys.yOffset + joKeyY;
+                    const ledgerAbove = Math.max(0, joClefStaffPosition - 8);
+                    const ledgerBelow = Math.max(0, -joClefStaffPosition);
                     const joClefEl = (
                       <JoClefSymbol
                         x={xOffset}
-                        centerY={sys.yOffset + joClefCenterY}
+                        centerY={joClefCenterY}
                         staffSpacing={staffSpace}
                         stroke="#000"
                         strokeWidth={2.2}
                         barLength={14}
                         showLedgerLine={true}
-                        ledgerLinesAbove={KEY_LEDGER_ABOVE[keySignature] ?? 0}
-                        ledgerLinesBelow={KEY_LEDGER_BELOW[keySignature] ?? 0}
+                        ledgerLinesAbove={ledgerAbove}
+                        ledgerLinesBelow={ledgerBelow}
                       />
                     );
                     const isFirstSystem = sys.systemIndex === 0;
@@ -5644,7 +5861,7 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
                         key="jo-clef"
                         data-jo-clef
                         style={{ cursor: canFocus ? 'pointer' : undefined }}
-                        title={canFocus ? (joClefFocused ? 'Kasuta nooleklahve ↑ ja ↓ helistiku muutmiseks. Escape = lõpeta.' : 'Klõpsa JO-võtit, seejärel kasuta nooleklahve ↑↓ helistiku valimiseks.') : undefined}
+                        title={canFocus ? (joClefFocused ? 'Kasuta nooleklahve ↑ ja ↓ JO-võtme nihutamiseks (joon/vahe ja abijooned). Escape = lõpeta.' : 'Klõpsa JO-võtit, seejärel nooltega ↑↓ nihuta võtit. Noodid liiguvad koos.') : undefined}
                         onClick={canFocus ? (e) => {
                           e.stopPropagation();
                           onJoClefFocus(true);
@@ -5652,7 +5869,7 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
                       >
                         {joClefEl}
                         {joClefFocused && (
-                          <rect x={xOffset - 2} y={sys.yOffset + joClefCenterY - staffSpace * 2 - 4} width={24} height={staffSpace * 4 + 8} fill="none" stroke="#0ea5e9" strokeWidth="2" strokeDasharray="4 2" rx="2" />
+                          <rect x={xOffset - 2} y={joClefCenterY - staffSpace * 2 - 4} width={24} height={staffSpace * 4 + 8} fill="none" stroke="#0ea5e9" strokeWidth="2" strokeDasharray="4 2" rx="2" />
                         )}
                       </g>
                     );
@@ -5745,7 +5962,7 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
             };
 
             // Liitrütmide magneetiline ühendamine (beaming): sama löögi 1/8, 1/16, 1/32 ühendatakse ühise vibuga
-            const noteheadRx = 7;
+            const noteheadRx = getNoteheadRx(spacing);
             const beamable = (dur) => ['1/8', '1/16', '1/32'].includes(dur || '');
             const beamGroups = (() => {
               const out = [];
@@ -5867,12 +6084,15 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
                 style: { cursor: onNoteClick ? 'pointer' : undefined }
               };
               if (note.isRest) {
+                const restLabelY = sys.yOffset + staffLinePositions[staffLinePositions.length - 1] + spacing * 1.8;
+                const restSyllable = showRhythmSyllables ? getRhythmSyllableForNote(note) : '';
                 if (isFigurenotesMode && !figurenotesStems) {
                   const boxW = getRestBoxWidth(note);
                   const zSize = Math.min(boxW * 0.55, 26);
                   return (
                     <g key={noteIdx} {...noteGroupProps}>
                       <text x={noteX} y={sys.yOffset + centerY + zSize * 0.2} textAnchor="middle" fontSize={zSize} fontWeight="bold" fill="#1a1a1a" fontFamily="serif">Z</text>
+                      {restSyllable && <RhythmSyllableLabel x={noteX} y={restLabelY} text={restSyllable} staffSpace={spacing} />}
                     </g>
                   );
                 }
@@ -5880,12 +6100,14 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
                   return (
                     <g key={noteIdx} {...noteGroupProps}>
                       {renderStandardRest(note, noteX, sys.yOffset + centerY)}
+                      {restSyllable && <RhythmSyllableLabel x={noteX} y={restLabelY} text={restSyllable} staffSpace={spacing} />}
                     </g>
                   );
                 }
                 return (
                   <g key={noteIdx} {...noteGroupProps}>
                     {renderStandardRest(note, noteX, sys.yOffset + centerY)}
+                    {restSyllable && <RhythmSyllableLabel x={noteX} y={restLabelY} text={restSyllable} staffSpace={spacing} />}
                   </g>
                 );
               }
@@ -5912,16 +6134,6 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
                 return (
                   <g key={noteIdx} {...noteGroupProps}>
                     {renderFigurenote(note, noteX, noteY, globalNoteIndex)}
-                    <text
-                      x={noteX}
-                      y={labelY}
-                      textAnchor="middle"
-                      fontSize={labelFontSize}
-                      fill="#333"
-                      fontWeight="bold"
-                    >
-                      {note.pitch}
-                    </text>
                     {(note.lyric != null && String(note.lyric).trim() !== '') && (
                       <text
                         x={noteX}
@@ -5938,23 +6150,19 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
                 );
               } else if (notationMode === 'traditional' || notationMode === 'vabanotatsioon') {
                 const isSelected = isNoteSelected(globalNoteIndex);
-                const noteheadRx = 7;
-                const noteheadRy = 5;
+                const noteheadRx = getNoteheadRx(spacing);
+                const noteheadRy = getNoteheadRy(spacing);
                 const stemX = stemUp ? noteX + noteheadRx : noteX - noteheadRx;
                 const beamGroup = getBeamGroup(noteIdx);
                 const stemY2 = beamGroup ? beamGroup.beamY : (stemUp ? noteY - 32 : noteY + 32);
                 const fingering = isFingeringMode ? getFingeringForNote(note.pitch, note.octave, instrument) : null;
                 const fingerY = noteY + (stemUp ? 38 : 42);
-                const ledgerHalfWidth = 14;
-                // Traditsiooniline notatsioon: abijooned ainult JOONTE positsioonidel (samm = spacing), mitte iga pool sammu
-                const lastLineY = staffLinePositions[staffLinePositions.length - 1];
+                const ledgerHalfWidth = getLedgerHalfWidth(spacing);
                 const firstLineY = staffLinePositions[0];
-                const nLedgerAbove = staffLines === 5 && pitchY < firstLineY
-                  ? Math.floor((firstLineY - pitchY) / spacing)
-                  : 0;
-                const nLedgerBelow = staffLines === 5 && pitchY > lastLineY
-                  ? Math.floor((pitchY - lastLineY) / spacing)
-                  : 0;
+                const lastLineY = staffLinePositions[staffLinePositions.length - 1];
+                const { above: nLedgerAbove, below: nLedgerBelow } = staffLines === 5
+                  ? getLedgerLineCountExact(pitchY, firstLineY, lastLineY, spacing)
+                  : { above: 0, below: 0 };
                 return (
                   <g key={noteIdx} {...noteGroupProps}>
                     {nLedgerAbove > 0 && Array.from({ length: nLedgerAbove }, (_, i) => (
@@ -5990,14 +6198,13 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
                         rx="4"
                       />
                     )}
-                    <ellipse 
-                      cx={noteX} 
-                      cy={noteY} 
-                      rx={noteheadRx} 
-                      ry={noteheadRy} 
-                      fill="#1a1a1a"
-                      stroke={isSelected ? "#2563eb" : "none"}
-                      strokeWidth={isSelected ? "2" : "0"}
+                    <NoteHead
+                      cx={noteX}
+                      cy={noteY}
+                      staffSpace={spacing}
+                      filled
+                      stemUp={stemUp}
+                      selected={isSelected}
                     />
                     <line 
                       x1={stemX} 
@@ -6039,6 +6246,41 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
                         {note.lyric}
                       </text>
                     )}
+                    {showRhythmSyllables && (() => {
+                      const labelY = sys.yOffset + staffLinePositions[staffLinePositions.length - 1] + spacing * 1.8;
+                      if (beamGroup && noteIdx === beamGroup.start) {
+                        const groupNotes = measure.notes.slice(beamGroup.start, beamGroup.end + 1);
+                        const syllable = getRhythmSyllableForNote(note, { beamGroupNotes: groupNotes });
+                        const xCenter = (beamGroup.xLeft + beamGroup.xRight) / 2;
+                        return <RhythmSyllableLabel key="syl" x={xCenter} y={labelY} text={syllable} staffSpace={spacing} />;
+                      }
+                      if (!beamGroup) {
+                        const syllable = getRhythmSyllableForNote(note);
+                        return <RhythmSyllableLabel key="syl" x={noteX} y={labelY} text={syllable} staffSpace={spacing} />;
+                      }
+                      return null;
+                    })()}
+                    {enableEmojiOverlays && !note.isRest && (notationMode === 'traditional' || notationMode === 'vabanotatsioon') && (() => {
+                      const labelAboveY = sys.yOffset + noteY - spacing * 2.2;
+                      const hasCustom = note.teacherLabel != null && note.teacherLabel !== '';
+                      const displayText = hasCustom ? expandEmojiShortcuts(note.teacherLabel) : (showAllNoteLabels && notationMode === 'vabanotatsioon' ? getJoName(note.pitch, note.octave, keySignature) : '');
+                      const canEdit = typeof onNoteLabelClick === 'function';
+                      return (
+                        <g
+                          key="teacher-label"
+                          data-teacher-label
+                          style={{ cursor: canEdit ? 'pointer' : undefined }}
+                          onClick={canEdit ? (ev) => { ev.stopPropagation(); onNoteLabelClick(globalNoteIndex); } : undefined}
+                          title={canEdit ? (t('teacher.noteLabelHint') || 'Klõpsa valimiseks, Delete kustutab') : undefined}
+                        >
+                          {displayText ? (
+                            <text x={noteX} y={labelAboveY} textAnchor="middle" dominantBaseline="auto" fontSize={Math.max(10, spacing * 1.0)} fill="#333" fontFamily="sans-serif" fontWeight="600">{displayText}</text>
+                          ) : (
+                            <rect x={noteX - 14} y={labelAboveY - 12} width={28} height={14} fill="transparent" />
+                          )}
+                        </g>
+                      );
+                    })()}
                   </g>
                 );
               } else {
@@ -6084,6 +6326,11 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
                       stroke="#333" 
                       strokeWidth="1.5" 
                     />
+                    {showRhythmSyllables && (() => {
+                      const labelY = sys.yOffset + staffLinePositions[staffLinePositions.length - 1] + spacing * 1.8;
+                      const syllable = getRhythmSyllableForNote(note);
+                      return <RhythmSyllableLabel key="syl" x={noteX} y={labelY} text={syllable} staffSpace={spacing} />;
+                    })()}
                   </g>
                 );
               }
@@ -6107,10 +6354,33 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
         </g>
       ); })}
 
-      {/* Cursor + Ghost note (only visible when note input mode is ON) – slot center */}
-      {noteInputMode && cursorInfo && cursorSlotCenterX != null && (
+      {/* Cursor + Ghost note (only visible when note input mode is ON) – slot center. Dünaamiline: tühi väli = joon, muidu emoji. Rütmiline hüpe: y = base_y - |A·sin(π·beat_progress)| */}
+      {noteInputMode && cursorInfo && cursorSlotCenterX != null && (() => {
+        const cursorChar = (pedagogicalPlayheadEmoji || '').trim();
+        const showLine = cursorChar === '';
+        const displayEmoji = cursorChar || '🎵';
+        const emojiSizePx = Math.max(20, Math.min(60, pedagogicalPlayheadEmojiSize));
+        const beatProgress = cursorPosition % 1;
+        const JUMP_AMPLITUDE = 14;
+        const baseY = centerY - emojiSizePx / 2;
+        const emojiCenterY = baseY - JUMP_AMPLITUDE * Math.abs(Math.sin(Math.PI * beatProgress));
+        const cursorEmojiY = cursorInfo.system.yOffset + emojiCenterY;
+        if (exportCursorRef) {
+          if (showLine) exportCursorRef.current = null;
+          else if (scoreContainerRef?.current && timelineSvgRef?.current) {
+            const svgR = timelineSvgRef.current.getBoundingClientRect();
+            const containerR = scoreContainerRef.current.getBoundingClientRect();
+            exportCursorRef.current = {
+              x: cursorSlotCenterX + svgR.left - containerR.left,
+              y: cursorInfo.system.yOffset + emojiCenterY + svgR.top - containerR.top,
+              emoji: displayEmoji,
+              size: emojiSizePx
+            };
+          }
+        }
+        return (
         <g>
-          {pedagogicalPlayheadStyle === 'line' ? (
+          {showLine ? (
             <line
               x1={cursorSlotCenterX}
               y1={cursorInfo.system.yOffset + 5}
@@ -6122,35 +6392,30 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
             >
               <animate attributeName="opacity" values="0.8;0.3;0.8" dur="1s" repeatCount="indefinite" />
             </line>
-          ) : (() => {
-              const playheadEmoji = pedagogicalPlayheadStyle === 'violin' ? '🎻' : pedagogicalPlayheadStyle === 'smiley' ? '😊' : (pedagogicalPlayheadEmoji || '🎵').trim() || '🎵';
-              const cursorCenterY = cursorInfo.system.yOffset + centerY;
-              const emojiSize = 28;
-              return (
-                <>
-                  <line
-                    x1={cursorSlotCenterX}
-                    y1={cursorInfo.system.yOffset + 5}
-                    x2={cursorSlotCenterX}
-                    y2={cursorInfo.system.yOffset + timelineHeight - 5}
-                    stroke="#2563eb"
-                    strokeWidth="1.5"
-                    opacity="0.4"
-                  />
-                  <text
-                    x={cursorSlotCenterX}
-                    y={cursorCenterY}
-                    textAnchor="middle"
-                    dominantBaseline="middle"
-                    fontSize={emojiSize}
-                    fontFamily="sans-serif"
-                  >
-                    {playheadEmoji}
-                    {isPedagogicalAudioPlaying && <animate attributeName="opacity" values="1;0.75;1" dur="0.6s" repeatCount="indefinite" />}
-                  </text>
-                </>
-              );
-            })()}
+          ) : (
+            <>
+              <line
+                x1={cursorSlotCenterX}
+                y1={cursorInfo.system.yOffset + 5}
+                x2={cursorSlotCenterX}
+                y2={cursorInfo.system.yOffset + timelineHeight - 5}
+                stroke="#2563eb"
+                strokeWidth="1.5"
+                opacity="0.4"
+              />
+              <text
+                x={cursorSlotCenterX}
+                y={cursorEmojiY}
+                textAnchor="middle"
+                dominantBaseline="middle"
+                fontSize={emojiSizePx}
+                fontFamily="sans-serif"
+              >
+                {displayEmoji}
+                {isPedagogicalAudioPlaying && <animate attributeName="opacity" values="1;0.75;1" dur="0.6s" repeatCount="indefinite" />}
+              </text>
+            </>
+          )}
           {isRest ? (
             isFigurenotesMode
               ? (() => {
@@ -6183,21 +6448,37 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
                 const color = FIGURENOTES_COLORS[ghostPitch] || '#000';
                 const shape = FIGURENOTES_SHAPES[ghostOctave] || 'circle';
                 const size = figurenotesSize;
-                const el = shape === 'square' ? <rect x={cx - size/2} y={cy - size/2} width={size} height={size} fill={color} stroke="#2563eb" strokeWidth="2" opacity="0.9"/> :
-                  shape === 'triangle' ? <path d={`M ${cx} ${cy - size*0.43} L ${cx + size/2} ${cy + size/2} L ${cx - size/2} ${cy + size/2} Z`} fill={color} stroke="#2563eb" strokeWidth="2" opacity="0.9"/> :
-                  <circle cx={cx} cy={cy} r={size/2} fill={color} stroke="#2563eb" strokeWidth="2" opacity="0.9"/>;
+                const r = size / 2;
+                let el;
+                if (shape === 'cross') {
+                  const strokeW = Math.max(2, size * 0.38);
+                  el = (
+                    <g stroke={color} strokeWidth={strokeW} strokeLinecap="round">
+                      <line x1={cx - r} y1={cy - r} x2={cx + r} y2={cy + r} />
+                      <line x1={cx + r} y1={cy - r} x2={cx - r} y2={cy + r} />
+                      <rect x={cx - r} y={cy - r} width={size} height={size} fill="none" stroke="#2563eb" strokeWidth="2" />
+                    </g>
+                  );
+                } else if (shape === 'square') {
+                  el = <rect x={cx - size/2} y={cy - size/2} width={size} height={size} fill={color} stroke="#2563eb" strokeWidth="2" opacity="0.9"/>;
+                } else if (shape === 'triangle') {
+                  el = <path d={`M ${cx} ${cy - size*0.43} L ${cx + size/2} ${cy + size/2} L ${cx - size/2} ${cy + size/2} Z`} fill={color} stroke="#2563eb" strokeWidth="2" opacity="0.9"/>;
+                } else {
+                  el = <circle cx={cx} cy={cy} r={size/2} fill={color} stroke="#2563eb" strokeWidth="2" opacity="0.9"/>;
+                }
                 return <g opacity="0.9">{el}</g>;
               }
               if (notationMode === 'traditional') {
-                const rx = 6; const ry = 4;
+                const rx = getNoteheadRx(spacing);
                 const stemX = stemUp ? cx + rx : cx - rx;
                 const stemY2 = stemUp ? cy - 28 : cy + 28;
-                const ledgerHalfWidth = 14;
+                const ledgerHalfWidth = getLedgerHalfWidth(spacing);
                 const sysY = cursorInfo.system.yOffset;
                 const firstLineY = staffLinePositions[0];
                 const lastLineY = staffLinePositions[staffLinePositions.length - 1];
-                const nLedgerAbove = staffLines === 5 && pitchY < firstLineY ? Math.floor((firstLineY - pitchY) / spacing) : 0;
-                const nLedgerBelow = staffLines === 5 && pitchY > lastLineY ? Math.floor((pitchY - lastLineY) / spacing) : 0;
+                const { above: nLedgerAbove, below: nLedgerBelow } = staffLines === 5
+                  ? getLedgerLineCountExact(pitchY, firstLineY, lastLineY, spacing)
+                  : { above: 0, below: 0 };
                 return (
                   <g opacity="0.85">
                     {nLedgerAbove > 0 && Array.from({ length: nLedgerAbove }, (_, i) => (
@@ -6206,7 +6487,7 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
                     {nLedgerBelow > 0 && Array.from({ length: nLedgerBelow }, (_, i) => (
                       <line key={`ghost-ledger-below-${i}`} x1={cx - ledgerHalfWidth} y1={sysY + lastLineY + (i + 1) * spacing} x2={cx + ledgerHalfWidth} y2={sysY + lastLineY + (i + 1) * spacing} stroke="#333" strokeWidth="1.5" />
                     ))}
-                    <ellipse cx={cx} cy={cy} rx={rx} ry={ry} fill="#1a1a1a" stroke="#2563eb" strokeWidth="2"/>
+                    <NoteHead cx={cx} cy={cy} staffSpace={spacing} filled stemUp={stemUp} selected />
                     <line x1={stemX} y1={cy} x2={stemX} y2={stemY2} stroke="#1a1a1a" strokeWidth="1.5"/>
                   </g>
                 );
@@ -6226,7 +6507,8 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
             </circle>
           )}
         </g>
-      )}
+        );
+      })()}
     </svg>
   );
 }

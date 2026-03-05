@@ -66,3 +66,17 @@
   background: linear-gradient(180deg, #60a5fa 0%, #2563eb 100%);
   border-top-color: #3b82f6;
 }
+
+/* Figuurnotatsioon: kujund klahvil umbes 60–70% klahvi laiusest */
+.NoodiMeisterPiano .ReactPiano__NoteLabel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+}
+.NoodiMeisterFigurenotesKeyLabel {
+  aspect-ratio: 1;
+  max-width: 70%;
+  max-height: 70%;
+}

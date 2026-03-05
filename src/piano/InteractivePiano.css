@@ -1,0 +1,17 @@
+.InteractivePiano__midi {
+  margin-bottom: 0.5rem;
+  font-size: 0.875rem;
+}
+.InteractivePiano__midi-error {
+  color: #b91c1c;
+}
+.InteractivePiano__midi-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+.InteractivePiano__midi-select {
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.25rem;
+  border: 1px solid #d1d5db;
+}
