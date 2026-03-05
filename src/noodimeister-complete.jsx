@@ -26,6 +26,15 @@ import { getRhythmSyllableForNote } from './notation/rhythmSyllables';
 import { RhythmSyllableLabel } from './components/RhythmSyllableLabel';
 import { getJoName } from './notation/joNames';
 import { expandEmojiShortcuts } from './utils/emojiShortcuts';
+import {
+  DEFAULT_JO_CLEF_STAFF_POSITION,
+  JO_CLEF_POSITION_MIN,
+  JO_CLEF_POSITION_MAX,
+  DEFAULT_SHOW_EMOJI_OVERLAYS,
+  DEFAULT_SHOW_RHYTHM_SYLLABLES,
+  DEFAULT_SHOW_ALL_NOTE_LABELS,
+  KEY_TO_SEMITONE,
+} from './utils/notationConstants';
 import { LOCALE_STORAGE_KEY, DEFAULT_LOCALE, LOCALES, createT } from './i18n';
 import html2canvas from 'html2canvas';
 import Soundfont from 'soundfont-player';
@@ -38,15 +47,6 @@ const LUCIDE_ICONS = [
 ];
 
 const STORAGE_KEY = 'noodimeister-data';
-
-// Garanteeritud algväärtused – kõik noodigraafika konstandid päises (vältib TDZ/ReferenceError Vercelil)
-const DEFAULT_JO_CLEF_STAFF_POSITION = -2;   // JO (toonika) staff-positsioon: -2=C, 2=G, 4=D
-const DEFAULT_SHOW_EMOJI_OVERLAYS = true;    // Õpetaja: noodipeal märgistused (JO-nimed, emojid)
-const DEFAULT_SHOW_RHYTHM_SYLLABLES = false; // Kodály rütmisilbid (TA, TI-TI jne)
-const DEFAULT_SHOW_ALL_NOTE_LABELS = false;  // Kuva kõikidel nootidel JO-nimed
-// JO-võtme ja noodigraafika väärtused – kasutatakse Timeline'i ja Fx-laadsetes kohtades; peavad olema päises
-const JO_CLEF_POSITION_MIN = -2;
-const JO_CLEF_POSITION_MAX = 10;
 
 function LoggedInUser({ icons, t }) {
   const navigate = useNavigate();
@@ -816,8 +816,6 @@ function getFigurenoteTextColor(pitch) {
 // Pitch/octave ↔ MIDI; fingering; timeline – defineeritud enne NoodiMeisterit, et vältida TDZ minifitseerimisel
 const PITCH_TO_SEMI = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
 const PAGE_BREAK_GAP = 80;
-// Helistiku juur (duur) pooltoonides C-st: transponeerimise arvutamiseks
-const KEY_TO_SEMITONE = { C: 0, G: 7, D: 2, A: 4, E: 6, B: 8, F: 5, Bb: 10, Eb: 3 };
 // JO-võtme nooltega liigutamine: järjestus üles (↑) / alla (↓)
 const KEY_ORDER = ['C', 'G', 'D', 'A', 'E', 'B', 'F', 'Bb', 'Eb'];
 // MIDI → noodinimi + oktaav (react-piano); looduslik noot sisestamiseks (C#, Db → C, D jne)

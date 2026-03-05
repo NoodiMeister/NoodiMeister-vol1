@@ -99,7 +99,11 @@ function useCloudLoginWithProvider(mode = 'login', stayLoggedIn = false, onError
             }
             console.log('[CloudLogin] Auth kinnitatud, suuname /app poole');
             requestAnimationFrame(() => {
-              navigate('/app');
+              try {
+                if (typeof window !== 'undefined' && !window.closed) navigate('/app');
+              } catch (navErr) {
+                console.warn('[CloudLogin] navigate viga (nt window.closed):', navErr);
+              }
             });
           } catch (e) {
             alert('Sisselogimise viga: ' + (e?.message ?? String(e)));

@@ -1,6 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { GoogleOAuthProvider } from '@react-oauth/google';
+import './utils/notationConstants'; // Lae enne Appi – vältib TDZ/ReferenceError lazy chunkides (Vercel)
 import App from './App';
 import './index.css';
 
