@@ -97,12 +97,12 @@ function useCloudLoginWithProvider(mode = 'login', stayLoggedIn = false, onError
               if (onError) onError(payload);
               return;
             }
-            console.log('[CloudLogin] Auth kinnitatud, suuname /app poole');
+            console.log('[CloudLogin] Auth kinnitatud, suuname /app poole (COOP: ainult location.assign, mitte window.close)');
             requestAnimationFrame(() => {
               try {
-                if (typeof window !== 'undefined') navigate('/app');
+                if (typeof window !== 'undefined') window.location.assign('/app');
               } catch (navErr) {
-                console.warn('[CloudLogin] navigate viga:', navErr);
+                console.warn('[CloudLogin] location.assign viga:', navErr);
               }
             });
           } catch (e) {

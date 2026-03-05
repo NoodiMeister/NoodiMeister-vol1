@@ -39,15 +39,23 @@ import { LOCALE_STORAGE_KEY, DEFAULT_LOCALE, LOCALES, createT } from './i18n';
 import html2canvas from 'html2canvas';
 import Soundfont from 'soundfont-player';
 
-// Globaalsed noodigraafika konstantid faili alguses (vältivad "Cannot access before initialization" Vercel/minifitseerimisel)
-const JA = true;
-const YA = true;
+// Globaalne konfiguratsioon KÕIGE ALGUSES – välistab "Cannot access before initialization" (YA/JA) Vercel/minifitseerimisel
+if (typeof window !== 'undefined') {
+  window.NOODIMEISTER_CONFIG = window.NOODIMEISTER_CONFIG || { JO_VOTI: 0, STAFF_HEIGHT: 100, EMOJIS: true };
+}
+function getNoodimeisterConfig() {
+  return (typeof window !== 'undefined' && window.NOODIMEISTER_CONFIG) ? window.NOODIMEISTER_CONFIG : { JO_VOTI: 0, STAFF_HEIGHT: 100, EMOJIS: true };
+}
+function getStaffHeight() {
+  const cfg = getNoodimeisterConfig();
+  return (cfg.STAFF_HEIGHT != null && cfg.STAFF_HEIGHT > 0) ? cfg.STAFF_HEIGHT : 140;
+}
+
 const LAYOUT = {
   PAGE_WIDTH_MIN: 800,
   PAGE_WIDTH_MAX: 1000,
   PAGE_WIDTH_MAX_LANDSCAPE: 1400,
   A4_HEIGHT_RATIO: 297 / 210,
-  STAFF_HEIGHT: 140,
   SYSTEM_GAP: 120,
   MARGIN_LEFT: 60,
   MARGIN_RIGHT: 40,
@@ -107,7 +115,7 @@ function computeLayout(measures, timeSignature, pixelsPerBeat, pageWidth, layout
     systemGap = LAYOUT.SYSTEM_GAP,
     staffCount = 1
   } = layoutOptions;
-  const step = (staffCount || 1) * LAYOUT.STAFF_HEIGHT + systemGap;
+  const step = (staffCount || 1) * getStaffHeight() + systemGap;
   const lineSet = new Set(Array.isArray(lineBreakBefore) ? lineBreakBefore : []);
   const pageSet = new Set(Array.isArray(pageBreakBefore) ? pageBreakBefore : []);
 
@@ -843,7 +851,7 @@ const FINGERING_RECORDER = {
 };
 
 function NoodiMeisterCore({ icons }) {
-  if (typeof YA === 'undefined') return null;
+  if (!getNoodimeisterConfig() || getNoodimeisterConfig().EMOJIS === undefined) return null;
   const [locale, setLocale] = useState(() => {
     try {
       return localStorage.getItem(LOCALE_STORAGE_KEY) || DEFAULT_LOCALE;
@@ -861,7 +869,7 @@ function NoodiMeisterCore({ icons }) {
   const instrumentConfig = useMemo(() => getInstrumentConfig(t), [t]);
   const toolboxes = useMemo(() => getToolboxes(t, instrumentConfig), [t, instrumentConfig]);
 
-  // JO-võti ja noodigraafika state esimesena (vältib "Cannot access 'JA' before initialization" Fx/Timeline minifitseerimisel)
+  // JO-võti ja noodigraafika state esimesena (konfiguratsioon tuleb window.NOODIMEISTER_CONFIG-ist)
   const [joClefFocused, setJoClefFocused] = useState(false);
   const [joClefStaffPosition, setJoClefStaffPosition] = useState(DEFAULT_JO_CLEF_STAFF_POSITION);
 
@@ -1021,6 +1029,7 @@ function NoodiMeisterCore({ icons }) {
       const isGrandStaff = cfg?.type === 'grandStaff';
       const current = prev[idx];
       const inBraceGroup = current.braceGroupId && prev[idx + 1]?.braceGroupId === current.braceGroupId;
+      // MuseScore klaverisüsteem: kaks paralleelset noodijoonestikku – ülemine viiulivõti (G), alumine bassivõti (F täpselt 4. joonel), vasakult ühendatud klaveriklambriga (Brace)
       if (isGrandStaff && instId === 'piano') {
         const braceGroupId = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `piano-${Date.now()}`;
         const id1 = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `staff-${Date.now()}-a`;
@@ -3292,7 +3301,7 @@ function NoodiMeisterCore({ icons }) {
     const opts = { measuresPerLine: effectiveLayoutMeasuresPerLine, lineBreakBefore: effectiveLayoutLineBreakBefore, pageBreakBefore: effectiveLayoutPageBreakBefore, systemGap: layoutSystemGap, staffCount: staves.length };
     const sys = computeLayout(measures, timeSignature, pixelsPerBeat, pageWidth || LAYOUT.PAGE_WIDTH_MIN, opts);
     const n = staves.length || 1;
-    return sys.length > 0 ? sys[sys.length - 1].yOffset + n * LAYOUT.STAFF_HEIGHT + 40 : n * LAYOUT.STAFF_HEIGHT + 40;
+    return sys.length > 0 ? sys[sys.length - 1].yOffset + n * getStaffHeight() + 40 : n * getStaffHeight() + 40;
   }, [measures, timeSignature, pixelsPerBeat, pageWidth, effectiveLayoutMeasuresPerLine, effectiveLayoutLineBreakBefore, effectiveLayoutPageBreakBefore, layoutSystemGap, staves.length]);
   const systemsForScore = useMemo(() => {
     const opts = { measuresPerLine: effectiveLayoutMeasuresPerLine, lineBreakBefore: effectiveLayoutLineBreakBefore, pageBreakBefore: effectiveLayoutPageBreakBefore, systemGap: layoutSystemGap, staffCount: staves.length };
@@ -3309,7 +3318,7 @@ function NoodiMeisterCore({ icons }) {
   const FOCUS_STAFF_HEIGHT = 280; // Kui osa ridu peidetud, suurendatakse nähtavad read (HEV/solfedž)
   const effectiveStaffHeight = visibleStaffList.length > 0 && visibleStaffList.length < staves.length
     ? FOCUS_STAFF_HEIGHT
-    : LAYOUT.STAFF_HEIGHT;
+    : getStaffHeight();
   const cursorMeasureIndex = measures.length > 0
     ? (() => {
         const i = measures.findIndex(m => cursorPosition >= m.startBeat && cursorPosition < m.endBeat);
@@ -4970,7 +4979,7 @@ function NoodiMeisterCore({ icons }) {
             style={{
               minWidth: LAYOUT.PAGE_WIDTH_MIN,
               maxWidth: pageOrientation === 'landscape' ? LAYOUT.PAGE_WIDTH_MAX_LANDSCAPE : LAYOUT.PAGE_WIDTH_MAX,
-              minHeight: Math.max(500, LAYOUT.STAFF_HEIGHT + LAYOUT.SYSTEM_GAP + LAYOUT.STAFF_HEIGHT + 120),
+              minHeight: Math.max(500, getStaffHeight() + LAYOUT.SYSTEM_GAP + getStaffHeight() + 120),
               ...(isHorizontalFlow ? { width: totalPagesVal * (pageWidth || LAYOUT.PAGE_WIDTH_MIN), height: a4PageHeightVal } : {})
             }}
             onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; e.currentTarget.classList.add('ring-2', 'ring-amber-400', 'ring-offset-2'); }}
@@ -5450,7 +5459,8 @@ function getFingeringForNote(pitch, octave, instrumentId) {
 
 // Timeline Component – multi-system layout (VexFlow loogika). (PAGE_BREAK_GAP on defineeritud üleval.)
 function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, pageWidth, cursorPosition, notationMode, staffLines, clefType, keySignature = 'C', relativeNotationShowKeySignature = false, relativeNotationShowTraditionalClef = false, onJoClefPositionChange, joClefFocused = false, onJoClefFocus, instrument = 'piano', instrumentNotationVariant = 'standard', instrumentConfig = {}, showBarNumbers = true, showRhythmSyllables = false, joClefStaffPosition: joClefStaffPositionProp, showAllNoteLabels = false, enableEmojiOverlays = true, onNoteTeacherLabelChange, onNoteLabelClick, chords = [], isDotted, isRest, selectedDuration, noteInputMode, selectedNoteIndex, isNoteSelected, notes: allNotes, onStaffAddNote, onNoteClick, ghostPitch, ghostOctave, notationStyle, layoutMeasuresPerLine = 4, layoutLineBreakBefore = [], layoutPageBreakBefore = [], layoutSystemGap = 120, systems: systemsProp, baseYOffset = 0, staffCount = 1, staffHeight: staffHeightProp, figurenotesSize = 16, figurenotesStems = false, pedagogicalPlayheadStyle = 'line', pedagogicalPlayheadEmoji = '🎵', pedagogicalPlayheadEmojiSize = 32, isPedagogicalAudioPlaying = false, isExportingAnimation = false, exportCursorRef, scoreContainerRef, pageFlowDirection = 'vertical', isFirstInBraceGroup = false, braceGroupSize = 0, lyricFontFamily = 'sans-serif' }) {
-  if (typeof JA === 'undefined' || !JA) return null;
+  const cfg = getNoodimeisterConfig();
+  if (!cfg || cfg.EMOJIS === false) return null;
   const safeKey = keySignature ?? 'C';
   const joClefStaffPosition = typeof joClefStaffPositionProp === 'number' ? joClefStaffPositionProp : getTonicStaffPosition(safeKey);
   if (typeof joClefStaffPosition !== 'number') return null;
@@ -5479,7 +5489,7 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
   }, [measures, allNotes]);
   const effectiveMeasures = React.useMemo(() => (measures || []).map((m, i) => ({ ...m, notes: notesByMeasure[i] || [] })), [measures, notesByMeasure]);
   const timelineSvgRef = useRef(null);
-  const timelineHeight = staffHeightProp ?? LAYOUT.STAFF_HEIGHT;
+  const timelineHeight = staffHeightProp ?? getStaffHeight();
   const totalHeight = systemsComputed.length > 0
     ? systemsComputed[systemsComputed.length - 1].yOffset + (staffCount || 1) * timelineHeight + 40
     : (staffCount || 1) * timelineHeight + 40;
@@ -5912,7 +5922,7 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
             <line x1={0} y1={sys.yOffset - PAGE_BREAK_GAP / 2} x2={pageWidth || LAYOUT.PAGE_WIDTH_MIN} y2={sys.yOffset - PAGE_BREAK_GAP / 2} stroke="#c4b896" strokeWidth={1} strokeDasharray="4 4" />
           )}
           {!isFigurenotesMode && isFirstInBraceGroup && braceGroupSize >= 2 && (() => {
-            const braceH = braceGroupSize * LAYOUT.STAFF_HEIGHT;
+            const braceH = braceGroupSize * getStaffHeight();
             const top = sys.yOffset + 2;
             const bottom = sys.yOffset + braceH - 2;
             const mid = sys.yOffset + braceH / 2;
