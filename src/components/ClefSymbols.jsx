@@ -107,6 +107,27 @@ export function StaffTrebleClef({ x, y, height, fill = '#333' }) {
   return <TrebleClefSymbol x={x} y={y} height={height} fill={fill} />;
 }
 
+// Bassivõtme viewBox: 0 0 24 24. F-joon (neljas joon ülevalt) = y=12 (keskpunkt).
+// Kaks punkti ja vertikaalsed jooned on ankurdatud F-joone suhtes.
+const BASS_VIEWBOX = 24;
+const BASS_F_LINE_Y = 12;
+
+/**
+ * Bassivõtme sümbol noodijoonestikul. Ankurdatud F-joone (neljas joon ülevalt) suhtes.
+ * x, y = F-joone Y-positsioon; height skaleerib sümboli joonestikuga.
+ * Noodid bassivõtmes arvutatakse õige helikõrgusega (F2–C4 vahemik).
+ */
+export function BassClefSymbol({ x, y, height, fill = '#333' }) {
+  const scale = height / BASS_VIEWBOX;
+  return (
+    <g transform={`translate(${x}, ${y}) scale(${scale}) translate(-12, -${BASS_F_LINE_Y})`} fill={fill}>
+      <ellipse cx="7.5" cy="9.5" rx="1.6" ry="2" />
+      <ellipse cx="16.5" cy="9.5" rx="1.6" ry="2" />
+      <path d="M9.8 4v16c0 .55.45 1 1 1s1-.45 1-1V4c0-.55-.45-1-1-1s-1 .45-1 1zm4.4 0v16c0 .55.45 1 1 1s1-.45 1-1V4c0-.55-.45-1-1-1s-1 .45-1 1z" />
+    </g>
+  );
+}
+
 /**
  * JO-võti joonestikul: dünaamiline – keskmine tühi osa ümbritseb alati seda vahet, kus on JO-noot.
  * joPosition = noodi positsioon (0=alumine joon, 1=esimene vahe, 2=teine joon, ... 8=ülemine joon).

@@ -248,6 +248,8 @@ const translations = {
     'inst.tab': 'TAB',
     'inst.fingering': 'Sõrmestus',
     'inst.figuredBass': 'Numbribass',
+    'inst.replaceStaff': 'Asenda aktiivne rida',
+    'inst.removeStaff': 'Eemalda aktiivne rida',
     // Fail / menüü
     'file.menu': 'Fail',
     'file.menuTitle': 'Fail: uus töö, salvesta, laadi, välju',
@@ -617,6 +619,8 @@ const translations = {
     'inst.tab': 'TAB',
     'inst.fingering': 'Fingering',
     'inst.figuredBass': 'Figured bass',
+    'inst.replaceStaff': 'Replace active staff',
+    'inst.removeStaff': 'Remove active staff',
     'file.menu': 'File',
     'file.menuTitle': 'File: new work, save, load, exit',
     'file.newWork': 'New work (new window)',

@@ -6,7 +6,7 @@ import 'react-piano/dist/styles.css';
 import './piano-overrides.css';
 import * as googleDrive from './services/googleDrive';
 import * as authStorage from './services/authStorage';
-import { JoClefSymbol, TrebleClefSymbol } from './components/ClefSymbols';
+import { JoClefSymbol, TrebleClefSymbol, BassClefSymbol } from './components/ClefSymbols';
 import { NoteHead } from './components/NoteHead';
 import {
   STAFF_SPACE,
@@ -38,6 +38,9 @@ import {
 import { LOCALE_STORAGE_KEY, DEFAULT_LOCALE, LOCALES, createT } from './i18n';
 import html2canvas from 'html2canvas';
 import Soundfont from 'soundfont-player';
+
+// Globaalne JO-võtme väärtus faili alguses (vältib "Cannot access 'JA' before initialization" Vercel/minifitseerimisel)
+const JA = true;
 
 // Ikoonid laetakse dünaamiliselt, et vältida "Cannot access 'Tt' before initialization" (lucide-react bundle)
 const LUCIDE_ICONS = [
@@ -413,20 +416,13 @@ const ClefIcon = ({ clefType }) => {
   );
 };
 
-// Noodijoonestikul kasutatav võtme sümbol. Viiulivõti: G-joon ankurdatud (TrebleClefSymbol).
+// Noodijoonestikul kasutatav võtme sümbol. Viiulivõti: G-joon ankurdatud; bassivõti: F-joon (4. joon) ankurdatud (dünaamiline nagu JO-võti).
 function StaffClefSymbol({ x, y, height, clefType, fill = '#333' }) {
   if (clefType === 'treble') {
     return <TrebleClefSymbol x={x} y={y} height={height} fill={fill} />;
   }
-  const scale = height / 24;
   if (clefType === 'bass') {
-    return (
-      <g transform={`translate(${x}, ${y}) scale(${scale}) translate(-12, -12)`} fill={fill}>
-        <ellipse cx="7.5" cy="9.5" rx="1.6" ry="2"/>
-        <ellipse cx="16.5" cy="9.5" rx="1.6" ry="2"/>
-        <path d="M9.8 4v16c0 .55.45 1 1 1s1-.45 1-1V4c0-.55-.45-1-1-1s-1 .45-1 1zm4.4 0v16c0 .55.45 1 1 1s1-.45 1-1V4c0-.55-.45-1-1-1s-1 .45-1 1z"/>
-      </g>
-    );
+    return <BassClefSymbol x={x} y={y} height={height} fill={fill} />;
   }
   if (clefType === 'alto' || clefType === 'tenor') {
     return (
@@ -969,8 +965,10 @@ function NoodiMeisterCore({ icons }) {
     { id: 2, pitch: 'D', octave: 4, duration: 1, durationLabel: '1/4', isDotted: false, isRest: false },
     { id: 3, pitch: 'E', octave: 4, duration: 1, durationLabel: '1/4', isDotted: false, isRest: false }
   ];
+  const defaultPianoBraceId = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `piano-${Date.now()}`;
   const [staves, setStaves] = useState(() => [
-    { id: '1', instrumentId: 'piano', clefType: 'treble', notes: initialStaffNotes }
+    { id: '1', instrumentId: 'piano', clefType: 'treble', notes: initialStaffNotes, braceGroupId: defaultPianoBraceId },
+    { id: '2', instrumentId: 'piano', clefType: 'bass', notes: [], braceGroupId: defaultPianoBraceId }
   ]);
   const [activeStaffIndex, setActiveStaffIndex] = useState(0);
   /** Iga noodirida võib olla vertikaalselt nihutatud (px). Klõps real aktiveerib rea; ↑↓ liigutavad aktiivset rida 1px. */
@@ -1021,12 +1019,45 @@ function NoodiMeisterCore({ icons }) {
     setStaves((prev) => {
       const idx = typeof activeStaffIndex === 'number' ? activeStaffIndex : 0;
       if (idx < 0 || idx >= prev.length) return prev;
-      const next = prev.slice();
       const cfg = INSTRUMENT_CONFIG_BASE[instId];
+      const isGrandStaff = cfg?.type === 'grandStaff';
+      const current = prev[idx];
+      const inBraceGroup = current.braceGroupId && prev[idx + 1]?.braceGroupId === current.braceGroupId;
+      if (isGrandStaff && instId === 'piano') {
+        const braceGroupId = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `piano-${Date.now()}`;
+        const id1 = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `staff-${Date.now()}-a`;
+        const id2 = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `staff-${Date.now()}-b`;
+        const trebleStaff = { id: id1, instrumentId: 'piano', clefType: 'treble', notes: inBraceGroup ? prev[idx].notes : [], braceGroupId };
+        const bassStaff = { id: id2, instrumentId: 'piano', clefType: 'bass', notes: inBraceGroup ? prev[idx + 1].notes : [], braceGroupId };
+        if (inBraceGroup) {
+          const next = prev.slice(0, idx).concat([trebleStaff, bassStaff], prev.slice(idx + 2));
+          return next;
+        }
+        const next = prev.slice(0, idx).concat([trebleStaff, bassStaff], prev.slice(idx + 1));
+        return next;
+      }
+      if (inBraceGroup) {
+        const singleStaff = { ...prev[idx], id: prev[idx].id, instrumentId: instId, clefType: (cfg?.defaultClef) || 'treble', notes: prev[idx].notes, braceGroupId: undefined };
+        const next = prev.slice(0, idx).concat([singleStaff], prev.slice(idx + 2));
+        return next;
+      }
+      const next = prev.slice();
       next[idx] = { ...next[idx], instrumentId: instId, clefType: (cfg?.defaultClef) || 'treble' };
       return next;
     });
   }, [activeStaffIndex]);
+  const removeStaff = useCallback(() => {
+    const idx = typeof activeStaffIndex === 'number' ? activeStaffIndex : 0;
+    if (idx < 0 || idx >= staves.length || staves.length <= 1) return;
+    const current = staves[idx];
+    const inBraceGroup = current.braceGroupId && staves[idx + 1]?.braceGroupId === current.braceGroupId;
+    const nextStaves = inBraceGroup
+      ? staves.slice(0, idx).concat(staves.slice(idx + 2))
+      : staves.slice(0, idx).concat(staves.slice(idx + 1));
+    const nextMaxIndex = nextStaves.length - 1;
+    setStaves(nextStaves);
+    setActiveStaffIndex((prev) => Math.min(prev, Math.max(0, nextMaxIndex)));
+  }, [activeStaffIndex, staves]);
   const clefType = activeStaff?.clefType ?? 'treble';
   const setClefType = useCallback((clef) => {
     setStaves((prev) => {
@@ -2533,6 +2564,8 @@ function NoodiMeisterCore({ icons }) {
         } else if (option.id.startsWith('spacing-')) setPixelsPerBeat(option.value);
         break;
       case 'instruments': {
+        if (option.type === 'category') break;
+        setSelectedOptionIndex(optionIndex);
         const instId = option.type === 'option' ? option.value : option.value;
         const cfg = instrumentConfig[instId];
         // Klaver: kaks noodirida (viiulivõti + bassivõti), ühendatud süsteemisulgega; teised instrumendid: üks noodirida
@@ -4592,6 +4625,34 @@ function NoodiMeisterCore({ icons }) {
                   </div>
                 )}
                 <div className="flex flex-col items-start gap-0.5">
+                  {activeToolbox === 'instruments' && (
+                    <div className="flex flex-wrap gap-1.5 mb-2 pb-2 border-b border-amber-200 w-full">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const opts = toolboxes.instruments?.options ?? [];
+                          const opt = opts[selectedOptionIndex]?.type === 'option' ? opts[selectedOptionIndex] : opts.find((o) => o.type === 'option');
+                          if (opt?.type === 'option') {
+                            setInstrument(opt.value);
+                            dirtyRef.current = true;
+                          }
+                        }}
+                        className="px-2 py-1 rounded text-xs font-medium bg-amber-200 text-amber-900 hover:bg-amber-300 border border-amber-400"
+                        title={t('inst.replaceStaff')}
+                      >
+                        {t('inst.replaceStaff')}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { if (staves.length > 1) { removeStaff(); dirtyRef.current = true; } }}
+                        disabled={staves.length <= 1}
+                        className="px-2 py-1 rounded text-xs font-medium bg-red-100 text-red-800 hover:bg-red-200 border border-red-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                        title={t('inst.removeStaff')}
+                      >
+                        {t('inst.removeStaff')}
+                      </button>
+                    </div>
+                  )}
                   {activeToolbox && activeToolbox !== 'pianoKeyboard' && activeToolbox !== 'rhythm' && activeToolbox !== 'textBox' && toolboxes[activeToolbox]?.options?.map((option, idx) => {
                     if (activeToolbox === 'instruments' && option.type === 'category') return <div key={option.id} className="pt-1.5 pb-0.5 px-1.5 text-xs font-bold text-amber-800 uppercase tracking-wide border-b border-amber-200 first:pt-0">{option.label}</div>;
                     const isActive = activeToolbox === 'timeSignature' && option.value === 'mode-toggle' ? false : activeToolbox === 'clefs' ? option.value === clefType : activeToolbox === 'keySignatures' ? option.value === keySignature : activeToolbox === 'transpose' ? option.value === keySignature : activeToolbox === 'notehead' ? option.value === notationMode : activeToolbox === 'instruments' ? option.type === 'option' && option.value === instrument : activeToolbox === 'layout' ? (option.value === 'gridOnly' && notationStyle === 'FIGURENOTES') || (option.id === 'staff-5' && notationStyle === 'TRADITIONAL' && staffLines === 5) || (option.id === 'staff-1' && notationStyle === 'TRADITIONAL' && staffLines === 1) || (option.id?.startsWith('spacing-') && pixelsPerBeat === option.value) : selectedOptionIndex === idx;
@@ -5391,7 +5452,7 @@ function getFingeringForNote(pitch, octave, instrumentId) {
 
 // Timeline Component – multi-system layout (VexFlow loogika). (PAGE_BREAK_GAP on defineeritud üleval.)
 function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, pageWidth, cursorPosition, notationMode, staffLines, clefType, keySignature = 'C', relativeNotationShowKeySignature = false, relativeNotationShowTraditionalClef = false, onJoClefPositionChange, joClefFocused = false, onJoClefFocus, instrument = 'piano', instrumentNotationVariant = 'standard', instrumentConfig = {}, showBarNumbers = true, showRhythmSyllables = false, joClefStaffPosition: joClefStaffPositionProp, showAllNoteLabels = false, enableEmojiOverlays = true, onNoteTeacherLabelChange, onNoteLabelClick, chords = [], isDotted, isRest, selectedDuration, noteInputMode, selectedNoteIndex, isNoteSelected, notes: allNotes, onStaffAddNote, onNoteClick, ghostPitch, ghostOctave, notationStyle, layoutMeasuresPerLine = 4, layoutLineBreakBefore = [], layoutPageBreakBefore = [], layoutSystemGap = 120, systems: systemsProp, baseYOffset = 0, staffCount = 1, staffHeight: staffHeightProp, figurenotesSize = 16, figurenotesStems = false, pedagogicalPlayheadStyle = 'line', pedagogicalPlayheadEmoji = '🎵', pedagogicalPlayheadEmojiSize = 32, isPedagogicalAudioPlaying = false, isExportingAnimation = false, exportCursorRef, scoreContainerRef, pageFlowDirection = 'vertical', isFirstInBraceGroup = false, braceGroupSize = 0, lyricFontFamily = 'sans-serif' }) {
-  // Fx/Vercel TDZ parandus: kindel JO-võtme väärtus kohe, et vältida "Cannot access 'JA' before initialization"
+  if (typeof JA === 'undefined' || !JA) return null;
   const safeKey = keySignature ?? 'C';
   const joClefStaffPosition = typeof joClefStaffPositionProp === 'number' ? joClefStaffPositionProp : getTonicStaffPosition(safeKey);
   if (typeof joClefStaffPosition !== 'number') return null;
@@ -5882,10 +5943,11 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
                 <text x={18} y={sys.yOffset + centerY + 6} fontSize="14" fontWeight="bold" fill="#333">TAB</text>
               ) : staffLines === 5 ? (
                 (() => {
-                  const trebleGLine = staffLinePositions[3];
-                  // Bassivõtme F-joon on teine joon ülevalt [1]. Fonti 𝄢 joonistus on sageli ülevalt lõigatud; nihutame võtit alla, et punktid langeksid F-joonega.
-                  const bassFLine = staffLinePositions[1];
-                  const bassClefYOffset = staffLinePositions.length >= 5 ? spacing * 0.6 : 0;
+                  // Viiulivõti: G-joon on teine joon ülevalt [1].
+                  const trebleGLine = staffLinePositions[1];
+                  // Bassivõti: F-joon (võtme kese) on neljas joon ülevalt [3].
+                  const bassFLine = staffLinePositions[3];
+                  const bassClefYOffset = 0;
                   const middleLineYStaff = centerY;
                   const staffSpace = spacing;
                   const clefFontSize = staffSpace * 6;

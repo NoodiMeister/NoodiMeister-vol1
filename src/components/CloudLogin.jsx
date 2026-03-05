@@ -100,9 +100,9 @@ function useCloudLoginWithProvider(mode = 'login', stayLoggedIn = false, onError
             console.log('[CloudLogin] Auth kinnitatud, suuname /app poole');
             requestAnimationFrame(() => {
               try {
-                if (typeof window !== 'undefined' && !window.closed) navigate('/app');
+                if (typeof window !== 'undefined') navigate('/app');
               } catch (navErr) {
-                console.warn('[CloudLogin] navigate viga (nt window.closed):', navErr);
+                console.warn('[CloudLogin] navigate viga:', navErr);
               }
             });
           } catch (e) {
