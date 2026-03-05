@@ -39,8 +39,22 @@ import { LOCALE_STORAGE_KEY, DEFAULT_LOCALE, LOCALES, createT } from './i18n';
 import html2canvas from 'html2canvas';
 import Soundfont from 'soundfont-player';
 
-// Globaalne JO-võtme väärtus faili alguses (vältib "Cannot access 'JA' before initialization" Vercel/minifitseerimisel)
+// Globaalsed noodigraafika konstantid faili alguses (vältivad "Cannot access before initialization" Vercel/minifitseerimisel)
 const JA = true;
+const YA = true;
+const LAYOUT = {
+  PAGE_WIDTH_MIN: 800,
+  PAGE_WIDTH_MAX: 1000,
+  PAGE_WIDTH_MAX_LANDSCAPE: 1400,
+  A4_HEIGHT_RATIO: 297 / 210,
+  STAFF_HEIGHT: 140,
+  SYSTEM_GAP: 120,
+  MARGIN_LEFT: 60,
+  MARGIN_RIGHT: 40,
+  CLEF_WIDTH: 45
+};
+const DEMO_MAX_BEATS = 8;
+const DEMO_MAX_MEASURES = 2;
 
 // Ikoonid laetakse dünaamiliselt, et vältida "Cannot access 'Tt' before initialization" (lucide-react bundle)
 const LUCIDE_ICONS = [
@@ -80,23 +94,6 @@ function LoggedInUser({ icons, t }) {
     </div>
   );
 }
-
-// Layout engine – A4 proportion, automaatne reavahetus (VexFlow loogika)
-const LAYOUT = {
-  PAGE_WIDTH_MIN: 800,
-  PAGE_WIDTH_MAX: 1000,
-  PAGE_WIDTH_MAX_LANDSCAPE: 1400,
-  A4_HEIGHT_RATIO: 297 / 210,
-  STAFF_HEIGHT: 140,
-  SYSTEM_GAP: 120,
-  MARGIN_LEFT: 60,
-  MARGIN_RIGHT: 40,
-  CLEF_WIDTH: 45
-};
-
-// Demo versioon: registreerimata kasutaja saab kuni 2 rida (8 takti)
-const DEMO_MAX_BEATS = 8;
-const DEMO_MAX_MEASURES = 2;
 
 // Arvuta süsteemid (read) – iga rida = eraldi Stave; toetab eeltakti, taktide arv rea kohta ja käsitsi rea/lehevahetused
 function computeLayout(measures, timeSignature, pixelsPerBeat, pageWidth, layoutOptions = {}) {
@@ -846,6 +843,7 @@ const FINGERING_RECORDER = {
 };
 
 function NoodiMeisterCore({ icons }) {
+  if (typeof YA === 'undefined') return null;
   const [locale, setLocale] = useState(() => {
     try {
       return localStorage.getItem(LOCALE_STORAGE_KEY) || DEFAULT_LOCALE;
@@ -2633,7 +2631,7 @@ function NoodiMeisterCore({ icons }) {
       }
       if (e.key === 'Escape') setSelectedTextboxId(null);
 
-      // JO-võti valitud: nooltega ↑↓ võtme nihutamine; noodid transponeeritakse vastavalt uuele helistikule
+      // JO-võti valitud: nooltega ↑↓ võtme nihutamine; noodid transponeeritakse sünkroonis kõigil joonestikel (sh Grand Staff)
       if (joClefFocused) {
         if (e.code === 'Escape') {
           e.preventDefault();
@@ -2649,7 +2647,7 @@ function NoodiMeisterCore({ icons }) {
             const semitones = (KEY_TO_SEMITONE[newKey] ?? 0) - (KEY_TO_SEMITONE[keySignature] ?? 0);
             if (semitones !== 0) {
               saveToHistory(notes);
-              setNotes(transposeNotes(notes, semitones));
+              setStaves((prev) => prev.map((staff) => ({ ...staff, notes: transposeNotes(staff.notes || [], semitones) })));
             }
             setKeySignature(newKey);
           }
