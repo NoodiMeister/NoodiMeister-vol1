@@ -195,6 +195,7 @@ function RhythmToolbar({ t = (k) => k }) {
       case '1/2': return 'half';
       case '1/8': return 'eighth';
       case '1/16': return 'sixteenth';
+      case '1/32': return 'thirtySecond';
       default: return 'quarter';
     }
   };
@@ -204,6 +205,7 @@ function RhythmToolbar({ t = (k) => k }) {
       case '1/2': return 'half';
       case '1/8': return 'eighth';
       case '1/16': return 'sixteenth';
+      case '1/32': return 'thirtySecond';
       default: return 'quarter';
     }
   };

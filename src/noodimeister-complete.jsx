@@ -958,8 +958,8 @@ function NoodiMeisterCore({ icons }) {
   ];
   const defaultPianoBraceId = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `piano-${Date.now()}`;
   const [staves, setStaves] = useState(() => [
-    { id: '1', instrumentId: 'piano', clefType: 'treble', notes: initialStaffNotes, braceGroupId: defaultPianoBraceId },
-    { id: '2', instrumentId: 'piano', clefType: 'bass', notes: [], braceGroupId: defaultPianoBraceId }
+    { id: '1', instrumentId: 'piano', clefType: 'treble', notes: initialStaffNotes, braceGroupId: defaultPianoBraceId, notationMode: 'traditional' },
+    { id: '2', instrumentId: 'piano', clefType: 'bass', notes: [], braceGroupId: defaultPianoBraceId, notationMode: 'traditional' }
   ]);
   const [activeStaffIndex, setActiveStaffIndex] = useState(0);
   /** Iga noodirida võib olla vertikaalselt nihutatud (px). Klõps real aktiveerib rea; ↑↓ liigutavad aktiivset rida 1px. */
@@ -2313,24 +2313,26 @@ function NoodiMeisterCore({ icons }) {
     }
   }, [tuningReferenceNote, tuningReferenceOctave, tuningReferenceHz, instrument]);
 
-  // Lisa uus noodirida valitud instrumendiga (noodivõti instrumendi konfiguratsioonist)
+  // Lisa uus noodirida valitud instrumendiga (noodivõti instrumendi konfiguratsioonist). Igal real oma notationMode (T/F/P).
   const addStaff = useCallback((instId) => {
     const cfg = INSTRUMENT_CONFIG_BASE[instId];
     const clef = (cfg?.defaultClef) || 'treble';
     const id = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `staff-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    setStaves((prev) => [...prev, { id, instrumentId: instId, clefType: clef, notes: [] }]);
+    const staffNotationMode = notationStyle === 'FIGURENOTES' ? 'figurenotes' : notationMode === 'vabanotatsioon' ? 'pedagogical' : 'traditional';
+    setStaves((prev) => [...prev, { id, instrumentId: instId, clefType: clef, notes: [], notationMode: staffNotationMode }]);
     setActiveStaffIndex((prev) => prev + 1);
-  }, []);
+  }, [notationStyle, notationMode]);
 
   // Klaveri sisestamine: kaks noodirida (viiulivõti + bassivõti), ühendatud ühe instrumendi süsteemina (sulgega)
   const addPianoStaff = useCallback(() => {
     const braceGroupId = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `piano-${Date.now()}`;
     const id1 = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `staff-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     const id2 = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `staff-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const staffMode = notationStyle === 'FIGURENOTES' ? 'figurenotes' : notationMode === 'vabanotatsioon' ? 'pedagogical' : 'traditional';
     setStaves((prev) => [
       ...prev,
-      { id: id1, instrumentId: 'piano', clefType: 'treble', notes: [], braceGroupId },
-      { id: id2, instrumentId: 'piano', clefType: 'bass', notes: [], braceGroupId }
+      { id: id1, instrumentId: 'piano', clefType: 'treble', notes: [], braceGroupId, notationMode: staffMode },
+      { id: id2, instrumentId: 'piano', clefType: 'bass', notes: [], braceGroupId, notationMode: staffMode }
     ]);
     setActiveStaffIndex((prev) => prev + 1);
   }, []);
@@ -5609,7 +5611,7 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
   }, [measures, allNotes]);
 
   const durationLabelToNoteSymbolType = (dur) => {
-    const map = { '1/1': 'whole', '1/2': 'half', '1/4': 'quarter', '1/8': 'eighth', '1/16': 'sixteenth', '1/32': 'sixteenth' };
+    const map = { '1/1': 'whole', '1/2': 'half', '1/4': 'quarter', '1/8': 'eighth', '1/16': 'sixteenth', '1/32': 'thirtySecond' };
     return map[dur] || 'quarter';
   };
   const effectiveMeasures = React.useMemo(() => (measures || []).map((m, i) => ({ ...m, notes: notesByMeasure[i] || [] })), [measures, notesByMeasure]);

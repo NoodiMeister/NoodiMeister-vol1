@@ -12,7 +12,7 @@ import {
  * Näide: <Rest type="quarter" x={80} centerY={100} />
  *
  * Props:
- *   type: 'whole' | 'half' | 'quarter' | 'eighth' | 'sixteenth'
+ *   type: 'whole' | 'half' | 'quarter' | 'eighth' | 'sixteenth' | 'thirtySecond'
  *   x: horisontaalne positsioon (vaikimisi 0)
  *   centerY: joonestiku vertikaalne keskpunkt (pausi vertikaalne keskpunkt arvutatakse sellest)
  *   staffSpace: ühe vahe kõrgus (vaikimisi STAFF_SPACE)

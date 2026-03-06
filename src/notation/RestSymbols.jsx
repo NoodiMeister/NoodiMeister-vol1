@@ -73,12 +73,26 @@ export function SixteenthRestSymbol({ x = 0, y = 0, staffSpace = STAFF_SPACE }) 
   );
 }
 
+/** Kuuskümnendikpaus (32nd Rest) – SMuFL rest32nd (Leland). */
+export function ThirtySecondRestSymbol({ x = 0, y = 0, staffSpace = STAFF_SPACE }) {
+  return (
+    <SmuflGlyph
+      x={x}
+      y={y}
+      glyph={SMUFL_GLYPH.rest32nd}
+      fontSize={staffSpace * 4.5}
+      fill={DEFAULT_FILL}
+    />
+  );
+}
+
 const REST_SYMBOLS = {
   whole: WholeRestSymbol,
   half: HalfRestSymbol,
   quarter: QuarterRestSymbol,
   eighth: EighthRestSymbol,
   sixteenth: SixteenthRestSymbol,
+  thirtySecond: ThirtySecondRestSymbol,
 };
 
 export function RestSymbol({ type, x = 0, y = 0, staffSpace = STAFF_SPACE }) {

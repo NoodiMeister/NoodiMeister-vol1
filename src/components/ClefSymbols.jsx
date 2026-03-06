@@ -87,8 +87,8 @@ export function JoClefSymbol({
   );
 }
 
-// ——— Viiulivõti (Treble Clef) ———
-// Ankurpunkt: y = G-joone asukoht (teine joon alt üles = 3*staffSpace kui ülemine joon on 0).
+// ——— Viiulivõti (Treble Clef) U+E050 ———
+// Leland: y = G-joone asukoht (altpoolt teine noodijoon). Nihutusega viime spiraali keskpunkti täpselt selle joonega ühtima.
 
 export function TrebleClefSymbol({
   x,
@@ -97,26 +97,27 @@ export function TrebleClefSymbol({
   height,
   fill = 'black',
 }) {
-  const staffSpace = staffSpaceProp ?? (height != null ? height / 7 : 10);
-  const fontSize = height ?? staffSpace * 7;
-  // SMuFL: gClef glyph. We keep the same +0.5 staffSpace visual nudge.
+  const staffSpace = staffSpaceProp ?? (height != null ? height / 4 : 10);
+  const fontSize = staffSpace * 4; // Leland: 4× staff-space
+  const spiralAlignDy = staffSpace * 0.35; // Leland gClef: spiraal veidi allapoole glyph keskpunktist
   return (
     <SmuflGlyph
       x={x}
-      y={y + staffSpace * 0.5}
+      y={y + spiralAlignDy}
       glyph={SMUFL_GLYPH.gClef}
       fontSize={fontSize}
       fill={fill}
+      dominantBaseline="middle"
     />
   );
 }
 
 /**
- * Viiulivõti joonestikul. x tagab vähemalt staffSpace veerise vasakust äärest
- * (ei puutu kokku takti algusjoonega). y peab olema G-joone asukoht (3*staffSpace kui ülemine joon = 0).
+ * Viiulivõti joonestikul. x tagab vähemalt staffSpace veerise vasakust äärest.
+ * y = G-joone asukoht (altpoolt teine noodijoon). Leland: fontSize = staffSpace * 4.
  */
 export function StaffTrebleClef({ x, y, height, staffSpace, fill = '#000' }) {
-  const space = staffSpace ?? (height != null ? height / 7 : 10);
+  const space = staffSpace ?? (height != null ? height / 4 : 10);
   const xSafe = Math.max(x ?? 0, space);
   return (
     <TrebleClefSymbol
@@ -129,6 +130,9 @@ export function StaffTrebleClef({ x, y, height, staffSpace, fill = '#000' }) {
   );
 }
 
+// ——— Bassivõti (Bass Clef) U+E062 ———
+// Leland: y = F-joone asukoht (neljas noodijoon ülevalt). Põhiosa ja punktid ümber selle joone.
+
 export function BassClefSymbol({
   x,
   y,
@@ -136,8 +140,8 @@ export function BassClefSymbol({
   height,
   fill = 'var(--note-fill, #000)',
 }) {
-  const staffSpace = staffSpaceProp ?? (height != null ? height / 3.5 : 10);
-  const fontSize = height ?? staffSpace * 3.5;
+  const staffSpace = staffSpaceProp ?? (height != null ? height / 4 : 10);
+  const fontSize = staffSpace * 4; // Leland: 4× staff-space
   return (
     <SmuflGlyph
       x={x}
@@ -145,6 +149,7 @@ export function BassClefSymbol({
       glyph={SMUFL_GLYPH.fClef}
       fontSize={fontSize}
       fill={fill}
+      dominantBaseline="middle"
     />
   );
 }

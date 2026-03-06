@@ -134,6 +134,16 @@ export function SixteenthNoteSymbol({ cx = 0, cy = 0, staffSpace = STAFF_SPACE, 
   );
 }
 
+/** Kuuskümnendiknoot (3 lippu) – Leland/SMuFL. */
+export function ThirtySecondNoteSymbol({ cx = 0, cy = 0, staffSpace = STAFF_SPACE, stemUp = true, stemLength, hideFlags }) {
+  return (
+    <g>
+      <QuarterNoteSymbol cx={cx} cy={cy} staffSpace={staffSpace} stemUp={stemUp} stemLength={stemLength} />
+      {!hideFlags && <Flags cx={cx} cy={cy} staffSpace={staffSpace} stemUp={stemUp} count={3} stemLength={stemLength} />}
+    </g>
+  );
+}
+
 /**
  * Peamine komponent, mis valib õige sümboli.
  * hideFlags / stemLength: talatud nootidel – lipud peidetud, vars ulatub talani.
@@ -149,6 +159,8 @@ export function NoteSymbol({ type, cx = 0, cy = 0, staffSpace = STAFF_SPACE, ste
       return <EighthNoteSymbol {...props} />;
     case 'sixteenth':
       return <SixteenthNoteSymbol {...props} />;
+    case 'thirtySecond':
+      return <ThirtySecondNoteSymbol {...props} />;
     case 'quarter':
     default:
       return <QuarterNoteSymbol cx={cx} cy={cy} staffSpace={staffSpace} stemUp={stemUp} stemLength={stemLength} />;

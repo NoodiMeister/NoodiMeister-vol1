@@ -184,11 +184,12 @@ export function TraditionalNotationView({
   const spacing = staffSpaceProp ?? STAFF_SPACE;
   const centerY = timelineHeight / 2;
   const staffLinePositions = getStaffLinePositions(centerY, staffLines, spacing);
-  const trebleGLine = staffLinePositions[1];
-  const bassFLine = staffLinePositions[3];
+  // Leland: Viiulivõti G-joonel (altpoolt 2. joon = index 3), Bassivõti F-joonel (ülevalt 4. joon = index 1)
+  const trebleGLine = staffLinePositions[3]; // G4
+  const bassFLine = staffLinePositions[1];    // F3
   const middleLineY = centerY;
   const resolvePitchY = (pitch, octave) => (typeof getPitchY === 'function' ? getPitchY(pitch, octave) : centerY);
-  const clefFontSize = spacing * 6;
+  const clefFontSize = spacing * 4; // Leland: 4× staff-space
   const clefX = 24;
   const firstLineY = staffLinePositions[0];
   const lastLineY = staffLinePositions[staffLinePositions.length - 1];
