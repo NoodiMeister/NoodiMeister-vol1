@@ -36,6 +36,7 @@ import {
   KEY_TO_SEMITONE,
 } from './utils/notationConstants';
 import { FIGURENOTES_COLORS, getFigureSymbol } from './utils/figurenotes';
+import { getPedagogicalSymbol } from './notation/PedagogicalLogic';
 import { FigurenotesBlockIcon } from './toolboxes';
 import { FigurenotesView } from './views/FigurenotesView';
 import { TraditionalNotationView } from './views/TraditionalNotationView';
@@ -873,6 +874,8 @@ function NoodiMeisterCore({ icons }) {
   useEffect(() => {
     if (!pianoStripVisible) return;
     const handleKeyDown = (e) => {
+      const tag = e.target?.tagName?.toUpperCase?.();
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
       if (!e.altKey || e.repeat) return;
       if (e.key === 'ArrowRight') {
         e.preventDefault();
@@ -1021,8 +1024,9 @@ function NoodiMeisterCore({ icons }) {
         const braceGroupId = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `piano-${Date.now()}`;
         const id1 = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `staff-${Date.now()}-a`;
         const id2 = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `staff-${Date.now()}-b`;
-        const trebleStaff = { id: id1, instrumentId: 'piano', clefType: 'treble', notes: inBraceGroup ? prev[idx].notes : [], braceGroupId };
-        const bassStaff = { id: id2, instrumentId: 'piano', clefType: 'bass', notes: inBraceGroup ? prev[idx + 1].notes : [], braceGroupId };
+        const preservedMode = prev[idx].notationMode ?? 'traditional';
+        const trebleStaff = { id: id1, instrumentId: 'piano', clefType: 'treble', notes: inBraceGroup ? prev[idx].notes : [], braceGroupId, notationMode: preservedMode };
+        const bassStaff = { id: id2, instrumentId: 'piano', clefType: 'bass', notes: inBraceGroup ? prev[idx + 1].notes : [], braceGroupId, notationMode: preservedMode };
         if (inBraceGroup) {
           const next = prev.slice(0, idx).concat([trebleStaff, bassStaff], prev.slice(idx + 2));
           return next;
@@ -1031,12 +1035,12 @@ function NoodiMeisterCore({ icons }) {
         return next;
       }
       if (inBraceGroup) {
-        const singleStaff = { ...prev[idx], id: prev[idx].id, instrumentId: instId, clefType: (cfg?.defaultClef) || 'treble', notes: prev[idx].notes, braceGroupId: undefined };
+        const singleStaff = { ...prev[idx], id: prev[idx].id, instrumentId: instId, clefType: (cfg?.defaultClef) || 'treble', notes: prev[idx].notes, braceGroupId: undefined, notationMode: prev[idx].notationMode ?? 'traditional' };
         const next = prev.slice(0, idx).concat([singleStaff], prev.slice(idx + 2));
         return next;
       }
       const next = prev.slice();
-      next[idx] = { ...next[idx], instrumentId: instId, clefType: (cfg?.defaultClef) || 'treble' };
+      next[idx] = { ...next[idx], instrumentId: instId, clefType: (cfg?.defaultClef) || 'treble', notationMode: next[idx].notationMode ?? 'traditional' };
       return next;
     });
   }, [activeStaffIndex]);
@@ -2335,7 +2339,7 @@ function NoodiMeisterCore({ icons }) {
       { id: id2, instrumentId: 'piano', clefType: 'bass', notes: [], braceGroupId, notationMode: staffMode }
     ]);
     setActiveStaffIndex((prev) => prev + 1);
-  }, []);
+  }, [notationStyle, notationMode]);
 
   // Handle toolbox selection (clickedIndex = option index when clicking, else uses selectedOptionIndex for keyboard)
   const addNoteAtCursor = useCallback((pitch, octave, accidental = 0, options = {}) => {
@@ -3593,7 +3597,7 @@ function NoodiMeisterCore({ icons }) {
 
       {/* Uue töö seadistuse dialoog – notatsioon, taktimõõt, loo nimi, autor jne */}
       {newWorkSetupOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-amber-950/70 backdrop-blur-sm p-6" onClick={() => {}}>
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-amber-950/70 backdrop-blur-sm p-6" onClick={() => {}}>
           <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-hidden border-2 border-amber-200 flex flex-col" onClick={e => e.stopPropagation()}>
             <div className="bg-gradient-to-r from-amber-600 to-amber-700 text-white px-6 py-4 flex items-center justify-between shrink-0">
               <h2 className="text-lg font-bold flex items-center gap-2"><Plus className="w-5 h-5" /> Uue töö seadistus</h2>
@@ -3775,7 +3779,7 @@ function NoodiMeisterCore({ icons }) {
 
       {/* Settings modal – Title, Author, Pickup (post-setup editing) */}
       {settingsOpen && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-amber-950/60 backdrop-blur-sm p-6" onClick={() => setSettingsOpen(false)}>
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-amber-950/60 backdrop-blur-sm p-6" onClick={() => setSettingsOpen(false)}>
           <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden border-2 border-amber-200" onClick={e => e.stopPropagation()}>
             <div className="bg-gradient-to-r from-slate-600 to-slate-700 text-white px-6 py-4 flex items-center justify-between">
               <h2 className="text-lg font-bold flex items-center gap-2"><Settings className="w-5 h-5" /> Seaded</h2>
@@ -4145,7 +4149,7 @@ function NoodiMeisterCore({ icons }) {
 
       {/* Pilve salvestamise dialoog: vali kaust või loo uus */}
       {saveCloudDialogOpen && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-amber-950/60 backdrop-blur-sm p-6" onClick={() => setSaveCloudDialogOpen(false)}>
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-amber-950/60 backdrop-blur-sm p-6" onClick={() => setSaveCloudDialogOpen(false)}>
           <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden border-2 border-sky-200" onClick={e => e.stopPropagation()}>
             <div className="bg-gradient-to-r from-sky-600 to-sky-700 text-white px-6 py-4 flex items-center justify-between">
               <h2 className="text-lg font-bold flex items-center gap-2"><CloudUpload className="w-5 h-5" /> Salvesta Google Drivesse</h2>
@@ -4228,6 +4232,7 @@ function NoodiMeisterCore({ icons }) {
                       type="button"
                       onClick={() => {
                         setHeaderMenuOpen(null);
+                        setPianoStripVisible(false);
                         setSearchParams({ new: '1' });
                         setNewWorkSetupOpen(true);
                       }}
@@ -4254,14 +4259,14 @@ function NoodiMeisterCore({ icons }) {
                     <div className="my-1 border-t border-slate-600" />
                     <button
                       type="button"
-                      onClick={() => { saveToCloud(); setHeaderMenuOpen(null); }}
+                      onClick={() => { setPianoStripVisible(false); saveToCloud(); setHeaderMenuOpen(null); }}
                       className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-amber-50 hover:bg-slate-600"
                     >
                       <CloudUpload className="w-4 h-4" /> {t('file.saveCloud')}
                     </button>
                     <button
                       type="button"
-                      onClick={() => { loadFromCloud(); setHeaderMenuOpen(null); }}
+                      onClick={() => { setPianoStripVisible(false); loadFromCloud(); setHeaderMenuOpen(null); }}
                       className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-amber-50 hover:bg-slate-600"
                     >
                       <CloudDownload className="w-4 h-4" /> {t('file.loadCloud')}
@@ -4323,7 +4328,7 @@ function NoodiMeisterCore({ icons }) {
                         <div className="absolute left-full top-0 ml-0 min-w-[220px] py-1 rounded-lg bg-slate-700 border border-slate-600 shadow-xl z-50">
                           <button
                             type="button"
-                            onClick={() => { setSettingsOpen(true); setHeaderMenuOpen(null); setFileSubmenuOpen(null); }}
+                            onClick={() => { setPianoStripVisible(false); setSettingsOpen(true); setHeaderMenuOpen(null); setFileSubmenuOpen(null); }}
                             className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-amber-50 hover:bg-slate-600"
                           >
                             <Settings className="w-4 h-4" /> {t('file.settingsSub')}
@@ -4753,6 +4758,14 @@ function NoodiMeisterCore({ icons }) {
                     <div className="flex flex-wrap gap-1.5 mb-2 pb-2 border-b border-amber-200 w-full">
                       <button
                         type="button"
+                        onClick={() => { addStaff('single-staff-treble'); dirtyRef.current = true; }}
+                        className="px-2 py-1 rounded text-xs font-medium bg-green-100 text-green-800 hover:bg-green-200 border border-green-400"
+                        title={t('toolbox.addInstrument')}
+                      >
+                        {t('toolbox.addInstrument')}
+                      </button>
+                      <button
+                        type="button"
                         onClick={() => {
                           const opts = toolboxes.instruments?.options ?? [];
                           const opt = opts[selectedOptionIndex]?.type === 'option' ? opts[selectedOptionIndex] : opts.find((o) => o.type === 'option');
@@ -4775,6 +4788,27 @@ function NoodiMeisterCore({ icons }) {
                       >
                         {t('inst.removeStaff')}
                       </button>
+                      <span className="text-xs text-amber-800 font-medium ml-1">{t('inst.notationMode')}:</span>
+                      {['traditional', 'figurenotes', 'pedagogical'].map((mode) => {
+                        const isActive = (activeStaff?.notationMode ?? 'traditional') === mode;
+                        const label = mode === 'traditional' ? t('inst.modeT') : mode === 'figurenotes' ? t('inst.modeF') : t('inst.modeP');
+                        return (
+                          <button
+                            key={mode}
+                            type="button"
+                            onClick={() => {
+                              setStaves((prev) => prev.map((s, i) => i === activeStaffIndex ? { ...s, notationMode: mode } : s));
+                              setNotationStyle(mode === 'figurenotes' ? 'FIGURENOTES' : 'TRADITIONAL');
+                              setNotationMode(mode === 'pedagogical' ? 'vabanotatsioon' : mode === 'figurenotes' ? 'figurenotes' : 'traditional');
+                              dirtyRef.current = true;
+                            }}
+                            className={`px-1.5 py-0.5 rounded text-xs font-medium ${isActive ? 'bg-amber-400 text-amber-900 ring-1 ring-amber-600' : 'bg-amber-100 text-amber-800 hover:bg-amber-200'} border border-amber-300`}
+                            title={label}
+                          >
+                            {mode === 'traditional' ? 'T' : mode === 'figurenotes' ? 'F' : 'P'}
+                          </button>
+                        );
+                      })}
                     </div>
                   )}
                   {activeToolbox === 'clefs' && toolboxes.clefs?.options && (
@@ -4890,7 +4924,7 @@ function NoodiMeisterCore({ icons }) {
                       <h4 className="text-xs font-bold text-amber-900 uppercase mb-2">{t('layout.projectFile')}</h4>
                       <div className="flex flex-col gap-2">
                         <button type="button" onClick={downloadProject} className="w-full py-2 px-3 rounded-lg bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-500">{t('layout.saveProject')}</button>
-                        <button type="button" onClick={() => projectFileInputRef.current?.click()} className="w-full py-2 px-3 rounded-lg bg-slate-600 text-white text-sm font-semibold hover:bg-slate-500">{t('layout.openProject')}</button>
+                        <button type="button" onClick={() => { setPianoStripVisible(false); projectFileInputRef.current?.click(); }} className="w-full py-2 px-3 rounded-lg bg-slate-600 text-white text-sm font-semibold hover:bg-slate-500">{t('layout.openProject')}</button>
                         <input ref={projectFileInputRef} type="file" accept=".json,.noodimeister,application/json" className="hidden" onChange={handleOpenProjectFile} />
                       </div>
                     </div>
@@ -5492,9 +5526,11 @@ function NoodiMeisterCore({ icons }) {
                       height={100}
                       showMidiSelect={true}
                       onNotePlay={handleNotePlay}
-                      figurenotesColors={notationStyle === 'FIGURENOTES' || notationMode === 'pedagogical' ? FIGURENOTES_COLORS : null}
+                      figurenotesColors={notationStyle === 'FIGURENOTES' ? FIGURENOTES_COLORS : null}
+                      getKeyColor={notationMode === 'vabanotatsioon' ? (pitch, oct) => getPedagogicalSymbol(keySignature, joClefStaffPosition, pitch, oct).color : null}
                       keySignature={keySignature}
-                      keyboardPlaysPiano={pianoStripVisible && (notationStyle === 'FIGURENOTES' || notationMode === 'pedagogical')}
+                      keyboardPlaysPiano={pianoStripVisible && (notationStyle === 'FIGURENOTES' || notationMode === 'vabanotatsioon')}
+                      ignoreKeyboardWhenModalOpen={newWorkSetupOpen || saveCloudDialogOpen || settingsOpen}
                     />
                   </div>
                 </div>

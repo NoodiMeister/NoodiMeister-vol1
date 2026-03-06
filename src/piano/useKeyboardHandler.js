@@ -14,8 +14,9 @@ import { buildKeyboardMap } from './keyboardMap.js';
  * @param {(pitch: number) => void} stopNote
  * @param {boolean} [enabled=true]
  * @param {boolean} [keyboardPlaysPiano=false] – true: ASDFGHJ/WETYUOP jne mängivad klaverit (ära reserveeri A–G noodisise jaoks)
+ * @param {boolean} [ignoreWhenModalOpen=false] – true: kui dialoog (Uue faili jms) on avatud, klahve ei töötle
  */
-export function useKeyboardHandler(firstNote, lastNote, playNote, stopNote, enabled = true, keyboardPlaysPiano = false) {
+export function useKeyboardHandler(firstNote, lastNote, playNote, stopNote, enabled = true, keyboardPlaysPiano = false, ignoreWhenModalOpen = false) {
   const keyMap = useMemo(
     () => buildKeyboardMap(firstNote, lastNote),
     [firstNote, lastNote]
@@ -29,6 +30,9 @@ export function useKeyboardHandler(firstNote, lastNote, playNote, stopNote, enab
 
     const onKeyDown = (e) => {
       if (e.repeat) return;
+      const tag = e.target?.tagName?.toUpperCase?.();
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+      if (ignoreWhenModalOpen) return;
       // Tavarežiimis reserveeri A–G noodisise kiirklahvide jaoks; Figurenotes/pedagoogilises režiimis luba need klaveriks.
       if (reserveLetterKeys && !e.metaKey && !e.ctrlKey && !e.altKey && /^[a-g]$/i.test(e.key || '')) return;
       const code = e.code;
@@ -41,6 +45,9 @@ export function useKeyboardHandler(firstNote, lastNote, playNote, stopNote, enab
     };
 
     const onKeyUp = (e) => {
+      const tag = e.target?.tagName?.toUpperCase?.();
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+      if (ignoreWhenModalOpen) return;
       if (reserveLetterKeys && !e.metaKey && !e.ctrlKey && !e.altKey && /^[a-g]$/i.test(e.key || '')) return;
       const code = e.code;
       const midi = keyMap.get(code);
@@ -56,5 +63,5 @@ export function useKeyboardHandler(firstNote, lastNote, playNote, stopNote, enab
       window.removeEventListener('keydown', onKeyDown, { capture: true });
       window.removeEventListener('keyup', onKeyUp, { capture: true });
     };
-  }, [enabled, keyboardPlaysPiano, keyMap, playNote, stopNote]);
+  }, [enabled, keyboardPlaysPiano, ignoreWhenModalOpen, keyMap, playNote, stopNote]);
 }

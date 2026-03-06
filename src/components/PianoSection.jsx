@@ -99,6 +99,8 @@ export function PianoSection({
   useEffect(() => {
     if (!visible) return;
     const handleKeyDown = (e) => {
+      const tag = e.target?.tagName?.toUpperCase?.();
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
       if (!e.altKey || e.repeat) return;
       if (e.key === 'ArrowRight') {
         e.preventDefault();

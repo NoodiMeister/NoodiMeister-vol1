@@ -103,6 +103,8 @@ export function PianoVisual({
   height = 160,
   /** Figuurnotatsioon: värviallikas FIGURE_SHAPES_DATA (C, D, …). Null = tavarežiim, klassikaline must-valge klaver. */
   figurenotesColors = null,
+  /** Pedagoogiline: (natural, octave) => hex – värv JO suhtes; kui antud, kasutatakse getKeyColor asemel figurenotesColors */
+  getKeyColor = null,
   /** Helistik JO/LE teksti jaoks (nt 'C', 'F') */
   keySignature = 'C',
 }) {
@@ -114,7 +116,7 @@ export function PianoVisual({
   const whiteWidth = white.length > 0 ? 100 / white.length : 0;
   const blackWidthPct = whiteWidth * BLACK_WIDTH_RATIO;
   const activeSet = useMemo(() => new Set(activeNotes), [activeNotes]);
-  const useFigurenotes = figurenotesColors && Object.keys(figurenotesColors).length > 0;
+  const useFigurenotes = (figurenotesColors && Object.keys(figurenotesColors).length > 0) || typeof getKeyColor === 'function';
 
   const handlePointerDown = (e, midi) => {
     e.preventDefault();
@@ -136,8 +138,9 @@ export function PianoVisual({
     const natural = NATURAL_PITCH_BY_MIDI_MOD[midi % 12];
     if (!natural) return base;
     const octave = midiToOctave(midi);
-    const figureStyle = getFigureStyle(natural, octave);
-    const fillColor = figureStyle.fill ?? figurenotesColors[natural];
+    const fillColor = typeof getKeyColor === 'function'
+      ? getKeyColor(natural, octave)
+      : (getFigureStyle(natural, octave).fill ?? figurenotesColors?.[natural]);
     if (!fillColor) return base;
     const textColor = natural === 'A' || natural === 'E' ? '#000000' : '#ffffff';
     return {
