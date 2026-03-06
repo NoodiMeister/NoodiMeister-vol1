@@ -1,7 +1,45 @@
 /**
  * Rütmi tööriistakast: visuaalsed sümbolid (noodid, pausid, rütmipatternid).
+ * Figurenotes režiimis: rütmi pikkust näidatakse hallide klotsidena (1× = 1/4, 2× = 1/2 jne).
  */
 import React from 'react';
+
+const FIGURE_BLOCK_GRAY = '#9ca3af';
+
+/** Vältuse kordaja võrreldes veerandnoodiga (1/4 = 1, 1/2 = 2, 1/1 = 4). */
+const DURATION_TO_MULTIPLIER = {
+  '1/32': 0.25, '1/16': 0.5, '1/8': 0.5, '1/4': 1, '1/2': 2, '1/1': 4,
+};
+
+/**
+ * Figurenotes rütmi klots: hall neutraalne kujund (ruudu kuju), laius vastavalt vältusele.
+ * Kasutada rütmi tööriistakastis, kui notationStyle === 'FIGURENOTES'.
+ */
+export function FigurenotesBlockIcon({ duration, className = 'w-8 h-5' }) {
+  const d = duration && (duration === 'rest' || duration === 'dotted' ? '1/4' : duration);
+  const mult = DURATION_TO_MULTIPLIER[d] ?? 1;
+  const boxW = 24;
+  const boxH = 20;
+  const blockW = Math.max(8, Math.min(20, (boxW * mult) / Math.ceil(mult)));
+  const count = Math.ceil(mult);
+  return (
+    <svg viewBox={`0 0 ${boxW} ${boxH}`} className={className} aria-hidden="true">
+      {Array.from({ length: count }, (_, i) => (
+        <rect
+          key={i}
+          x={2 + i * (blockW + 2)}
+          y={2}
+          width={blockW}
+          height={boxH - 4}
+          rx={1}
+          fill={FIGURE_BLOCK_GRAY}
+          stroke="#6b7280"
+          strokeWidth="0.8"
+        />
+      ))}
+    </svg>
+  );
+}
 
 export const RHYTHM_SYLLABLE_IMAGES = {
   '1/4': '/ta.svg',

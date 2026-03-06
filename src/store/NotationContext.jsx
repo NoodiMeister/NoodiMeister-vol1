@@ -29,13 +29,21 @@ export function getEffectiveDuration(durationLabel, isDotted = false) {
 
 const defaultTimeSignature = { beats: 4, beatUnit: 4 };
 
-/** Ühe instrumendi andmed: id, name, clef, notes. */
-function createInstrument(id, name, clef, notes = []) {
-  return { id, name, clef, notes: notes ?? [] };
+/** Ühe instrumendi andmed: id, name, clef, notationMode, notes. */
+function createInstrument(id, name, clef, notes = [], notationMode = 'traditional') {
+  return { id, name, clef, notationMode: notationMode ?? 'traditional', notes: notes ?? [] };
 }
 
+/** Instrumentide eelvalikud: nimi, võti, ulatus. */
+export const INSTRUMENT_PRESETS = {
+  piano: { name: 'Klaver', clef: 'treble', range: ['A0', 'C8'] },
+  violin: { name: 'Viiul', clef: 'treble', range: ['G3', 'A7'] },
+  voice: { name: 'Laul', clef: 'treble', range: ['C3', 'C6'] },
+  bass: { name: 'Basskitarr', clef: 'bass', range: ['E1', 'G3'] },
+};
+
 const DEFAULT_INSTRUMENTS = [
-  createInstrument('default', 'Klaver', 'treble', []),
+  createInstrument('default', 'Klaver', 'treble', [], 'traditional'),
 ];
 
 export function NotationProvider({ children }) {
@@ -51,6 +59,7 @@ export function NotationProvider({ children }) {
   const [ghostPitch, setGhostPitchState] = useState('C');
   const [ghostOctave, setGhostOctaveState] = useState(4);
   const [notationStyle, setNotationStyleState] = useState('TRADITIONAL'); // 'TRADITIONAL' | 'FIGURENOTES'
+  const [notationMode, setNotationModeState] = useState('traditional'); // 'traditional' | 'vabanotatsioon' | 'figurenotes'
   const [globalSpacingMultiplier, setGlobalSpacingMultiplierState] = useState(1.0);
   const [staffSpacing, setStaffSpacingState] = useState(120); // Vertikaalne vahe joonestikute vahel (px), keskkohast keskkohani
   const [measureWidthMultiplier, setMeasureWidthMultiplierState] = useState(1.0); // Horisontaalne kordaja
@@ -85,12 +94,25 @@ export function NotationProvider({ children }) {
   const setActiveInstrumentId = useCallback((id) => setActiveInstrumentIdState(id), []);
   const addInstrument = useCallback((options = {}) => {
     const id = options.id ?? `inst-${Date.now()}`;
-    const name = options.name ?? 'Instrument';
-    const clef = options.clef ?? 'treble';
-    setInstrumentsState((prev) => [...prev, createInstrument(id, name, clef, [])]);
+    let name = options.name ?? 'Instrument';
+    let clef = options.clef ?? 'treble';
+    let notationMode = options.notationMode ?? 'traditional';
+    if (options.preset && INSTRUMENT_PRESETS[options.preset]) {
+      const preset = INSTRUMENT_PRESETS[options.preset];
+      name = preset.name;
+      clef = preset.clef;
+    }
+    setInstrumentsState((prev) => [...prev, createInstrument(id, name, clef, [], notationMode)]);
     setActiveInstrumentIdState(id);
     return id;
   }, []);
+
+  /** Muudab instrumendi tüüpi vastavalt eelvalikule (preset key). */
+  const changeInstrument = useCallback((instrumentId, presetKey) => {
+    const preset = INSTRUMENT_PRESETS[presetKey];
+    if (!preset) return;
+    updateInstrument(instrumentId, { name: preset.name, clef: preset.clef });
+  }, [updateInstrument]);
   const removeInstrument = useCallback((instrumentId) => {
     setInstrumentsState((prev) => {
       const next = prev.filter((i) => i.id !== instrumentId);
@@ -110,6 +132,14 @@ export function NotationProvider({ children }) {
   const setGhostPitch = useCallback((p) => setGhostPitchState(p), []);
   const setGhostOctave = useCallback((o) => setGhostOctaveState(o), []);
   const setNotationStyle = useCallback((s) => setNotationStyleState(s), []);
+  const setNotationMode = useCallback((m) => setNotationModeState(m), []);
+  /** Režiimi vahetus: traditsioonilisele minnes sunnib viiulivõtme peale, kui praegu on JO-võti. */
+  const switchNotationMode = useCallback((newMode) => {
+    setNotationModeState(newMode);
+    if (newMode === 'traditional' && clefType === 'jo') {
+      setClefType('treble');
+    }
+  }, [clefType, setClefType]);
   const setGlobalSpacingMultiplier = useCallback((v) => setGlobalSpacingMultiplierState(typeof v === 'number' ? v : 1), []);
   const setStaffSpacing = useCallback((v) => setStaffSpacingState(typeof v === 'number' ? v : 120), []);
   const setMeasureWidthMultiplier = useCallback((v) => setMeasureWidthMultiplierState(typeof v === 'number' ? v : 1), []);
@@ -199,6 +229,7 @@ export function NotationProvider({ children }) {
     addInstrument,
     removeInstrument,
     updateInstrument,
+    changeInstrument,
     clefType,
     setClefType,
     cursorPosition,
@@ -209,6 +240,9 @@ export function NotationProvider({ children }) {
     setGhostOctave,
     notationStyle,
     setNotationStyle,
+    notationMode,
+    setNotationMode,
+    switchNotationMode,
     globalSpacingMultiplier,
     setGlobalSpacingMultiplier,
     staffSpacing,
@@ -237,6 +271,7 @@ export function NotationProvider({ children }) {
     ghostPitch,
     ghostOctave,
     notationStyle,
+    notationMode,
     globalSpacingMultiplier,
     staffSpacing,
     measureWidthMultiplier,

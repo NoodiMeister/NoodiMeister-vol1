@@ -6,12 +6,12 @@
  */
 import React from 'react';
 import { JoClefSymbol, TrebleClefSymbol, BassClefSymbol } from '../components/ClefSymbols';
-import { NoteHead } from '../components/NoteHead';
-import { NoteSymbol } from '../notation/NoteSymbols';
 import { RhythmSyllableLabel } from '../components/RhythmSyllableLabel';
 import { getJoName } from '../notation/joNames';
 import { getRhythmSyllableForNote } from '../notation/rhythmSyllables';
 import { expandEmojiShortcuts } from '../utils/emojiShortcuts';
+import { SmuflGlyph } from '../notation/smufl/SmuflGlyph';
+import { SMUFL_GLYPH, smuflRestForDurationLabel } from '../notation/smufl/glyphs';
 import {
   getStaffLinePositions,
   getYFromStaffPosition,
@@ -19,6 +19,7 @@ import {
   getNoteheadRx,
   getLedgerHalfWidth,
   getVerticalPosition,
+  getStemLength,
 } from '../notation/StaffConstants';
 import {
   computeBeamGroups,
@@ -32,13 +33,67 @@ const PAGE_BREAK_GAP = 80;
 const STAFF_SPACE = 10;
 const barLineWidth = 2;
 
+// SMuFL noteheads (Leland)
+const SMUFL = {
+  noteheadWhole: '\uE0A2',
+  noteheadHalf: '\uE0A3',
+  noteheadBlack: '\uE0A4',
+};
+
 function StaffClefSymbol({ x, y, height, clefType, fill = '#000', staffSpace = 10 }) {
   if (clefType === 'treble') return <TrebleClefSymbol x={x} y={y} height={height} fill={fill} />;
   if (clefType === 'bass') return <BassClefSymbol x={x} y={y} height={height} fill={fill} staffSpace={staffSpace} />;
   if (clefType === 'alto' || clefType === 'tenor') {
-    return <text x={x} y={y} textAnchor="middle" dominantBaseline="middle" fontSize={height * 0.5} fontFamily="serif" fill={fill}>C</text>;
+    return (
+      <SmuflGlyph
+        x={x}
+        y={y}
+        glyph={SMUFL_GLYPH.cClef}
+        fontSize={height ?? staffSpace * 7}
+        fill={fill}
+      />
+    );
   }
   return <TrebleClefSymbol x={x} y={y} height={height} fill={fill} />;
+}
+
+function getNoteheadGlyph(durationLabel) {
+  const dur = durationLabel || '1/4';
+  if (dur === '1/1') return SMUFL.noteheadWhole;
+  if (dur === '1/2') return SMUFL.noteheadHalf;
+  return SMUFL.noteheadBlack;
+}
+
+function getFlagCount(durationLabel) {
+  const dur = durationLabel || '1/4';
+  if (dur === '1/8') return 1;
+  if (dur === '1/16') return 2;
+  if (dur === '1/32') return 3;
+  return 0;
+}
+
+function Flags({ stemX, stemEndY, staffSpace, stemUp, count = 1 }) {
+  const elements = [];
+  const strokeW = staffSpace * 0.15;
+  const flagGap = staffSpace * 0.8;
+  for (let i = 0; i < count; i++) {
+    const yOffset = i * flagGap * (stemUp ? 1 : -1);
+    const startY = stemEndY + yOffset;
+    const curve = stemUp
+      ? `M ${stemX} ${startY} c ${staffSpace * 0.8} ${staffSpace * 0.2} ${staffSpace * 1.2} ${staffSpace * 1.5} ${staffSpace * 1.2} ${staffSpace * 2.5}`
+      : `M ${stemX} ${startY} c ${staffSpace * 0.8} ${-staffSpace * 0.2} ${staffSpace * 1.2} ${-staffSpace * 1.5} ${staffSpace * 1.2} ${-staffSpace * 2.5}`;
+    elements.push(
+      <path
+        key={i}
+        d={curve}
+        fill="none"
+        stroke="var(--note-fill, #1a1a1a)"
+        strokeWidth={strokeW}
+        strokeLinecap="round"
+      />
+    );
+  }
+  return <g>{elements}</g>;
 }
 
 function renderTimeSignature(timeSignature, timeSignatureMode, centerY) {
@@ -69,22 +124,18 @@ function renderTimeSignature(timeSignature, timeSignatureMode, centerY) {
   );
 }
 
-function renderStandardRest(note, x, restY) {
-  const dur = note.durationLabel || '1/4';
-  const scale = 0.9;
-  const w = 8 * scale, h = 3 * scale;
-  if (dur === '1/1' || dur === '1/2') return <rect x={x - w/2} y={restY - h/2} width={w} height={h} fill="#1a1a1a" />;
-  if (dur === '1/4') return <path d={`M ${x} ${restY - 10} Q ${x + 6} ${restY - 4} ${x} ${restY} Q ${x - 6} ${restY + 4} ${x} ${restY + 10}`} stroke="#1a1a1a" strokeWidth="1.8" fill="none" />;
-  if (dur === '1/8') return (<g stroke="#1a1a1a" fill="#1a1a1a" strokeWidth="1.2"><circle cx={x} cy={restY - 4} r="2" /><path d={`M ${x} ${restY - 2} Q ${x - 6} ${restY} ${x} ${restY + 6}`} fill="none" strokeWidth="1.5" /></g>);
-  if (dur === '1/16') return (<g stroke="#1a1a1a" fill="#1a1a1a" strokeWidth="1.2"><circle cx={x} cy={restY - 6} r="1.8" /><circle cx={x} cy={restY} r="1.8" /><path d={`M ${x} ${restY + 2} Q ${x - 5} ${restY + 4} ${x} ${restY + 10}`} fill="none" strokeWidth="1.5" /></g>);
-  if (dur === '1/32') return (<g stroke="#1a1a1a" fill="#1a1a1a" strokeWidth="1.1"><circle cx={x} cy={restY - 8} r="1.5" /><circle cx={x} cy={restY - 2} r="1.5" /><circle cx={x} cy={restY + 4} r="1.5" /><path d={`M ${x} ${restY + 6} Q ${x - 4} ${restY + 8} ${x} ${restY + 12}`} fill="none" strokeWidth="1.3" /></g>);
-  return <rect x={x - w/2} y={restY - h/2} width={w} height={h} fill="#1a1a1a" />;
+function renderStandardRest(note, x, y, staffSpace) {
+  const glyph = smuflRestForDurationLabel(note.durationLabel || '1/4');
+  return (
+    <SmuflGlyph
+      x={x}
+      y={y}
+      glyph={glyph}
+      fontSize={staffSpace * 4.5}
+      fill="var(--note-fill, #1a1a1a)"
+    />
+  );
 }
-
-const durationLabelToNoteSymbolType = (dur) => {
-  const map = { '1/1': 'whole', '1/2': 'half', '1/4': 'quarter', '1/8': 'eighth', '1/16': 'sixteenth', '1/32': 'sixteenth' };
-  return map[dur] || 'quarter';
-};
 
 export function TraditionalNotationView({
   systems,
@@ -152,7 +203,7 @@ export function TraditionalNotationView({
   const staffList = multiStaff ? instruments : [{ id: '_single', name: '', clef: clefType }];
 
   return (
-    <>
+    <g className="traditional-notation">
       {systems.map((sys) => {
         const pageIndex = isHorizontal ? Math.floor(sys.yOffset / a4PageHeight) : 0;
         const groupTransform = isHorizontal && pageWidth ? `translate(${pageIndex * pageWidth}, ${-pageIndex * a4PageHeight})` : undefined;
@@ -255,11 +306,12 @@ export function TraditionalNotationView({
                       }
                       let g = [];
                       if (isVabanotatsioon) {
+                        let currentX = clefXStaff;
                         const joClefCenterY = staffY + joKeyY;
                         const { above: ledgerAbove, below: ledgerBelow } = getLedgerLineCountExact(joKeyY, firstLineY, lastLineY, spacing);
                         const joClefEl = (
                           <JoClefSymbol
-                            x={xOffset}
+                            x={currentX}
                             centerY={joClefCenterY}
                             staffSpacing={spacing}
                             stroke="#000"
@@ -281,24 +333,24 @@ export function TraditionalNotationView({
                           >
                             {joClefEl}
                             {joClefFocused && isFirstSystem && (
-                              <rect x={xOffset - 2} y={joClefCenterY - spacing * 2 - 4} width={24} height={spacing * 4 + 8} fill="none" stroke="#0ea5e9" strokeWidth="2" strokeDasharray="4 2" rx="2" />
+                              <rect x={currentX - 2} y={joClefCenterY - spacing * 2 - 4} width={24} height={spacing * 4 + 8} fill="none" stroke="#0ea5e9" strokeWidth="2" strokeDasharray="4 2" rx="2" />
                             )}
                           </g>
                         );
-                        xOffset += LAYOUT.CLEF_WIDTH;
+                        currentX += LAYOUT.CLEF_WIDTH;
                         if (relativeNotationShowTraditionalClef) {
                           const tradY = clefType === 'treble' ? staffY + trebleGLine : clefType === 'bass' ? staffY + bassFLine : staffY + centerY;
-                          g.push(<StaffClefSymbol key="trad-clef" x={xOffset} y={tradY} height={clefFontSize} clefType={clefType} fill="#000" staffSpace={spacing} />);
-                          xOffset += LAYOUT.CLEF_WIDTH;
+                          g.push(<StaffClefSymbol key="trad-clef" x={currentX} y={tradY} height={clefFontSize} clefType={clefType} fill="#000" staffSpace={spacing} />);
+                          currentX += LAYOUT.CLEF_WIDTH;
                         }
                         if (relativeNotationShowKeySignature && keySignature && keySignature !== 'C') {
                           const sharpCount = { G: 1, D: 2, A: 3, E: 4, B: 5 }[keySignature] || 0;
                           const flatCount = { F: 1, Bb: 2, Eb: 3 }[keySignature] || 0;
                           const sym = flatCount ? '♭' : '♯';
                           for (let i = 0; i < (sharpCount || flatCount); i++) {
-                            g.push(<text key={`ks-${i}`} x={xOffset + i * 10} y={staffY + centerY - 8} fontSize="20" fontFamily="serif" fill="#333" textAnchor="middle" dominantBaseline="middle">{sym}</text>);
+                            g.push(<text key={`ks-${i}`} x={currentX + i * 10} y={staffY + centerY - 8} fontSize="20" fontFamily="serif" fill="#333" textAnchor="middle" dominantBaseline="middle">{sym}</text>);
                           }
-                          xOffset += Math.max(sharpCount, flatCount) * 12;
+                          currentX += Math.max(sharpCount, flatCount) * 12;
                         }
                         return <g>{g}</g>;
                       }
@@ -368,9 +420,11 @@ export function TraditionalNotationView({
                     const py = n.pitch && typeof n.octave === 'number' ? staffResolvePitchY(n.pitch, n.octave) : staffCenterY;
                     noteCys.push(py);
                   }
-                  let stemUp = noteCys[0] > middleLineY ? false : true;
-                  if (noteCys.length > 0 && noteCys.every((cy) => (stemUp ? cy <= middleLineY : cy >= middleLineY)) === false) {
-                    stemUp = noteCys.reduce((s, cy) => s + cy, 0) / noteCys.length > middleLineY ? false : true;
+                  // VexFlow/MuseScore reegel: alla keskmise joone = vars üles; üle keskmise joone = vars alla.
+                  let stemUp = noteCys[0] > middleLineY;
+                  if (noteCys.length > 0) {
+                    const avg = noteCys.reduce((s, cy) => s + cy, 0) / noteCys.length;
+                    stemUp = avg > middleLineY;
                   }
                   const geom = computeBeamGeometry(gr, measure.notes, noteXs, noteCys, stemUp, spacing);
                   return { ...gr, ...geom, noteXs, noteCys };
@@ -412,9 +466,16 @@ export function TraditionalNotationView({
 
                       if (note.isRest) {
                         const restSyllable = showRhythmSyllables ? getRhythmSyllableForNote(note) : '';
+                        const dur = note.durationLabel || '1/4';
+                        const restAnchorY =
+                          dur === '1/1'
+                            ? staffY + staffLinePositions[1] // whole rest hangs from 2nd line (from top)
+                            : dur === '1/2'
+                              ? staffY + staffLinePositions[2] // half rest sits on middle line
+                              : staffY + staffCenterY;
                         return (
                           <g key={noteIdx} {...noteGroupProps}>
-                            {renderStandardRest(note, noteX, staffY + staffCenterY)}
+                            {renderStandardRest(note, noteX, restAnchorY, spacing)}
                             {restSyllable && <RhythmSyllableLabel x={noteX} y={restLabelY} text={restSyllable} staffSpace={spacing} />}
                           </g>
                         );
@@ -423,6 +484,15 @@ export function TraditionalNotationView({
                       const isSelected = isNoteSelected ? isNoteSelected(globalNoteIndex) : false;
                       const ledgerHalfWidth = getLedgerHalfWidth(spacing);
                       const { above: nLedgerAbove, below: nLedgerBelow } = getLedgerLineCountExact(pitchY, firstLineY, lastLineY, spacing);
+                      const glyph = getNoteheadGlyph(note.durationLabel);
+                      const lelandSize = Math.max(18, spacing * 4.2);
+                      const stemLenDefault = getStemLength(spacing);
+                      const stemStrokeW = spacing * 0.12;
+                      const stemX = stemUp ? (noteX + noteheadRx - stemStrokeW / 2) : (noteX - noteheadRx + stemStrokeW / 2);
+                      const stemY1 = noteY;
+                      const stemLen = beamGroup ? (beamGroup.stemLengths[noteIdx - beamGroup.start] ?? stemLenDefault) : stemLenDefault;
+                      const stemY2 = stemUp ? (stemY1 - stemLen) : (stemY1 + stemLen);
+                      const flagCount = beamGroup ? 0 : getFlagCount(note.durationLabel);
 
                       return (
                         <g key={noteIdx} {...noteGroupProps}>
@@ -436,17 +506,37 @@ export function TraditionalNotationView({
                           {(note.accidental === 1 || note.accidental === -1) && (
                             <text x={noteX - (noteheadRx + spacing * 0.5)} y={noteY} textAnchor="middle" dominantBaseline="central" fontSize={Math.round(spacing * 1.4)} fill="#1a1a1a" fontFamily="serif">{note.accidental === 1 ? '♯' : '♭'}</text>
                           )}
-                          <g transform={`translate(${noteX}, ${noteY})`}>
-                            <NoteSymbol
-                              type={durationLabelToNoteSymbolType(note.durationLabel)}
-                              cx={0}
-                              cy={0}
-                              staffSpace={spacing}
-                              stemUp={stemUp}
-                              hideFlags={!!beamGroup}
-                              stemLength={beamGroup ? beamGroup.stemLengths[noteIdx - beamGroup.start] : undefined}
-                            />
-                          </g>
+                          <SmuflGlyph
+                            x={noteX}
+                            y={noteY}
+                            glyph={glyph}
+                            fontSize={lelandSize}
+                            fill="var(--note-fill, #1a1a1a)"
+                            dominantBaseline="central"
+                          />
+                          {/* Vars + lipud (talatud nootidel lipud peidetud, vars ulatub talani) */}
+                          {note.durationLabel !== '1/1' && (
+                            <g>
+                              <line
+                                x1={stemX}
+                                y1={stemY1}
+                                x2={stemX}
+                                y2={stemY2}
+                                stroke="var(--note-fill, #1a1a1a)"
+                                strokeWidth={stemStrokeW}
+                                strokeLinecap="butt"
+                              />
+                              {flagCount > 0 && (
+                                <Flags
+                                  stemX={stemX}
+                                  stemEndY={stemY2}
+                                  staffSpace={spacing}
+                                  stemUp={stemUp}
+                                  count={flagCount}
+                                />
+                              )}
+                            </g>
+                          )}
                           {beamGroup && noteIdx === beamGroup.start && (() => {
                             const thick = getBeamThickness(spacing);
                             const gap = getBeamGap(spacing);
@@ -535,6 +625,6 @@ export function TraditionalNotationView({
           </g>
         );
       })}
-    </>
+    </g>
   );
 }

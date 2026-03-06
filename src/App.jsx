@@ -41,45 +41,40 @@ function MinuToodOrRedirect() {
   return <UserDashboard />;
 }
 
-function ErrorFallback({ error }) {
-  const [copied, setCopied] = React.useState(false);
-  const preRef = React.useRef(null);
-  const copyableText = [
-    error?.message || 'Tundmatu viga',
-    error?.stack ? `\n\nStack:\n${error.stack}` : '',
-  ].join('');
-
-  const handleCopy = () => {
-    if (!copyableText) return;
-    navigator.clipboard.writeText(copyableText).then(
-      () => { setCopied(true); setTimeout(() => setCopied(false), 3000); },
-      () => {}
-    );
-  };
-
-  return (
-    <div style={{ padding: 24, background: '#fef2f2', color: '#991b1b', fontFamily: 'sans-serif', minHeight: '100vh', boxSizing: 'border-box' }}>
-      <h2>Viga</h2>
-      <p style={{ marginTop: 8, fontSize: 14 }}>Rakendus ei kukkunud kokku – saad selle teate kopeerida ja edastada.</p>
-      <pre ref={preRef} style={{ overflow: 'auto', background: '#fff', padding: 12, borderRadius: 8, fontSize: 12, border: '1px solid #fecaca' }}>
-        {copyableText}
-      </pre>
-      <button
-        type="button"
-        onClick={handleCopy}
-        style={{ marginTop: 12, padding: '8px 16px', cursor: 'pointer', background: '#dc2626', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600 }}
-      >
-        {copied ? 'Kopeeritud' : 'Kopeeri veateade'}
-      </button>
-    </div>
-  );
-}
-
+/** ErrorBoundary ümbritseb kogu rakenduse; püüab renderdamise vead ja näitab kasutajale selge veateate. */
 class ErrorBoundary extends React.Component {
-  state = { error: null };
-  static getDerivedStateFromError(e) { return { error: e }; }
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    // Vea saatmine administraatorile: logi konsooli ja valmista ette payload (nt. POST /api/log-error).
+    console.error('[ErrorBoundary] Viga püütud, saadan info administraatorile:', error, errorInfo);
+    // Näide: fetch('/api/log-error', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: error?.message, stack: error?.stack, componentStack: errorInfo?.componentStack }) });
+  }
+
   render() {
-    if (this.state.error) return <ErrorFallback error={this.state.error} />;
+    if (this.state.hasError) {
+      return (
+        <div className="error-screen" style={{ padding: 50, textAlign: 'center', fontFamily: 'sans-serif', minHeight: '100vh', boxSizing: 'border-box', background: '#fef2f2', color: '#991b1b', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+          <h1>Hups! Tehniline viga.</h1>
+          <p style={{ marginTop: 12, fontSize: 16 }}>Teade on edastatud arendajale. Viga: {this.state.error?.message || 'tundmatu'}.</p>
+          <div style={{ display: 'flex', gap: 12, justifyContent: 'center', marginTop: 24, flexWrap: 'wrap' }}>
+            <button type="button" onClick={() => window.history.back()} style={{ padding: '12px 24px', cursor: 'pointer', background: '#b91c1c', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600 }}>
+              Mine tagasi
+            </button>
+            <button type="button" onClick={() => window.location.reload()} style={{ padding: '12px 24px', cursor: 'pointer', background: '#6b7280', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600 }}>
+              Värskenda lehte
+            </button>
+          </div>
+        </div>
+      );
+    }
     return this.props.children;
   }
 }

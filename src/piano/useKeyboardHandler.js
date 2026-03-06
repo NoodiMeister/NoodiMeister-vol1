@@ -1,6 +1,7 @@
 /**
  * Klaviatuuri sisendihaldur.
- * Kaardistab arvutiklahvid MIDI noodinumbritele ja kutsub playNote/stopNote.
+ * Kaardistab arvutiklahvid MIDI noodinumbritele (ASDF = valged, WETYU = mustad jne) ja kutsub playNote/stopNote.
+ * Kui keyboardPlaysPiano === true, siis A–G vajutused mängivad klaverit (Figurenotes õppimine).
  */
 
 import { useEffect, useRef, useMemo } from 'react';
@@ -12,8 +13,9 @@ import { buildKeyboardMap } from './keyboardMap.js';
  * @param {(pitch: number) => void} playNote
  * @param {(pitch: number) => void} stopNote
  * @param {boolean} [enabled=true]
+ * @param {boolean} [keyboardPlaysPiano=false] – true: ASDFGHJ/WETYUOP jne mängivad klaverit (ära reserveeri A–G noodisise jaoks)
  */
-export function useKeyboardHandler(firstNote, lastNote, playNote, stopNote, enabled = true) {
+export function useKeyboardHandler(firstNote, lastNote, playNote, stopNote, enabled = true, keyboardPlaysPiano = false) {
   const keyMap = useMemo(
     () => buildKeyboardMap(firstNote, lastNote),
     [firstNote, lastNote]
@@ -23,8 +25,12 @@ export function useKeyboardHandler(firstNote, lastNote, playNote, stopNote, enab
   useEffect(() => {
     if (!enabled) return;
 
+    const reserveLetterKeys = !keyboardPlaysPiano;
+
     const onKeyDown = (e) => {
       if (e.repeat) return;
+      // Tavarežiimis reserveeri A–G noodisise kiirklahvide jaoks; Figurenotes/pedagoogilises režiimis luba need klaveriks.
+      if (reserveLetterKeys && !e.metaKey && !e.ctrlKey && !e.altKey && /^[a-g]$/i.test(e.key || '')) return;
       const code = e.code;
       const midi = keyMap.get(code);
       if (midi === undefined) return;
@@ -35,6 +41,7 @@ export function useKeyboardHandler(firstNote, lastNote, playNote, stopNote, enab
     };
 
     const onKeyUp = (e) => {
+      if (reserveLetterKeys && !e.metaKey && !e.ctrlKey && !e.altKey && /^[a-g]$/i.test(e.key || '')) return;
       const code = e.code;
       const midi = keyMap.get(code);
       if (midi === undefined) return;
@@ -49,5 +56,5 @@ export function useKeyboardHandler(firstNote, lastNote, playNote, stopNote, enab
       window.removeEventListener('keydown', onKeyDown, { capture: true });
       window.removeEventListener('keyup', onKeyUp, { capture: true });
     };
-  }, [enabled, keyMap, playNote, stopNote]);
+  }, [enabled, keyboardPlaysPiano, keyMap, playNote, stopNote]);
 }

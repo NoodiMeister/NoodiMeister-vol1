@@ -1,5 +1,7 @@
 import React from 'react';
 import { getYFromStaffPosition } from '../notation/StaffConstants';
+import { SmuflGlyph } from '../notation/smufl/SmuflGlyph';
+import { SMUFL_GLYPH } from '../notation/smufl/glyphs';
 
 /**
  * JO-võtme sümbol (Vabanotatsioon).
@@ -86,76 +88,64 @@ export function JoClefSymbol({
 }
 
 // ——— Viiulivõti (Treble Clef) ———
-// Täidetud sümbol. Pathi "kõht" (G-joon) on x≈13..15, y≈0. Skaala 38 ühikut kõrge (y ≈ -25 … 12).
-const TREBLE_VIEWBOX_HEIGHT = 38;
+// Ankurpunkt: y = G-joone asukoht (teine joon alt üles = 3*staffSpace kui ülemine joon on 0).
 
-// Sinu saadetud detailne path (koondatud ühte muutusse)
-const TREBLE_CLEF_PATH =
-  'M 10.5 -1.2 c -2.1 0.4 -3.8 1.9 -4.5 3.9 c -0.3 1.1 -0.3 2.8 0.1 3.9 c 0.9 2.7 3.6 4.4 6.7 4.4 c 3.7 0 6.8 -2.4 7.6 -6 c 0.2 -0.9 0.2 -2.5 -0.1 -3.6 c -0.8 -3.1 -3.8 -5.5 -7.4 -6 c -0.8 -0.1 -2 -0.1 -2.4 0 m 2.2 0.7 c 2.5 0.5 4.5 2.5 4.9 5 c 0.2 1.2 0 2.6 -0.6 3.7 c -1.2 2.2 -3.7 3.3 -6.3 2.8 c -2 -0.4 -3.6 -2.1 -4 -4.1 c -0.2 -0.9 -0.1 -2.4 0.3 -3.4 c 0.8 -2.2 3.1 -3.9 5.7 -4 z M 12.5 12.3 c -5.4 -1.2 -9.5 -5.8 -10 -11.2 c -0.2 -1.9 0.1 -4.1 0.8 -6 c 1.8 -4.9 6.2 -8.5 11.3 -9.2 c 1.1 -0.1 2.9 -0.1 3.8 0 c 4.6 0.7 8.5 3.8 10.2 8.2 c 0.8 2 1.1 3.7 1 5.7 c -0.2 6 -4.1 11 -9.9 12.5 c -1.6 0.4 -5.5 0.4 -7.2 0 z m 6.2 -1.1 c 4.2 -1.2 7.1 -5.1 7.3 -9.4 c 0.1 -1.4 -0.1 -2.9 -0.6 -4.2 c -1.3 -3.4 -4.4 -5.8 -8 -6.3 c -0.9 -0.1 -2.3 -0.1 -3.2 0 c -4.1 0.6 -7.5 3.6 -8.6 7.6 c -0.5 1.7 -0.6 3.5 -0.2 5.2 c 1 4.3 4.8 7.6 9.3 8.1 c 1 0.1 3.1 0 4 0 z M 15.5 -25 c -1.5 0.5 -2.5 1.5 -3 3 c -0.3 0.8 -0.3 2.5 0 3.5 c 0.5 1.5 1.5 2.5 3 3 c 1 0.3 2.5 0.3 3.5 0 c 1.5 -0.5 2.5 -1.5 3 -3 c 0.3 -0.8 0.3 -2.5 0 -3.5 c -0.5 -1.5 -1.5 -2.5 -3 -3 c -1 -0.3 -2.5 -0.3 -3.5 0 z';
+export function TrebleClefSymbol({
+  x,
+  y,
+  staffSpace: staffSpaceProp,
+  height,
+  fill = 'black',
+}) {
+  const staffSpace = staffSpaceProp ?? (height != null ? height / 7 : 10);
+  const fontSize = height ?? staffSpace * 7;
+  // SMuFL: gClef glyph. We keep the same +0.5 staffSpace visual nudge.
+  return (
+    <SmuflGlyph
+      x={x}
+      y={y + staffSpace * 0.5}
+      glyph={SMUFL_GLYPH.gClef}
+      fontSize={fontSize}
+      fill={fill}
+    />
+  );
+}
 
 /**
- * Viiulivõtme sümbol.
- * x, y – asukoht joonestikul (y peab olema 2. joon ehk G-joon).
- * staffSpace – joonte vahe (px); kui ei anta, kasutatakse height (sümboli kõrgus ≈ 7 staff-space'i).
+ * Viiulivõti joonestikul. x tagab vähemalt staffSpace veerise vasakust äärest
+ * (ei puutu kokku takti algusjoonega). y peab olema G-joone asukoht (3*staffSpace kui ülemine joon = 0).
  */
-export function TrebleClefSymbol({
+export function StaffTrebleClef({ x, y, height, staffSpace, fill = '#000' }) {
+  const space = staffSpace ?? (height != null ? height / 7 : 10);
+  const xSafe = Math.max(x ?? 0, space);
+  return (
+    <TrebleClefSymbol
+      x={xSafe}
+      y={y}
+      staffSpace={space}
+      height={height}
+      fill={fill}
+    />
+  );
+}
+
+export function BassClefSymbol({
   x,
   y,
   staffSpace: staffSpaceProp,
   height,
   fill = 'var(--note-fill, #000)',
 }) {
-  const staffSpace = staffSpaceProp ?? (height != null ? height / 7 : 38 / 7);
-  const scale = (staffSpace * 7) / 38;
+  const staffSpace = staffSpaceProp ?? (height != null ? height / 3.5 : 10);
+  const fontSize = height ?? staffSpace * 3.5;
   return (
-    <g transform={`translate(${x}, ${y}) scale(${scale})`}>
-      {/* Kasuta translate'i ainult sümboli tsentreerimiseks,
-          mitte rea vahe tekitamiseks! */}
-      <path
-        fill={fill}
-        d={TREBLE_CLEF_PATH}
-        transform="translate(-14, 1.5)"
-      />
-    </g>
-  );
-}
-
-export function StaffTrebleClef({ x, y, height, staffSpace, fill = '#000' }) {
-  return <TrebleClefSymbol x={x} y={y} height={height} staffSpace={staffSpace} fill={fill} />;
-}
-
-// ——— Bassivõti (F Clef) ———
-// F-joon (4. joon ülevalt) on ankurpunkt.
-// Sümboli kõht ja punktid peavad asetsema ümber F-joone.
-const BASS_CLEF_PATH =
-  'M 12.5 -8.5 c -5.5 0 -10 4.5 -10 10 s 4.5 10 10 10 c 2.5 0 4.8 -1 6.5 -2.5 l -1.5 -1.5 c -1.2 1.2 -3 2 -5 2 c -4.4 0 -8 -3.6 -8 -8 s 3.6 -8 8 -8 c 3.5 0 6.5 2.3 7.6 5.5 h 2.2 c -1.2 -4.4 -5.2 -7.5 -9.8 -7.5 z';
-
-/**
- * Bassivõtme sümbol.
- * x, y – asukoht (y on joonestiku 4. joon ehk F-joon).
- * staffSpace – joonte vahe (px). Kui ei anta, arvutatakse height/2.8 põhjal.
- * height – valikuline; kui staffSpace puudub, kasutatakse height/2.8.
- */
-export function BassClefSymbol({ x, y, staffSpace: staffSpaceProp, height, fill = 'var(--note-fill, #000)' }) {
-  const staffSpace = staffSpaceProp ?? (height != null ? height / 2.8 : 10);
-  // MuseScore'i stiilis bassivõti on tavaliselt 2.5 kuni 3 staffSpace'i kõrge
-  const symbolHeight = staffSpace * 2.8;
-  const scale = symbolHeight / 25;
-
-  const dotRadius = staffSpace * 0.18;
-  const dotX = staffSpace * 1.3;
-
-  return (
-    <g transform={`translate(${x}, ${y})`} className="bass-clef">
-      {/* Koma kujund - scale ja peenhäälestus */}
-      <g transform={`scale(${scale}) translate(-5, -10)`}>
-        <path fill={fill} d={BASS_CLEF_PATH} />
-      </g>
-
-      {/* Punktid F-joone (y=0) ümber */}
-      <circle cx={dotX} cy={-staffSpace / 2} r={dotRadius} fill={fill} />
-      <circle cx={dotX} cy={staffSpace / 2} r={dotRadius} fill={fill} />
-    </g>
+    <SmuflGlyph
+      x={x}
+      y={y}
+      glyph={SMUFL_GLYPH.fClef}
+      fontSize={fontSize}
+      fill={fill}
+    />
   );
 }
 

@@ -21,13 +21,25 @@ export function getBeamLevel(durationLabel, isDotted) {
 
 /**
  * Grupeerib takti nootid talarühmadesse.
- * Reegel: järjestikused beamable nootid samas löögis (beat) kuuluvad ühte rühma.
+ * Reegel (VexFlow-laadne): järjestikused beamable nootid ühes "beat group"-is kuuluvad ühte rühma.
+ * - Simple meter (nt 4/4, 3/4): group size = 1 beat
+ * - Compound meter (nt 6/8, 9/8, 12/8): group size = 3 beats (dotted quarter feel)
  * @param {Array<{durationLabel: string, isRest: boolean, beat: number}>} notes - takti nootid
  * @param {number} measureStartBeat - takti alguse beat
  * @param {{ beats: number, beatUnit: number }} timeSignature - taktimõõt (vaikimisi 2 või 4 nooti rühmas)
  * @returns {Array<{ start: number, end: number }>} rühmad (indeksid start..end)
  */
 export function computeBeamGroups(notes, measureStartBeat, timeSignature = { beats: 4, beatUnit: 4 }) {
+  const beats = timeSignature?.beats ?? 4;
+  const beatUnit = timeSignature?.beatUnit ?? 4;
+
+  // In this codebase, `beat` is already in the time signature's beat-unit steps.
+  // Example: 6/8 => beats=6 and beat indexes are eighth-note slots.
+  const groupSize =
+    beatUnit === 8 && beats % 3 === 0 && beats > 3
+      ? 3
+      : 1;
+
   const groups = [];
   let i = 0;
   while (i < notes.length) {
@@ -36,12 +48,12 @@ export function computeBeamGroups(notes, measureStartBeat, timeSignature = { bea
       i++;
       continue;
     }
-    const beat0 = Math.floor(note.beat - measureStartBeat);
+    const group0 = Math.floor((note.beat - measureStartBeat) / groupSize);
     let j = i;
     while (j < notes.length) {
       const n = notes[j];
       if (n.isRest || !isBeamableDuration(n.durationLabel)) break;
-      if (Math.floor(n.beat - measureStartBeat) !== beat0) break;
+      if (Math.floor((n.beat - measureStartBeat) / groupSize) !== group0) break;
       j++;
     }
     if (j > i + 1) {

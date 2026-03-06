@@ -5,17 +5,17 @@
  * RhythmToolbox valikud → NotationContext (selectedRhythm, isDotted, isRest) → NoteSymbols.
  */
 
-import React, { useMemo, useCallback, useState } from 'react';
+import React, { useMemo, useCallback, useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 
 // —— Store & context ——
-import { NotationProvider, useNotation, DURATIONS, getEffectiveDuration } from '../store/NotationContext';
+import { NotationProvider, useNotation, DURATIONS, getEffectiveDuration, INSTRUMENT_PRESETS } from '../store/NotationContext';
 
 // —— Pitch input (klahv → kõrgus) ——
 import { getPitchFromMidi } from '../musical/PitchInputLogic';
 
 // —— Tööriistakastid (rütm, taktimõõt, võtmed) ——
-import { RhythmIcon, RhythmPatternIcon } from '../toolboxes/rhythmToolbox';
+import { RhythmPatternIcon } from '../toolboxes/rhythmToolbox';
 import { ClefIcon } from '../toolboxes/clefsToolbox';
 import { MeterIcon, PedagogicalMeterIcon } from '../toolboxes/timeSignatureToolbox';
 
@@ -181,49 +181,59 @@ function RhythmToolbar({ t = (k) => k }) {
     setIsRest,
   } = useNotation();
 
-  const rhythmOptions = [
-    { value: '1/4', label: t('note.quarter') || '1/4' },
-    { value: '1/8', label: t('note.eighth') || '1/8' },
-    { value: '1/2', label: t('note.half') || '1/2' },
-    { value: '1/1', label: t('note.whole') || '1/1' },
-    { value: '1/16', label: t('note.sixteenth') || '1/16' },
-    { value: 'rest', label: t('note.rest') || 'Paus' },
-    { value: 'dotted', label: t('note.dotted') || 'Punkt' },
+  const durationOptions = [
+    { value: '1/1', keyHint: '1', label: t('note.whole') || 'Terve' },
+    { value: '1/2', keyHint: '2', label: t('note.half') || 'Pool' },
+    { value: '1/4', keyHint: '3', label: t('note.quarter') || 'Veerand' },
+    { value: '1/8', keyHint: '4', label: t('note.eighth') || 'Kaheksandik' },
+    { value: '1/16', keyHint: '5', label: t('note.sixteenth') || 'Kuueteistkümnendik' },
   ];
+
+  const durationToNoteType = (dur) => {
+    switch (dur) {
+      case '1/1': return 'whole';
+      case '1/2': return 'half';
+      case '1/8': return 'eighth';
+      case '1/16': return 'sixteenth';
+      default: return 'quarter';
+    }
+  };
+  const durationToRestType = (dur) => {
+    switch (dur) {
+      case '1/1': return 'whole';
+      case '1/2': return 'half';
+      case '1/8': return 'eighth';
+      case '1/16': return 'sixteenth';
+      default: return 'quarter';
+    }
+  };
+
+  const RhythmGlyph = ({ duration, dotted = false, rest = false }) => {
+    const staffSpace = 6.2;
+    const w = 34;
+    const h = 34;
+    const cx = 16;
+    const cy = 18;
+    return (
+      <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} style={{ display: 'block' }}>
+        {rest ? (
+          <RestSymbol type={durationToRestType(duration)} x={cx} y={cy} staffSpace={staffSpace} />
+        ) : (
+          <NoteSymbol type={durationToNoteType(duration)} cx={cx} cy={cy} staffSpace={staffSpace} stemUp={true} />
+        )}
+        {dotted && <circle cx={cx + 10} cy={cy} r={1.6} fill="currentColor" />}
+      </svg>
+    );
+  };
 
   return (
     <div className="flex flex-wrap items-center gap-2 p-2 bg-amber-50 border-b border-amber-200">
-      <span className="text-xs font-bold text-amber-800 uppercase tracking-wider mr-1">Rütm</span>
-      {rhythmOptions.map((opt) => {
-        if (opt.value === 'rest') {
-          const active = isRest;
-          return (
-            <button
-              key={opt.value}
-              type="button"
-              onClick={() => setIsRest(!active)}
-              className={`px-2 py-1 rounded text-xs font-medium transition-colors ${active ? 'bg-amber-600 text-white' : 'bg-amber-200/80 text-amber-900 hover:bg-amber-300'}`}
-              title={opt.label}
-            >
-              <RhythmIcon duration={selectedRhythm} isRest={true} />
-            </button>
-          );
-        }
-        if (opt.value === 'dotted') {
-          const active = isDotted;
-          return (
-            <button
-              key={opt.value}
-              type="button"
-              onClick={() => setIsDotted(!active)}
-              className={`px-2 py-1 rounded text-xs font-medium transition-colors ${active ? 'bg-amber-600 text-white' : 'bg-amber-200/80 text-amber-900 hover:bg-amber-300'}`}
-              title={opt.label}
-            >
-              <RhythmIcon duration={selectedRhythm} isDotted={true} />
-            </button>
-          );
-        }
-        const active = selectedRhythm === opt.value && !isRest && !isDotted;
+      <span className="text-xs font-bold text-amber-800 uppercase tracking-wider mr-1">
+        {t('toolbox.rhythm') || 'Rütm'}
+      </span>
+
+      {durationOptions.map((opt) => {
+        const active = selectedRhythm === opt.value && !isRest;
         return (
           <button
             key={opt.value}
@@ -232,13 +242,40 @@ function RhythmToolbar({ t = (k) => k }) {
               setSelectedRhythm(opt.value);
               setIsRest(false);
             }}
-            className={`px-2 py-1 rounded text-xs font-medium transition-colors ${active ? 'bg-amber-600 text-white' : 'bg-amber-200/80 text-amber-900 hover:bg-amber-300'}`}
-            title={opt.label}
+            className={`relative px-2 py-1 rounded text-xs font-medium transition-colors ${active ? 'bg-amber-600 text-white' : 'bg-amber-200/80 text-amber-900 hover:bg-amber-300'}`}
+            title={`${opt.label} (${opt.keyHint})`}
           >
-            <RhythmIcon duration={opt.value} />
+            <span className="absolute -top-1 -right-1 text-[10px] leading-[1] px-1 py-[2px] rounded bg-white/70 text-amber-900 border border-amber-300">
+              {opt.keyHint}
+            </span>
+            <span className={active ? 'text-white' : 'text-amber-900'}>
+              <RhythmGlyph duration={opt.value} />
+            </span>
           </button>
         );
       })}
+
+      <button
+        type="button"
+        onClick={() => setIsRest(!isRest)}
+        className={`px-2 py-1 rounded text-xs font-medium transition-colors ${isRest ? 'bg-amber-600 text-white' : 'bg-amber-200/80 text-amber-900 hover:bg-amber-300'}`}
+        title={t('note.rest') || 'Paus'}
+      >
+        <RhythmGlyph duration={selectedRhythm} rest={true} />
+      </button>
+
+      <button
+        type="button"
+        onClick={() => setIsDotted(!isDotted)}
+        className={`px-2 py-1 rounded text-xs font-medium transition-colors ${isDotted ? 'bg-amber-600 text-white' : 'bg-amber-200/80 text-amber-900 hover:bg-amber-300'}`}
+        title={t('note.dotted') || 'Punkt'}
+      >
+        <RhythmGlyph duration={selectedRhythm} dotted={true} rest={false} />
+      </button>
+
+      <span className="text-[11px] text-amber-700 ml-2">
+        {t('shortcut.rhythmDigits') || '1–5 = rütm, A–G = noot'}
+      </span>
     </div>
   );
 }
@@ -247,6 +284,7 @@ function RhythmToolbar({ t = (k) => k }) {
  * Mootori juurkomponent: ühendab konteksti, rütmiriba, noodijoonestiku vaate ja klaviatuuri.
  */
 function NotationOrchestratorInner({ showPiano = true, t = (k) => k }) {
+  const [addInstrumentOpen, setAddInstrumentOpen] = useState(false);
   const notation = useNotation();
   const {
     keySignature,
@@ -261,11 +299,55 @@ function NotationOrchestratorInner({ showPiano = true, t = (k) => k }) {
     ghostPitch,
     ghostOctave,
     notationStyle,
+    notationMode,
     globalSpacingMultiplier = 1,
     staffSpacing = 120,
+    setSelectedRhythm,
+    setIsRest,
+    addNote,
   } = notation;
 
   const onNotePlay = usePianoToNotationHandler();
+
+  // Klaviatuuri kiirklahvid: 1–5 rütm, A–G noodi sisestus.
+  useEffect(() => {
+    const isTypingTarget = (el) => {
+      if (!el) return false;
+      const tag = el.tagName;
+      return tag === 'INPUT' || tag === 'TEXTAREA' || el.isContentEditable;
+    };
+    const onKeyDown = (e) => {
+      if (e.repeat) return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (isTypingTarget(e.target)) return;
+
+      // Rhythm: 1..5
+      const rhythmByDigit = {
+        '1': '1/1',
+        '2': '1/2',
+        '3': '1/4',
+        '4': '1/8',
+        '5': '1/16',
+      };
+      if (rhythmByDigit[e.key]) {
+        e.preventDefault();
+        e.stopPropagation();
+        setSelectedRhythm(rhythmByDigit[e.key]);
+        setIsRest(false);
+        return;
+      }
+
+      // Note entry: A..G
+      const k = String(e.key || '').toUpperCase();
+      if (k.length === 1 && k >= 'A' && k <= 'G') {
+        e.preventDefault();
+        e.stopPropagation();
+        addNote(k, ghostOctave ?? 4, 0, { skipPlay: true });
+      }
+    };
+    window.addEventListener('keydown', onKeyDown, { capture: true });
+    return () => window.removeEventListener('keydown', onKeyDown, { capture: true });
+  }, [addNote, ghostOctave, setIsRest, setSelectedRhythm]);
 
   const { measures, effectiveMeasuresPerInstrument } = useMemo(
     () => buildMeasuresFromInstruments(instruments, timeSignature),
@@ -325,14 +407,40 @@ function NotationOrchestratorInner({ showPiano = true, t = (k) => k }) {
             </option>
           ))}
         </select>
-        <button
-          type="button"
-          onClick={() => addInstrument({ name: 'Plokkflööt', clef: 'treble' })}
-          className="px-2 py-1 rounded text-xs font-medium bg-slate-200 text-slate-800 hover:bg-slate-300 transition-colors"
-          title={t('toolbox.addInstrument') || 'Lisa instrument'}
-        >
-          + {t('toolbox.addInstrument') || 'Lisa instrument'}
-        </button>
+        <div className="relative inline-block">
+          <button
+            type="button"
+            onClick={() => setAddInstrumentOpen((v) => !v)}
+            className="px-2 py-1 rounded text-xs font-medium bg-slate-200 text-slate-800 hover:bg-slate-300 transition-colors"
+            title={t('toolbox.addInstrument') || 'Lisa instrument'}
+          >
+            + {t('toolbox.addInstrument') || 'Lisa instrument'}
+          </button>
+          {addInstrumentOpen && (
+            <>
+              <div
+                className="fixed inset-0 z-10"
+                aria-hidden="true"
+                onClick={() => setAddInstrumentOpen(false)}
+              />
+              <div className="absolute left-0 top-full mt-1 z-20 min-w-[140px] py-1 rounded border border-slate-200 bg-white shadow-lg">
+                {Object.entries(INSTRUMENT_PRESETS).map(([key, preset]) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => {
+                      addInstrument({ preset: key });
+                      setAddInstrumentOpen(false);
+                    }}
+                    className="w-full px-3 py-2 text-left text-sm text-slate-800 hover:bg-slate-100 first:rounded-t last:rounded-b"
+                  >
+                    {preset.name}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
         <span className="text-xs font-bold text-slate-700 uppercase tracking-wider ml-2 mr-1">{t('layout.staffSpacing') || 'Ridade vahe'}</span>
         <input
           type="range"
@@ -416,8 +524,9 @@ function NotationOrchestratorInner({ showPiano = true, t = (k) => k }) {
                     height={100}
                     showMidiSelect={false}
                     onNotePlay={onNotePlay}
-                    figurenotesColors={notationStyle === 'FIGURENOTES' ? FIGURENOTES_COLORS : null}
+                    figurenotesColors={notationStyle === 'FIGURENOTES' || notationMode === 'pedagogical' ? FIGURENOTES_COLORS : null}
                     keySignature={keySignature}
+                    keyboardPlaysPiano={notationStyle === 'FIGURENOTES' || notationMode === 'pedagogical'}
                   />
                 </div>
               </div>

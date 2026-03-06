@@ -1,13 +1,14 @@
 /**
  * PianoVisual – visuaalne klaverikomponent.
- * Figuurnotatsioon: värv = noodi nimi (C, D, …), kujund = oktaav (rist, ruut, ring, kolmnurk);
- * mustadel klahvidel nool kujundi peal (↗ kõrgendus, ↖ madaldus).
+ * Värvid ja kujundid: FIGURE_SHAPES_DATA (C=punane ruut, D=pruun ring, E=kollane kolmnurk, F=roheline, G=sinine täht, A=lilla romb, B=valge ovaal).
+ * Oktav 2–3: tumedus/rist; oktav 5: must piirjoon; oktav 6: värviline raam. Tavarežiimis (Leland) figurenotesColors=null → klassikaline must-valge.
  */
 
 import React, { useMemo } from 'react';
 import { getKeysInRange } from './pianoKeys.js';
 import { getJoName } from '../notation/joNames';
 import { getFigureSymbol } from '../utils/figurenotes';
+import { getShapeData, getFigureStyle } from '../constants/FigureNotesLibrary';
 import './PianoVisual.css';
 
 const BLACK_WIDTH_RATIO = 0.6;
@@ -15,7 +16,35 @@ const NATURAL_PITCH_BY_MIDI_MOD = { 0: 'C', 2: 'D', 4: 'E', 5: 'F', 7: 'G', 9: '
 /** Mustad klahvid: MIDI mod 12 -> kas kõrgendus (#) või madaldus (b). Vaikimisi #. */
 const BLACK_KEY_ACCIDENTAL = { 1: 'sharp', 3: 'sharp', 6: 'sharp', 8: 'sharp', 10: 'sharp' };
 
-/** Väike figuuri kujund klahvidel (SVG). shape: none | cross | square | circle | triangle | triangleDown. */
+/** Teaduslik oktaav MIDI numbrist (C4 = 60 → 4). */
+function midiToOctave(midi) {
+  return Math.floor(midi / 12) - 1;
+}
+
+/**
+ * Figurenotes kujund klahvidel: noodinime + oktaav.
+ * Kui octave on antud, rakendatakse getFigureStyle (oktav 5 = must raam, oktav 3 = tumedam jne).
+ */
+function FigureKeyPath({ pitch, color, size = 14, className = '', octave }) {
+  const data = getShapeData(pitch);
+  const style = octave != null ? getFigureStyle(pitch, octave) : { fill: color };
+  const fill = style.fill ?? data.color ?? color;
+  const stroke = style.stroke ?? data.stroke ?? 'none';
+  const strokeWidth = style.strokeWidth ?? (data.stroke ? 3 : 0);
+  return (
+    <svg className={className} width={size} height={size} viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet" aria-hidden="true" style={{ opacity: style.opacity ?? 1 }}>
+      <path d={data.path} fill={fill} stroke={stroke} strokeWidth={strokeWidth} vectorEffect="non-scaling-stroke" />
+      {style.showCross && (
+        <g stroke="#000" strokeWidth={Math.max(2, strokeWidth || 2)} strokeLinecap="round" vectorEffect="non-scaling-stroke">
+          <line x1="10" y1="10" x2="90" y2="90" />
+          <line x1="90" y1="10" x2="10" y2="90" />
+        </g>
+      )}
+    </svg>
+  );
+}
+
+/** Väike figuuri kujund klahvidel (SVG). shape: none | cross | square | circle | triangle | triangleDown. Kasutatakse kui path-based pole. */
 function FigureKeyShape({ shape, color, size = 14, className = '' }) {
   const r = size / 2;
   const strokeW = Math.max(1.5, size * 0.2);
@@ -72,7 +101,7 @@ export function PianoVisual({
   className = '',
   width = 600,
   height = 160,
-  /** Figuurnotatsioon: { C: '#FF0000', D: '#8B4513', ... } – valged klahvid, --piano-figurenotes-color */
+  /** Figuurnotatsioon: värviallikas FIGURE_SHAPES_DATA (C, D, …). Null = tavarežiim, klassikaline must-valge klaver. */
   figurenotesColors = null,
   /** Helistik JO/LE teksti jaoks (nt 'C', 'F') */
   keySignature = 'C',
@@ -105,12 +134,15 @@ export function PianoVisual({
     const base = { width: `${whiteWidth}%` };
     if (!useFigurenotes) return base;
     const natural = NATURAL_PITCH_BY_MIDI_MOD[midi % 12];
-    const color = natural ? figurenotesColors[natural] : null;
-    if (!color) return base;
+    if (!natural) return base;
+    const octave = midiToOctave(midi);
+    const figureStyle = getFigureStyle(natural, octave);
+    const fillColor = figureStyle.fill ?? figurenotesColors[natural];
+    if (!fillColor) return base;
     const textColor = natural === 'A' || natural === 'E' ? '#000000' : '#ffffff';
     return {
       ...base,
-      ['--piano-figurenotes-color']: color,
+      ['--piano-figurenotes-color']: fillColor,
       ['--piano-figurenotes-text']: textColor,
     };
   };
@@ -123,26 +155,27 @@ export function PianoVisual({
     return getJoName(natural, octave, keySignature);
   };
 
-  /** Valge klahvi figuur: värv + kujund (getFigureSymbol). */
+  /** Valge klahvi figuur: noodinime + oktaav (sama oktaavireegel nagu noodijoonestikul). */
   const getWhiteKeyFigure = (midi) => {
     if (!useFigurenotes) return null;
     const natural = NATURAL_PITCH_BY_MIDI_MOD[midi % 12];
     if (!natural) return null;
-    const octave = Math.floor(midi / 12) - 1;
-    return getFigureSymbol(natural, octave);
+    const octave = midiToOctave(midi);
+    const data = getShapeData(natural);
+    return { pitch: natural, color: data.color, stroke: data.stroke, octave };
   };
 
-  /** Musta klahvi figuur: värv + kujund + nool (kõrgendus/madaldus). */
+  /** Musta klahvi figuur: noodinime + oktaav + nool (kõrgendus/madaldus). */
   const getBlackKeyFigure = (midi) => {
     if (!useFigurenotes) return null;
     const mod = midi % 12;
     const naturalForColor = { 1: 'C', 3: 'D', 6: 'F', 8: 'G', 10: 'A' }[mod];
     if (!naturalForColor) return null;
-    const octave = Math.floor(midi / 12) - 1;
-    const { color, shape } = getFigureSymbol(naturalForColor, octave);
+    const octave = midiToOctave(midi);
+    const data = getShapeData(naturalForColor);
     const useFlat = keySignature === 'F' || keySignature === 'Bb' || keySignature === 'Eb';
     const arrow = BLACK_KEY_ACCIDENTAL[mod] ? (useFlat ? 'flat' : 'sharp') : 'sharp';
-    return { color, shape, arrow };
+    return { pitch: naturalForColor, color: data.color, stroke: data.stroke, arrow, octave };
   };
 
   return (
@@ -170,7 +203,7 @@ export function PianoVisual({
                 if (!fig) return null;
                 return (
                   <>
-                    <FigureKeyShape shape={fig.shape} color={fig.color} size={14} className="PianoVisual__key-figure" />
+                    <FigureKeyPath pitch={fig.pitch} color={fig.color} size={14} className="PianoVisual__key-figure" octave={fig.octave} />
                     {getJoLabel(midi) && (
                       <span className="PianoVisual__key-label" style={{ color: 'var(--piano-figurenotes-text)' }}>
                         {getJoLabel(midi)}
@@ -203,7 +236,7 @@ export function PianoVisual({
               >
                 {fig && (
                   <span className="PianoVisual__black-figure" style={{ backgroundColor: fig.color }}>
-                    <FigureKeyShape shape={fig.shape} color="#fff" size={12} className="PianoVisual__black-shape" />
+                    <FigureKeyPath pitch={fig.pitch} color="#fff" size={12} className="PianoVisual__black-shape" octave={fig.octave} />
                     <span className="PianoVisual__black-arrow" aria-hidden="true">
                       {fig.arrow === 'flat' ? '↖' : '↗'}
                     </span>

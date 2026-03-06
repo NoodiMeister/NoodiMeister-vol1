@@ -22,10 +22,12 @@ export function InteractivePiano({
   engineOptions = {},
   onNotePlay,
   onNoteStop,
-  /** Figuurnotatsioon: klahvide värvid { C: '#FF0000', D: '#8B4513', ... } */
+  /** Figuurnotatsioon: klahvide värvid { C: '#FF0000', D: '#8B4513', ... } – null = klassikaline must-valge */
   figurenotesColors = null,
   /** Helistik JO/LE ja mustade klahvide noole jaoks (nt 'C') */
   keySignature = 'C',
+  /** true: ASDF/WETYU jne mängivad klaverit (Figurenotes õppimine); false: A–G reserveeritud noodisise jaoks */
+  keyboardPlaysPiano = false,
 }) {
   const { activeNotes, playNote, stopNote } = usePianoEngine(engineOptions);
 
@@ -45,7 +47,7 @@ export function InteractivePiano({
     [stopNote, onNoteStop]
   );
 
-  useKeyboardHandler(firstNote, lastNote, handlePlayNote, handleStopNote, true);
+  useKeyboardHandler(firstNote, lastNote, handlePlayNote, handleStopNote, true, keyboardPlaysPiano);
   const midi = useMidiHandler(handlePlayNote, handleStopNote, true);
 
   return (

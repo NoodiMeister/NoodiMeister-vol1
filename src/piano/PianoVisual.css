@@ -1,4 +1,5 @@
-/* PianoVisual – valged ja mustad klahvid täpselt joondatud */
+/* PianoVisual – valged ja mustad klahvid täpselt joondatud.
+   Tavarežiim (Leland): figurenotesColors=null → klassikaline must-valge; Figurenotes/pedagoogiline: värvid ja kujundid. */
 
 .PianoVisual {
   position: relative;

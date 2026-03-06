@@ -37,8 +37,8 @@ export function Note({
   const lines = getStaffLinePositions(centerY, staffLines, staffSpace);
   const firstLineY = lines[0];
   const lastLineY = lines[lines.length - 1];
-  const middleLineY = lines[2];
-  const stemUp = stemUpProp ?? (cy > middleLineY);
+  // Stem direction is view-specific; default to up unless explicitly provided.
+  const stemUp = stemUpProp ?? true;
 
   const ledgerHalfWidth = getLedgerHalfWidth(staffSpace);
   const { above: nLedgerAbove, below: nLedgerBelow } = showLedgerLines

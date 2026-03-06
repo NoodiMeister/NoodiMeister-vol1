@@ -1,91 +1,75 @@
 import React from 'react';
 import { STAFF_SPACE } from './StaffConstants';
+import { SmuflGlyph } from './smufl/SmuflGlyph';
+import { SMUFL_GLYPH } from './smufl/glyphs';
 
 /**
  * Kasutame ühtset värvi muutujat, mis toetab teemasid.
  */
 const DEFAULT_FILL = 'var(--note-fill, #1a1a1a)';
 
-/** Täispaus (Whole Rest): Rippuv ristkülik 4. joone all. */
+/** Täispaus (Whole Rest) – SMuFL restWhole. */
 export function WholeRestSymbol({ x = 0, y = 0, staffSpace = STAFF_SPACE }) {
-  const w = staffSpace * 1.2;
-  const h = staffSpace * 0.5; // Täispaus on tegelikult pool staff-space'i paks
   return (
-    <rect
-      x={x - w / 2}
+    <SmuflGlyph
+      x={x}
       y={y}
-      width={w}
-      height={h}
+      glyph={SMUFL_GLYPH.restWhole}
+      fontSize={staffSpace * 4.5}
       fill={DEFAULT_FILL}
     />
   );
 }
 
-/** Poolpaus (Half Rest): Seisev ristkülik 3. joone peal. */
+/** Poolpaus (Half Rest) – SMuFL restHalf. */
 export function HalfRestSymbol({ x = 0, y = 0, staffSpace = STAFF_SPACE }) {
-  const w = staffSpace * 1.2;
-  const h = staffSpace * 0.5;
   return (
-    <rect
-      x={x - w / 2}
-      y={y - h}
-      width={w}
-      height={h}
+    <SmuflGlyph
+      x={x}
+      y={y}
+      glyph={SMUFL_GLYPH.restHalf}
+      fontSize={staffSpace * 4.5}
       fill={DEFAULT_FILL}
     />
   );
 }
 
-/** Veerandpaus (Quarter Rest): MuseScore'i stiilis "siksak" sabaga. */
+/** Veerandpaus (Quarter Rest) – SMuFL restQuarter. */
 export function QuarterRestSymbol({ x = 0, y = 0, staffSpace = STAFF_SPACE }) {
-  const s = staffSpace;
-  // Keeruline path, mis imiteerib klassikalist veerandpausi kuju
-  const d = `
-    M ${x - s * 0.4} ${y - s * 1.5}
-    L ${x + s * 0.3} ${y - s * 0.5}
-    L ${x - s * 0.2} ${y + s * 0.3}
-    C ${x - s * 0.5} ${y + s * 0.6} ${x - s * 0.2} ${y + s * 1.2} ${x + s * 0.2} ${y + s * 1.4}
-    C ${x + s * 0.1} ${y + s * 1.1} ${x - s * 0.1} ${y + s * 0.9} ${x - s * 0.1} ${y + s * 0.6}
-    L ${x + s * 0.4} ${y - s * 0.3}
-    L ${x - s * 0.1} ${y - s * 1.3}
-    Z
-  `;
-  return <path d={d} fill={DEFAULT_FILL} />;
-}
-
-/** Kaheksandikpaus (Eighth Rest): Klassikaline "nupp" ja kaldjalg. */
-export function EighthRestSymbol({ x = 0, y = 0, staffSpace = STAFF_SPACE }) {
-  const s = staffSpace;
-  // Nupp (pea) ja kumer vars
-  const d = `
-    M ${x - s * 0.3} ${y - s * 0.5}
-    a ${s * 0.2} ${s * 0.2} 0 1 1 ${s * 0.1} ${s * 0.3}
-    c ${s * 0.3} 0 ${s * 0.5} ${s * 0.5} ${s * 0.7} ${s * 1.5}
-    l ${s * 0.1} ${-s * 0.1}
-    c ${-s * 0.3} ${-s * 1.2} ${-s * 0.7} ${-s * 1.5} ${-s * 1.2} ${-s * 1.7}
-    Z
-  `;
-  return <path d={d} fill={DEFAULT_FILL} />;
-}
-
-/** Kuueteistkümnendikpaus (Sixteenth Rest): Kahe nupuga versioon. */
-export function SixteenthRestSymbol({ x = 0, y = 0, staffSpace = STAFF_SPACE }) {
-  const s = staffSpace;
   return (
-    <g>
-      {/* Ülemine nupp ja osa varrest */}
-      <EighthRestSymbol x={x} y={y - s * 0.5} staffSpace={staffSpace} />
-      {/* Alumine nupp */}
-      <path
-        d={`
-        M ${x - s * 0.5} ${y + s * 0.2}
-        a ${s * 0.18} ${s * 0.18} 0 1 1 ${s * 0.1} ${s * 0.3}
-        L ${x + s * 0.3} ${y + s * 0.8}
-        Z
-      `}
-        fill={DEFAULT_FILL}
-      />
-    </g>
+    <SmuflGlyph
+      x={x}
+      y={y}
+      glyph={SMUFL_GLYPH.restQuarter}
+      fontSize={staffSpace * 4.5}
+      fill={DEFAULT_FILL}
+    />
+  );
+}
+
+/** Kaheksandikpaus (Eighth Rest) – SMuFL rest8th. */
+export function EighthRestSymbol({ x = 0, y = 0, staffSpace = STAFF_SPACE }) {
+  return (
+    <SmuflGlyph
+      x={x}
+      y={y}
+      glyph={SMUFL_GLYPH.rest8th}
+      fontSize={staffSpace * 4.5}
+      fill={DEFAULT_FILL}
+    />
+  );
+}
+
+/** Kuueteistkümnendikpaus (Sixteenth Rest) – SMuFL rest16th. */
+export function SixteenthRestSymbol({ x = 0, y = 0, staffSpace = STAFF_SPACE }) {
+  return (
+    <SmuflGlyph
+      x={x}
+      y={y}
+      glyph={SMUFL_GLYPH.rest16th}
+      fontSize={staffSpace * 4.5}
+      fill={DEFAULT_FILL}
+    />
   );
 }
 

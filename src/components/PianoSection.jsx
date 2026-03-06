@@ -65,6 +65,8 @@ export function PianoSection({
   onClose,
   keySignature,
   notationStyle,
+  /** 'pedagogical' → klaver näitab Figurenotes värve ja oktaavireegleid */
+  notationMode = 'traditional',
   noteInputMode,
   onNotePlay,
   t,
@@ -180,8 +182,9 @@ export function PianoSection({
             height={100}
             showMidiSelect={true}
             onNotePlay={handleNotePlay}
-            figurenotesColors={notationStyle === 'FIGURENOTES' ? FIGURENOTES_COLORS : null}
+            figurenotesColors={notationStyle === 'FIGURENOTES' || notationMode === 'pedagogical' ? FIGURENOTES_COLORS : null}
             keySignature={keySignature}
+            keyboardPlaysPiano={notationStyle === 'FIGURENOTES' || notationMode === 'pedagogical'}
           />
         </div>
       </div>

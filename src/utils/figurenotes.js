@@ -1,19 +1,15 @@
 /**
  * Figuurnotatsiooni kujundite ja värvide süsteem.
- * Värv sõltub noodi nimest (C, D, …), kujund sõltub oktaavist (teaduslik oktaav 0–7+).
+ * Värvid sünkroonitud FigureNotesLibrary FIGURE_SHAPES_DATA-ga (C=punane ruut, D=pruun ring jne).
  */
 
-/** Värvid noodinime järgi. B ja H mõlemad roheline. */
-export const FIGURENOTES_COLORS = {
-  C: '#FF0000',
-  D: '#8B4513',
-  E: '#808080',
-  F: '#0000FF',
-  G: '#000000',
-  A: '#FFFF00',
-  B: '#008000',
-  H: '#008000',
-};
+import { FIGURE_SHAPES_DATA, getShapeData } from '../constants/FigureNotesLibrary';
+
+/** Värvid noodinime järgi (klaviatuur jms). B ja H sama kujund. */
+export const FIGURENOTES_COLORS = Object.fromEntries(
+  Object.entries(FIGURE_SHAPES_DATA).map(([k, v]) => [k, v.color])
+);
+FIGURENOTES_COLORS.H = FIGURE_SHAPES_DATA.B.color;
 
 /**
  * Kujund teadusliku oktaavi järgi:
@@ -39,8 +35,7 @@ export function getFigureShape(octave) {
 
 /** Värv noodinime (pitch) järgi. */
 export function getFigureColor(pitch) {
-  const p = pitch && String(pitch).toUpperCase().replace('H', 'B');
-  return FIGURENOTES_COLORS[p] || FIGURENOTES_COLORS[p?.charAt(0)] || '#000000';
+  return getShapeData(pitch).color;
 }
 
 /**

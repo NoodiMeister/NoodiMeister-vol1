@@ -1,9 +1,7 @@
 /**
- * Sisselogimise ja seansihaldus:
- * - "Jäta mind meelde" valimata (vaikimisi): sessionStorage → brauseri akna/tabi sulgemisel logitakse välja.
- * - "Jäta mind meelde" valitud: localStorage → kasutaja jääb sisse logituks ka pärast brauseri sulgemist.
- * Vaikimisi on märkeruut valimata (ühiskasutatavate arvutite turvalisus, nt kooliklass).
- * Väljalogimine (clearAuth) kasutab ainult nupp "Logi välja"; uue faili loomine ei tühjenda salvestust.
+ * Sisselogimise ja seansihaldus – püsivus localStorage'is.
+ * Kasutame localStorage'it, et kasutajat ei logitaks välja lehe värskendamisel ega rakenduse kokkujooksmisel.
+ * Väljalogimine (clearAuth) tühjendab salvestuse ainult nupu "Logi välja" kaudu.
  */
 
 const KEY_LOGGED_IN = 'noodimeister-logged-in';
@@ -19,11 +17,11 @@ function safeStorage(storage) {
   }
 }
 
-/** Tagastab salvestuse, kuhu sisselogimise andmed kirjutada (rememberMe = linnuke "Jäta mind meelde"). Vercel: ei viska kunagi. */
+/** Tagastab salvestuse, kuhu sisselogimise andmed kirjutada. Kasutame localStorage'it, et sessioon püsiks värskenduse ja vea korral. */
 export function getStorageForLogin(rememberMe) {
   try {
     if (typeof window === 'undefined') return null;
-    const storage = rememberMe ? safeStorage(window.localStorage) : safeStorage(window.sessionStorage);
+    const storage = safeStorage(window.localStorage);
     if (!storage) return null;
     return storage;
   } catch (e) {
@@ -32,12 +30,12 @@ export function getStorageForLogin(rememberMe) {
   }
 }
 
-/** Tagastab salvestuse, kust praegu sisselogimist lugeda (sessionStorage eelneb, siis localStorage). Vercel: ei viska kunagi. */
+/** Tagastab salvestuse, kust sisselogimist lugeda. Eelistame localStorage'it, et kasutaja jääks sisse logituks pärast lehe värskendamist või viga. */
 export function getStorageForRead() {
   try {
     if (typeof window === 'undefined') return null;
-    if (window.sessionStorage?.getItem(KEY_LOGGED_IN)) return window.sessionStorage;
     if (window.localStorage?.getItem(KEY_LOGGED_IN)) return window.localStorage;
+    if (window.sessionStorage?.getItem(KEY_LOGGED_IN)) return window.sessionStorage;
   } catch (e) {
     console.error('[authStorage] getStorageForRead:', e?.message);
   }

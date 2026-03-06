@@ -2,29 +2,25 @@ import React from 'react';
 import {
   STAFF_SPACE,
   getNoteheadRx,
-  getNoteheadRy,
   getStemLength,
 } from './StaffConstants';
-
-const TILT_DEG = -24; // Traditsiooniline noodipea kalle
+import { SmuflGlyph } from './smufl/SmuflGlyph';
+import { smuflNoteheadForType } from './smufl/glyphs';
 
 /**
- * Täiustatud noodipea: paksem ja õige kaldega.
+ * SMuFL notehead glyph (Bravura/Leland).
  */
-function NoteHeadShape({ cx, cy, staffSpace, filled }) {
-  const rx = getNoteheadRx(staffSpace) * 1.1; // Veidi laiemaks
-  const ry = getNoteheadRy(staffSpace) * 0.9; // Veidi madalamaks
-
+function NoteHeadGlyph({ cx, cy, staffSpace, type }) {
+  const glyph = smuflNoteheadForType(type);
+  // Heuristic: SMuFL glyphs are designed around a 4-space staff in an em-box.
+  const fontSize = staffSpace * 4.0;
   return (
-    <ellipse
-      cx={cx}
-      cy={cy}
-      rx={rx}
-      ry={ry}
-      fill={filled ? 'var(--note-fill, #1a1a1a)' : 'none'}
-      stroke="var(--note-fill, #1a1a1a)"
-      strokeWidth={staffSpace * 0.18} // Paksem stroke annab "trükitud" ilme
-      transform={`rotate(${TILT_DEG} ${cx} ${cy})`}
+    <SmuflGlyph
+      x={cx}
+      y={cy}
+      glyph={glyph}
+      fontSize={fontSize}
+      fill="var(--note-fill, #1a1a1a)"
     />
   );
 }
@@ -99,13 +95,13 @@ function Flags({ cx, cy, staffSpace, stemUp, count = 1, stemLength }) {
 // --- Eksporditavad sümbolid ---
 
 export function WholeNoteSymbol({ cx = 0, cy = 0, staffSpace = STAFF_SPACE }) {
-  return <NoteHeadShape cx={cx} cy={cy} staffSpace={staffSpace} filled={false} />;
+  return <NoteHeadGlyph cx={cx} cy={cy} staffSpace={staffSpace} type="whole" />;
 }
 
 export function HalfNoteSymbol({ cx = 0, cy = 0, staffSpace = STAFF_SPACE, stemUp = true }) {
   return (
     <g>
-      <NoteHeadShape cx={cx} cy={cy} staffSpace={staffSpace} filled={false} />
+      <NoteHeadGlyph cx={cx} cy={cy} staffSpace={staffSpace} type="half" />
       <Stem cx={cx} cy={cy} staffSpace={staffSpace} stemUp={stemUp} />
     </g>
   );
@@ -114,7 +110,7 @@ export function HalfNoteSymbol({ cx = 0, cy = 0, staffSpace = STAFF_SPACE, stemU
 export function QuarterNoteSymbol({ cx = 0, cy = 0, staffSpace = STAFF_SPACE, stemUp = true, stemLength }) {
   return (
     <g>
-      <NoteHeadShape cx={cx} cy={cy} staffSpace={staffSpace} filled={true} />
+      <NoteHeadGlyph cx={cx} cy={cy} staffSpace={staffSpace} type="quarter" />
       <Stem cx={cx} cy={cy} staffSpace={staffSpace} stemUp={stemUp} stemLength={stemLength} />
     </g>
   );

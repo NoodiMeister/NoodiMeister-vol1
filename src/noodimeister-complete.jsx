@@ -36,6 +36,7 @@ import {
   KEY_TO_SEMITONE,
 } from './utils/notationConstants';
 import { FIGURENOTES_COLORS, getFigureSymbol } from './utils/figurenotes';
+import { FigurenotesBlockIcon } from './toolboxes';
 import { FigurenotesView } from './views/FigurenotesView';
 import { TraditionalNotationView } from './views/TraditionalNotationView';
 import { LOCALE_STORAGE_KEY, DEFAULT_LOCALE, LOCALES, createT } from './i18n';
@@ -1061,6 +1062,16 @@ function NoodiMeisterCore({ icons }) {
       return next;
     });
   }, [activeStaffIndex]);
+
+  // Kui režiim vahetub 'traditional' peale ja aktiivne noodivõti on JO, määra automaatselt viiulivõti (treble).
+  useEffect(() => {
+    if (notationMode !== 'traditional') return;
+    const currentClef = activeStaff?.clefType ?? 'treble';
+    if (currentClef === 'jo' || currentClef === 'do') {
+      setClefType('treble');
+    }
+  }, [notationMode, activeStaff?.clefType, setClefType]);
+
   const [saveFeedback, setSaveFeedback] = useState('');
   const [addedMeasures, setAddedMeasures] = useState(0);
   const [songTitle, setSongTitle] = useState('');
@@ -4449,7 +4460,11 @@ function NoodiMeisterCore({ icons }) {
             {/* Rütmi indikaator, tagasiside, valik, notatsiooni vahetajad */}
             <div className="flex items-center gap-2 bg-amber-800 px-3 py-1 rounded shrink-0">
               <span className="text-xs uppercase tracking-wider">{t('toolbar.rhythm')}:</span>
-              <RhythmIcon duration={selectedDuration} isDotted={isDotted} isRest={isRest} />
+              {notationStyle === 'FIGURENOTES' ? (
+                <FigurenotesBlockIcon duration={selectedDuration} className="w-8 h-5" />
+              ) : (
+                <RhythmIcon duration={selectedDuration} isDotted={isDotted} isRest={isRest} />
+              )}
               {tupletMode && (
                 <span className="flex items-center justify-center min-w-[20px] h-5 px-1 rounded bg-amber-600 text-white text-xs font-bold" title={tupletMode.type === 3 ? t('note.triplet') : tupletMode.type === 5 ? t('note.quintuplet') : tupletMode.type === 6 ? t('note.sextuplet') : t('note.septuplet')}>
                   {tupletMode.type}
@@ -4607,7 +4622,9 @@ function NoodiMeisterCore({ icons }) {
                         title={`${option.label}. Lohistage noodilehele.`}
                       >
                         <span className="flex items-center justify-center gap-0.5 text-amber-900">
-                          {RHYTHM_SYLLABLE_IMAGES[option.value] ? (
+                          {notationStyle === 'FIGURENOTES' && ['1/1','1/2','1/4','1/8','1/16','1/32'].includes(option.value) ? (
+                            <FigurenotesBlockIcon duration={option.value} className="w-8 h-5" />
+                          ) : RHYTHM_SYLLABLE_IMAGES[option.value] ? (
                             <>
                               <img src={RHYTHM_SYLLABLE_IMAGES[option.value]} alt={option.label} className="w-5 h-5 object-contain" onError={(e) => { e.target.style.display = 'none'; e.target.nextElementSibling?.classList.remove('hidden'); }} />
                               <span className="hidden"><RhythmIcon duration={option.value} /></span>
@@ -4760,7 +4777,8 @@ function NoodiMeisterCore({ icons }) {
                   )}
                   {activeToolbox === 'clefs' && toolboxes.clefs?.options && (
                     <div className="grid grid-cols-2 gap-2" role="group" aria-label={t('toolbox.clefs')}>
-                      {toolboxes.clefs.options.map((option, idx) => {
+                      {(toolboxes.clefs.options.filter((o) => o.value !== 'jo' || notationMode === 'vabanotatsioon')).map((option) => {
+                        const idx = toolboxes.clefs.options.findIndex((opt) => opt.id === option.id);
                         const isClefActive = option.value === 'jo' ? notationMode === 'vabanotatsioon' : notationMode === 'traditional' && option.value === clefType;
                         const boxSize = 56;
                         const center = boxSize / 2;
@@ -4945,7 +4963,7 @@ function NoodiMeisterCore({ icons }) {
               if (!toolbox) return null;
               const renderIcon = () => {
                 switch (id) {
-                  case 'rhythm': return <RhythmIcon duration={selectedDuration} isDotted={isDotted} isRest={isRest} />;
+                  case 'rhythm': return notationStyle === 'FIGURENOTES' ? <FigurenotesBlockIcon duration={selectedDuration} className="w-5 h-5" /> : <RhythmIcon duration={selectedDuration} isDotted={isDotted} isRest={isRest} />;
                   case 'timeSignature':
                     return timeSignatureMode === 'pedagogical'
                       ? <PedagogicalMeterIcon beats={timeSignature.beats} beatUnit={timeSignature.beatUnit} />
@@ -5472,8 +5490,9 @@ function NoodiMeisterCore({ icons }) {
                       height={100}
                       showMidiSelect={true}
                       onNotePlay={handleNotePlay}
-                      figurenotesColors={notationStyle === 'FIGURENOTES' ? FIGURENOTES_COLORS : null}
+                      figurenotesColors={notationStyle === 'FIGURENOTES' || notationMode === 'pedagogical' ? FIGURENOTES_COLORS : null}
                       keySignature={keySignature}
+                      keyboardPlaysPiano={pianoStripVisible && (notationStyle === 'FIGURENOTES' || notationMode === 'pedagogical')}
                     />
                   </div>
                 </div>

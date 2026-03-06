@@ -3,11 +3,14 @@
  * Siin JO-võtit EI kuvata. Kasutatakse ainult taktikaste, rütmifiguure ja oktaavipõhiseid kujundeid (rist, ruut, ring jne).
  */
 import React from 'react';
-import { getFigureSymbol } from '../utils/figurenotes';
+import { getFigureSymbol, getFigureColor } from '../utils/figurenotes';
 import { getJoName } from '../notation/joNames';
 import { RhythmSyllableLabel } from '../components/RhythmSyllableLabel';
 import { getRhythmSyllableForNote } from '../notation/rhythmSyllables';
 import { getFigureNoteWidth, FIGURE_BASE_WIDTH } from '../layout/LayoutEngine';
+import { SmuflGlyph } from '../notation/smufl/SmuflGlyph';
+import { smuflNoteheadForType } from '../notation/smufl/glyphs';
+import { getShapeData, getFigureStyle } from '../constants/FigureNotesLibrary';
 
 const LAYOUT = { MARGIN_LEFT: 60, MEASURE_MIN_WIDTH: 28 };
 const FIGURE_START_PADDING = 8;
@@ -15,7 +18,8 @@ const PAGE_BREAK_GAP = 80;
 const barLineWidth = 5;
 
 function getFigurenoteTextColor(pitch) {
-  return (pitch === 'A' || pitch === 'E') ? '#000000' : '#ffffff';
+  const p = String(pitch || '').toUpperCase();
+  return (p === 'A' || p === 'E' || p === 'B') ? '#000000' : '#ffffff';
 }
 
 function renderTimeSignature(timeSignature, timeSignatureMode, centerY) {
@@ -140,42 +144,72 @@ export function FigurenotesView({
               const figureSize = Math.max(14, Math.min(48, boxHeight * 0.5));
               const beatFigurePadding = 4;
 
-              const renderFigurenote = (note, x, y, noteIndex) => {
-                const { color, shape } = getFigureSymbol(note.pitch, note.octave);
+              const renderFigurenote = (note, x, y, noteIndex, noteWidth) => {
+                const pitch = String(note.pitch || '').toUpperCase().replace('H', 'B');
+                const shapeData = getShapeData(note.pitch);
+                const style = getFigureStyle(note.pitch, note.octave);
                 const size = figureSize;
                 const isSelected = isNoteSelected ? isNoteSelected(noteIndex) : false;
                 const dur = note.durationLabel || '1/4';
-                const drawStem = figurenotesStems && dur !== '1/1';
+                const smuflType =
+                  dur === '1/1' ? 'whole'
+                    : dur === '1/2' ? 'half'
+                      : dur === '1/8' ? 'eighth'
+                        : dur === '1/16' || dur === '1/32' ? 'sixteenth'
+                          : 'quarter';
                 const stemLength = 26;
                 const stemX = x + size / 2 + 1;
                 const stemY1 = y;
                 const stemY2 = y - stemLength;
                 const textColor = getFigurenoteTextColor(note.pitch);
                 const r = size / 2;
-                const strokeW = Math.max(2, size * 0.38);
                 const strokeShape = isSelected ? '#2563eb' : '#000';
                 const strokeWShape = isSelected ? 3 : 2;
-                let shapeEl;
-                if (shape === 'none') {
-                  shapeEl = <rect x={x - r} y={y - r} width={size} height={size} fill="none" stroke={strokeShape} strokeWidth={strokeWShape} strokeDasharray="2 2" opacity={0.6} />;
-                } else if (shape === 'cross') {
-                  shapeEl = (<g stroke={color} strokeWidth={strokeW} strokeLinecap="round"><line x1={x - r} y1={y - r} x2={x + r} y2={y + r} /><line x1={x + r} y1={y - r} x2={x - r} y2={y + r} /><rect x={x - r} y={y - r} width={size} height={size} fill="none" stroke={strokeShape} strokeWidth={strokeWShape} /></g>);
-                } else if (shape === 'circle') {
-                  shapeEl = <circle cx={x} cy={y} r={r} fill={color} stroke={strokeShape} strokeWidth={strokeWShape} />;
-                } else if (shape === 'square') {
-                  shapeEl = <rect x={x - r} y={y - r} width={size} height={size} fill={color} stroke={strokeShape} strokeWidth={strokeWShape} />;
-                } else if (shape === 'triangle') {
-                  const h = size * 0.866;
-                  shapeEl = <path d={`M ${x} ${y - h / 2} L ${x + size / 2} ${y + h / 2} L ${x - size / 2} ${y + h / 2} Z`} fill={color} stroke={strokeShape} strokeWidth={strokeWShape} />;
-                } else if (shape === 'triangleDown') {
-                  const h = size * 0.866;
-                  shapeEl = <path d={`M ${x} ${y + h / 2} L ${x + size / 2} ${y - h / 2} L ${x - size / 2} ${y - h / 2} Z`} fill={color} stroke={strokeShape} strokeWidth={strokeWShape} />;
-                } else {
-                  shapeEl = null;
-                }
+
+                const w = Math.max(size, noteWidth ?? size);
+                const h = size;
+                const svgX = x - w / 2;
+                const svgY = y - h / 2;
+                const effectiveStroke = style.stroke ?? shapeData.stroke ?? 'none';
+                const effectiveStrokeWidth = style.strokeWidth ?? (shapeData.stroke ? 2 : 0);
+
+                const shapeEl = (
+                  <svg
+                    x={svgX}
+                    y={svgY}
+                    width={w}
+                    height={h}
+                    viewBox="0 0 100 100"
+                    preserveAspectRatio="none"
+                    style={{ overflow: 'visible', opacity: style.opacity ?? 1 }}
+                  >
+                    <path
+                      d={shapeData.path}
+                      fill={style.fill ?? shapeData.color}
+                      stroke={effectiveStroke}
+                      strokeWidth={effectiveStrokeWidth}
+                      vectorEffect="non-scaling-stroke"
+                    />
+                    {style.showCross && (
+                      <g stroke="#000" strokeWidth={Math.max(2, effectiveStrokeWidth || 2)} strokeLinecap="round" vectorEffect="non-scaling-stroke">
+                        <line x1="10" y1="10" x2="90" y2="90" />
+                        <line x1="90" y1="10" x2="10" y2="90" />
+                      </g>
+                    )}
+                  </svg>
+                );
                 const tailLen = (dur === '1/1') ? Math.max(20, size * 1.4) : (dur === '1/2') ? Math.max(12, size * 0.85) : 0;
                 return (
                   <g>
+                    {/* Pedagoogiline aluskiht: SMuFL notehead (Bravura/Leland) */}
+                    <SmuflGlyph
+                      x={x}
+                      y={y}
+                      glyph={smuflNoteheadForType(smuflType)}
+                      fontSize={size * 1.35}
+                      fill="var(--note-fill, #1a1a1a)"
+                      style={{ opacity: 0.18 }}
+                    />
                     {shapeEl}
                     <text x={x} y={y} textAnchor="middle" dominantBaseline="central" fill={textColor} fontSize={Math.max(8, size * 0.5)} fontWeight="bold">
                       {getJoName(note.pitch, note.octave, keySignature)}
@@ -264,11 +298,11 @@ export function FigurenotesView({
                       const bandLeft = currentX - noteWidth;
                       const bandY = sys.yOffset + 6;
                       const bandH = timelineHeight - 12;
-                      const { color: bandColor } = getFigureSymbol(note.pitch, note.octave);
+                      const bandColor = getFigureColor(note.pitch);
                       return (
                         <g key={noteIdx} {...noteGroupProps}>
                           <rect x={bandLeft} y={bandY} width={noteWidth} height={bandH} fill={bandColor} opacity="0.2" rx="2" />
-                          {renderFigurenote(note, figureX, noteY, globalNoteIndex)}
+                          {renderFigurenote(note, figureX, noteY, globalNoteIndex, noteWidth)}
                           {(note.lyric != null && String(note.lyric).trim() !== '') && (
                             <text x={figureX} y={labelY + 14} textAnchor="middle" fontSize="11" fill="#333" fontFamily={lyricFontFamily}>{note.lyric}</text>
                           )}

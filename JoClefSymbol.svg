@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- JO clef: matches ClefSymbols.jsx (JO_CLEF_WIDTH=55, JO_CLEF_HEIGHT=80, JO_CLEF_WINDOW_HEIGHT=16, boxHeight=32, tulpWidth=12) -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 55 80" width="55" height="80">
+  <!-- 1. Vasak paks tulp (left bar) -->
+  <rect x="0" y="0" width="12" height="80" fill="#000"/>
+  <!-- 2. Ülemine kast (top box) -->
+  <rect x="15" y="0" width="40" height="32" fill="#000"/>
+  <!-- 3. Alumine kast – keskel tühi aken 16px (bottom box, 16px window in between) -->
+  <rect x="15" y="48" width="40" height="32" fill="#000"/>
+</svg>

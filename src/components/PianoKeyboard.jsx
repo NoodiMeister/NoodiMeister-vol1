@@ -14,12 +14,14 @@ export { PianoKeyboardSVG } from './PianoKeyboardSVG';
  * Täielik klaviatuuri riba redaktoris: vahemikud, sulgemine, figuurid ja JO-nimed.
  * @param showNoteNames – kas näidata nootinimesid (JO/LE/MI või C/D/E) – juhitakse keySignature + figurenotesColors kaudu
  * @param showFigurenotes – kas kasutada figuurnotatsiooni värve ja kujundeid (notationStyle === 'FIGURENOTES')
+ * @param notationMode – 'pedagogical' → klaver Figurenotes värvid ja oktaavireeglid
  */
 export function PianoKeyboard({
   visible,
   onClose,
   keySignature = 'C',
   notationStyle = 'TRADITIONAL',
+  notationMode = 'traditional',
   noteInputMode = true,
   onNotePlay,
   t,
@@ -32,6 +34,7 @@ export function PianoKeyboard({
       onClose={onClose}
       keySignature={keySignature}
       notationStyle={notationStyle}
+      notationMode={notationMode}
       noteInputMode={noteInputMode}
       onNotePlay={onNotePlay}
       t={t}
