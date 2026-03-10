@@ -24,10 +24,12 @@ export default function UserDashboard() {
   const userFromStorage = authStorage.getLoggedInUser();
   const isLoggedIn = store ? (store.user?.email || userFromStorage?.email) : userFromStorage?.email;
 
-  if (store && !isLoggedIn) {
-    navigate('/login', { replace: true });
-    return null;
-  }
+  // Redirect only in effect to avoid navigate()-during-render (can freeze the page / break buttons)
+  useEffect(() => {
+    if (store && !isLoggedIn) navigate('/login', { replace: true });
+  }, [store, isLoggedIn, navigate]);
+
+  if (store && !isLoggedIn) return null;
 
   return <MinuTöödPage />;
 }

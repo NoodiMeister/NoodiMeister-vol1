@@ -3830,10 +3830,16 @@ function NoodiMeisterCore({ icons }) {
 
       {/* Uue töö seadistuse dialoog – notatsioon, taktimõõt, loo nimi, autor jne */}
       {newWorkSetupOpen && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-amber-950/70 backdrop-blur-sm p-6" onClick={() => {}}>
+        <div
+          className="fixed inset-0 z-[110] flex items-center justify-center bg-amber-950/70 backdrop-blur-sm p-6"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="new-work-dialog-title"
+          onClick={() => { setNewWorkSetupOpen(false); setSearchParams((prev) => { const next = new URLSearchParams(prev); next.delete('new'); return next; }); }}
+        >
           <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-hidden border-2 border-amber-200 flex flex-col" onClick={e => e.stopPropagation()}>
             <div className="bg-gradient-to-r from-amber-600 to-amber-700 text-white px-6 py-4 flex items-center justify-between shrink-0">
-              <h2 className="text-lg font-bold flex items-center gap-2"><Plus className="w-5 h-5" /> Uue töö seadistus</h2>
+              <h2 id="new-work-dialog-title" className="text-lg font-bold flex items-center gap-2"><Plus className="w-5 h-5" /> Uue töö seadistus</h2>
             </div>
             <div className="p-6 space-y-4 overflow-y-auto">
               <p className="text-sm text-amber-900">Täida väljad uue nooditöö jaoks. Kõik vajalikud seaded saad hiljem muuta menüüst Seaded.</p>
