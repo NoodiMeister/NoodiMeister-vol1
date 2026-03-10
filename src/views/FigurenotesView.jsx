@@ -153,9 +153,9 @@ export function FigurenotesView({
               };
 
               const boxHeight = timelineHeight - 8;
-              const figureSizeBase = Math.max(14, Math.min(48, boxHeight * 0.5));
-              const figureSizeCappedByBeat = Math.min(figureSizeBase, beatWidth * 0.82);
-              const figureSizeBaseForMeasure = Math.max(12, figureSizeCappedByBeat);
+              /** User-chosen notation size (px). Shapes are never stretched or capped by beat width — kept intact. */
+              const figureSizeBase = Math.max(12, Math.min(96, figurenotesSize));
+              const figureSizeBaseForMeasure = figureSizeBase;
 
               /** Scale figure when shorter than quarter so multiple notes fit in one beat: eighth = 0.5, 16th/32nd = 0.25. */
               const getFigureScaleForDuration = (durLabel) => {

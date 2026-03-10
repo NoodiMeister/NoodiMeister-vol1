@@ -1065,7 +1065,7 @@ function NoodiMeisterCore({ icons }) {
   const [tuningReferenceOctave, setTuningReferenceOctave] = useState(3);
   const [tuningReferenceHz, setTuningReferenceHz] = useState(440);
   const [playNoteOnInsert, setPlayNoteOnInsert] = useState(true);
-  const [figurenotesSize, setFigurenotesSize] = useState(16); // Figuurnotatsiooni figuuride suurus (nagu fonti suurus), 10–32
+  const [figurenotesSize, setFigurenotesSize] = useState(16); // Noodigraafika suurus (figuurid ja noodid), 12–96 px
   const [figurenotesStems, setFigurenotesStems] = useState(false); // Figuurnotatsioonis rütmi näitamine noodivartega (vaikimisi välja)
   const [showBarNumbers, setShowBarNumbers] = useState(true); // Taktide numbrid iga rea alguses noodivõtme kohal
   const [showRhythmSyllables, setShowRhythmSyllables] = useState(DEFAULT_SHOW_RHYTHM_SYLLABLES);
@@ -1529,9 +1529,6 @@ function NoodiMeisterCore({ icons }) {
         windowHeight: container.scrollHeight,
       });
       const scale = 2;
-      const systems = systemsForScoreRef.current || [];
-      const pageStarts = [0, ...systems.filter((s) => s.pageBreakBefore).map((s) => s.yOffset)];
-      const totalContentHeight = container.scrollHeight;
       const pdf = new jsPDF({
         orientation: canvas.width > canvas.height ? 'landscape' : 'portrait',
         unit: 'mm',
@@ -1539,38 +1536,65 @@ function NoodiMeisterCore({ icons }) {
       });
       const pageW = pdf.internal.pageSize.getWidth();
       const pageH = pdf.internal.pageSize.getHeight();
-      if (pageStarts.length >= 2) {
-        for (let p = 0; p < pageStarts.length; p++) {
-          const startPx = pageStarts[p];
-          const endPx = p < pageStarts.length - 1 ? pageStarts[p + 1] : totalContentHeight;
-          const sliceHeightPx = endPx - startPx;
-          if (sliceHeightPx <= 0) continue;
+
+      const isHorizontalFlow = pageFlowDirection === 'horizontal';
+      if (isHorizontalFlow) {
+        const pageWidthPx = pageWidth || LAYOUT.PAGE_WIDTH_MIN;
+        const a4PageHeightPx = pageWidthPx * LAYOUT.A4_HEIGHT_RATIO;
+        const totalPages = Math.max(1, Math.round(container.scrollWidth / pageWidthPx));
+        for (let p = 0; p < totalPages; p++) {
+          const srcX = p * pageWidthPx * scale;
+          const sliceW = Math.round(pageWidthPx * scale);
+          const sliceH = Math.round(a4PageHeightPx * scale);
+          if (srcX + sliceW > canvas.width || sliceH > canvas.height) continue;
           const sliceCanvas = document.createElement('canvas');
-          sliceCanvas.width = canvas.width;
-          sliceCanvas.height = Math.round(sliceHeightPx * scale);
+          sliceCanvas.width = sliceW;
+          sliceCanvas.height = sliceH;
           const ctx = sliceCanvas.getContext('2d');
-          ctx.drawImage(canvas, 0, startPx * scale, canvas.width, sliceCanvas.height, 0, 0, canvas.width, sliceCanvas.height);
+          ctx.drawImage(canvas, srcX, 0, sliceW, sliceH, 0, 0, sliceW, sliceH);
           const sliceData = sliceCanvas.toDataURL('image/png');
-          const sliceImgW = sliceCanvas.width;
-          const sliceImgH = sliceCanvas.height;
-          const drawW = Math.min(pageW, pageH * (sliceImgW / sliceImgH));
-          const drawH = Math.min(pageH, pageW * (sliceImgH / sliceImgW));
+          const drawW = Math.min(pageW, pageH * (sliceW / sliceH));
+          const drawH = Math.min(pageH, pageW * (sliceH / sliceW));
           if (p > 0) pdf.addPage();
           pdf.addImage(sliceData, 'PNG', 0, 0, drawW, drawH);
         }
       } else {
-        const imgData = canvas.toDataURL('image/png');
-        const imgW = pageW;
-        const imgH = (canvas.height * imgW) / canvas.width;
-        let heightLeft = imgH;
-        let position = 0;
-        pdf.addImage(imgData, 'PNG', 0, position, imgW, imgH);
-        heightLeft -= pageH;
-        while (heightLeft > 0) {
-          pdf.addPage();
-          position = -(pageH * (pdf.internal.getNumberOfPages() - 1));
+        const systems = systemsForScoreRef.current || [];
+        const pageStarts = [0, ...systems.filter((s) => s.pageBreakBefore).map((s) => s.yOffset)];
+        const totalContentHeight = container.scrollHeight;
+        if (pageStarts.length >= 2) {
+          for (let p = 0; p < pageStarts.length; p++) {
+            const startPx = pageStarts[p];
+            const endPx = p < pageStarts.length - 1 ? pageStarts[p + 1] : totalContentHeight;
+            const sliceHeightPx = endPx - startPx;
+            if (sliceHeightPx <= 0) continue;
+            const sliceCanvas = document.createElement('canvas');
+            sliceCanvas.width = canvas.width;
+            sliceCanvas.height = Math.round(sliceHeightPx * scale);
+            const ctx = sliceCanvas.getContext('2d');
+            ctx.drawImage(canvas, 0, startPx * scale, canvas.width, sliceCanvas.height, 0, 0, canvas.width, sliceCanvas.height);
+            const sliceData = sliceCanvas.toDataURL('image/png');
+            const sliceImgW = sliceCanvas.width;
+            const sliceImgH = sliceCanvas.height;
+            const drawW = Math.min(pageW, pageH * (sliceImgW / sliceImgH));
+            const drawH = Math.min(pageH, pageW * (sliceImgH / sliceImgW));
+            if (p > 0) pdf.addPage();
+            pdf.addImage(sliceData, 'PNG', 0, 0, drawW, drawH);
+          }
+        } else {
+          const imgData = canvas.toDataURL('image/png');
+          const imgW = pageW;
+          const imgH = (canvas.height * imgW) / canvas.width;
+          let heightLeft = imgH;
+          let position = 0;
           pdf.addImage(imgData, 'PNG', 0, position, imgW, imgH);
           heightLeft -= pageH;
+          while (heightLeft > 0) {
+            pdf.addPage();
+            position = -(pageH * (pdf.internal.getNumberOfPages() - 1));
+            pdf.addImage(imgData, 'PNG', 0, position, imgW, imgH);
+            heightLeft -= pageH;
+          }
         }
       }
       const filename = ((songTitle || t('common.untitled')).replace(/\s+/g, '-').replace(/[^\w\-.]/g, '') || 'score') + '.pdf';
@@ -1582,7 +1606,7 @@ function NoodiMeisterCore({ icons }) {
     } finally {
       setIsExportingPdf(false);
     }
-  }, [songTitle, t]);
+  }, [songTitle, t, pageFlowDirection, pageWidth]);
 
   // Build state to persist
   const getPersistedState = useCallback(() => ({
@@ -1780,7 +1804,7 @@ function NoodiMeisterCore({ icons }) {
       if (data.notationStyle) setNotationStyle(data.notationStyle);
       if (data.notationMode) setNotationMode(data.notationMode);
       if (data.pixelsPerBeat != null) setPixelsPerBeat(data.pixelsPerBeat);
-      if (data.figurenotesSize != null) setFigurenotesSize(Math.max(10, Math.min(32, data.figurenotesSize)));
+      if (data.figurenotesSize != null) setFigurenotesSize(Math.max(12, Math.min(96, data.figurenotesSize)));
       if (data.figurenotesStems != null) setFigurenotesStems(!!data.figurenotesStems);
       if (data.isPedagogicalProject != null) setIsPedagogicalProject(!!data.isPedagogicalProject);
       if (data.pedagogicalAudioBpm != null) setPedagogicalAudioBpm(Math.max(20, Math.min(300, data.pedagogicalAudioBpm)));
@@ -1904,7 +1928,7 @@ function NoodiMeisterCore({ icons }) {
         if (data.notationStyle) setNotationStyle(data.notationStyle);
         else if (data.gridOnlyMode != null) setNotationStyle(data.gridOnlyMode ? 'FIGURENOTES' : 'TRADITIONAL');
         if (data.pixelsPerBeat != null) setPixelsPerBeat(data.pixelsPerBeat);
-        if (data.figurenotesSize != null) setFigurenotesSize(Math.max(10, Math.min(32, data.figurenotesSize)));
+        if (data.figurenotesSize != null) setFigurenotesSize(Math.max(12, Math.min(96, data.figurenotesSize)));
         if (data.figurenotesStems != null) setFigurenotesStems(!!data.figurenotesStems);
         if (data.notationMode) setNotationMode(data.notationMode);
         if (data.instrumentNotationVariant) setInstrumentNotationVariant(data.instrumentNotationVariant);
@@ -2092,7 +2116,7 @@ function NoodiMeisterCore({ icons }) {
           if (data.notationStyle) setNotationStyle(data.notationStyle);
           else if (data.gridOnlyMode != null) setNotationStyle(data.gridOnlyMode ? 'FIGURENOTES' : 'TRADITIONAL');
           if (data.pixelsPerBeat != null) setPixelsPerBeat(data.pixelsPerBeat);
-          if (data.figurenotesSize != null) setFigurenotesSize(Math.max(10, Math.min(32, data.figurenotesSize)));
+          if (data.figurenotesSize != null) setFigurenotesSize(Math.max(12, Math.min(96, data.figurenotesSize)));
           if (data.notationMode) setNotationMode(data.notationMode);
           if (data.instrument) setInstrument(data.instrument);
           if (data.instrumentNotationVariant) setInstrumentNotationVariant(data.instrumentNotationVariant);
@@ -2904,7 +2928,7 @@ function NoodiMeisterCore({ icons }) {
         }
       }
 
-      // N key toggles note input mode
+      // N key toggles note input mode. When entering N mode, clear selection so cursor/ghost keys work (no stuck state).
       if (e.code === 'KeyN' && !e.shiftKey && !modKey) {
         e.preventDefault();
         setNoteInputMode(prev => {
@@ -2912,14 +2936,19 @@ function NoodiMeisterCore({ icons }) {
             setSelectedNoteIndex(-1);
             setSelectionStart(-1);
             setSelectionEnd(-1);
-          } else if (selectedNoteIndex >= 0 && notes[selectedNoteIndex]) {
-            const n = notes[selectedNoteIndex];
-            setGhostPitch(n.pitch);
-            setGhostOctave(n.octave);
-          } else if (notes.length > 0) {
-            const last = notes[notes.length - 1];
-            setGhostPitch(last.pitch);
-            setGhostOctave(last.octave);
+          } else {
+            setSelectedNoteIndex(-1);
+            setSelectionStart(-1);
+            setSelectionEnd(-1);
+            if (selectedNoteIndex >= 0 && notes[selectedNoteIndex]) {
+              const n = notes[selectedNoteIndex];
+              setGhostPitch(n.pitch);
+              setGhostOctave(n.octave);
+            } else if (notes.length > 0) {
+              const last = notes[notes.length - 1];
+              setGhostPitch(last.pitch);
+              setGhostOctave(last.octave);
+            }
           }
           return !prev;
         });
@@ -3061,11 +3090,20 @@ function NoodiMeisterCore({ icons }) {
             const dir = e.code === 'ArrowUp' ? 1 : -1;
             saveToHistory(notes);
             if (e.shiftKey || modKey) {
-              setNotes(prev => prev.map((n, i) => i === noteIdx ? { ...n, octave: shiftOctave(n.octave, dir) } : n));
+              const newOctave = shiftOctave(notes[noteIdx].octave, dir);
+              setNotes(prev => prev.map((n, i) => i === noteIdx ? { ...n, octave: newOctave } : n));
+              setGhostPitch(notes[noteIdx].pitch);
+              setGhostOctave(newOctave);
             } else if (notationStyle === 'FIGURENOTES') {
-              setNotes(prev => prev.map((n, i) => i === noteIdx ? { ...n, octave: shiftOctave(n.octave, dir) } : n));
+              const newOctave = shiftOctave(notes[noteIdx].octave, dir);
+              setNotes(prev => prev.map((n, i) => i === noteIdx ? { ...n, octave: newOctave } : n));
+              setGhostPitch(notes[noteIdx].pitch);
+              setGhostOctave(newOctave);
             } else {
-              setNotes(prev => prev.map((n, i) => i === noteIdx ? { ...n, ...shiftPitch(n.pitch, n.octave, dir), accidental: 0 } : n));
+              const updated = shiftPitch(notes[noteIdx].pitch, notes[noteIdx].octave, dir);
+              setNotes(prev => prev.map((n, i) => i === noteIdx ? { ...n, ...updated, accidental: 0 } : n));
+              setGhostPitch(updated.pitch);
+              setGhostOctave(updated.octave);
             }
             return;
           }
@@ -4264,12 +4302,13 @@ function NoodiMeisterCore({ icons }) {
                   <input
                     id="figurenotes-size"
                     type="number"
-                    min={10}
-                    max={32}
+                    min={12}
+                    max={96}
+                    step={1}
                     value={figurenotesSize}
                     onChange={(e) => {
                       const v = parseInt(e.target.value, 10);
-                      if (!isNaN(v)) { dirtyRef.current = true; setFigurenotesSize(Math.max(10, Math.min(32, v))); }
+                      if (!isNaN(v)) { dirtyRef.current = true; setFigurenotesSize(Math.max(12, Math.min(96, v))); }
                     }}
                     className="w-16 px-2 py-1.5 rounded border-2 border-amber-200 bg-amber-50 text-amber-900"
                   />
@@ -4868,7 +4907,16 @@ function NoodiMeisterCore({ icons }) {
               ))}
             </div>
             <button
-              onClick={() => setNoteInputMode(prev => !prev)}
+              onClick={() => {
+                setNoteInputMode(prev => {
+                  if (!prev) {
+                    setSelectedNoteIndex(-1);
+                    setSelectionStart(-1);
+                    setSelectionEnd(-1);
+                  }
+                  return !prev;
+                });
+              }}
               className={`px-4 py-2 rounded font-bold transition-all ${
                 noteInputMode 
                   ? 'bg-blue-600 text-white shadow-lg' 
@@ -5172,15 +5220,18 @@ function NoodiMeisterCore({ icons }) {
                         <p className="text-xs text-amber-700 mb-1">{t('layout.globalSpacingHint')}</p>
                         <div className="flex items-center gap-2">
                           <input
-                            type="range"
-                            min={0.5}
-                            max={2}
-                            step={0.1}
-                            value={layoutGlobalSpacingMultiplier}
-                            onChange={(e) => { dirtyRef.current = true; setLayoutGlobalSpacingMultiplier(Math.max(0.5, Math.min(2, Number(e.target.value) || 1))); }}
-                            className="flex-1 h-2 rounded-lg appearance-none bg-amber-200 accent-amber-600"
+                            type="number"
+                            min={12}
+                            max={96}
+                            step={1}
+                            value={figurenotesSize}
+                            onChange={(e) => {
+                              const v = parseInt(e.target.value, 10);
+                              if (!isNaN(v)) { dirtyRef.current = true; setFigurenotesSize(Math.max(12, Math.min(96, v))); }
+                            }}
+                            className="w-20 px-2 py-1.5 rounded border-2 border-amber-200 bg-amber-50 text-amber-900"
                           />
-                          <span className="text-sm font-medium text-amber-900 w-10 tabular-nums">{layoutGlobalSpacingMultiplier.toFixed(1)}</span>
+                          <span className="text-sm font-medium text-amber-900">px</span>
                         </div>
                       </div>
                       <p className="text-xs text-amber-700 mb-1">Paigutuse muudatus kehtib kursorit sisaldava takti suhtes. Liigu kursoriga (← →) soovitud takti.</p>
@@ -5456,8 +5507,9 @@ function NoodiMeisterCore({ icons }) {
           >
           <div
             ref={scoreContainerRef}
-            className="relative mx-auto bg-white rounded-lg shadow-lg border-2 border-amber-200 p-8 flex-1 transition-colors"
+            className="relative mx-auto rounded-lg shadow-lg border-2 border-amber-200 p-8 flex-1 transition-colors"
             style={{
+              backgroundColor: themeColors.scoreBg,
               minWidth: LAYOUT.PAGE_WIDTH_MIN,
               maxWidth: pageOrientation === 'landscape' ? LAYOUT.PAGE_WIDTH_MAX_LANDSCAPE : LAYOUT.PAGE_WIDTH_MAX,
               minHeight: Math.max(500, getStaffHeight() + LAYOUT.SYSTEM_GAP + getStaffHeight() + 120),
@@ -6386,8 +6438,7 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
       onClick={handleStaffClick}
       style={isHorizontal ? { display: 'block', minWidth: svgWidth } : undefined}
     >
-      <rect width={isHorizontal ? svgWidth : '100%'} height={svgHeight} fill={themeColors.scoreBg} pointerEvents={noteInputMode ? 'auto' : 'none'} />
-
+      {/* No canvas/SVG background: paper style comes from the score container (CSS) like Docs/MuseScore */}
       {isFigurenotesMode ? (
         <FigurenotesView
           systems={systems}
@@ -6555,7 +6606,7 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
               const stemUp = pitchY > middleLineY;
               if (notationMode === 'figurenotes') {
                 const { color, shape } = getFigureSymbol(ghostPitch, ghostOctave);
-                const size = figurenotesSize;
+                const size = figurenotesSize + 2;
                 const r = size / 2;
                 const strokeW = Math.max(2, size * 0.38);
                 let el;
