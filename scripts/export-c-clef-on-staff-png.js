@@ -23,8 +23,8 @@ const staffLinePositions = [0, 1, 2, 3, 4].map((i) => startY + i * staffSpace);
 // C clef: middle "arrow" on the 2nd staff line (one line up from middle). Index: 0=top, 1=2nd line.
 const C_CLEF_LINE_INDEX = 1;
 const middleLineY = staffLinePositions[C_CLEF_LINE_INDEX];
-// Vertical offset so the 3rd line runs through the middle arrow (Leland glyph center may need a small nudge).
-const cClefAlignDy = staffSpace * 0;
+// Vertical offset so the middle arrow sits on the 2nd line (positive = clef lower).
+const cClefAlignDy = staffSpace * 0.45;
 const clefFontSize = staffSpace * 4;
 const clefX = 28;
 const staffLeft = 0;

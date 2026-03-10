@@ -76,9 +76,9 @@ async function main() {
     });
   });
 
-  // Clefs (path-based; no font)
+  // Clefs (path-based where no Leland script exists)
   toExport.push({ id: 'clef-bass', svg: svgWrap(BASS_CLEF_PATH) });
-  toExport.push({ id: 'clef-c', svg: svgWrap(C_CLEF_PATH) });
+  // clef-c.png: use scripts/export-clef-c-png.js (Leland U+E05C cClef), not path-based C_CLEF_PATH
 
   // Notes (path-based)
   toExport.push({ id: 'note-whole', svg: svgWrap(NOTE_WHOLE_PATH) });
