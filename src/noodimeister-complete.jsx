@@ -1793,8 +1793,19 @@ function NoodiMeisterCore({ icons }) {
       } else {
         const scoreData = data.scoreData ?? data.notes;
         const notesArr = Array.isArray(scoreData) ? scoreData : [];
-        const cfg = INSTRUMENT_CONFIG_BASE[data.instrument];
-        setStaves([{ id: '1', instrumentId: data.instrument || 'piano', clefType: (cfg?.defaultClef) || data.clefType || 'treble', notes: notesArr }]);
+        const instId = data.instrument || 'piano';
+        const cfg = INSTRUMENT_CONFIG_BASE[instId];
+        if (instId === 'piano' || cfg?.type === 'grandStaff') {
+          const braceGroupId = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `piano-${Date.now()}`;
+          const id1 = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `staff-${Date.now()}-a`;
+          const id2 = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `staff-${Date.now()}-b`;
+          setStaves([
+            { id: id1, instrumentId: 'piano', clefType: 'treble', notes: notesArr, braceGroupId, notationMode: data.notationMode ?? 'traditional' },
+            { id: id2, instrumentId: 'piano', clefType: 'bass', notes: [], braceGroupId, notationMode: data.notationMode ?? 'traditional' }
+          ]);
+        } else {
+          setStaves([{ id: '1', instrumentId: instId, clefType: (cfg?.defaultClef) || data.clefType || 'treble', notes: notesArr, notationMode: data.notationMode ?? 'traditional' }]);
+        }
         setActiveStaffIndex(0);
       }
       if (data.timeSignature) setTimeSignature(data.timeSignature);
@@ -1917,8 +1928,20 @@ function NoodiMeisterCore({ icons }) {
           if (Array.isArray(data.measureStretchFactors)) setMeasureStretchFactors(data.measureStretchFactors);
           if (Array.isArray(data.systemYOffsets)) setSystemYOffsets(data.systemYOffsets);
         } else {
-          const cfg = INSTRUMENT_CONFIG_BASE[data.instrument];
-          setStaves([{ id: '1', instrumentId: data.instrument || 'piano', clefType: (cfg?.defaultClef) || data.clefType || 'treble', notes: data.notes }]);
+          const instId = data.instrument || 'piano';
+          const cfg = INSTRUMENT_CONFIG_BASE[instId];
+          if (instId === 'piano' || cfg?.type === 'grandStaff') {
+            const braceGroupId = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `piano-${Date.now()}`;
+            const id1 = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `staff-${Date.now()}-a`;
+            const id2 = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `staff-${Date.now()}-b`;
+            const notesArr = Array.isArray(data.notes) ? data.notes : [];
+            setStaves([
+              { id: id1, instrumentId: 'piano', clefType: 'treble', notes: notesArr, braceGroupId, notationMode: data.notationMode ?? 'traditional' },
+              { id: id2, instrumentId: 'piano', clefType: 'bass', notes: [], braceGroupId, notationMode: data.notationMode ?? 'traditional' }
+            ]);
+          } else {
+            setStaves([{ id: '1', instrumentId: instId, clefType: (cfg?.defaultClef) || data.clefType || 'treble', notes: data.notes ?? [], notationMode: data.notationMode ?? 'traditional' }]);
+          }
           setActiveStaffIndex(0);
         }
         if (data.timeSignature) setTimeSignature(data.timeSignature);
@@ -2409,8 +2432,8 @@ function NoodiMeisterCore({ icons }) {
     const id = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `staff-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     const staffNotationMode = notationStyle === 'FIGURENOTES' ? 'figurenotes' : notationMode === 'vabanotatsioon' ? 'pedagogical' : 'traditional';
     setStaves((prev) => [...prev, { id, instrumentId: instId, clefType: clef, notes: [], notationMode: staffNotationMode }]);
-    setActiveStaffIndex((prev) => prev + 1);
-  }, [notationStyle, notationMode]);
+    setActiveStaffIndex(staves.length);
+  }, [notationStyle, notationMode, staves.length]);
 
   // Klaveri sisestamine: kaks noodirida (viiulivõti + bassivõti), ühendatud ühe instrumendi süsteemina (sulgega)
   const addPianoStaff = useCallback(() => {
@@ -2423,8 +2446,8 @@ function NoodiMeisterCore({ icons }) {
       { id: id1, instrumentId: 'piano', clefType: 'treble', notes: [], braceGroupId, notationMode: staffMode },
       { id: id2, instrumentId: 'piano', clefType: 'bass', notes: [], braceGroupId, notationMode: staffMode }
     ]);
-    setActiveStaffIndex((prev) => prev + 1);
-  }, [notationStyle, notationMode]);
+    setActiveStaffIndex(staves.length);
+  }, [notationStyle, notationMode, staves.length]);
 
   // Handle toolbox selection (clickedIndex = option index when clicking, else uses selectedOptionIndex for keyboard)
   const addNoteAtCursor = useCallback((pitch, octave, accidental = 0, options = {}) => {
@@ -2695,9 +2718,23 @@ function NoodiMeisterCore({ icons }) {
         setSelectedOptionIndex(optionIndex);
         const instId = option.type === 'option' ? option.value : option.value;
         const cfg = instrumentConfig[instId];
-        // Klaver: kaks noodirida (viiulivõti + bassivõti), ühendatud süsteemisulgega; teised instrumendid: üks noodirida
+        // Klaver: alati kaks paralleelset rida (viiulivõti üleval, bassivõti all); teised instrumendid: lisa üks uus rida
         if (instId === 'piano') {
-          addPianoStaff();
+          if (staves.length === 1) {
+            setStaves((prev) => {
+              const braceGroupId = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `piano-${Date.now()}`;
+              const id1 = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `staff-${Date.now()}-a`;
+              const id2 = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `staff-${Date.now()}-b`;
+              const staffMode = notationStyle === 'FIGURENOTES' ? 'figurenotes' : notationMode === 'vabanotatsioon' ? 'pedagogical' : 'traditional';
+              return [
+                { id: id1, instrumentId: 'piano', clefType: 'treble', notes: prev[0]?.notes ?? [], braceGroupId, notationMode: staffMode },
+                { id: id2, instrumentId: 'piano', clefType: 'bass', notes: [], braceGroupId, notationMode: staffMode }
+              ];
+            });
+            setActiveStaffIndex(0);
+          } else {
+            addPianoStaff();
+          }
         } else {
           addStaff(instId);
         }
@@ -2725,7 +2762,7 @@ function NoodiMeisterCore({ icons }) {
     }
     setActiveToolbox(null);
     setSelectedOptionIndex(0);
-  }, [activeToolbox, selectedOptionIndex, noteInputMode, addNoteAtCursor, ghostOctave, instrumentNotationVariant, addChordAt, getChordInsertBeat, getSelectedNotes, notes, keySignature, setNotes, saveToHistory, selectedNoteIndex, selectionStart, selectionEnd, durations, insertPatternAtCursor, addStaff, addPianoStaff, instrumentConfig, setNotationMode, setClefType]);
+  }, [activeToolbox, selectedOptionIndex, noteInputMode, addNoteAtCursor, ghostOctave, instrumentNotationVariant, addChordAt, getChordInsertBeat, getSelectedNotes, notes, keySignature, setNotes, saveToHistory, selectedNoteIndex, selectionStart, selectionEnd, durations, insertPatternAtCursor, addStaff, addPianoStaff, instrumentConfig, setNotationMode, setClefType, staves.length, notationStyle, notationMode]);
 
   // Keyboard handler
   useEffect(() => {
@@ -3577,6 +3614,9 @@ function NoodiMeisterCore({ icons }) {
   const effectiveLayoutLineBreakBefore = viewMode === 'score' ? layoutLineBreakBefore : partLayoutLineBreakBefore;
   const effectiveLayoutPageBreakBefore = viewMode === 'score' ? layoutPageBreakBefore : partLayoutPageBreakBefore;
   const scoreContainerRef = useRef(null);
+  const scoreContentRef = useRef(null); // div that has handleScoreContentClick – for drag coordinate conversion
+  const textboxInteractionRef = useRef(null); // { type: 'move'|'resize', id, startX, startY, boxStartX?, boxStartY?, boxStartW?, boxStartH?, handle? }
+  const textboxDragStartRef = useRef(null); // { id, startX, startY, boxStartX, boxStartY } – click vs drag
   const systemsForScoreRef = useRef([]);
   const exportCursorRef = useRef(null); // { x, y, emoji, size } container-relative, for MP4 fillText
   const [pageWidth, setPageWidth] = useState(LAYOUT.PAGE_WIDTH_MIN);
@@ -3675,11 +3715,85 @@ function NoodiMeisterCore({ icons }) {
       text: text || (isTempo ? option?.label : ''),
       type: isTempo ? 'tempo' : 'text',
       ...(bpm ? { tempoBpm: bpm } : {}),
-      fontSize: 14
+      fontSize: 14,
+      textAlign: 'center',
+      width: 200,
+      height: 60
     }]);
     if (!isTempo) setTextBoxDraftText('');
     if (isTempo && textBoxTempoBpm) setTextBoxTempoBpm('');
   }, [activeToolbox, selectedOptionIndex, textBoxDraftText, textBoxTempoBpm, toolboxes.textBox?.options]);
+
+  // Text box drag (move) and resize: document-level mousemove/mouseup
+  useEffect(() => {
+    const onMouseMove = (e) => {
+      const state = textboxInteractionRef.current;
+      const dragStart = textboxDragStartRef.current;
+      if (dragStart && !state) {
+        const dist = Math.hypot(e.clientX - dragStart.startX, e.clientY - dragStart.startY);
+        if (dist > 5) {
+          textboxInteractionRef.current = { type: 'move', id: dragStart.id, startX: dragStart.startX, startY: dragStart.startY, boxStartX: dragStart.boxStartX, boxStartY: dragStart.boxStartY };
+          textboxDragStartRef.current = null;
+        }
+      }
+      const current = textboxInteractionRef.current;
+      if (!current || !scoreContentRef.current) return;
+      if (current.type === 'move') {
+        const dx = e.clientX - current.startX;
+        const dy = e.clientY - current.startY;
+        setTextBoxes((prev) => prev.map((b) => b.id === current.id ? { ...b, x: current.boxStartX + dx, y: current.boxStartY + dy } : b));
+      } else if (current.type === 'resize' && current.handle) {
+        const dx = e.clientX - state.startX;
+        const dy = e.clientY - state.startY;
+        const minW = 60;
+        const minH = 30;
+        let { x, y, width, height } = { x: current.boxStartX, y: current.boxStartY, width: current.boxStartW, height: current.boxStartH };
+        switch (current.handle) {
+          case 'se':
+            width = Math.max(minW, current.boxStartW + dx);
+            height = Math.max(minH, current.boxStartH + dy);
+            break;
+          case 'sw':
+            x = current.boxStartX + dx;
+            width = Math.max(minW, current.boxStartW - dx);
+            height = Math.max(minH, current.boxStartH + dy);
+            break;
+          case 'ne':
+            y = current.boxStartY + dy;
+            width = Math.max(minW, current.boxStartW + dx);
+            height = Math.max(minH, current.boxStartH - dy);
+            break;
+          case 'nw':
+            x = current.boxStartX + dx;
+            y = current.boxStartY + dy;
+            width = Math.max(minW, current.boxStartW - dx);
+            height = Math.max(minH, current.boxStartH - dy);
+            break;
+          default:
+            break;
+        }
+        setTextBoxes((prev) => prev.map((b) => b.id === current.id ? { ...b, x, y, width, height } : b));
+      }
+    };
+    const onMouseUp = () => {
+      const dragStart = textboxDragStartRef.current;
+      if (dragStart && !textboxInteractionRef.current) {
+        setSelectedTextboxId(dragStart.id);
+        textboxDragStartRef.current = null;
+      }
+      if (textboxInteractionRef.current) {
+        textboxInteractionRef.current = null;
+        dirtyRef.current = true;
+      }
+      textboxDragStartRef.current = null;
+    };
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+    return () => {
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+    };
+  }, []);
 
   const completeSetup = useCallback((style) => {
     setNotationStyle(style);
@@ -4476,17 +4590,10 @@ function NoodiMeisterCore({ icons }) {
       <div className="sticky top-0 z-30 flex flex-col flex-shrink-0 shadow-lg">
       <header className="flex-shrink-0 bg-gradient-to-r from-amber-900 via-orange-800 to-red-900 text-amber-50">
           <div className="w-full pl-3 pr-4 py-3 flex flex-col gap-3">
-          {/* Rida 1: logo + link galeriile */}
+          {/* Rida 1: logo */}
           <div className="flex items-center justify-between gap-4">
             <Link to="/" className="inline-flex items-center text-amber-50 hover:opacity-90 transition-opacity">
               <img src="/logo.png" alt="NoodiMeister" className="h-9 w-auto" />
-            </Link>
-            <Link
-              to="/gallery"
-              className="inline-flex items-center px-3 py-1.5 rounded-lg text-sm font-medium text-amber-100 bg-amber-800/60 hover:bg-amber-700 border border-amber-600/50 transition-colors"
-              title={t('view.symbolGalleryHint')}
-            >
-              {t('view.symbolGallery')}
             </Link>
           </div>
           {/* Rida 2: rippmenüüd ja kõik käsud */}
@@ -4719,14 +4826,6 @@ function NoodiMeisterCore({ icons }) {
                       {toolboxPaletteVisible && <Check className="w-4 h-4 text-amber-400" />}
                     </button>
                     <div className="my-1 border-t border-slate-600" />
-                    <Link
-                      to="/gallery"
-                      onClick={() => setHeaderMenuOpen(null)}
-                      className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-amber-50 hover:bg-slate-600"
-                      title={t('view.symbolGalleryHint')}
-                    >
-                      {t('view.symbolGallery')}
-                    </Link>
                     <button
                       type="button"
                       onClick={() => { setHeaderMenuOpen(null); window.location.reload(); }}
@@ -5075,7 +5174,36 @@ function NoodiMeisterCore({ icons }) {
                       </select>
                     </div>
                     {selectedTextboxId && (
-                      <p className="text-xs text-amber-600">{t('textBox.selected')}: Delete / Backspace {t('textBox.delete')}</p>
+                      <>
+                        <div className="pt-2 mt-2 border-t border-amber-200">
+                          <label className="block text-xs font-semibold text-amber-900 mb-1">{t('textBox.textAlignment')}</label>
+                          <div className="flex flex-wrap gap-1">
+                            {[
+                              { value: 'left', label: t('textBox.alignLeft') },
+                              { value: 'center', label: t('textBox.alignCenter') },
+                              { value: 'right', label: t('textBox.alignRight') },
+                              { value: 'justify', label: t('textBox.alignJustify') },
+                            ].map(({ value, label }) => {
+                              const box = textBoxes.find((b) => b.id === selectedTextboxId);
+                              const isActive = (box?.textAlign ?? 'center') === value;
+                              return (
+                                <button
+                                  key={value}
+                                  type="button"
+                                  onClick={() => {
+                                    dirtyRef.current = true;
+                                    setTextBoxes((prev) => prev.map((b) => b.id === selectedTextboxId ? { ...b, textAlign: value } : b));
+                                  }}
+                                  className={`px-2 py-1 rounded text-xs font-medium ${isActive ? 'bg-amber-600 text-white' : 'bg-amber-100 text-amber-800 hover:bg-amber-200'}`}
+                                >
+                                  {label}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                        <p className="text-xs text-amber-600 mt-2">{t('textBox.selected')}: Delete / Backspace {t('textBox.delete')}. {t('textBox.dragResizeHint')}</p>
+                      </>
                     )}
                   </div>
                 )}
@@ -5527,7 +5655,7 @@ function NoodiMeisterCore({ icons }) {
               if (!Number.isNaN(optionIndex) && toolboxes.rhythm?.options?.[optionIndex]) handleToolboxSelection(optionIndex);
             }}
           >
-              <div className="relative" onClick={handleScoreContentClick} role="presentation">
+              <div ref={scoreContentRef} className="relative" onClick={handleScoreContentClick} role="presentation">
               {/* Pealkiri muudetav otse lehel (nagu Google Docs); failinimi = pealkiri salvestamisel */}
               <div className="mb-4">
                 <input
@@ -5734,27 +5862,83 @@ function NoodiMeisterCore({ icons }) {
           )}
           {/* Teksti kastid overlay – vabalt paigutatavad laulutekstid, kommentaarid ja tempo */}
           <div className="absolute inset-0 pointer-events-none" aria-hidden="true">
-            {textBoxes.map((box) => (
-              <div
-                key={box.id}
-                data-textbox-id={box.id}
-                className="pointer-events-auto absolute min-w-[2rem] max-w-[20rem] px-2 py-1 rounded border-2 bg-white/95 shadow text-amber-900 text-sm cursor-pointer select-none whitespace-pre-wrap break-words"
-                style={{ left: box.x, top: box.y, fontSize: box.fontSize || 14, borderColor: selectedTextboxId === box.id ? 'rgb(217 119 6)' : 'rgb(253 230 138)' }}
-                onClick={(e) => { e.stopPropagation(); setSelectedTextboxId(box.id); }}
-              >
-                {box.text}
-                {selectedTextboxId === box.id && (
-                  <button
-                    type="button"
-                    onClick={(e) => { e.stopPropagation(); dirtyRef.current = true; setTextBoxes(prev => prev.filter(b => b.id !== box.id)); setSelectedTextboxId(null); }}
-                    className="ml-2 text-red-600 hover:text-red-700 font-bold"
-                    title={t('textBox.delete')}
-                  >
-                    ×
-                  </button>
-                )}
-              </div>
-            ))}
+            {textBoxes.map((box) => {
+              const w = box.width ?? 200;
+              const h = box.height ?? 60;
+              const align = box.textAlign ?? 'center';
+              const isSelected = selectedTextboxId === box.id;
+              return (
+                <div
+                  key={box.id}
+                  data-textbox-id={box.id}
+                  className="pointer-events-auto absolute px-2 py-1 rounded border-2 bg-white/95 shadow text-amber-900 text-sm select-none whitespace-pre-wrap break-words overflow-hidden flex flex-col"
+                  style={{
+                    left: box.x,
+                    top: box.y,
+                    width: w,
+                    height: h,
+                    fontSize: box.fontSize || 14,
+                    borderColor: isSelected ? 'rgb(217 119 6)' : 'rgb(253 230 138)',
+                    textAlign: align,
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                  onMouseDown={(e) => {
+                    if (e.target.closest('button') || e.target.closest('[data-resize-handle]')) return;
+                    e.stopPropagation();
+                    textboxDragStartRef.current = { id: box.id, startX: e.clientX, startY: e.clientY, boxStartX: box.x, boxStartY: box.y };
+                  }}
+                >
+                  <div className="flex-1 flex items-start justify-between gap-1 min-h-0" style={{ textAlign: align }}>
+                    <span className="flex-1 min-w-0 block" style={{ textAlign: align }}>{box.text}</span>
+                    {isSelected && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); dirtyRef.current = true; setTextBoxes(prev => prev.filter(b => b.id !== box.id)); setSelectedTextboxId(null); }}
+                          onMouseDown={(e) => e.stopPropagation()}
+                          className="flex-shrink-0 text-red-600 hover:text-red-700 font-bold"
+                          title={t('textBox.delete')}
+                        >
+                          ×
+                        </button>
+                      </>
+                    )}
+                  </div>
+                  {isSelected && (
+                    <>
+                      {['nw', 'ne', 'sw', 'se'].map((handle) => {
+                        const pos = { nw: { top: -2, left: -2 }, ne: { top: -2, right: -2 }, sw: { bottom: -2, left: -2 }, se: { bottom: -2, right: -2 } }[handle];
+                        const cursor = (handle === 'nw' || handle === 'se') ? 'nwse-resize' : 'nesw-resize';
+                        return (
+                          <div
+                            key={handle}
+                            data-resize-handle
+                            className="absolute w-3 h-3 bg-amber-600 rounded-sm border border-amber-800 z-10"
+                            style={{ ...pos, cursor }}
+                            onMouseDown={(e) => {
+                              e.stopPropagation();
+                              e.preventDefault();
+                              textboxDragStartRef.current = null;
+                              textboxInteractionRef.current = {
+                                type: 'resize',
+                                id: box.id,
+                                startX: e.clientX,
+                                startY: e.clientY,
+                                boxStartX: box.x,
+                                boxStartY: box.y,
+                                boxStartW: w,
+                                boxStartH: h,
+                                handle,
+                              };
+                            }}
+                          />
+                        );
+                      })}
+                    </>
+                  )}
+                </div>
+              );
+            })}
           </div>
           </div>
           </div>
