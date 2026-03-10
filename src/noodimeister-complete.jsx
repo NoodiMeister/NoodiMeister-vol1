@@ -5625,7 +5625,7 @@ function NoodiMeisterCore({ icons }) {
                   layoutPageBreakBefore={effectiveLayoutPageBreakBefore}
                   layoutSystemGap={layoutSystemGap}
                   layoutGlobalSpacingMultiplier={layoutGlobalSpacingMultiplier}
-                  showLayoutBreakIcons={activeToolbox === 'layout'}
+                  showLayoutBreakIcons={false}
                   showStaffSpacerHandles={activeToolbox === 'layout'}
                   onSystemYOffsetChange={isFirstVisible ? (systemIndex, deltaY) => {
                     dirtyRef.current = true;
@@ -6365,8 +6365,10 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
       beatLeft -= beatCount;
     }
     const j = Math.max(0, sys.measureIndices.length - 1);
-    return marginLeft + widths.slice(0, j + 1).reduce((a, b) => a + b, 0) - (widths[j] ?? 0) * 0.5;
+    const x = marginLeft + widths.slice(0, j + 1).reduce((a, b) => a + b, 0) - (widths[j] ?? 0) * 0.5;
+    return Number.isFinite(x) ? x : marginLeft + 50;
   })() : null;
+  const cursorSlotCenterXValid = cursorSlotCenterX != null && Number.isFinite(cursorSlotCenterX);
 
   const svgWidth = isHorizontal ? totalPages * (pageWidth || LAYOUT.PAGE_WIDTH_MIN) : '100%';
   const svgHeight = isHorizontal ? a4PageHeight : totalHeight;
@@ -6462,7 +6464,7 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
 
 
       {/* Cursor + Ghost note (only visible when note input mode is ON) – slot center. Dünaamiline: tühi väli = joon, muidu emoji. Rütmiline hüpe: y = base_y - |A·sin(π·beat_progress)| */}
-      {noteInputMode && cursorInfo && cursorSlotCenterX != null && (() => {
+      {noteInputMode && cursorInfo && cursorSlotCenterXValid && (() => {
         const cursorChar = (pedagogicalPlayheadEmoji || '').trim();
         const showLine = cursorChar === '';
         const displayEmoji = cursorChar || '🎵';

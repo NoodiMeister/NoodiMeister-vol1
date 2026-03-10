@@ -186,22 +186,24 @@ export function FigurenotesView({
                 const strokeShape = isSelected ? '#2563eb' : '#000';
                 const strokeWShape = isSelected ? 3 : 2;
 
-                const w = Math.max(size, noteWidth ?? size);
-                const h = size;
-                const svgX = x - w / 2;
-                const svgY = y - h / 2;
                 const fill = style.fill ?? '#6b7280';
                 const effectiveStroke = style.stroke ?? 'none';
                 const effectiveStrokeWidth = style.strokeWidth ?? 0;
+
+                /* Quarter (1/4) and all durations: use a square SVG and preserve aspect ratio so shapes
+                   are never stretched — perfect circle, square, X, or triangle (not oval/rectangular). */
+                const shapeSize = size;
+                const svgX = x - shapeSize / 2;
+                const svgY = y - shapeSize / 2;
 
                 const shapeEl = (
                   <svg
                     x={svgX}
                     y={svgY}
-                    width={w}
-                    height={h}
+                    width={shapeSize}
+                    height={shapeSize}
                     viewBox="0 0 100 100"
-                    preserveAspectRatio="none"
+                    preserveAspectRatio="xMidYMid meet"
                     style={{ overflow: 'visible' }}
                   >
                     {shapePaths.map((d, i) => (
