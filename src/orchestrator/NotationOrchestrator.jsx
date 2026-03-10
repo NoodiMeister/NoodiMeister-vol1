@@ -529,6 +529,7 @@ function NotationOrchestratorInner({ showPiano = true, t = (k) => k }) {
                     onNotePlay={onNotePlay}
                     figurenotesColors={notationStyle === 'FIGURENOTES' || notationMode === 'pedagogical' ? FIGURENOTES_COLORS : null}
                     keySignature={keySignature}
+                    useTraditionalNoteNames={notationStyle === 'FIGURENOTES'}
                     keyboardPlaysPiano={notationStyle === 'FIGURENOTES' || notationMode === 'pedagogical'}
                   />
                 </div>

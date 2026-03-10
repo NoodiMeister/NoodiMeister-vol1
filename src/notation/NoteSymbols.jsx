@@ -7,7 +7,7 @@ import {
 } from './StaffConstants';
 import { getGlyphFontSize } from './musescoreStyle';
 import { SmuflGlyph } from './smufl/SmuflGlyph';
-import { smuflNoteheadForType, smuflPrecomposedNote } from './smufl/glyphs';
+import { SMUFL_GLYPH, smuflNoteheadForType, smuflPrecomposedNote } from './smufl/glyphs';
 
 /**
  * SMuFL notehead glyph (Leland). Scale from MuseScore/SMuFL: 4 sp per em.
@@ -115,9 +115,25 @@ export function WholeNoteSymbol({ cx = 0, cy = 0, staffSpace = STAFF_SPACE }) {
   return <NoteHeadGlyph cx={cx} cy={cy} staffSpace={staffSpace} type="whole" />;
 }
 
-export function HalfNoteSymbol({ cx = 0, cy = 0, staffSpace = STAFF_SPACE, stemUp = true }) {
+/** Half note: hollow notehead (outline) + SVG stem – same building blocks as quarter for consistent look. */
+export function HalfNoteSymbol({ cx = 0, cy = 0, staffSpace = STAFF_SPACE, stemUp = true, stemLength }) {
+  const fontSize = getGlyphFontSize(staffSpace);
+  const strokeW = getStemThickness(staffSpace) * 0.8;
   return (
-    <PrecomposedNoteGlyph cx={cx} cy={cy} staffSpace={staffSpace} type="half" stemUp={stemUp} />
+    <g>
+      <SmuflGlyph
+        x={cx}
+        y={cy}
+        glyph={SMUFL_GLYPH.noteheadHalf}
+        fontSize={fontSize}
+        fill="none"
+        style={{
+          stroke: 'var(--note-fill, #1a1a1a)',
+          strokeWidth: strokeW,
+        }}
+      />
+      <Stem cx={cx} cy={cy} staffSpace={staffSpace} stemUp={stemUp} stemLength={stemLength} />
+    </g>
   );
 }
 

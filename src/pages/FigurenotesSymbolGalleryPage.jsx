@@ -5,7 +5,7 @@
 import React from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import './SymbolGalleryPage.css';
-import { FIGURE_NOTE_COLORS, FIGURE_NOTE_NAMES, getShapePathsByOctave, getFigureStyle } from '../constants/FigureNotesLibrary';
+import { FIGURE_NOTE_COLORS, getShapePathsByOctave, getFigureStyle } from '../constants/FigureNotesLibrary';
 
 const FIGURE_BLOCK_GRAY = '#9ca3af';
 const DURATION_TO_MULTIPLIER = {
@@ -102,7 +102,7 @@ function buildFigurenotesSymbolList() {
     Object.keys(FIGURE_NOTE_COLORS).forEach((note) => {
       list.push({
         id: `octave-${oct}-${note}`,
-        title: `Octave ${oct} (${OCTAVE_LABELS[oct]}) – ${note} (${FIGURE_NOTE_NAMES[note]})`,
+        title: `Octave ${oct} (${OCTAVE_LABELS[oct]}) – ${note}`,
         el: <FigurenotesShapeCell noteName={note} octave={oct} />,
       });
     });

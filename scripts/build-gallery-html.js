@@ -19,7 +19,6 @@ const DEFINITIONS = `
   <table>
     <thead><tr><th>Glyph name</th><th>Codepoint</th><th>Used in PNGs</th></tr></thead>
     <tbody>
-      <tr><td>gClef (treble)</td><td><code>U+E050</code></td><td>clef-treble</td></tr>
       <tr><td>fClef (bass)</td><td><code>U+E062</code></td><td>clef-bass, bass-staff-eb-a-f-d-bb</td></tr>
       <tr><td>cClef (alto/tenor)</td><td><code>U+E05C</code></td><td>clef-c</td></tr>
       <tr><td>noteheadWhole</td><td><code>U+E0A2</code></td><td>note-whole</td></tr>
@@ -38,10 +37,8 @@ const DEFINITIONS = `
   <table>
     <thead><tr><th>PNG file</th><th>Definition</th></tr></thead>
     <tbody>
-      <tr><td>clef-treble.png</td><td>Leland U+E050 (gClef)</td></tr>
       <tr><td>clef-bass.png</td><td>Leland U+E062 (fClef)</td></tr>
       <tr><td>clef-c.png</td><td>Leland U+E05C (cClef)</td></tr>
-      <tr><td>clef-jo.png</td><td>SVG: 3 black rectangles</td></tr>
       <tr><td>note-whole.png</td><td>Leland U+E0A2</td></tr>
       <tr><td>note-half-up.png</td><td>Leland U+E0A3 + SVG stem</td></tr>
       <tr><td>note-quarter-up.png</td><td>Leland U+E0A4 + SVG stem</td></tr>

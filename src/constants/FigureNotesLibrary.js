@@ -20,15 +20,15 @@ export const FIGURE_NOTE_COLORS = {
   B: '#22c55e',   // GREEN
 };
 
-/** Note name → solfège label (DO, RE, …). */
+/** Note name → traditional letter (C, D, E, …). Figurenotes use traditional note names only. */
 export const FIGURE_NOTE_NAMES = {
-  C: 'DO',
-  D: 'RE',
-  E: 'MI',
-  F: 'FA',
-  G: 'SOL',
-  A: 'LA',
-  B: 'SI',
+  C: 'C',
+  D: 'D',
+  E: 'E',
+  F: 'F',
+  G: 'G',
+  A: 'A',
+  B: 'B',
 };
 
 /** Octave 2: X-shape (two hexagons, viewBox 0 0 100 100). */
@@ -83,7 +83,7 @@ export function getFigureColor(noteName) {
 export function getShapeData(noteName) {
   const p = normalizeNote(noteName);
   const color = FIGURE_NOTE_COLORS[p] ?? FIGURE_NOTE_COLORS.C;
-  const name = FIGURE_NOTE_NAMES[p] ?? 'DO';
+  const name = FIGURE_NOTE_NAMES[p] ?? 'C';
   return { name, color };
 }
 

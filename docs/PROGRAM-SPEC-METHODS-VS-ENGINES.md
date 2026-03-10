@@ -39,7 +39,7 @@ Each method is a **mode** the user can select. It determines **which view is sho
 |------|------|
 | **User intent** | Figurenotes.org-style: pitch = shape + color (C=red square, D=circle, …), duration = note width or stems/flags; rest = “Z”; grid of measure boxes. |
 | **View** | **Exactly one:** `FigurenotesView`. No other view must render the Figurenotes grid and colored shapes. |
-| **Symbols** | Shapes and colors from `FigureNotesLibrary.js` (paths and colors per pitch; octave styles). Optional stems/flags for duration. Rest = “Z”. JO note names (e.g. Do, Re) from `joNames.js`. Toolbox duration = `FigurenotesBlockIcon` (gray blocks). |
+| **Symbols** | Shapes and colors from `FigureNotesLibrary.js` (paths and colors per pitch; octave styles). Optional stems/flags for duration. Rest = “Z”. Traditional note names (C, D, E, …) only; pedagogical (JO/LE/MI) names are not used. Toolbox duration = `FigurenotesBlockIcon` (gray blocks). |
 | **Function keys / toolbox** | Rhythm toolbox shows `FigurenotesBlockIcon` per duration. No clef toolbox for Figurenotes (no JO clef in this view). Same rhythm numeric keys (2–7, 0, dot) for input. |
 | **Layout** | Uses engine’s **figure** branch: measure boxes, beat grid, horizontal flow of figures. |
 | **Trigger** | `notationStyle === 'FIGURENOTES'`. |

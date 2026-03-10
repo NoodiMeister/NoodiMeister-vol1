@@ -37,6 +37,8 @@ import { renderFiguredBassFigurations } from '../notation/figuredBassFigurations
 const LAYOUT = { MARGIN_LEFT: 60, CLEF_WIDTH: 45, MEASURE_MIN_WIDTH: 28 };
 const PAGE_BREAK_GAP = 80;
 const STAFF_SPACE = 10;
+/** Treble clef anchor: one staff line higher than standard (B line). staffLinePositions[2]. */
+const TREBLE_CLEF_LINE_INDEX = 3; // G4 = 2nd line from bottom (0=top=F5, 4=bottom=E4)
 
 // SMuFL noteheads (Leland)
 const SMUFL = {
@@ -207,10 +209,13 @@ export function TraditionalNotationView({
   const spacing = staffSpaceProp ?? STAFF_SPACE;
   const centerY = timelineHeight / 2;
   const staffLinePositions = getStaffLinePositions(centerY, staffLines, spacing);
-  // Leland: Viiulivõti G-joonel (altpoolt 2. joon = index 3), Bassivõti F-joonel (ülevalt 4. joon = index 1)
-  const trebleGLine = staffLinePositions[3]; // G4
+  // Leland: Treble on B line (traditional-method placement). Bass: F line (index 1).
+  const trebleGLine = staffLinePositions[TREBLE_CLEF_LINE_INDEX];
   const bassFLine = staffLinePositions[1];    // F3
   const middleLineY = centerY;
+  // C clef: alto = middle line (index 2), tenor = one line up (index 1). Middle arrow of cClef sits on this line.
+  const cClefAltoLine = staffLinePositions[2];
+  const cClefTenorLine = staffLinePositions[1];
   const resolvePitchY = (pitch, octave) => (typeof getPitchY === 'function' ? getPitchY(pitch, octave) : centerY);
   const clefFontSize = spacing * 4; // Leland: 4× staff-space
   const clefX = 24;
@@ -315,7 +320,7 @@ export function TraditionalNotationView({
                       const nameWidth = multiStaff ? 50 : 0;
                       const clefXStaff = clefX + nameWidth;
                       if (multiStaff) {
-                        const clefY = instClef === 'treble' ? staffY + trebleGLine : instClef === 'bass' ? staffY + bassFLine : staffY + centerY;
+                        const clefY = instClef === 'treble' ? staffY + trebleGLine : instClef === 'bass' ? staffY + bassFLine : instClef === 'tenor' ? staffY + cClefTenorLine : staffY + cClefAltoLine;
                         return (
                           <StaffClefSymbol
                             key={`clef-${sys.systemIndex}-${staffIndex}-${instClef}`}
@@ -364,7 +369,7 @@ export function TraditionalNotationView({
                         );
                         currentX += LAYOUT.CLEF_WIDTH;
                         if (relativeNotationShowTraditionalClef) {
-                          const tradY = clefType === 'treble' ? staffY + trebleGLine : clefType === 'bass' ? staffY + bassFLine : staffY + centerY;
+                          const tradY = clefType === 'treble' ? staffY + trebleGLine : clefType === 'bass' ? staffY + bassFLine : clefType === 'tenor' ? staffY + cClefTenorLine : staffY + cClefAltoLine;
                           g.push(<StaffClefSymbol key="trad-clef" x={currentX} y={tradY} height={clefFontSize} clefType={clefType} fill="#000" staffSpace={spacing} />);
                           currentX += LAYOUT.CLEF_WIDTH;
                         }
@@ -379,7 +384,7 @@ export function TraditionalNotationView({
                         }
                         return <g>{g}</g>;
                       }
-                      const clefY = clefType === 'treble' ? staffY + trebleGLine : clefType === 'bass' ? staffY + bassFLine : staffY + centerY;
+                      const clefY = clefType === 'treble' ? staffY + trebleGLine : clefType === 'bass' ? staffY + bassFLine : clefType === 'tenor' ? staffY + cClefTenorLine : staffY + cClefAltoLine;
                       return (
                         <StaffClefSymbol
                           key={`clef-${sys.systemIndex}-${staffIndex}-${clefType}`}

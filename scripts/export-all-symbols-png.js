@@ -3,11 +3,7 @@
  * Run: node scripts/export-all-symbols-png.js
  * Writes PNGs to docs/symbol-previews/
  *
- * - Figurenotes, JO clef, octave: Sharp (no font).
- * - Traditional clefs/notes/rests: Puppeteer so Leland font is applied (Sharp does not use @font-face).
- *   If Puppeteer is not installed, those PNGs are still generated with Sharp but will show wrong/missing glyphs.
- *
- * For correct traditional symbols: npm install puppeteer --save-dev
+ * All symbols are path-based or use system fonts; Sharp only (no Puppeteer/Chrome).
  */
 
 import fs from 'fs';
@@ -17,51 +13,12 @@ import { FIGURE_NOTE_COLORS, getShapePathsByOctave, getFigureStyle } from '../sr
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const OUT_DIR = path.join(__dirname, '..', 'docs', 'symbol-previews');
-const FONT_PATH = path.join(__dirname, '..', 'public', 'fonts', 'Leland.woff2');
 
 const SIZE = 200;
 
-/** IDs that use Leland; must be rendered in a browser (Puppeteer) for correct glyphs. */
-const FONT_DEPENDENT_IDS = new Set([
-  'clef-treble', 'clef-bass', 'clef-c',
-  'note-whole', 'note-half-up', 'note-quarter-up', 'note-eighth-up', 'note-16th-up', 'note-32nd-up',
-  'rest-whole', 'rest-half', 'rest-quarter', 'rest-eighth', 'rest-16th', 'rest-32nd',
-  'bass-staff-eb-a-f-d-bb',
-]);
-
-function lelandFontDataUrl() {
-  if (!fs.existsSync(FONT_PATH)) return null;
-  const woff2 = fs.readFileSync(FONT_PATH);
-  return `data:font/woff2;base64,${woff2.toString('base64')}`;
-}
-
-/** Render SVG to PNG in headless Chrome so Leland @font-face is applied. Returns null if Puppeteer unavailable. */
-async function renderSvgWithPuppeteer(svgString, width, height) {
-  try {
-    const puppeteer = (await import('puppeteer')).default;
-    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"/></head><body style="margin:0;display:flex;align-items:center;justify-content:center;min-height:100vh;">${svgString}</body></html>`;
-    const browser = await puppeteer.launch({ headless: true });
-    const page = await browser.newPage();
-    await page.setViewport({ width: Math.max(width, 400), height: Math.max(height, 400), deviceScaleFactor: 2 });
-    await page.setContent(html, { waitUntil: 'networkidle0', timeout: 10000 });
-    await page.evaluate(() => document.fonts.ready);
-    await new Promise((r) => setTimeout(r, 200));
-    const el = await page.$('svg');
-    const pngBuffer = el ? await el.screenshot({ type: 'png' }) : null;
-    await browser.close();
-    return pngBuffer ? (Buffer.isBuffer(pngBuffer) ? pngBuffer : Buffer.from(pngBuffer)) : null;
-  } catch {
-    return null;
-  }
-}
-
-function svgWrap(content, width = SIZE, height = SIZE, fontDataUrl = null) {
-  const defs = fontDataUrl
-    ? `<defs><style>@font-face{font-family:'Leland';src:url('${fontDataUrl}') format('woff2');}</style></defs>`
-    : '';
+function svgWrap(content, width = SIZE, height = SIZE) {
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="${-width/2} ${-height/2} ${width} ${height}" width="${width}" height="${height}">
-  ${defs}
   <rect x="${-width/2}" y="${-height/2}" width="${width}" height="${height}" fill="#fff"/>
   ${content}
 </svg>`;
@@ -71,32 +28,39 @@ function safeId(id) {
   return String(id).replace(/[^a-zA-Z0-9-_]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '') || 'symbol';
 }
 
-// —— Rest paths (when font not available) ——
+// —— Path-based traditional symbols (Sharp-only; no font/Puppeteer) ——
+// Bass clef from bassclefsymbol.svg: path + two dots, scaled and centered
+const BASS_CLEF_PATH = `<g transform="translate(-46.2, 78.5) scale(4.62) translate(-5, -12)"><path fill="#1a1a1a" d="M12.4,2.5 C9.8,2.5,7.6,3.4,5.9,5.2 C4.2,7,3.3,9.2,3.3,11.8 c0,2.8,1,5.2,2.9,7.1 c1.9,1.9,4.3,2.9,7.1,2.9 c2.1,0,4-0.6,5.6-1.9 l-1.3-1.6 c-1.2,0.9-2.7,1.4-4.3,1.4 c-2.2,0-4.1-0.8-5.6-2.3 c-1.5-1.5-2.2-3.4-2.2-5.6 c0-2.2,0.8-4.1,2.3-5.6 c1.5-1.5,3.4-2.3,5.6-2.3 c3.2,0,5.9,2,7,4.8 h2.3 C21.6,6,17.5,2.5,12.4,2.5 z"/><circle cx="15" cy="-5" r="1.8" fill="#1a1a1a"/><circle cx="15" cy="0" r="1.8" fill="#1a1a1a"/></g>`;
+// C clef: two vertical bars + C curve
+const C_CLEF_PATH = '<g stroke="#1a1a1a" fill="none" stroke-width="4" stroke-linecap="round"><line x1="-14" y1="-55" x2="-14" y2="55"/><line x1="14" y1="-55" x2="14" y2="55"/><path d="M14 0 Q-14 0 -14 -28 Q14 -55 14 -28 M14 28 Q-14 28 -14 0 Q14 28 14 0"/></g>';
+// Note shapes (path/circle/ellipse + stem + flags)
+const NOTE_WHOLE_PATH = '<ellipse cx="0" cy="0" rx="28" ry="16" fill="none" stroke="#1a1a1a" stroke-width="2.5"/>';
+const NOTE_HALF_PATH = '<ellipse cx="0" cy="0" rx="25" ry="14" fill="none" stroke="#1a1a1a" stroke-width="2.5"/><line x1="12" y1="0" x2="12" y2="-88" stroke="#1a1a1a" stroke-width="2.5"/>';
+const NOTE_QUARTER_PATH = '<circle cx="0" cy="0" r="18" fill="#1a1a1a"/><line x1="18" y1="0" x2="18" y2="-85" stroke="#1a1a1a" stroke-width="2.5"/>';
+const stemR = 18;
+const stemY = -85;   // stem-up: tip at y = -85
+const stemYDown = 85; // stem-down: tip at y = +85
+// Flag for stem UP: on right of stem, going right then back (dy offsets from stem tip)
+const flag = (dy) => `<path d="M${stemR} ${stemY} L${stemR + 14} ${stemY + dy} L${stemR} ${stemY + dy + 12}" fill="#1a1a1a"/>`;
+// Flag for stem DOWN: on right of stem (negative x), below stem tip
+const flagDown = (dy) => `<path d="M${-stemR} ${stemYDown} L${-stemR - 14} ${stemYDown + dy} L${-stemR} ${stemYDown + dy + 12}" fill="#1a1a1a"/>`;
+const NOTE_EIGHTH_PATH = `<circle cx="0" cy="0" r="${stemR}" fill="#1a1a1a"/><line x1="${stemR}" y1="0" x2="${stemR}" y2="${stemY}" stroke="#1a1a1a" stroke-width="2.5"/>${flag(8)}`;
+const NOTE_16TH_PATH = `<circle cx="0" cy="0" r="${stemR}" fill="#1a1a1a"/><line x1="${stemR}" y1="0" x2="${stemR}" y2="${stemY}" stroke="#1a1a1a" stroke-width="2.5"/>${flag(8)}${flag(20)}`;
+const NOTE_16TH_DOWN_PATH = `<circle cx="0" cy="0" r="${stemR}" fill="#1a1a1a"/><line x1="${-stemR}" y1="0" x2="${-stemR}" y2="${stemYDown}" stroke="#1a1a1a" stroke-width="2.5"/>${flagDown(8)}${flagDown(20)}`;
+const NOTE_32ND_PATH = `<circle cx="0" cy="0" r="${stemR}" fill="#1a1a1a"/><line x1="${stemR}" y1="0" x2="${stemR}" y2="${stemY}" stroke="#1a1a1a" stroke-width="2.5"/>${flag(8)}${flag(20)}${flag(32)}`;
+// Rests
 const REST_WHOLE_PATH = '<path fill="#1a1a1a" d="M-48,-18 L48,-18 L48,18 L-48,18 Z"/>';
 const REST_QUARTER_PATH = '<g transform="translate(-17,-42.5) scale(0.85)"><path fill="#1a1a1a" d="M28,5 C35,5 38,12 36,22 L34,45 C30,62 22,72 12,68 C4,64 2,54 8,46 C14,38 26,42 30,50 L28,78 C26,88 20,95 12,92 C4,89 2,82 6,78 L20,52 C26,42 24,32 16,34 C10,36 6,32 8,26 L24,8 C28,4 30,2 28,5 Z"/></g>';
-// Half rest: hat on line
 const REST_HALF_PATH = '<path fill="#1a1a1a" d="M-40,-8 L40,-8 L35,8 L-35,8 Z"/>';
-// Eighth: squiggle similar to quarter
 const REST_EIGHTH_PATH = '<g transform="translate(-12,-45) scale(0.6)"><path fill="#1a1a1a" d="M28,5 C35,5 38,12 36,22 L34,45 C30,62 22,72 12,68 C4,64 2,54 8,46 C14,38 26,42 30,50 L28,78 C26,88 20,95 12,92 C4,89 2,82 6,78 L20,52 C26,42 24,32 16,34 C10,36 6,32 8,26 L24,8 C28,4 30,2 28,5 Z"/></g>';
 const REST_16TH_PATH = '<g transform="translate(-8,-48) scale(0.5)"><path fill="#1a1a1a" d="M28,5 C35,5 38,12 36,22 L34,45 C30,62 22,72 12,68 C4,64 2,54 8,46 C14,38 26,42 30,50 L28,78 C26,88 20,95 12,92 C4,89 2,82 6,78 L20,52 C26,42 24,32 16,34 C10,36 6,32 8,26 L24,8 C28,4 30,2 28,5 Z"/></g>';
 const REST_32ND_PATH = '<g transform="translate(-5,-50) scale(0.4)"><path fill="#1a1a1a" d="M28,5 C35,5 38,12 36,22 L34,45 C30,62 22,72 12,68 C4,64 2,54 8,46 C14,38 26,42 30,50 L28,78 C26,88 20,95 12,92 C4,89 2,82 6,78 L20,52 C26,42 24,32 16,34 C10,36 6,32 8,26 L24,8 C28,4 30,2 28,5 Z"/></g>';
+// Flat sign (simple path for staff)
+const FLAT_PATH = '<path fill="#1a1a1a" d="M0 4 L0 -18 L3 -18 L3 2 Q0 -2 -3 2 L-3 18 L0 18 Z"/>';
 
 async function main() {
   const sharp = (await import('sharp')).default;
   fs.mkdirSync(OUT_DIR, { recursive: true });
-  const fontUrl = lelandFontDataUrl();
-  const textStyle = 'font-family:\'Leland\',sans-serif; font-size:120; fill:#1a1a1a; text-anchor:middle; dominant-baseline:middle';
-  const textStyleOutline = 'font-family:\'Leland\',sans-serif; font-size:120; fill:none; stroke:#1a1a1a; stroke-width:2; text-anchor:middle; dominant-baseline:middle';
-
-  // SMuFL: clefs, noteheads, rests; precomposed notes (note+stem+flag in one glyph) from font
-  const smufl = {
-    gClef: '\uE050', fClef: '\uE062', cClef: '\uE05C',
-    noteheadWhole: '\uE0A2', noteheadHalf: '\uE0A3', noteheadBlack: '\uE0A4',
-    noteWhole: '\uE1D2', noteHalfUp: '\uE1D3', noteQuarterUp: '\uE1D5',
-    note8thUp: '\uE1D7', note16thUp: '\uE1D9', note32ndUp: '\uE1DB',
-    restWhole: '\uE4E3', restHalf: '\uE4E4', restQuarter: '\uE4E5',
-    rest8th: '\uE4E6', rest16th: '\uE4E7', rest32nd: '\uE4E8',
-  };
 
   const toExport = [];
 
@@ -112,36 +76,28 @@ async function main() {
     });
   });
 
-  // Clefs (Leland)
+  // Clefs (path-based; no font)
+  toExport.push({ id: 'clef-bass', svg: svgWrap(BASS_CLEF_PATH) });
+  toExport.push({ id: 'clef-c', svg: svgWrap(C_CLEF_PATH) });
+
+  // Notes (path-based)
+  toExport.push({ id: 'note-whole', svg: svgWrap(NOTE_WHOLE_PATH) });
+  toExport.push({ id: 'note-half-up', svg: svgWrap(NOTE_HALF_PATH) });
+  toExport.push({ id: 'note-quarter-up', svg: svgWrap(NOTE_QUARTER_PATH) });
+  toExport.push({ id: 'note-eighth-up', svg: svgWrap(NOTE_EIGHTH_PATH) });
+  toExport.push({ id: 'note-16th-up', svg: svgWrap(NOTE_16TH_PATH) });
+  toExport.push({ id: 'note-16th-down', svg: svgWrap(NOTE_16TH_DOWN_PATH) });
+  toExport.push({ id: 'note-32nd-up', svg: svgWrap(NOTE_32ND_PATH) });
+
+  // Rests (path-based)
   [
-    { id: 'clef-treble', content: `<text x="0" y="0" style="${textStyle}">${smufl.gClef}</text>` },
-    { id: 'clef-bass', content: `<text x="0" y="0" style="${textStyle}">${smufl.fClef}</text>` },
-    { id: 'clef-c', content: `<text x="0" y="0" style="${textStyle}">${smufl.cClef}</text>` },
-  ].forEach(({ id, content }) => toExport.push({ id, svg: svgWrap(content, SIZE, SIZE, fontUrl) }));
-
-  // JO clef
-  const joClef = `<g transform="translate(0,0) scale(0.6) translate(0,-40)"><rect x="0" y="0" width="12" height="80" fill="#000"/><rect x="15" y="0" width="40" height="32" fill="#000"/><rect x="15" y="48" width="40" height="32" fill="#000"/></g>`;
-  toExport.push({ id: 'clef-jo', svg: svgWrap(joClef) });
-
-  // Notes: use Leland precomposed glyphs (note+stem+flag in one character) so previews match font design
-  toExport.push({ id: 'note-whole', svg: svgWrap(`<text x="0" y="0" style="${textStyle}">${smufl.noteheadWhole}</text>`, SIZE, SIZE, fontUrl) });
-  toExport.push({ id: 'note-half-up', svg: svgWrap(`<text x="0" y="0" style="${textStyleOutline}">${smufl.noteHalfUp}</text>`, SIZE, SIZE, fontUrl) });
-  toExport.push({ id: 'note-quarter-up', svg: svgWrap(`<text x="0" y="0" style="${textStyle}">${smufl.noteQuarterUp}</text>`, SIZE, SIZE, fontUrl) });
-  toExport.push({ id: 'note-eighth-up', svg: svgWrap(`<text x="0" y="0" style="${textStyle}">${smufl.note8thUp}</text>`, SIZE, SIZE, fontUrl) });
-  toExport.push({ id: 'note-16th-up', svg: svgWrap(`<text x="0" y="0" style="${textStyle}">${smufl.note16thUp}</text>`, SIZE, SIZE, fontUrl) });
-  toExport.push({ id: 'note-32nd-up', svg: svgWrap(`<text x="0" y="0" style="${textStyle}">${smufl.note32ndUp}</text>`, SIZE, SIZE, fontUrl) });
-
-  // Rests (Leland first; fallback paths used if font fails)
-  [
-    { id: 'rest-whole', font: `<text x="0" y="0" style="${textStyle}">${smufl.restWhole}</text>`, path: REST_WHOLE_PATH },
-    { id: 'rest-half', font: `<text x="0" y="0" style="${textStyle}">${smufl.restHalf}</text>`, path: REST_HALF_PATH },
-    { id: 'rest-quarter', font: `<text x="0" y="0" style="${textStyle}">${smufl.restQuarter}</text>`, path: REST_QUARTER_PATH },
-    { id: 'rest-eighth', font: `<text x="0" y="0" style="${textStyle}">${smufl.rest8th}</text>`, path: REST_EIGHTH_PATH },
-    { id: 'rest-16th', font: `<text x="0" y="0" style="${textStyle}">${smufl.rest16th}</text>`, path: REST_16TH_PATH },
-    { id: 'rest-32nd', font: `<text x="0" y="0" style="${textStyle}">${smufl.rest32nd}</text>`, path: REST_32ND_PATH },
-  ].forEach(({ id, font, path: pathContent }) => {
-    toExport.push({ id, svg: svgWrap(font, SIZE, SIZE, fontUrl), pathFallback: pathContent });
-  });
+    { id: 'rest-whole', path: REST_WHOLE_PATH },
+    { id: 'rest-half', path: REST_HALF_PATH },
+    { id: 'rest-quarter', path: REST_QUARTER_PATH },
+    { id: 'rest-eighth', path: REST_EIGHTH_PATH },
+    { id: 'rest-16th', path: REST_16TH_PATH },
+    { id: 'rest-32nd', path: REST_32ND_PATH },
+  ].forEach(({ id, path: pathContent }) => toExport.push({ id, svg: svgWrap(pathContent) }));
 
   // Octave symbols
   const octaveSymbols = [
@@ -185,30 +141,24 @@ async function main() {
 </svg>`;
   toExport.push({ id: 'octave-2-cross-coordinate-table', svg: coordTableSvg });
 
-  // Bass staff with notes (Eb, A, F, D, Bb) — font embedded for Sharp
-  const bassStaffFontDef = fontUrl ? `<defs><style>@font-face{font-family:'Leland';src:url('${fontUrl}') format('woff2');} text.leland{font-family:Leland,sans-serif;fill:#1a1a1a} text.acc{font-family:Leland,sans-serif;font-size:22px;fill:#1a1a1a}</style></defs>` : '<defs><style>text.leland{font-family:sans-serif;fill:#1a1a1a} text.acc{font-size:22px;fill:#1a1a1a}</style></defs>';
+  // Bass staff with notes (Eb, A, F, D, Bb) — path-based (bass clef path, circles, stems, flat path)
+  const bassClefScale = 0.38;
   const bassStaffSvg = `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 340 100" width="340" height="100">
   <rect width="340" height="100" fill="#fff"/>
-  ${bassStaffFontDef}
   <line x1="40" x2="320" y1="34" y2="34" stroke="#1a1a1a" stroke-width="1"/>
   <line x1="40" x2="320" y1="42" y2="42" stroke="#1a1a1a" stroke-width="1"/>
   <line x1="40" x2="320" y1="50" y2="50" stroke="#1a1a1a" stroke-width="1"/>
   <line x1="40" x2="320" y1="58" y2="58" stroke="#1a1a1a" stroke-width="1"/>
   <line x1="40" x2="320" y1="66" y2="66" stroke="#1a1a1a" stroke-width="1"/>
-  <text class="leland" x="32" y="50" text-anchor="middle" dominant-baseline="middle" font-size="48">&#xE062;</text>
-  <text class="acc" x="72" y="46" text-anchor="middle" dominant-baseline="middle">&#xE260;</text>
-  <text class="leland" x="90" y="46" text-anchor="middle" dominant-baseline="middle" font-size="28">&#xE0A4;</text>
-  <line x1="97" y1="46" x2="97" y2="18" stroke="#1a1a1a" stroke-width="1.2"/>
-  <text class="leland" x="140" y="62" text-anchor="middle" dominant-baseline="middle" font-size="28">&#xE0A4;</text>
-  <line x1="147" y1="62" x2="147" y2="34" stroke="#1a1a1a" stroke-width="1.2"/>
-  <text class="leland" x="190" y="42" text-anchor="middle" dominant-baseline="middle" font-size="28">&#xE0A4;</text>
-  <line x1="197" y1="42" x2="197" y2="14" stroke="#1a1a1a" stroke-width="1.2"/>
-  <text class="leland" x="240" y="50" text-anchor="middle" dominant-baseline="middle" font-size="28">&#xE0A4;</text>
-  <line x1="247" y1="50" x2="247" y2="22" stroke="#1a1a1a" stroke-width="1.2"/>
-  <text class="acc" x="272" y="58" text-anchor="middle" dominant-baseline="middle">&#xE260;</text>
-  <text class="leland" x="290" y="58" text-anchor="middle" dominant-baseline="middle" font-size="28">&#xE0A4;</text>
-  <line x1="297" y1="58" x2="297" y2="30" stroke="#1a1a1a" stroke-width="1.2"/>
+  <g transform="translate(32, 50) scale(${bassClefScale}) translate(-46.2, 78.5) scale(4.62) translate(-5, -12)"><path fill="#1a1a1a" d="M12.4,2.5 C9.8,2.5,7.6,3.4,5.9,5.2 C4.2,7,3.3,9.2,3.3,11.8 c0,2.8,1,5.2,2.9,7.1 c1.9,1.9,4.3,2.9,7.1,2.9 c2.1,0,4-0.6,5.6-1.9 l-1.3-1.6 c-1.2,0.9-2.7,1.4-4.3,1.4 c-2.2,0-4.1-0.8-5.6-2.3 c-1.5-1.5-2.2-3.4-2.2-5.6 c0-2.2,0.8-4.1,2.3-5.6 c1.5-1.5,3.4-2.3,5.6-2.3 c3.2,0,5.9,2,7,4.8 h2.3 C21.6,6,17.5,2.5,12.4,2.5 z"/><circle cx="15" cy="-5" r="1.8" fill="#1a1a1a"/><circle cx="15" cy="0" r="1.8" fill="#1a1a1a"/></g>
+  <g transform="translate(72, 46) scale(0.22)">${FLAT_PATH}</g>
+  <circle cx="90" cy="46" r="6" fill="#1a1a1a"/><line x1="97" y1="46" x2="97" y2="18" stroke="#1a1a1a" stroke-width="1.2"/>
+  <circle cx="140" cy="62" r="6" fill="#1a1a1a"/><line x1="147" y1="62" x2="147" y2="34" stroke="#1a1a1a" stroke-width="1.2"/>
+  <circle cx="190" cy="42" r="6" fill="#1a1a1a"/><line x1="197" y1="42" x2="197" y2="14" stroke="#1a1a1a" stroke-width="1.2"/>
+  <circle cx="240" cy="50" r="6" fill="#1a1a1a"/><line x1="247" y1="50" x2="247" y2="22" stroke="#1a1a1a" stroke-width="1.2"/>
+  <g transform="translate(272, 58) scale(0.22)">${FLAT_PATH}</g>
+  <circle cx="290" cy="58" r="6" fill="#1a1a1a"/><line x1="297" y1="58" x2="297" y2="30" stroke="#1a1a1a" stroke-width="1.2"/>
   <text x="90" y="88" text-anchor="middle" font-size="11" fill="#555" font-family="sans-serif">E&#9837;</text>
   <text x="140" y="88" text-anchor="middle" font-size="11" fill="#555" font-family="sans-serif">A</text>
   <text x="190" y="88" text-anchor="middle" font-size="11" fill="#555" font-family="sans-serif">F</text>
@@ -218,60 +168,23 @@ async function main() {
   toExport.push({ id: 'bass-staff-eb-a-f-d-bb', svg: bassStaffSvg, rawSvg: true });
 
   const base64Images = [];
-  let puppeteerUsed = false;
-  let sharpFallbackWarned = false;
 
   for (const item of toExport) {
     const id = item.id;
     const safe = safeId(id);
     const outPath = path.join(OUT_DIR, `${safe}.png`);
-    const isFontDependent = FONT_DEPENDENT_IDS.has(id);
     const w = item.rawSvg ? 340 : SIZE;
     const h = item.rawSvg ? 100 : SIZE;
 
-    let pngBuffer = null;
-
-    if (isFontDependent && fontUrl) {
-      pngBuffer = await renderSvgWithPuppeteer(item.svg, w, h);
-      if (pngBuffer) puppeteerUsed = true;
-    }
-    if (!pngBuffer) {
-      if (isFontDependent && fontUrl && !sharpFallbackWarned) {
-        console.warn('Puppeteer not available: traditional symbols (clefs, notes, rests) will render as missing glyphs. Install with: npm install puppeteer --save-dev');
-        sharpFallbackWarned = true;
-      }
-      let svgToUse = item.svg;
-      if (item.rawSvg) {
-        svgToUse = item.svg;
-      } else if (isFontDependent && item.pathFallback) {
-        svgToUse = svgWrap(item.pathFallback, SIZE, SIZE);
-      } else if (item.pathFallback) {
-        try {
-          pngBuffer = await sharp(Buffer.from(svgToUse)).png().toBuffer();
-        } catch {
-          svgToUse = svgWrap(item.pathFallback, SIZE, SIZE);
-        }
-      }
-      if (!pngBuffer) {
-        try {
-          pngBuffer = await sharp(Buffer.from(svgToUse)).png().toBuffer();
-        } catch (e) {
-          if (item.pathFallback) {
-            pngBuffer = await sharp(Buffer.from(svgWrap(item.pathFallback, SIZE, SIZE))).png().toBuffer();
-          } else {
-            console.warn('Skip', safe, e.message);
-          }
-        }
-      }
-    }
-
-    if (pngBuffer) {
+    try {
+      const pngBuffer = await sharp(Buffer.from(item.svg)).png().toBuffer();
       fs.writeFileSync(outPath, pngBuffer);
       base64Images.push({ id, safeId: safe, base64: pngBuffer.toString('base64') });
       console.log('Saved', safe + '.png');
+    } catch (e) {
+      console.warn('Skip', safe, e.message);
     }
   }
-  if (puppeteerUsed) console.log('Traditional symbols (clefs, notes, rests) rendered with Leland in browser.');
 
   // Index HTML
   const imgs = base64Images.map(({ id, safeId: s, base64 }) => {

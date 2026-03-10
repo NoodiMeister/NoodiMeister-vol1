@@ -13,6 +13,11 @@ import './PianoVisual.css';
 
 const BLACK_WIDTH_RATIO = 0.6;
 const NATURAL_PITCH_BY_MIDI_MOD = { 0: 'C', 2: 'D', 4: 'E', 5: 'F', 7: 'G', 9: 'A', 11: 'B' };
+
+/** Traditional note letter for white key (C–B). */
+function getTraditionalKeyLabel(midi) {
+  return NATURAL_PITCH_BY_MIDI_MOD[midi % 12] ?? null;
+}
 /** Mustad klahvid: MIDI mod 12 -> kas kõrgendus (#) või madaldus (b). Vaikimisi #. */
 const BLACK_KEY_ACCIDENTAL = { 1: 'sharp', 3: 'sharp', 6: 'sharp', 8: 'sharp', 10: 'sharp' };
 
@@ -105,6 +110,8 @@ export function PianoVisual({
   getKeyColor = null,
   /** Helistik JO/LE teksti jaoks (nt 'C', 'F') */
   keySignature = 'C',
+  /** true = show C/D/E on keys (Figurenotes); false = show JO/LE/MI (pedagogical) */
+  useTraditionalNoteNames = false,
 }) {
   const { white, black } = useMemo(
     () => getKeysInRange(firstNote, lastNote),
@@ -148,8 +155,10 @@ export function PianoVisual({
     };
   };
 
-  const getJoLabel = (midi) => {
-    if (!useFigurenotes || !keySignature) return null;
+  const getKeyLabel = (midi) => {
+    if (!useFigurenotes) return null;
+    if (useTraditionalNoteNames) return getTraditionalKeyLabel(midi);
+    if (!keySignature) return null;
     const natural = NATURAL_PITCH_BY_MIDI_MOD[midi % 12];
     if (!natural) return null;
     const octave = Math.floor(midi / 12) - 1;
@@ -205,9 +214,9 @@ export function PianoVisual({
                 return (
                   <>
                     <FigureKeyPath pitch={fig.pitch} color={fig.color} size={14} className="PianoVisual__key-figure" octave={fig.octave} />
-                    {getJoLabel(midi) && (
+                    {getKeyLabel(midi) && (
                       <span className="PianoVisual__key-label" style={{ color: 'var(--piano-figurenotes-text)' }}>
-                        {getJoLabel(midi)}
+                        {getKeyLabel(midi)}
                       </span>
                     )}
                   </>

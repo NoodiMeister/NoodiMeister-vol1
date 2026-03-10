@@ -28,6 +28,8 @@ export function InteractivePiano({
   getKeyColor = null,
   /** Helistik JO/LE ja mustade klahvide noole jaoks (nt 'C') */
   keySignature = 'C',
+  /** true: show C/D/E on keys (Figurenotes); false: show JO/LE/MI (pedagogical) */
+  useTraditionalNoteNames = false,
   /** true: ASDF/WETYU jne mängivad klaverit (Figurenotes õppimine); false: A–G reserveeritud noodisise jaoks */
   keyboardPlaysPiano = false,
   /** true: kui dialoog (Uue faili jms) on avatud, arvutiklahve ei töötle */
@@ -89,6 +91,7 @@ export function InteractivePiano({
         figurenotesColors={figurenotesColors}
         getKeyColor={getKeyColor}
         keySignature={keySignature}
+        useTraditionalNoteNames={useTraditionalNoteNames}
       />
     </div>
   );

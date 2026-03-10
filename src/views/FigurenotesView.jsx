@@ -4,7 +4,6 @@
  */
 import React from 'react';
 import { getFigureSymbol, getFigureColor } from '../utils/figurenotes';
-import { getJoName } from '../notation/joNames';
 import { RhythmSyllableLabel } from '../components/RhythmSyllableLabel';
 import { getRhythmSyllableForNote } from '../notation/rhythmSyllables';
 import { getFigureNoteWidth, FIGURE_BASE_WIDTH } from '../layout/LayoutEngine';
@@ -210,7 +209,7 @@ export function FigurenotesView({
                     />
                     {shapeEl}
                     <text x={x} y={y} textAnchor="middle" dominantBaseline="central" fill={textColor} fontSize={Math.max(8, size * 0.5)} fontWeight="bold">
-                      {getJoName(note.pitch, note.octave, keySignature)}
+                      {String(note.pitch || '').toUpperCase().replace('H', 'B')}
                     </text>
                     {figurenotesStems && dur !== '1/1' && (
                       <g stroke="#1a1a1a" fill="#1a1a1a" strokeWidth="1.8">
