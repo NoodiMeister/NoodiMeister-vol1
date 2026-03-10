@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { FilePlus, FolderOpen, Cloud, LogIn, Loader2 } from 'lucide-react';
+import { FilePlus, FolderOpen, Cloud, LogIn, Loader2, Globe } from 'lucide-react';
 import * as googleDrive from '../services/googleDrive';
 import * as authStorage from '../services/authStorage';
 
@@ -109,7 +109,9 @@ export default function MinuTöödPage() {
             <img src="/logo.png" alt="NoodiMeister" className="h-9 w-auto" />
           </Link>
           <nav className="flex items-center gap-3">
-            <Link to="/app" className="text-amber-700 hover:text-amber-900 font-medium">Tööriist</Link>
+            <Link to="/app" className="text-amber-700 hover:text-amber-900 p-1.5 rounded-lg hover:bg-amber-100 transition-colors" aria-label="Tööriist" title="Tööriist">
+              <Globe className="w-5 h-5" />
+            </Link>
             <Link to="/" className="text-amber-700 hover:text-amber-900 font-medium">Esileht</Link>
           </nav>
         </div>

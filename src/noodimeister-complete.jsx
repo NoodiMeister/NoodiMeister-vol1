@@ -1270,7 +1270,8 @@ function NoodiMeisterCore({ icons }) {
     setHistoryIndex(-1);
     setSetupCompleted(true);
     setNewWorkSetupOpen(false);
-    setSearchParams({});
+    // Stay on /app (openLocal=1) so AppOrRedirect does not send user back to /tood
+    setSearchParams({ local: '1' });
     dirtyRef.current = true;
   }, [wizardNotationMethod, wizardTimeSignature, wizardSongTitle, wizardAuthor, wizardInstrument, wizardPickupEnabled, wizardPickupQuantity, wizardPickupDuration, instrumentConfig]);
 
