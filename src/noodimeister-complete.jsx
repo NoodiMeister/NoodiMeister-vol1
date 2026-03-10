@@ -976,10 +976,10 @@ function NoodiMeisterCore({ icons }) {
   }, [notes]);
   const onNotePitchChange = useCallback((noteIndex, pitch, octave) => {
     if (noteIndex < 0 || noteIndex >= notes.length) return;
-    saveToHistory(notes);
+    if (saveToHistoryRef.current) saveToHistoryRef.current(notes);
     setNotes((prev) => prev.map((n, i) => (i === noteIndex ? { ...n, pitch, octave, accidental: 0 } : n)));
     dirtyRef.current = true;
-  }, [notes, setNotes, saveToHistory]);
+  }, [notes, setNotes]);
   const clearAllNoteLabels = useCallback(() => {
     if (saveToHistoryRef.current) saveToHistoryRef.current(notes);
     setNotes((prev) => prev.map((n) => ({ ...n, teacherLabel: '' })));
