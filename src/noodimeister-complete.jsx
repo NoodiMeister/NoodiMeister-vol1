@@ -1507,6 +1507,8 @@ function NoodiMeisterCore({ icons }) {
     window.print();
   }, []);
 
+  const pdfExportOptionsRef = useRef({ pageFlowDirection: 'vertical', pageWidth: LAYOUT.PAGE_WIDTH_MIN });
+
   const exportToPdf = useCallback(async () => {
     const container = scoreContainerRef?.current;
     if (!container) {
@@ -1537,9 +1539,10 @@ function NoodiMeisterCore({ icons }) {
       const pageW = pdf.internal.pageSize.getWidth();
       const pageH = pdf.internal.pageSize.getHeight();
 
-      const isHorizontalFlow = pageFlowDirection === 'horizontal';
+      const { pageFlowDirection: flowDir, pageWidth: pw } = pdfExportOptionsRef.current;
+      const isHorizontalFlow = flowDir === 'horizontal';
       if (isHorizontalFlow) {
-        const pageWidthPx = pageWidth || LAYOUT.PAGE_WIDTH_MIN;
+        const pageWidthPx = pw || LAYOUT.PAGE_WIDTH_MIN;
         const a4PageHeightPx = pageWidthPx * LAYOUT.A4_HEIGHT_RATIO;
         const totalPages = Math.max(1, Math.round(container.scrollWidth / pageWidthPx));
         for (let p = 0; p < totalPages; p++) {
@@ -1606,7 +1609,7 @@ function NoodiMeisterCore({ icons }) {
     } finally {
       setIsExportingPdf(false);
     }
-  }, [songTitle, t, pageFlowDirection, pageWidth]);
+  }, [songTitle, t]);
 
   // Build state to persist
   const getPersistedState = useCallback(() => ({
@@ -3632,6 +3635,9 @@ function NoodiMeisterCore({ icons }) {
     setPageWidth(Math.max(LAYOUT.PAGE_WIDTH_MIN, Math.min(effectivePageWidthMax, el.getBoundingClientRect().width)));
     return () => ro.disconnect();
   }, [pageOrientation, effectivePageWidthMax]);
+  useEffect(() => {
+    pdfExportOptionsRef.current = { pageFlowDirection, pageWidth };
+  }, [pageFlowDirection, pageWidth]);
   const a4PageHeightPx = (pageWidth || LAYOUT.PAGE_WIDTH_MIN) * LAYOUT.A4_HEIGHT_RATIO;
   const logicalContentHeight = useMemo(() => {
     if (notationStyle === 'FIGURENOTES') {
@@ -5635,7 +5641,7 @@ function NoodiMeisterCore({ icons }) {
           >
           <div
             ref={scoreContainerRef}
-            className="relative mx-auto rounded-lg shadow-lg border-2 border-amber-200 p-8 flex-1 transition-colors"
+            className={`relative mx-auto p-8 flex-1 transition-colors ${isHorizontalFlow ? '' : 'rounded-lg shadow-lg border-2 border-amber-200'}`}
             style={{
               backgroundColor: themeColors.scoreBg,
               minWidth: LAYOUT.PAGE_WIDTH_MIN,
@@ -5656,8 +5662,11 @@ function NoodiMeisterCore({ icons }) {
             }}
           >
               <div ref={scoreContentRef} className="relative" onClick={handleScoreContentClick} role="presentation">
-              {/* Pealkiri muudetav otse lehel (nagu Google Docs); failinimi = pealkiri salvestamisel */}
-              <div className="mb-4">
+              {/* Pealkiri muudetav otse lehel (nagu Google Docs); horizontal: constrained to first page width so title is centered on first page */}
+              <div
+                className="mb-4"
+                style={isHorizontalFlow ? { width: pageWidth || LAYOUT.PAGE_WIDTH_MIN, flexShrink: 0 } : undefined}
+              >
                 <input
                   type="text"
                   value={songTitle}

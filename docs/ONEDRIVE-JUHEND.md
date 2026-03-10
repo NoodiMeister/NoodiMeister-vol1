@@ -41,6 +41,8 @@ Seega **ainult Google’il on „mootor“** – Microsoft ja Apple on placehold
    - `offline_access` (refresh token, valikuline)
 6. **Grant admin consent** (kui on organisatsiooni konto).
 
+**Testija-/administraatori kontod (Microsoft nupp):** kui rakendus on arendusrežiimis, lisa Azure'is need kontod, kes tohib Microsoftiga sisse logida. Näiteks **raido.lill@paikesekool.parnu.ee** (teine testija-administraator). Rakenduses on sama nimekiri keskkonnamuutujas `VITE_MICROSOFT_TESTER_EMAILS` (komaga eraldatud); kui see on täidetud, saavad ainult need e-mailid Microsofti sisselogimise lõpuni teha.
+
 **Salavõti (client secret) SPA puhul tavaliselt ei kasutata** – brauseris kasutatakse PKCE flow’d ilma salavõtata. Veendu, et **Authentication** → **Platform configurations** → SPA redirect URI’d on täpselt need, mida rakendus kasutab.
 
 ---

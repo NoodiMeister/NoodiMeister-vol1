@@ -6,6 +6,13 @@ import { formatAuthError } from '../utils/authError';
 
 const googleClientId = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_GOOGLE_CLIENT_ID) || '';
 
+/** Microsoft sisselogimise testija e-mailid (VITE_MICROSOFT_TESTER_EMAILS, komaga eraldatud). Kui massiiv on tühi, piirangut ei ole. */
+function getMicrosoftTesterEmails() {
+  const raw = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_MICROSOFT_TESTER_EMAILS) || '';
+  if (!raw || typeof raw !== 'string') return [];
+  return raw.split(',').map((e) => e.trim().toLowerCase()).filter(Boolean);
+}
+
 const KEY_LOGGED_IN = 'noodimeister-logged-in';
 const KEY_GOOGLE_TOKEN = 'noodimeister-google-token';
 const KEY_GOOGLE_EXPIRY = 'noodimeister-google-token-expiry';
