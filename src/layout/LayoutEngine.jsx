@@ -180,7 +180,7 @@ function calculateTraditionalSystems(data, availableWidth, dims, availablePageHe
 }
 
 /**
- * Vabanotatsioon (pedagogical): JO-võtme asukoht ja ridade vaba vool.
+ * Pedagoogiline notatsioon (pedagogical): JO-võtme asukoht ja ridade vaba vool.
  * staffSpacing ja lehevahetus nagu traditional.
  */
 function calculateFreeFlow(data, availableWidth, dims, availablePageHeight) {

@@ -1,5 +1,6 @@
 import React from 'react';
 import { STAFF_SPACE } from './StaffConstants';
+import { getRestFontSize } from './musescoreStyle';
 import { SmuflGlyph } from './smufl/SmuflGlyph';
 import { SMUFL_GLYPH } from './smufl/glyphs';
 
@@ -8,6 +9,11 @@ import { SMUFL_GLYPH } from './smufl/glyphs';
  */
 const DEFAULT_FILL = 'var(--note-fill, #1a1a1a)';
 
+/** Rest glyph font size – MuseScore/SMuFL (4 sp). */
+function restFontSize(staffSpace) {
+  return getRestFontSize(staffSpace);
+}
+
 /** Täispaus (Whole Rest) – SMuFL restWhole. */
 export function WholeRestSymbol({ x = 0, y = 0, staffSpace = STAFF_SPACE }) {
   return (
@@ -15,7 +21,7 @@ export function WholeRestSymbol({ x = 0, y = 0, staffSpace = STAFF_SPACE }) {
       x={x}
       y={y}
       glyph={SMUFL_GLYPH.restWhole}
-      fontSize={staffSpace * 4.5}
+      fontSize={restFontSize(staffSpace)}
       fill={DEFAULT_FILL}
     />
   );
@@ -28,7 +34,7 @@ export function HalfRestSymbol({ x = 0, y = 0, staffSpace = STAFF_SPACE }) {
       x={x}
       y={y}
       glyph={SMUFL_GLYPH.restHalf}
-      fontSize={staffSpace * 4.5}
+      fontSize={restFontSize(staffSpace)}
       fill={DEFAULT_FILL}
     />
   );
@@ -41,7 +47,7 @@ export function QuarterRestSymbol({ x = 0, y = 0, staffSpace = STAFF_SPACE }) {
       x={x}
       y={y}
       glyph={SMUFL_GLYPH.restQuarter}
-      fontSize={staffSpace * 4.5}
+      fontSize={restFontSize(staffSpace)}
       fill={DEFAULT_FILL}
     />
   );
@@ -54,7 +60,7 @@ export function EighthRestSymbol({ x = 0, y = 0, staffSpace = STAFF_SPACE }) {
       x={x}
       y={y}
       glyph={SMUFL_GLYPH.rest8th}
-      fontSize={staffSpace * 4.5}
+      fontSize={restFontSize(staffSpace)}
       fill={DEFAULT_FILL}
     />
   );
@@ -67,7 +73,7 @@ export function SixteenthRestSymbol({ x = 0, y = 0, staffSpace = STAFF_SPACE }) 
       x={x}
       y={y}
       glyph={SMUFL_GLYPH.rest16th}
-      fontSize={staffSpace * 4.5}
+      fontSize={restFontSize(staffSpace)}
       fill={DEFAULT_FILL}
     />
   );
@@ -80,7 +86,7 @@ export function ThirtySecondRestSymbol({ x = 0, y = 0, staffSpace = STAFF_SPACE 
       x={x}
       y={y}
       glyph={SMUFL_GLYPH.rest32nd}
-      fontSize={staffSpace * 4.5}
+      fontSize={restFontSize(staffSpace)}
       fill={DEFAULT_FILL}
     />
   );

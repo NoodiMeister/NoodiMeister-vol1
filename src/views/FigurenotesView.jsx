@@ -10,7 +10,7 @@ import { getRhythmSyllableForNote } from '../notation/rhythmSyllables';
 import { getFigureNoteWidth, FIGURE_BASE_WIDTH } from '../layout/LayoutEngine';
 import { SmuflGlyph } from '../notation/smufl/SmuflGlyph';
 import { smuflNoteheadForType } from '../notation/smufl/glyphs';
-import { getShapeData, getFigureStyle } from '../constants/FigureNotesLibrary';
+import { getShapePathsByOctave, getFigureStyle } from '../constants/FigureNotesLibrary';
 
 const LAYOUT = { MARGIN_LEFT: 60, MEASURE_MIN_WIDTH: 28 };
 const FIGURE_START_PADDING = 8;
@@ -146,8 +146,8 @@ export function FigurenotesView({
 
               const renderFigurenote = (note, x, y, noteIndex, noteWidth) => {
                 const pitch = String(note.pitch || '').toUpperCase().replace('H', 'B');
-                const shapeData = getShapeData(note.pitch);
                 const style = getFigureStyle(note.pitch, note.octave);
+                const shapePaths = getShapePathsByOctave(note.octave);
                 const size = figureSize;
                 const isSelected = isNoteSelected ? isNoteSelected(noteIndex) : false;
                 const dur = note.durationLabel || '1/4';
@@ -170,8 +170,9 @@ export function FigurenotesView({
                 const h = size;
                 const svgX = x - w / 2;
                 const svgY = y - h / 2;
-                const effectiveStroke = style.stroke ?? shapeData.stroke ?? 'none';
-                const effectiveStrokeWidth = style.strokeWidth ?? (shapeData.stroke ? 2 : 0);
+                const fill = style.fill ?? '#6b7280';
+                const effectiveStroke = style.stroke ?? 'none';
+                const effectiveStrokeWidth = style.strokeWidth ?? 0;
 
                 const shapeEl = (
                   <svg
@@ -181,27 +182,24 @@ export function FigurenotesView({
                     height={h}
                     viewBox="0 0 100 100"
                     preserveAspectRatio="none"
-                    style={{ overflow: 'visible', opacity: style.opacity ?? 1 }}
+                    style={{ overflow: 'visible' }}
                   >
-                    <path
-                      d={shapeData.path}
-                      fill={style.fill ?? shapeData.color}
-                      stroke={effectiveStroke}
-                      strokeWidth={effectiveStrokeWidth}
-                      vectorEffect="non-scaling-stroke"
-                    />
-                    {style.showCross && (
-                      <g stroke="#000" strokeWidth={Math.max(2, effectiveStrokeWidth || 2)} strokeLinecap="round" vectorEffect="non-scaling-stroke">
-                        <line x1="10" y1="10" x2="90" y2="90" />
-                        <line x1="90" y1="10" x2="10" y2="90" />
-                      </g>
-                    )}
+                    {shapePaths.map((d, i) => (
+                      <path
+                        key={i}
+                        d={d}
+                        fill={fill}
+                        stroke={effectiveStroke}
+                        strokeWidth={effectiveStrokeWidth}
+                        vectorEffect="non-scaling-stroke"
+                      />
+                    ))}
                   </svg>
                 );
                 const tailLen = (dur === '1/1') ? Math.max(20, size * 1.4) : (dur === '1/2') ? Math.max(12, size * 0.85) : 0;
                 return (
                   <g>
-                    {/* Pedagoogiline aluskiht: SMuFL notehead (Bravura/Leland) */}
+                    {/* Pedagoogiline aluskiht: SMuFL notehead (Leland) */}
                     <SmuflGlyph
                       x={x}
                       y={y}

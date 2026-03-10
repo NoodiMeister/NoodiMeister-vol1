@@ -1,7 +1,18 @@
 /**
  * Noodijoonestiku visuaalne notatsioon – kõik mõõdud sõltuvad ühest staff-space'ist.
  * Staff-space = vahe kahe joone vahel. Üks "samm" (pool space'i) = üks pooltoon.
+ * Traditional layout constants: musescoreStyle.js (MuseScore default style).
  */
+
+import {
+  STAFF_LINE_WIDTH,
+  STEM_WIDTH,
+  LEDGER_LINE_WIDTH,
+  BEAM_WIDTH,
+  BEAM_SPACING,
+  STEM_LENGTH,
+  getThinBarlineThickness as getThinBarlineThicknessFromStyle,
+} from './musescoreStyle';
 
 /** Standardne vahe kahe joone vahel (px). Kõik joonestiku mõõdud tuletatakse sellest. */
 export const STAFF_SPACE = 10;
@@ -24,9 +35,39 @@ export function getLedgerHalfWidth(staffSpace = STAFF_SPACE) {
   return staffSpace * 1.4;
 }
 
-/** Varre pikkus (noodipea keskpunktist otsani) ≈ 3,5 staff-space'i (standard). */
+/** Staff line thickness (px) – Leland staffLineThickness 0.11 sp. */
+export function getStaffLineThickness(staffSpace = STAFF_SPACE) {
+  return staffSpace * STAFF_LINE_WIDTH;
+}
+
+/** Stem thickness (px) – Leland stemThickness 0.1 sp. */
+export function getStemThickness(staffSpace = STAFF_SPACE) {
+  return staffSpace * STEM_WIDTH;
+}
+
+/** Ledger line thickness (px) – Leland legerLineThickness 0.16 sp. */
+export function getLegerLineThickness(staffSpace = STAFF_SPACE) {
+  return staffSpace * LEDGER_LINE_WIDTH;
+}
+
+/** Beam thickness (px) – Leland beamThickness 0.5 sp. */
+export function getBeamThickness(staffSpace = STAFF_SPACE) {
+  return staffSpace * BEAM_WIDTH;
+}
+
+/** Beam spacing between beams (px) – Leland beamSpacing 0.25 sp. */
+export function getBeamGap(staffSpace = STAFF_SPACE) {
+  return staffSpace * BEAM_SPACING;
+}
+
+/** Stem length from notehead center to tip (px) – Leland default 3.5 sp. */
 export function getStemLength(staffSpace = STAFF_SPACE) {
-  return staffSpace * 3.5;
+  return staffSpace * STEM_LENGTH;
+}
+
+/** Bar line thickness (px) – Leland thinBarlineThickness 0.18 sp. */
+export function getThinBarlineThickness(staffSpace = STAFF_SPACE) {
+  return getThinBarlineThicknessFromStyle(staffSpace);
 }
 
 /** Lipu kõrgus (üks lipp) ≈ 1 staff-space. */
@@ -70,15 +111,22 @@ export function getYFromStaffPosition(position, centerY, staffLines = 5, staffSp
  */
 const PITCH_INDEX = { C: 0, D: 1, E: 2, F: 3, G: 4, A: 5, B: 6 };
 
-/** Helistiku toonika (JO) viiulivõtme staff-positsioon (poolspace sammud, E4=0). Bb/Eb = bemoll. */
+/** Helistiku toonika (JO) viiulivõtme staff-positsioon (poolspace sammud, E4=0). Legacy lookup for known keys. */
 const TONIC_STAFF_POSITION = { C: -2, G: 2, D: 4, A: 5, E: 7, B: 9, F: 3, Bb: 8, Eb: 6 };
+
+/** Rule: tonic staff position = treble position of the key's letter in octave 4 (accidentals don't change line/space). */
+function getTonicStaffPositionFromKeyName(keyName) {
+  const letter = (keyName && keyName.trim().slice(0, 1).toUpperCase()) || 'C';
+  return getStaffPositionTreble(PITCH_INDEX[letter] !== undefined ? letter : 'C', 4);
+}
 
 /**
  * Tagastab toonika (JO) staff-positsiooni viiulivõtme skaalas (0 = alumine joon E4, negatiivne = abijooned all).
  * Kasutatakse JO-võtme vaikimisi asukoha ja ankurina.
+ * Rule-based: unknown keys use letter of key name + octave 4; known keys use legacy table for consistency.
  */
 export function getTonicStaffPosition(keySignature = 'C') {
-  return TONIC_STAFF_POSITION[keySignature] ?? TONIC_STAFF_POSITION.C;
+  return TONIC_STAFF_POSITION[keySignature] ?? getTonicStaffPositionFromKeyName(keySignature);
 }
 
 /** Staff-positsioon → helistik (JO-võtme liigutamise tulemus). */

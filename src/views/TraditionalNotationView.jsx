@@ -1,11 +1,11 @@
 /**
- * Vabanotatsiooni / traditsiooniline vaade – TÄIELIKULT ERALDI figuurnotatsioonist.
+ * Pedagoogiline notatsioon / traditsiooniline vaade – TÄIELIKULT ERALDI figuurnotatsioonist.
  * JO-võti on peamine tööriist: liigutatav, dünaamiline; kordub iga uue rea alguses (System Break).
  * Abijooned genereeritakse, kui JO-võti või nootid väljuvad 5-liini süsteemist.
  * Paigutuse tööriistad (Staff Spacer, taktide laiendamine { }) rakenduvad siin.
  */
 import React from 'react';
-import { JoClefSymbol, TrebleClefSymbol, BassClefSymbol } from '../components/ClefSymbols';
+import { JoClefSymbol, TrebleClefSymbol, BassClefSymbol, getJoClefPixelWidth, getJoClefDoStripeBounds } from '../components/ClefSymbols';
 import { RhythmSyllableLabel } from '../components/RhythmSyllableLabel';
 import { getJoName } from '../notation/joNames';
 import { getRhythmSyllableForNote } from '../notation/rhythmSyllables';
@@ -20,18 +20,23 @@ import {
   getLedgerHalfWidth,
   getVerticalPosition,
   getStemLength,
+  getStaffLineThickness,
+  getLegerLineThickness,
+  getStemThickness,
+  getThinBarlineThickness,
 } from '../notation/StaffConstants';
+import { getGlyphFontSize, TEXT_FONT_FAMILY } from '../notation/musescoreStyle';
 import {
   computeBeamGroups,
   computeBeamGeometry,
   getBeamThickness,
   getBeamGap,
 } from '../notation/BeamCalculation';
+import { renderFiguredBassFigurations } from '../notation/figuredBassFigurations';
 
 const LAYOUT = { MARGIN_LEFT: 60, CLEF_WIDTH: 45, MEASURE_MIN_WIDTH: 28 };
 const PAGE_BREAK_GAP = 80;
 const STAFF_SPACE = 10;
-const barLineWidth = 2;
 
 // SMuFL noteheads (Leland)
 const SMUFL = {
@@ -49,7 +54,7 @@ function StaffClefSymbol({ x, y, height, clefType, fill = '#000', staffSpace = 1
         x={x}
         y={y}
         glyph={SMUFL_GLYPH.cClef}
-        fontSize={height ?? staffSpace * 7}
+        fontSize={height ?? getGlyphFontSize(staffSpace)}
         fill={fill}
       />
     );
@@ -72,9 +77,25 @@ function getFlagCount(durationLabel) {
   return 0;
 }
 
+/** Tin whistle fingering: note name for tab (a, b, c, d, e, f, g, c#). */
+function getTinWhistleNotationName(pitch, octave) {
+  if (!pitch || typeof octave !== 'number') return '';
+  const letter = pitch.replace(/[#b]/, '');
+  const lower = { C: 'c', D: 'd', E: 'e', F: 'f', G: 'g', A: 'a', B: 'b' }[letter] || 'c';
+  return pitch.includes('#') ? lower + '#' : lower;
+}
+
+/** Recorder (soprano C) fingering: note name for RecorderFont finger table (C, D, E, F, G, A, B, C#, etc.). */
+function getRecorderFingeringChar(pitch, octave) {
+  if (!pitch || typeof octave !== 'number') return '';
+  const letter = pitch.replace(/[#b]/, '');
+  const base = { C: 'C', D: 'D', E: 'E', F: 'F', G: 'G', A: 'A', B: 'B' }[letter] || 'C';
+  return pitch.includes('#') ? base + '#' : pitch.includes('b') ? base + 'b' : base;
+}
+
 function Flags({ stemX, stemEndY, staffSpace, stemUp, count = 1 }) {
   const elements = [];
-  const strokeW = staffSpace * 0.15;
+  const strokeW = getStemThickness(staffSpace);
   const flagGap = staffSpace * 0.8;
   for (let i = 0; i < count; i++) {
     const yOffset = i * flagGap * (stemUp ? 1 : -1);
@@ -174,12 +195,14 @@ export function TraditionalNotationView({
   getPitchY, // (pitch, octave) => Y relative to staff center (Timeline arvutab JO/viiulivõtme järgi)
   isFirstInBraceGroup = false,
   braceGroupSize = 0,
-  lyricFontFamily = 'sans-serif',
+  lyricFontFamily = TEXT_FONT_FAMILY,
   isHorizontal = false,
   a4PageHeight = 400,
   getStaffHeight = () => 140,
   showStaffSpacerHandles = false,
   onStaffSpacerMouseDown, // (systemIndex) => (e) => { ... } – ridade vertikaalne liigutamine (Layout)
+  instrument = 'piano',
+  instrumentNotationVariant = 'standard',
 }) {
   const spacing = staffSpaceProp ?? STAFF_SPACE;
   const centerY = timelineHeight / 2;
@@ -267,7 +290,7 @@ export function TraditionalNotationView({
                       x2={marginLeft + (sys.measureWidths ?? []).reduce((a, b) => a + b, 0)}
                       y2={staffY + y}
                       stroke="#000"
-                      strokeWidth="1.2"
+                      strokeWidth={getStaffLineThickness(spacing)}
                     />
                   ))}
 
@@ -310,6 +333,7 @@ export function TraditionalNotationView({
                         let currentX = clefXStaff;
                         const joClefCenterY = staffY + joKeyY;
                         const { above: ledgerAbove, below: ledgerBelow } = getLedgerLineCountExact(joKeyY, firstLineY, lastLineY, spacing);
+                        const joClefWidthPx = getJoClefPixelWidth(spacing);
                         const joClefEl = (
                           <JoClefSymbol
                             x={currentX}
@@ -443,16 +467,23 @@ export function TraditionalNotationView({
                         <path d={`M ${measureX + measureWidth / 2 - 4} ${staffY - 10} L ${measureX + measureWidth / 2} ${staffY - 14} L ${measureX + measureWidth / 2 + 4} ${staffY - 10}`} fill="none" stroke="#92400e" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
                       </g>
                     )}
-                    {j !== 0 && <line x1={measureX} y1={staffY + firstLineY} x2={measureX} y2={staffY + lastLineY} stroke="#1a1a1a" strokeWidth={barLineWidth} />}
+                    {j !== 0 && <line x1={measureX} y1={staffY + firstLineY} x2={measureX} y2={staffY + lastLineY} stroke="#1a1a1a" strokeWidth={getThinBarlineThickness(spacing)} />}
                     {measureIdx === sys.measureIndices[sys.measureIndices.length - 1] && (
-                      <line x1={measureX + measureWidth} y1={staffY + firstLineY} x2={measureX + measureWidth} y2={staffY + lastLineY} stroke="#1a1a1a" strokeWidth={barLineWidth} />
+                      <line x1={measureX + measureWidth} y1={staffY + firstLineY} x2={measureX + measureWidth} y2={staffY + lastLineY} stroke="#1a1a1a" strokeWidth={getThinBarlineThickness(spacing)} />
                     )}
-                    {chords.filter(c => c.beatPosition >= measure.startBeat && c.beatPosition < measure.endBeat).map((chord) => (
-                      <g key={chord.id}>
-                        <text x={measureX + (chord.beatPosition - measure.startBeat) * beatWidth} y={staffY + firstLineY - 18} textAnchor="start" fontSize="14" fontWeight="bold" fill="#1a1a1a" fontFamily="sans-serif">{chord.chord}</text>
-                        {chord.figuredBass && <text x={measureX + (chord.beatPosition - measure.startBeat) * beatWidth} y={staffY + firstLineY - 4} textAnchor="start" fontSize="11" fill="#555" fontFamily="serif">{chord.figuredBass}</text>}
-                      </g>
-                    ))}
+                    {chords.filter(c => c.beatPosition >= measure.startBeat && c.beatPosition < measure.endBeat).map((chord) => {
+                      const chordX = measureX + (chord.beatPosition - measure.startBeat) * beatWidth;
+                      const useFigurations = (instrument === 'harpsichord' || instrument === 'organ') && instrumentNotationVariant === 'figuredBass' && chord.figuredBass;
+                      return (
+                        <g key={chord.id}>
+                          <text x={chordX} y={staffY + firstLineY - 18} textAnchor="start" fontSize="14" fontWeight="bold" fill="#1a1a1a" fontFamily="sans-serif">{chord.chord}</text>
+                          {chord.figuredBass && (useFigurations
+                            ? renderFiguredBassFigurations(chord.figuredBass, { x: chordX, y: staffY + firstLineY - 4, fontSize: 11, fill: '#555' })
+                            : <text x={chordX} y={staffY + firstLineY - 4} textAnchor="start" fontSize="11" fill="#555" fontFamily="serif">{chord.figuredBass}</text>
+                          )}
+                        </g>
+                      );
+                    })}
                     {measure.notes.map((note, noteIdx) => {
                       const noteX = getNoteSlotCenterX(note);
                       let globalNoteIndex = 0;
@@ -488,7 +519,7 @@ export function TraditionalNotationView({
                       const glyph = getNoteheadGlyph(note.durationLabel);
                       const lelandSize = Math.max(18, spacing * 4.2);
                       const stemLenDefault = getStemLength(spacing);
-                      const stemStrokeW = spacing * 0.12;
+                      const stemStrokeW = getStemThickness(spacing);
                       const stemX = stemUp ? (noteX + noteheadRx - stemStrokeW / 2) : (noteX - noteheadRx + stemStrokeW / 2);
                       const stemY1 = noteY;
                       const stemLen = beamGroup ? (beamGroup.stemLengths[noteIdx - beamGroup.start] ?? stemLenDefault) : stemLenDefault;
@@ -498,10 +529,10 @@ export function TraditionalNotationView({
                       return (
                         <g key={noteIdx} {...noteGroupProps}>
                           {nLedgerAbove > 0 && Array.from({ length: nLedgerAbove }, (_, i) => (
-                            <line key={`la-${i}`} x1={noteX - ledgerHalfWidth} y1={staffY + firstLineY - (i + 1) * spacing} x2={noteX + ledgerHalfWidth} y2={staffY + firstLineY - (i + 1) * spacing} stroke="#333" strokeWidth="1.5" />
+                            <line key={`la-${i}`} x1={noteX - ledgerHalfWidth} y1={staffY + firstLineY - (i + 1) * spacing} x2={noteX + ledgerHalfWidth} y2={staffY + firstLineY - (i + 1) * spacing} stroke="#333" strokeWidth={getLegerLineThickness(spacing)} />
                           ))}
                           {nLedgerBelow > 0 && Array.from({ length: nLedgerBelow }, (_, i) => (
-                            <line key={`lb-${i}`} x1={noteX - ledgerHalfWidth} y1={staffY + lastLineY + (i + 1) * spacing} x2={noteX + ledgerHalfWidth} y2={staffY + lastLineY + (i + 1) * spacing} stroke="#333" strokeWidth="1.5" />
+                            <line key={`lb-${i}`} x1={noteX - ledgerHalfWidth} y1={staffY + lastLineY + (i + 1) * spacing} x2={noteX + ledgerHalfWidth} y2={staffY + lastLineY + (i + 1) * spacing} stroke="#333" strokeWidth={getLegerLineThickness(spacing)} />
                           ))}
                           {isSelected && <rect x={noteX - 18} y={noteY - 22} width={36} height={44} fill="#93c5fd" opacity="0.3" rx="4" />}
                           {(note.accidental === 1 || note.accidental === -1) && (
@@ -599,6 +630,44 @@ export function TraditionalNotationView({
                               <g key="teacher-label" data-teacher-label style={{ cursor: canEdit ? 'pointer' : undefined }} onClick={canEdit ? (ev) => { ev.stopPropagation(); onNoteLabelClick(globalNoteIndex); } : undefined} title={canEdit ? (translateLabel ? translateLabel('teacher.noteLabelHint') : null) || 'Klõpsa valimiseks' : undefined}>
                                 {displayText ? <text x={noteX} y={labelAboveY} textAnchor="middle" dominantBaseline="auto" fontSize={Math.max(10, spacing * 1.0)} fill="#333" fontFamily="sans-serif" fontWeight="600">{displayText}</text> : <rect x={noteX - 14} y={labelAboveY - 12} width={28} height={14} fill="transparent" />}
                               </g>
+                            );
+                          })()}
+                          {instrument === 'tin-whistle' && instrumentNotationVariant === 'fingering' && note.pitch && typeof note.octave === 'number' && (() => {
+                            const name = getTinWhistleNotationName(note.pitch, note.octave);
+                            if (!name) return null;
+                            const fingeringLabelY = staffY + lastLineY + spacing * (showRhythmSyllables ? 2.6 : 1.8);
+                            return (
+                              <text
+                                key="tinwhistle-fingering"
+                                x={noteX}
+                                y={fingeringLabelY}
+                                textAnchor="middle"
+                                dominantBaseline="auto"
+                                fontSize={Math.max(12, spacing * 1.4)}
+                                fill="var(--note-fill, #1a1a1a)"
+                                fontFamily="TinWhistleTab, sans-serif"
+                              >
+                                {name}
+                              </text>
+                            );
+                          })()}
+                          {instrument === 'recorder' && instrumentNotationVariant === 'fingering' && note.pitch && typeof note.octave === 'number' && (() => {
+                            const char = getRecorderFingeringChar(note.pitch, note.octave);
+                            if (!char) return null;
+                            const fingeringLabelY = staffY + lastLineY + spacing * (showRhythmSyllables ? 2.6 : 1.8);
+                            return (
+                              <text
+                                key="recorder-fingering"
+                                x={noteX}
+                                y={fingeringLabelY}
+                                textAnchor="middle"
+                                dominantBaseline="auto"
+                                fontSize={Math.max(12, spacing * 1.4)}
+                                fill="var(--note-fill, #1a1a1a)"
+                                fontFamily="RecorderFont, sans-serif"
+                              >
+                                {char}
+                              </text>
                             );
                           })()}
                         </g>

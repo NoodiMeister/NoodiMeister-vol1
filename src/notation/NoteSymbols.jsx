@@ -3,17 +3,34 @@ import {
   STAFF_SPACE,
   getNoteheadRx,
   getStemLength,
+  getStemThickness,
 } from './StaffConstants';
+import { getGlyphFontSize } from './musescoreStyle';
 import { SmuflGlyph } from './smufl/SmuflGlyph';
-import { smuflNoteheadForType } from './smufl/glyphs';
+import { smuflNoteheadForType, smuflPrecomposedNote } from './smufl/glyphs';
 
 /**
- * SMuFL notehead glyph (Bravura/Leland).
+ * SMuFL notehead glyph (Leland). Scale from MuseScore/SMuFL: 4 sp per em.
  */
 function NoteHeadGlyph({ cx, cy, staffSpace, type }) {
   const glyph = smuflNoteheadForType(type);
-  // Heuristic: SMuFL glyphs are designed around a 4-space staff in an em-box.
-  const fontSize = staffSpace * 4.0;
+  const fontSize = getGlyphFontSize(staffSpace);
+  return (
+    <SmuflGlyph
+      x={cx}
+      y={cy}
+      glyph={glyph}
+      fontSize={fontSize}
+      fill="var(--note-fill, #1a1a1a)"
+    />
+  );
+}
+
+/** Single glyph for full note (note+stem+flag) from Leland – use when not beamed. */
+function PrecomposedNoteGlyph({ cx, cy, staffSpace, type, stemUp }) {
+  const glyph = smuflPrecomposedNote(type, stemUp, true);
+  if (!glyph) return null;
+  const fontSize = getGlyphFontSize(staffSpace);
   return (
     <SmuflGlyph
       x={cx}
@@ -32,7 +49,7 @@ function NoteHeadGlyph({ cx, cy, staffSpace, type }) {
 function Stem({ cx, cy, staffSpace, stemUp, stemLength }) {
   const rx = getNoteheadRx(staffSpace);
   const stemLen = stemLength != null ? stemLength : getStemLength(staffSpace);
-  const strokeW = staffSpace * 0.12;
+  const strokeW = getStemThickness(staffSpace);
 
   // MuseScore'i reegel: Üles-vars paremal, alla-vars vasakul
   // Nihutame vart pool stroke-laiust sissepoole, et ühendus oleks puhas
@@ -60,7 +77,7 @@ function Stem({ cx, cy, staffSpace, stemUp, stemLength }) {
 function Flags({ cx, cy, staffSpace, stemUp, count = 1, stemLength }) {
   const rx = getNoteheadRx(staffSpace);
   const stemLen = stemLength != null ? stemLength : getStemLength(staffSpace);
-  const strokeW = staffSpace * 0.12;
+  const strokeW = getStemThickness(staffSpace);
 
   const stemX = stemUp ? cx + rx - strokeW / 2 : cx - rx + strokeW / 2;
   const stemEndY = stemUp ? cy - stemLen : cy + stemLen;
@@ -84,7 +101,7 @@ function Flags({ cx, cy, staffSpace, stemUp, count = 1, stemLength }) {
         d={curve}
         fill="none"
         stroke="var(--note-fill, #1a1a1a)"
-        strokeWidth={staffSpace * 0.15}
+        strokeWidth={strokeW}
         strokeLinecap="round"
       />
     );
@@ -100,14 +117,15 @@ export function WholeNoteSymbol({ cx = 0, cy = 0, staffSpace = STAFF_SPACE }) {
 
 export function HalfNoteSymbol({ cx = 0, cy = 0, staffSpace = STAFF_SPACE, stemUp = true }) {
   return (
-    <g>
-      <NoteHeadGlyph cx={cx} cy={cy} staffSpace={staffSpace} type="half" />
-      <Stem cx={cx} cy={cy} staffSpace={staffSpace} stemUp={stemUp} />
-    </g>
+    <PrecomposedNoteGlyph cx={cx} cy={cy} staffSpace={staffSpace} type="half" stemUp={stemUp} />
   );
 }
 
 export function QuarterNoteSymbol({ cx = 0, cy = 0, staffSpace = STAFF_SPACE, stemUp = true, stemLength }) {
+  const usePrecomposed = stemLength == null;
+  if (usePrecomposed) {
+    return <PrecomposedNoteGlyph cx={cx} cy={cy} staffSpace={staffSpace} type="quarter" stemUp={stemUp} />;
+  }
   return (
     <g>
       <NoteHeadGlyph cx={cx} cy={cy} staffSpace={staffSpace} type="quarter" />
@@ -117,6 +135,10 @@ export function QuarterNoteSymbol({ cx = 0, cy = 0, staffSpace = STAFF_SPACE, st
 }
 
 export function EighthNoteSymbol({ cx = 0, cy = 0, staffSpace = STAFF_SPACE, stemUp = true, stemLength, hideFlags }) {
+  const usePrecomposed = !hideFlags && stemLength == null;
+  if (usePrecomposed) {
+    return <PrecomposedNoteGlyph cx={cx} cy={cy} staffSpace={staffSpace} type="eighth" stemUp={stemUp} />;
+  }
   return (
     <g>
       <QuarterNoteSymbol cx={cx} cy={cy} staffSpace={staffSpace} stemUp={stemUp} stemLength={stemLength} />
@@ -126,6 +148,10 @@ export function EighthNoteSymbol({ cx = 0, cy = 0, staffSpace = STAFF_SPACE, ste
 }
 
 export function SixteenthNoteSymbol({ cx = 0, cy = 0, staffSpace = STAFF_SPACE, stemUp = true, stemLength, hideFlags }) {
+  const usePrecomposed = !hideFlags && stemLength == null;
+  if (usePrecomposed) {
+    return <PrecomposedNoteGlyph cx={cx} cy={cy} staffSpace={staffSpace} type="sixteenth" stemUp={stemUp} />;
+  }
   return (
     <g>
       <QuarterNoteSymbol cx={cx} cy={cy} staffSpace={staffSpace} stemUp={stemUp} stemLength={stemLength} />
@@ -136,6 +162,10 @@ export function SixteenthNoteSymbol({ cx = 0, cy = 0, staffSpace = STAFF_SPACE, 
 
 /** Kuuskümnendiknoot (3 lippu) – Leland/SMuFL. */
 export function ThirtySecondNoteSymbol({ cx = 0, cy = 0, staffSpace = STAFF_SPACE, stemUp = true, stemLength, hideFlags }) {
+  const usePrecomposed = !hideFlags && stemLength == null;
+  if (usePrecomposed) {
+    return <PrecomposedNoteGlyph cx={cx} cy={cy} staffSpace={staffSpace} type="thirtySecond" stemUp={stemUp} />;
+  }
   return (
     <g>
       <QuarterNoteSymbol cx={cx} cy={cy} staffSpace={staffSpace} stemUp={stemUp} stemLength={stemLength} />

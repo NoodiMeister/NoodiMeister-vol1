@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Figured bass figurations for harpsichord (and organ) in Noodimeister.
+  Compatible with MuseScore-style figure definitions: digits, accidentals, slashes.
+  You can replace this file with MuseScore's fonts_figuredbass.xml if you use their font.
+-->
+<figuredbass version="1.0">
+  <description>Figured bass figures: digits, accidentals, and modifiers for continuo notation.</description>
+  <figures>
+    <!-- Digits (intervals above bass) -->
+    <figure id="0" char="0" />
+    <figure id="1" char="1" />
+    <figure id="2" char="2" />
+    <figure id="3" char="3" />
+    <figure id="4" char="4" />
+    <figure id="5" char="5" />
+    <figure id="6" char="6" />
+    <figure id="7" char="7" />
+    <figure id="8" char="8" />
+    <figure id="9" char="9" />
+    <!-- Accidentals (MuseScore convention: # sharp, b flat, h natural, bb double flat, ## double sharp) -->
+    <figure id="sharp" char="#" />
+    <figure id="flat" char="b" />
+    <figure id="natural" char="h" />
+    <figure id="doubleflat" char="bb" />
+    <figure id="doublesharp" char="##" />
+    <!-- Slashes and modifiers -->
+    <figure id="slash" char="/" />
+    <figure id="backslash" char="\" />
+    <figure id="plus" char="+" />
+    <figure id="paren" char="()" />
+  </figures>
+</figuredbass>

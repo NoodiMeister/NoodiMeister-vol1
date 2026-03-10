@@ -379,7 +379,8 @@ function NotationOrchestratorInner({ showPiano = true, t = (k) => k }) {
   const timelineHeight = staffHeight;
   const marginLeft = LAYOUT.MARGIN_LEFT ?? 60;
   const pageWidth = PAGE_WIDTH_DEFAULT;
-  const joClefStaffPosition = DEFAULT_JO_CLEF_STAFF_POSITION;
+  // JO-võti: toonika (I aste) positsioon sõltub aktiivsest helistikust (alati MAŽOOR, valged klahvid).
+  const joClefStaffPosition = getTonicStaffPosition(keySignature);
   const centerY = timelineHeight / 2;
   const getPitchY = useCallback(
     (pitch, octave) =>

@@ -1,25 +1,16 @@
 /**
- * Figuurnotatsiooni kujundite ja värvide süsteem.
- * Värvid sünkroonitud FigureNotesLibrary FIGURE_SHAPES_DATA-ga (C=punane ruut, D=pruun ring jne).
+ * Figurenotes: shape by octave (2=X, 3=square, 4=circle, 5=triangle), color by note (C–B).
+ * Single source: FigureNotesLibrary (FIGURE_NOTE_COLORS, getShapePathsByOctave).
  */
 
-import { FIGURE_SHAPES_DATA, getShapeData } from '../constants/FigureNotesLibrary';
+import { FIGURE_NOTE_COLORS, getShapeData } from '../constants/FigureNotesLibrary';
 
-/** Värvid noodinime järgi (klaviatuur jms). B ja H sama kujund. */
-export const FIGURENOTES_COLORS = Object.fromEntries(
-  Object.entries(FIGURE_SHAPES_DATA).map(([k, v]) => [k, v.color])
-);
-FIGURENOTES_COLORS.H = FIGURE_SHAPES_DATA.B.color;
+/** Colors by note name (keyboard, etc.). B and H same. */
+export const FIGURENOTES_COLORS = { ...FIGURE_NOTE_COLORS, H: FIGURE_NOTE_COLORS.B };
 
 /**
- * Kujund teadusliku oktaavi järgi:
- * 1. oktaav (kontra/suur): puudub
- * 2. oktaav (väike): rist (+)
- * 3. oktaav (kesk-C): ruut
- * 4. oktaav: ring
- * 5. oktaav: kolmnurk (tipp üles)
- * 6. oktaav: tagurpidi kolmnurk (tipp alla)
- * Teaduslik oktaav: C4 = 4, C3 = 3 jne.
+ * Shape name by scientific octave (for timeline/piano when drawing by shape name).
+ * Octave 2 = X (cross), 3 = square, 4 = circle, 5 = triangle.
  */
 export function getFigureShape(octave) {
   const o = Number(octave);

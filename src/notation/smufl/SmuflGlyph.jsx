@@ -1,7 +1,7 @@
 import React from 'react';
 
 /**
- * Render a SMuFL glyph via a loaded music font (e.g. Bravura/Leland).
+ * Render a SMuFL glyph via the Leland music font.
  *
  * Notes:
  * - In SVG, y refers to the text baseline. We set dominantBaseline="middle"

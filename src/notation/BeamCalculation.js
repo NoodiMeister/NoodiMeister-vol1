@@ -3,7 +3,7 @@
  * Grupeerib 1/8 ja 1/16 nootid, arvutab tala asukoha ja varre pikkused.
  */
 
-import { getStemLength } from './StaffConstants';
+import { getStemLength, getBeamThickness, getBeamGap } from './StaffConstants';
 
 /** Kas vältus on lühem kui 1/4 (kaheksandik, kuueteistkümnendik) – võib talutada. */
 export function isBeamableDuration(durationLabel) {
@@ -121,16 +121,5 @@ export function computeBeamGeometry(group, notes, noteX, noteCy, stemUp, staffSp
   };
 }
 
-/**
- * Tala paksus (px) ≈ 0.5 * staffSpace.
- */
-export function getBeamThickness(staffSpace) {
-  return staffSpace * 0.5;
-}
-
-/**
- * Alamtala nihe (teine/kolmas tala paralleelselt esimesest).
- */
-export function getBeamGap(staffSpace) {
-  return staffSpace * 0.4;
-}
+/** Re-export SMuFL beam thickness and spacing from StaffConstants. */
+export { getBeamThickness, getBeamGap };

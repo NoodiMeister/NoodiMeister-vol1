@@ -1,0 +1,212 @@
+.symbol-gallery {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 24px 16px;
+  font-family: system-ui, -apple-system, sans-serif;
+  background: var(--bg-color, #fafafa);
+  color: var(--text-color, #1a1a1a);
+  min-height: 100vh;
+}
+
+.symbol-gallery__header {
+  margin-bottom: 24px;
+}
+
+.symbol-gallery__header h1 {
+  font-size: 1.35rem;
+  font-weight: 700;
+  margin: 0 0 8px 0;
+}
+
+.symbol-gallery__header p {
+  margin: 0 0 12px 0;
+  font-size: 0.9rem;
+  color: #555;
+}
+
+.symbol-gallery__back {
+  display: inline-block;
+  font-size: 0.9rem;
+  color: #92400e;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.symbol-gallery__back:hover {
+  text-decoration: underline;
+}
+
+/* Single symbol – full focus area */
+.symbol-gallery__view {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 32px;
+  margin-bottom: 24px;
+  min-height: 200px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Inverted JO-clef (white) needs dark background to be visible */
+.symbol-gallery__view[data-inverted-jo="true"] {
+  background: #1a1a1a;
+}
+
+.symbol-gallery__single {
+  text-align: center;
+  width: 100%;
+}
+
+.symbol-gallery__single-svg {
+  width: 100%;
+  max-width: 200px;
+  height: 200px;
+  margin: 0 auto;
+  display: block;
+}
+
+.symbol-gallery__single-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #374151;
+  margin-top: 12px;
+}
+
+/* Download as image */
+.symbol-gallery__downloads {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+  margin-bottom: 20px;
+}
+
+.symbol-gallery__download-btn {
+  padding: 8px 16px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #1e3a5f;
+  background: #e0e7ff;
+  border: 1px solid #a5b4fc;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.symbol-gallery__download-btn:hover {
+  background: #c7d2fe;
+  border-color: #818cf8;
+}
+
+/* PNG preview – view design as raster image */
+.symbol-gallery__png-preview {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 24px;
+  text-align: center;
+}
+
+.symbol-gallery__png-preview-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #6b7280;
+  margin: 0 0 12px 0;
+}
+
+.symbol-gallery__png-preview-img {
+  display: block;
+  margin: 0 auto;
+  max-width: 100%;
+  height: auto;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+}
+
+/* Prev/Next nav */
+.symbol-gallery__nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  margin-bottom: 32px;
+}
+
+.symbol-gallery__nav button {
+  padding: 10px 20px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #92400e;
+  background: #fffbeb;
+  border: 1px solid #fcd34d;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.symbol-gallery__nav button:hover:not(:disabled) {
+  background: #fef3c7;
+  border-color: #f59e0b;
+}
+
+.symbol-gallery__nav button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.symbol-gallery__counter {
+  font-size: 0.9rem;
+  color: #6b7280;
+  min-width: 4rem;
+  text-align: center;
+}
+
+/* Index list – jump to any symbol */
+.symbol-gallery__index {
+  border-top: 1px solid #e5e7eb;
+  padding-top: 24px;
+}
+
+.symbol-gallery__index-title {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #6b7280;
+  margin: 0 0 12px 0;
+}
+
+.symbol-gallery__index-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.symbol-gallery__index-list li {
+  margin: 0;
+  padding: 0;
+}
+
+.symbol-gallery__index-item {
+  display: inline-block;
+  padding: 6px 12px;
+  font-size: 0.8rem;
+  color: #374151;
+  background: #f3f4f6;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.symbol-gallery__index-item:hover {
+  background: #e5e7eb;
+}
+
+.symbol-gallery__index-item--current {
+  background: #fef3c7;
+  border-color: #f59e0b;
+  color: #92400e;
+  font-weight: 600;
+}

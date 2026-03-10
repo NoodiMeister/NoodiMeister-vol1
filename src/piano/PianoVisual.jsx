@@ -1,14 +1,14 @@
 /**
  * PianoVisual – visuaalne klaverikomponent.
- * Värvid ja kujundid: FIGURE_SHAPES_DATA (C=punane ruut, D=pruun ring, E=kollane kolmnurk, F=roheline, G=sinine täht, A=lilla romb, B=valge ovaal).
- * Oktav 2–3: tumedus/rist; oktav 5: must piirjoon; oktav 6: värviline raam. Tavarežiimis (Leland) figurenotesColors=null → klassikaline must-valge.
+ * Figurenotes: shape by octave (2=X, 3=square, 4=circle, 5=triangle), color by note (C=red, D=brown, E=grey, F=blue, G=black, A=yellow, B=green).
+ * Tavarežiimis figurenotesColors=null → klassikaline must-valge.
  */
 
 import React, { useMemo } from 'react';
 import { getKeysInRange } from './pianoKeys.js';
 import { getJoName } from '../notation/joNames';
 import { getFigureSymbol } from '../utils/figurenotes';
-import { getShapeData, getFigureStyle } from '../constants/FigureNotesLibrary';
+import { getShapePathsByOctave, getFigureStyle, getShapeData } from '../constants/FigureNotesLibrary';
 import './PianoVisual.css';
 
 const BLACK_WIDTH_RATIO = 0.6;
@@ -22,24 +22,20 @@ function midiToOctave(midi) {
 }
 
 /**
- * Figurenotes kujund klahvidel: noodinime + oktaav.
- * Kui octave on antud, rakendatakse getFigureStyle (oktav 5 = must raam, oktav 3 = tumedam jne).
+ * Figurenotes shape on key: shape by octave, color by note.
+ * Octave 2 = X, 3 = square, 4 = circle, 5 = triangle.
  */
 function FigureKeyPath({ pitch, color, size = 14, className = '', octave }) {
-  const data = getShapeData(pitch);
-  const style = octave != null ? getFigureStyle(pitch, octave) : { fill: color };
-  const fill = style.fill ?? data.color ?? color;
-  const stroke = style.stroke ?? data.stroke ?? 'none';
-  const strokeWidth = style.strokeWidth ?? (data.stroke ? 3 : 0);
+  const style = getFigureStyle(pitch, octave ?? 4);
+  const fill = style.fill ?? color;
+  const stroke = style.stroke ?? 'none';
+  const strokeWidth = style.strokeWidth ?? 0;
+  const paths = getShapePathsByOctave(octave ?? 4);
   return (
-    <svg className={className} width={size} height={size} viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet" aria-hidden="true" style={{ opacity: style.opacity ?? 1 }}>
-      <path d={data.path} fill={fill} stroke={stroke} strokeWidth={strokeWidth} vectorEffect="non-scaling-stroke" />
-      {style.showCross && (
-        <g stroke="#000" strokeWidth={Math.max(2, strokeWidth || 2)} strokeLinecap="round" vectorEffect="non-scaling-stroke">
-          <line x1="10" y1="10" x2="90" y2="90" />
-          <line x1="90" y1="10" x2="10" y2="90" />
-        </g>
-      )}
+    <svg className={className} width={size} height={size} viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+      {paths.map((d, i) => (
+        <path key={i} d={d} fill={fill} stroke={stroke} strokeWidth={strokeWidth} vectorEffect="non-scaling-stroke" />
+      ))}
     </svg>
   );
 }
@@ -52,11 +48,13 @@ function FigureKeyShape({ shape, color, size = 14, className = '' }) {
     return <span className={className} style={{ display: 'inline-block', width: size, height: size, border: '1px dashed rgba(0,0,0,0.3)', borderRadius: 2 }} aria-hidden="true" />;
   }
   if (shape === 'cross') {
+    const isBlack = !color || color === '#000000' || String(color).toLowerCase() === 'black';
+    const stroke = isBlack ? 'none' : '#000';
+    const strokeW = isBlack ? 0 : Math.max(0.5, size * 0.07);
     return (
-      <svg className={className} width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden="true">
-        <line x1={0} y1={0} x2={size} y2={size} stroke={color} strokeWidth={strokeW} strokeLinecap="round" />
-        <line x1={size} y1={0} x2={0} y2={size} stroke={color} strokeWidth={strokeW} strokeLinecap="round" />
-        <rect x={0} y={0} width={size} height={size} fill="none" stroke="currentColor" strokeWidth={1} opacity={0.4} />
+      <svg className={className} width={size} height={size} viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+        <path d="M10 10 L30 10 L90 70 L90 90 L70 90 L10 30 Z" fill={color} stroke={stroke} strokeWidth={strokeW} vectorEffect="non-scaling-stroke" />
+        <path d="M90 10 L70 10 L10 70 L10 90 L30 90 L90 30 Z" fill={color} stroke={stroke} strokeWidth={strokeW} vectorEffect="non-scaling-stroke" />
       </svg>
     );
   }
@@ -165,7 +163,7 @@ export function PianoVisual({
     if (!natural) return null;
     const octave = midiToOctave(midi);
     const data = getShapeData(natural);
-    return { pitch: natural, color: data.color, stroke: data.stroke, octave };
+    return { pitch: natural, color: data.color, octave };
   };
 
   /** Musta klahvi figuur: noodinime + oktaav + nool (kõrgendus/madaldus). */
@@ -178,7 +176,7 @@ export function PianoVisual({
     const data = getShapeData(naturalForColor);
     const useFlat = keySignature === 'F' || keySignature === 'Bb' || keySignature === 'Eb';
     const arrow = BLACK_KEY_ACCIDENTAL[mod] ? (useFlat ? 'flat' : 'sharp') : 'sharp';
-    return { pitch: naturalForColor, color: data.color, stroke: data.stroke, arrow, octave };
+    return { pitch: naturalForColor, color: data.color, arrow, octave };
   };
 
   return (

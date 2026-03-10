@@ -10,6 +10,8 @@ const ToetaPage = lazy(() => import('./pages/ToetaPage'));
 const UserDashboard = lazy(() => import('./components/UserDashboard'));
 const NoodiMeister = lazy(() => import('./noodimeister-complete'));
 const PianoDemoPage = lazy(() => import('./pages/PianoDemoPage'));
+const SymbolGalleryPage = lazy(() => import('./pages/SymbolGalleryPage'));
+const FigurenotesSymbolGalleryPage = lazy(() => import('./pages/FigurenotesSymbolGalleryPage'));
 
 import * as authStorage from './services/authStorage';
 
@@ -148,6 +150,8 @@ function AppRoutes() {
       <Suspense fallback={<div style={{ padding: 24, textAlign: 'center' }}>Laen…</div>}>
         <Routes>
           <Route path="/app" element={<NoodiMeister />} />
+          <Route path="/gallery/figurenotes" element={<FigurenotesSymbolGalleryPage />} />
+          <Route path="/gallery" element={<SymbolGalleryPage />} />
           <Route path="/piano" element={<PianoDemoPage />} />
           <Route path="/tood" element={<MinuToodOrRedirect />} />
           <Route path="/login" element={<LoginOrRedirect />} />

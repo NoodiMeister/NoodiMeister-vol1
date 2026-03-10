@@ -8,6 +8,7 @@
   --text-color: #1a1a1a;
   --staff-line-color: #000000;
   --note-fill: #1a1a1a;
+  --jo-clef-inverted: #ffffff; /* opposite of note-fill for JO-clef inverted variant */
   --score-bg: #fffbf0;
 }
 
@@ -22,6 +23,7 @@
   --text-color: #f0f0f0;
   --staff-line-color: #ffffff;
   --note-fill: #ffffff;
+  --jo-clef-inverted: #000000; /* opposite of note-fill in dark theme */
   --score-bg: #2d2d2d;
 }
 

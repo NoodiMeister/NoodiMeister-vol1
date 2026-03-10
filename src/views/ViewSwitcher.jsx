@@ -2,7 +2,7 @@
  * ViewSwitcher – valib kolm isoleeritud notatsioonivaadet.
  * TRADITIONAL: Leland (SMuFL), noodivõtmed 4× staffSpace, õigel positsioonil.
  * FIGURENOTES: absoluutne süsteem (C=punane ruut), rütm = kujundi laius (ScaleX).
- * PEDAGOGICAL: liikuv JO-võti (TraditionalNotationView + notationMode vabanotatsioon), värvid JO suhtes (PedagogicalLogic).
+ * PEDAGOGICAL: liikuv JO-võti (TraditionalNotationView + notationMode vabanotatsioon = Pedagoogiline notatsioon), värvid JO suhtes (PedagogicalLogic).
  * Ei seosta Figurenotes ja Pedagoogilist loogikat – eraldi failid.
  */
 import React from 'react';
@@ -10,7 +10,7 @@ import { VIEW_TRADITIONAL, VIEW_FIGURENOTES, VIEW_PEDAGOGICAL } from '../notatio
 
 /**
  * Tagastab vaate tüübi globaalse notationStyle ja notationMode põhjal.
- * notationStyle 'FIGURENOTES' → FIGURENOTES; notationMode 'vabanotatsioon' → PEDAGOGICAL; muul juhul TRADITIONAL.
+ * notationStyle 'FIGURENOTES' → FIGURENOTES; notationMode 'vabanotatsioon' (Pedagoogiline notatsioon) → PEDAGOGICAL; muul juhul TRADITIONAL.
  */
 export function getViewModeFromNotation(notationStyle, notationMode) {
   if (notationStyle === 'FIGURENOTES') return VIEW_FIGURENOTES;

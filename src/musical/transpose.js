@@ -1,7 +1,7 @@
 /**
  * Transponeerimise loogika: noodid pooltoonide võrra, helistik.
  */
-import { KEY_TO_SEMITONE } from '../utils/notationConstants';
+import { getSemitonesFromKey, KEY_TO_SEMITONE } from '../utils/notationConstants';
 
 const PITCH_TO_SEMI = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
 const PITCH_NAME_TO_NATURAL = {
@@ -52,9 +52,10 @@ export function transposeNotes(notes, semitones) {
 
 /**
  * Arvuta pooltoonide arv helistikust fromKey → toKey.
+ * Uses rule-based getSemitonesFromKey so any key name (e.g. F#, Ab) works without listing.
  */
 export function getTransposeSemitones(fromKey, toKey) {
-  const fromSemi = KEY_TO_SEMITONE[fromKey] ?? 0;
-  const toSemi = KEY_TO_SEMITONE[toKey] ?? 0;
+  const fromSemi = KEY_TO_SEMITONE[fromKey] ?? getSemitonesFromKey(fromKey);
+  const toSemi = KEY_TO_SEMITONE[toKey] ?? getSemitonesFromKey(toKey);
   return toSemi - fromSemi;
 }

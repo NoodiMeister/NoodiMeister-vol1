@@ -34,8 +34,10 @@ import {
   DEFAULT_SHOW_RHYTHM_SYLLABLES,
   DEFAULT_SHOW_ALL_NOTE_LABELS,
   KEY_TO_SEMITONE,
+  getSemitonesFromKey,
 } from './utils/notationConstants';
 import { FIGURENOTES_COLORS, getFigureSymbol } from './utils/figurenotes';
+import { getOctave2CrossStyle } from './constants/FigureNotesLibrary';
 import { getPedagogicalSymbol } from './notation/PedagogicalLogic';
 import { FigurenotesBlockIcon } from './toolboxes';
 import { FigurenotesView } from './views/FigurenotesView';
@@ -47,6 +49,7 @@ import { transposeNotes } from './musical/transpose';
 import { useNoodimeisterOptional } from './store/NoodimeisterContext';
 import { useNotationOptional } from './store/NotationContext';
 import html2canvas from 'html2canvas';
+import { jsPDF } from 'jspdf';
 import Soundfont from 'soundfont-player';
 
 // Safe Initialization: väline seadete objekt KÕIGE ALGUSES (väljaspool komponente). Vercel ei minifitseeri var-deklaratsioone YA/JA-ks.
@@ -81,7 +84,7 @@ var KEY_ORDER = ['C', 'G', 'D', 'A', 'E', 'B', 'F', 'Bb', 'Eb'];
 var LUCIDE_ICONS = [
   'Music2', 'Clock', 'Hash', 'Type', 'Piano', 'Palette', 'Layout', 'Check', 'Save', 'FolderOpen',
   'Plus', 'Settings', 'Key', 'Repeat', 'Cloud', 'LogOut', 'User', 'CloudUpload', 'CloudDownload', 'FolderPlus', 'ChevronDown',
-  'Play', 'Pause', 'Video', 'Eye', 'ArrowDown', 'ArrowRight', 'ArrowUpDown', 'X'
+  'Play', 'Pause', 'Video', 'Eye', 'ArrowDown', 'ArrowRight', 'ArrowUpDown', 'X', 'Printer', 'FileDown'
 ];
 var STORAGE_KEY = 'noodimeister-data';
 var THEME_STORAGE_KEY = 'noodimeister-theme';
@@ -1118,6 +1121,7 @@ function NoodiMeisterCore({ icons }) {
   const [pedagogicalPlayheadEmoji, setPedagogicalPlayheadEmoji] = useState('🎵'); // kasutub kui style === 'custom'; seadetes "Kursori karakter"
   const [pedagogicalPlayheadEmojiSize, setPedagogicalPlayheadEmojiSize] = useState(32); // HEV: 20–60 px
   const [isExportingAnimation, setIsExportingAnimation] = useState(false);
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
   const pedagogicalAudioRef = useRef(null); // HTMLAudioElement
   const pedagogicalPlaybackIntervalRef = useRef(null);
   const pedagogicalAudioDataRef = useRef(null); // base64 string (salvestamiseks)
@@ -1522,6 +1526,61 @@ function NoodiMeisterCore({ icons }) {
       }
     }, durationSec * 1000 + 1500);
   }, [isPedagogicalProject, notes, pedagogicalAudioUrl, pedagogicalAudioDuration, pedagogicalAudioBpm, songTitle, stopPedagogicalPlayback, t]);
+
+  const handlePrint = useCallback(() => {
+    setHeaderMenuOpen(null);
+    window.print();
+  }, []);
+
+  const exportToPdf = useCallback(async () => {
+    const container = scoreContainerRef?.current;
+    if (!container) {
+      setSaveFeedback(t('feedback.exportFailed'));
+      setTimeout(() => setSaveFeedback(''), 2000);
+      return;
+    }
+    setIsExportingPdf(true);
+    setSaveFeedback('PDF…');
+    try {
+      const canvas = await html2canvas(container, {
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        width: container.scrollWidth,
+        height: container.scrollHeight,
+        windowWidth: container.scrollWidth,
+        windowHeight: container.scrollHeight,
+      });
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF({
+        orientation: canvas.width > canvas.height ? 'landscape' : 'portrait',
+        unit: 'mm',
+        format: 'a4',
+      });
+      const pageW = pdf.internal.pageSize.getWidth();
+      const pageH = pdf.internal.pageSize.getHeight();
+      const imgW = pageW;
+      const imgH = (canvas.height * imgW) / canvas.width;
+      let heightLeft = imgH;
+      let position = 0;
+      pdf.addImage(imgData, 'PNG', 0, position, imgW, imgH);
+      heightLeft -= pageH;
+      while (heightLeft > 0) {
+        pdf.addPage();
+        position = -(pageH * (pdf.internal.getNumberOfPages() - 1));
+        pdf.addImage(imgData, 'PNG', 0, position, imgW, imgH);
+        heightLeft -= pageH;
+      }
+      const filename = ((songTitle || t('common.untitled')).replace(/\s+/g, '-').replace(/[^\w\-.]/g, '') || 'score') + '.pdf';
+      pdf.save(filename);
+      setSaveFeedback('');
+    } catch (e) {
+      setSaveFeedback(t('feedback.exportFailed'));
+      setTimeout(() => setSaveFeedback(''), 2000);
+    } finally {
+      setIsExportingPdf(false);
+    }
+  }, [songTitle, t]);
 
   // Build state to persist
   const getPersistedState = useCallback(() => ({
@@ -2537,8 +2596,8 @@ function NoodiMeisterCore({ icons }) {
         break;
       case 'transpose': {
         const targetKey = option.value;
-        const fromSemi = KEY_TO_SEMITONE[keySignature] ?? 0;
-        const toSemi = KEY_TO_SEMITONE[targetKey] ?? 0;
+        const fromSemi = KEY_TO_SEMITONE[keySignature] ?? getSemitonesFromKey(keySignature);
+        const toSemi = KEY_TO_SEMITONE[targetKey] ?? getSemitonesFromKey(targetKey);
         let semitones = (toSemi - fromSemi) % 12;
         if (semitones < 0) semitones += 12;
         if (semitones !== 0) {
@@ -2643,7 +2702,7 @@ function NoodiMeisterCore({ icons }) {
           const nextPos = Math.max(JO_CLEF_POSITION_MIN, Math.min(JO_CLEF_POSITION_MAX, joClefStaffPosition + step));
           const newKey = getKeyFromStaffPosition(nextPos);
           if (newKey !== keySignature) {
-            const semitones = (KEY_TO_SEMITONE[newKey] ?? 0) - (KEY_TO_SEMITONE[keySignature] ?? 0);
+            const semitones = (KEY_TO_SEMITONE[newKey] ?? getSemitonesFromKey(newKey)) - (KEY_TO_SEMITONE[keySignature] ?? getSemitonesFromKey(keySignature));
             if (semitones !== 0) {
               saveToHistory(notes);
               setStaves((prev) => prev.map((staff) => ({ ...staff, notes: transposeNotes(staff.notes || [], semitones) })));
@@ -3034,7 +3093,7 @@ function NoodiMeisterCore({ icons }) {
           return;
         }
 
-        // Stage V: Pitch editing – Arrow Up/Down (diatonic), Shift+Arrow (octave jump)
+        // Stage V: Pitch editing – Arrow Up/Down (diatonic), Shift+Arrow or Cmd/Ctrl+Arrow (octave jump)
         const applyToSelectedNotes = (transform) => {
           const newNotes = [...notes];
           if (selectionStart >= 0 && selectionEnd >= 0) {
@@ -3050,27 +3109,23 @@ function NoodiMeisterCore({ icons }) {
           setNotes(newNotes);
         };
 
-        if (e.code === 'ArrowUp' && selectedNoteIndex >= 0 && !e.shiftKey) {
+        const arrowOctave = (e.code === 'ArrowUp' || e.code === 'ArrowDown') && selectedNoteIndex >= 0 && (e.shiftKey || modKey);
+        if (arrowOctave) {
+          e.preventDefault();
+          const dir = e.code === 'ArrowUp' ? 1 : -1;
+          applyToSelectedNotes(n => ({ octave: shiftOctave(n.octave, dir) }));
+          return;
+        }
+
+        if (e.code === 'ArrowUp' && selectedNoteIndex >= 0 && !e.shiftKey && !modKey) {
           e.preventDefault();
           applyToSelectedNotes(n => ({ ...shiftPitch(n.pitch, n.octave, 1), accidental: 0 }));
           return;
         }
 
-        if (e.code === 'ArrowDown' && selectedNoteIndex >= 0 && !e.shiftKey) {
+        if (e.code === 'ArrowDown' && selectedNoteIndex >= 0 && !e.shiftKey && !modKey) {
           e.preventDefault();
           applyToSelectedNotes(n => ({ ...shiftPitch(n.pitch, n.octave, -1), accidental: 0 }));
-          return;
-        }
-
-        if (e.code === 'ArrowUp' && selectedNoteIndex >= 0 && e.shiftKey) {
-          e.preventDefault();
-          applyToSelectedNotes(n => ({ octave: shiftOctave(n.octave, 1) }));
-          return;
-        }
-
-        if (e.code === 'ArrowDown' && selectedNoteIndex >= 0 && e.shiftKey) {
-          e.preventDefault();
-          applyToSelectedNotes(n => ({ octave: shiftOctave(n.octave, -1) }));
           return;
         }
 
@@ -3618,7 +3673,7 @@ function NoodiMeisterCore({ icons }) {
                   </label>
                   <label className="flex items-center gap-3 p-3 rounded-lg border-2 border-amber-200 hover:bg-amber-50 cursor-pointer">
                     <input type="radio" name="wizardNotation" checked={wizardNotationMethod === 'vabanotatsioon'} onChange={() => setWizardNotationMethod('vabanotatsioon')} className="w-4 h-4 text-amber-600" />
-                    <span className="font-medium text-amber-900">Vabanotatsioon (solfeeg)</span>
+                    <span className="font-medium text-amber-900">Pedagoogiline notatsioon (solfeeg)</span>
                   </label>
                   <label className="flex items-center gap-3 p-3 rounded-lg border-2 border-amber-300 bg-amber-50/60 hover:bg-amber-100 cursor-pointer">
                     <input type="radio" name="wizardNotation" checked={wizardNotationMethod === 'pedagogical'} onChange={() => setWizardNotationMethod('pedagogical')} className="w-4 h-4 text-amber-600" />
@@ -4046,7 +4101,7 @@ function NoodiMeisterCore({ icons }) {
                 </label>
                 <p className="text-xs text-amber-600 mt-1">Kui see on sisse lülitatud, kuvatakse figuurnoodidel noodivars ja vibu (kaheksandik, kuueteistkümnendik), et rütm oleks selgem. Vaikimisi väljas.</p>
               </div>
-              {/* Vabanotatsioon (Kodály relatiivnotatsioon): Do (Jo) võti on alati nähtav; võtmemärk ja traditsiooniline võti valikulised */}
+              {/* Pedagoogiline notatsioon (Kodály relatiivnotatsioon): Do (Jo) võti on alati nähtav; võtmemärk ja traditsiooniline võti valikulised */}
               <div className="border-t border-amber-200 pt-4 mt-4">
                 <h3 className="text-sm font-bold text-amber-900 mb-2">{t('settings.relativeNotation')}</h3>
                 <p className="text-xs text-amber-700 mb-3">{t('settings.relativeNotationHint')}</p>
@@ -4196,11 +4251,18 @@ function NoodiMeisterCore({ icons }) {
       {/* Seadete riba + tööriistavalikud magneetiliselt all – sticky üleval */}
       <div className="sticky top-0 z-30 flex flex-col flex-shrink-0 shadow-lg">
       <header className="flex-shrink-0 bg-gradient-to-r from-amber-900 via-orange-800 to-red-900 text-amber-50">
-        <div className="w-full pl-3 pr-4 py-3 flex flex-col gap-3">
-          {/* Rida 1: ainult logo */}
-          <div>
+          <div className="w-full pl-3 pr-4 py-3 flex flex-col gap-3">
+          {/* Rida 1: logo + link galeriile */}
+          <div className="flex items-center justify-between gap-4">
             <Link to="/" className="inline-flex items-center text-amber-50 hover:opacity-90 transition-opacity">
               <img src="/logo.png" alt="NoodiMeister" className="h-9 w-auto" />
+            </Link>
+            <Link
+              to="/gallery"
+              className="inline-flex items-center px-3 py-1.5 rounded-lg text-sm font-medium text-amber-100 bg-amber-800/60 hover:bg-amber-700 border border-amber-600/50 transition-colors"
+              title={t('view.symbolGalleryHint')}
+            >
+              {t('view.symbolGallery')}
             </Link>
           </div>
           {/* Rida 2: rippmenüüd ja kõik käsud */}
@@ -4270,6 +4332,26 @@ function NoodiMeisterCore({ icons }) {
                       className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-amber-50 hover:bg-slate-600"
                     >
                       <CloudDownload className="w-4 h-4" /> {t('file.loadCloud')}
+                    </button>
+                    <div className="my-1 border-t border-slate-600" />
+                    <button
+                      type="button"
+                      onClick={() => { handlePrint(); }}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-amber-50 hover:bg-slate-600"
+                      title={t('file.printTitle')}
+                    >
+                      {icons?.Printer && <icons.Printer className="w-4 h-4" />}
+                      {t('file.print')}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isExportingPdf}
+                      onClick={() => { exportToPdf(); setHeaderMenuOpen(null); }}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-amber-50 hover:bg-slate-600 disabled:opacity-60"
+                      title={t('file.exportPdfTitle')}
+                    >
+                      {icons?.FileDown && <icons.FileDown className="w-4 h-4" />}
+                      {t('file.exportPdf')}
                     </button>
                     <div className="my-1 border-t border-slate-600" />
                     {/* Animatsiooni eksport (video) – ainult pedagoogilise projekti puhul */}
@@ -4413,6 +4495,14 @@ function NoodiMeisterCore({ icons }) {
                       {toolboxPaletteVisible && <Check className="w-4 h-4 text-amber-400" />}
                     </button>
                     <div className="my-1 border-t border-slate-600" />
+                    <Link
+                      to="/gallery"
+                      onClick={() => setHeaderMenuOpen(null)}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-amber-50 hover:bg-slate-600"
+                      title={t('view.symbolGalleryHint')}
+                    >
+                      {t('view.symbolGallery')}
+                    </Link>
                     <button
                       type="button"
                       onClick={() => { setHeaderMenuOpen(null); window.location.reload(); }}
@@ -5213,7 +5303,7 @@ function NoodiMeisterCore({ icons }) {
                   <p className="text-sm text-amber-700 text-right mt-1" style={{ fontFamily: documentFontFamily }}>{author}</p>
                 )}
               </div>
-              {/* Õpetaja režiimi tööriistariba (vabanotatsioon) */}
+              {/* Õpetaja režiimi tööriistariba (pedagoogiline notatsioon) */}
               {notationMode === 'vabanotatsioon' && (
                 <div className="mb-3 flex flex-wrap items-center gap-3 px-2 py-2 rounded-lg bg-amber-50 border border-amber-200">
                   <span className="text-xs font-semibold text-amber-800 uppercase tracking-wider">Õpetaja</span>
@@ -5307,8 +5397,8 @@ function NoodiMeisterCore({ icons }) {
                   relativeNotationShowTraditionalClef={relativeNotationShowTraditionalClef}
                   onJoClefPositionChange={notationMode === 'vabanotatsioon' ? (newKey) => {
                     dirtyRef.current = true;
-                    const fromSemi = KEY_TO_SEMITONE[keySignature] ?? 0;
-                    const toSemi = KEY_TO_SEMITONE[newKey] ?? 0;
+                    const fromSemi = KEY_TO_SEMITONE[keySignature] ?? getSemitonesFromKey(keySignature);
+                    const toSemi = KEY_TO_SEMITONE[newKey] ?? getSemitonesFromKey(newKey);
                     let semitones = (toSemi - fromSemi) % 12;
                     if (semitones < 0) semitones += 12;
                     if (semitones !== 0) {
@@ -5910,10 +6000,14 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
         );
       }
       if (shape === 'cross') {
+        const crossStyle = getOctave2CrossStyle(note.pitch);
+        const crossStrokeW = crossStyle.strokeWidth ? Math.max(0.5, size * 0.02) : 0;
+        const x0 = x - r, x1 = x - 0.8 * r, x2 = x - 0.68 * r, x3 = x + 0.68 * r, x4 = x + 0.8 * r, x5 = x + r;
+        const y0 = y - r, y1 = y - 0.8 * r, y2 = y - 0.68 * r, y3 = y + 0.68 * r, y4 = y + 0.8 * r, y5 = y + r;
         return (
-          <g stroke={color} strokeWidth={strokeW} strokeLinecap="round">
-            <line x1={x - r} y1={y - r} x2={x + r} y2={y + r} />
-            <line x1={x + r} y1={y - r} x2={x - r} y2={y + r} />
+          <g>
+            <path d={`M${x1} ${y1} L${x2} ${y2} L${x3} ${y3} L${x4} ${y4} L${x5} ${y3} L${x0} ${y2} Z`} fill={crossStyle.fill} stroke={crossStyle.stroke} strokeWidth={crossStrokeW} />
+            <path d={`M${x4} ${y1} L${x3} ${y2} L${x2} ${y3} L${x1} ${y4} L${x0} ${y3} L${x5} ${y2} Z`} fill={crossStyle.fill} stroke={crossStyle.stroke} strokeWidth={crossStrokeW} />
             <rect x={x - r} y={y - r} width={size} height={size} fill="none" stroke={strokeShape} strokeWidth={strokeWShape} />
           </g>
         );
@@ -6171,6 +6265,8 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
           getStaffHeight={getStaffHeight}
           showStaffSpacerHandles={showStaffSpacerHandles && typeof onSystemYOffsetChange === 'function'}
           onStaffSpacerMouseDown={typeof onSystemYOffsetChange === 'function' ? (systemIndex) => (e) => { e.stopPropagation(); setStaffSpacerDrag({ systemIndex, startClientY: e.clientY, cumulativeDelta: 0 }); } : undefined}
+          instrument={instrument}
+          instrumentNotationVariant={instrumentNotationVariant}
         />
       )}
 
@@ -6274,10 +6370,14 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
                 if (shape === 'none') {
                   el = <rect x={cx - r} y={cy - r} width={size} height={size} fill="none" stroke="#2563eb" strokeWidth="2" strokeDasharray="2 2" opacity="0.9" />;
                 } else if (shape === 'cross') {
+                  const crossStyle = getOctave2CrossStyle(ghostPitch);
+                  const crossStrokeW = crossStyle.strokeWidth ? Math.max(0.5, size * 0.02) : 0;
+                  const x0 = cx - r, x1 = cx - 0.8 * r, x2 = cx - 0.68 * r, x3 = cx + 0.68 * r, x4 = cx + 0.8 * r, x5 = cx + r;
+                  const y0 = cy - r, y1 = cy - 0.8 * r, y2 = cy - 0.68 * r, y3 = cy + 0.68 * r, y4 = cy + 0.8 * r, y5 = cy + r;
                   el = (
-                    <g stroke={color} strokeWidth={strokeW} strokeLinecap="round">
-                      <line x1={cx - r} y1={cy - r} x2={cx + r} y2={cy + r} />
-                      <line x1={cx + r} y1={cy - r} x2={cx - r} y2={cy + r} />
+                    <g>
+                      <path d={`M${x1} ${y1} L${x2} ${y2} L${x3} ${y3} L${x4} ${y4} L${x5} ${y3} L${x0} ${y2} Z`} fill={crossStyle.fill} stroke={crossStyle.stroke} strokeWidth={crossStrokeW} />
+                      <path d={`M${x4} ${y1} L${x3} ${y2} L${x2} ${y3} L${x1} ${y4} L${x0} ${y3} L${x5} ${y2} Z`} fill={crossStyle.fill} stroke={crossStyle.stroke} strokeWidth={crossStrokeW} />
                       <rect x={cx - r} y={cy - r} width={size} height={size} fill="none" stroke="#2563eb" strokeWidth="2" />
                     </g>
                   );
