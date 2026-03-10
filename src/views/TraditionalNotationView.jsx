@@ -4,7 +4,7 @@
  * Abijooned genereeritakse, kui JO-võti või nootid väljuvad 5-liini süsteemist.
  * Paigutuse tööriistad (Staff Spacer, taktide laiendamine { }) rakenduvad siin.
  */
-import React from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { JoClefSymbol, TrebleClefSymbol, BassClefSymbol, getJoClefPixelWidth, getJoClefDoStripeBounds } from '../components/ClefSymbols';
 import { RhythmSyllableLabel } from '../components/RhythmSyllableLabel';
 import { getJoName } from '../notation/joNames';
@@ -50,6 +50,7 @@ const SMUFL = {
 function StaffClefSymbol({ x, y, height, clefType, fill = '#000', staffSpace = 10 }) {
   if (clefType === 'treble') return <TrebleClefSymbol x={x} y={y} height={height} fill={fill} />;
   if (clefType === 'bass') return <BassClefSymbol x={x} y={y} height={height} fill={fill} staffSpace={staffSpace} />;
+  // Aldivõti (C-clef): symbol = clef-c.png, placement on staff = c-clef-on-staff.png (clef center = middle C line).
   if (clefType === 'alto' || clefType === 'tenor') {
     return (
       <SmuflGlyph
@@ -192,9 +193,12 @@ export function TraditionalNotationView({
   chords = [],
   isNoteSelected,
   onNoteClick,
+  onNotePitchChange,
   onNoteTeacherLabelChange,
   onNoteLabelClick,
   getPitchY, // (pitch, octave) => Y relative to staff center (Timeline arvutab JO/viiulivõtme järgi)
+  getPitchFromY, // (staffLocalY) => { pitch, octave } for drag-to-change-pitch
+  timelineSvgRef,
   isFirstInBraceGroup = false,
   braceGroupSize = 0,
   lyricFontFamily = TEXT_FONT_FAMILY,
@@ -208,6 +212,32 @@ export function TraditionalNotationView({
 }) {
   const spacing = staffSpaceProp ?? STAFF_SPACE;
   const centerY = timelineHeight / 2;
+  const [noteDrag, setNoteDrag] = useState(null); // { noteIndex, staffY } when dragging a note to change pitch
+  const lastPitchRef = useRef(null); // avoid duplicate updates when pitch unchanged
+  useEffect(() => {
+    if (!noteDrag || typeof onNotePitchChange !== 'function' || typeof getPitchFromY !== 'function' || !timelineSvgRef?.current) return;
+    const { noteIndex, staffY } = noteDrag;
+    const onMove = (e) => {
+      const rect = timelineSvgRef.current.getBoundingClientRect();
+      const yInSvg = e.clientY - rect.top;
+      const staffLocalY = yInSvg - staffY;
+      const pitchInfo = getPitchFromY(staffLocalY);
+      if (pitchInfo && (lastPitchRef.current?.pitch !== pitchInfo.pitch || lastPitchRef.current?.octave !== pitchInfo.octave)) {
+        lastPitchRef.current = pitchInfo;
+        onNotePitchChange(noteIndex, pitchInfo.pitch, pitchInfo.octave);
+      }
+    };
+    const onUp = () => {
+      setNoteDrag(null);
+      lastPitchRef.current = null;
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    return () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+  }, [noteDrag, onNotePitchChange, getPitchFromY, timelineSvgRef]);
   const staffLinePositions = getStaffLinePositions(centerY, staffLines, spacing);
   // Leland: Treble on B line (traditional-method placement). Bass: F line (index 1).
   const trebleGLine = staffLinePositions[TREBLE_CLEF_LINE_INDEX];
@@ -498,7 +528,17 @@ export function TraditionalNotationView({
                       const noteY = staffY + pitchY;
                       const beamGroup = getBeamGroup(noteIdx);
                       const stemUp = beamGroup ? beamGroup.stemUp : (pitchY > middleLineY);
-                      const noteGroupProps = { onClick: (e) => { e.stopPropagation(); onNoteClick?.(globalNoteIndex); }, style: { cursor: onNoteClick ? 'pointer' : undefined } };
+                      const canDragPitch = !note.isRest && typeof onNotePitchChange === 'function' && typeof getPitchFromY === 'function';
+                      const noteGroupProps = {
+                        onClick: (e) => { e.stopPropagation(); onNoteClick?.(globalNoteIndex); },
+                        onMouseDown: canDragPitch ? (e) => {
+                          if (e.button !== 0) return;
+                          e.stopPropagation();
+                          lastPitchRef.current = { pitch: note.pitch, octave: note.octave };
+                          setNoteDrag({ noteIndex: globalNoteIndex, staffY });
+                        } : undefined,
+                        style: { cursor: (onNoteClick || canDragPitch) ? 'pointer' : undefined }
+                      };
                       const restLabelY = staffY + lastLineY + spacing * 1.8;
 
                       if (note.isRest) {

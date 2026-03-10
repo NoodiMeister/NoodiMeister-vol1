@@ -9,6 +9,8 @@ To **see** the symbol designs as images in Cursor or any viewer:
 1. Open the **PNG files** in this folder:
    - `clef-bass.png`, `clef-c.png`, `note-whole.png`, `rest-whole.png`, `rest-quarter.png`, etc.
 
+**Aldivõti (C-clef / alto clef):** The symbol design is in **`clef-c.png`**. Staff placement (clef center = middle C) is defined by **`c-clef-on-staff.png`** — use that image as the reference for how the C-clef sits on the staff.
+
 2. In Cursor: **File → Open** (or drag) any of these `.png` files.  
    Cursor will show the **image**, not code.
 

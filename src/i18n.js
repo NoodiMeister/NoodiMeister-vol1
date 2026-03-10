@@ -223,6 +223,7 @@ const translations = {
     'chords.figuredBass': 'Figuurnoodid (valikuline)',
     'chords.figuredBassPlaceholder': 'nt. 6/5, 4/3',
     'chords.add': 'Lisa akord',
+    'noteInput.chordHint': 'Shift+A–G: lisa noot praeguse noodi peale (traditsiooniline / pedagoogiline).',
     // Instrumendid – kategooriad
     'cat.singleStaff': 'Üks rida (võti)',
     'cat.keyboard': 'Klahvpillid',
@@ -629,6 +630,7 @@ const translations = {
     'chords.figuredBass': 'Figured bass (optional)',
     'chords.figuredBassPlaceholder': 'e.g. 6/5, 4/3',
     'chords.add': 'Add chord',
+    'noteInput.chordHint': 'Shift+A–G: add note on top of current note (Traditional/Pedagogical).',
     'cat.singleStaff': 'Single staff (clef)',
     'cat.keyboard': 'Keyboard',
     'cat.stringsPlucked': 'Strings – plucked',

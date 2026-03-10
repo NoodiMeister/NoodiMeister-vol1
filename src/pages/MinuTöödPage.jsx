@@ -98,7 +98,11 @@ export default function MinuTöödPage() {
     navigate(path);
   };
 
-  const openApp = () => navigate('/app');
+  const openApp = () => {
+    const base = (typeof import.meta !== 'undefined' && import.meta.env?.BASE_URL) || '';
+    const path = base.replace(/\/$/, '') + '/app?local=1';
+    navigate(path);
+  };
 
   const openFile = (fileId) => {
     const base = (typeof import.meta !== 'undefined' && import.meta.env?.BASE_URL) || '';
@@ -149,21 +153,27 @@ export default function MinuTöödPage() {
           </div>
         )}
 
-        <div className="flex flex-wrap gap-4 mb-8">
-          <button
-            type="button"
-            onClick={openNew}
-            className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 text-white font-bold shadow-lg hover:shadow-xl hover:from-amber-500 hover:to-orange-500 transition-all"
-          >
-            <FilePlus className="w-5 h-5" /> Uus töö
-          </button>
-          <button
-            type="button"
-            onClick={openApp}
-            className="inline-flex items-center gap-2 px-6 py-3 rounded-xl border-2 border-amber-400 bg-white text-amber-800 font-semibold hover:bg-amber-50 transition-colors"
-          >
-            <FolderOpen className="w-5 h-5" /> Ava tööriist (brauseri salvestus)
-          </button>
+        <div className="mb-8">
+          <h2 className="text-lg font-semibold text-amber-900 mb-3">Viimati muudetud tööd</h2>
+          <p className="text-sm text-amber-800/90 mb-4">
+            Brauseris salvestatud viimane töö. Ava see, et jätkata kohalikult salvestatud tööga.
+          </p>
+          <div className="flex flex-wrap gap-4">
+            <button
+              type="button"
+              onClick={openNew}
+              className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 text-white font-bold shadow-lg hover:shadow-xl hover:from-amber-500 hover:to-orange-500 transition-all"
+            >
+              <FilePlus className="w-5 h-5" /> Uus töö
+            </button>
+            <button
+              type="button"
+              onClick={openApp}
+              className="inline-flex items-center gap-2 px-6 py-3 rounded-xl border-2 border-amber-400 bg-white text-amber-800 font-semibold hover:bg-amber-50 transition-colors"
+            >
+              <FolderOpen className="w-5 h-5" /> Ava viimati muudetud töö
+            </button>
+          </div>
         </div>
 
         {hasGoogle && (

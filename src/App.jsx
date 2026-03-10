@@ -1,5 +1,5 @@
 import React, { Suspense, lazy } from 'react';
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation, useSearchParams } from 'react-router-dom';
 import { NoodimeisterProvider } from './store/NoodimeisterContext';
 import LandingPage from './pages/LandingPage';
 // Lazy load, et vältida TDZ-viga ühes suures bundle'is
@@ -41,6 +41,16 @@ function RegisterOrRedirect() {
 function MinuToodOrRedirect() {
   if (!isLoggedIn()) return <Navigate to="/login" replace />;
   return <UserDashboard />;
+}
+
+/** Sisselogitud kasutaja suuna /app pealt Minu tööde vaatesse, kui ei avata konkreetset faili, uut tööd ega viimati muudetud tööd (local=1). */
+function AppOrRedirect() {
+  const [searchParams] = useSearchParams();
+  const fileId = searchParams.get('fileId');
+  const isNew = searchParams.get('new') === '1';
+  const openLocal = searchParams.get('local') === '1';
+  if (isLoggedIn() && !fileId && !isNew && !openLocal) return <Navigate to="/tood" replace />;
+  return <NoodiMeister />;
 }
 
 /** ErrorBoundary ümbritseb kogu rakenduse; püüab renderdamise vead ja näitab kasutajale selge veateate. */
@@ -149,7 +159,7 @@ function AppRoutes() {
       <EnvBanner />
       <Suspense fallback={<div style={{ padding: 24, textAlign: 'center' }}>Laen…</div>}>
         <Routes>
-          <Route path="/app" element={<NoodiMeister />} />
+          <Route path="/app" element={<AppOrRedirect />} />
           <Route path="/gallery/figurenotes" element={<FigurenotesSymbolGalleryPage />} />
           <Route path="/gallery" element={<SymbolGalleryPage />} />
           <Route path="/piano" element={<PianoDemoPage />} />

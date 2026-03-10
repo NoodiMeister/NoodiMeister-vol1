@@ -26,17 +26,17 @@ function canUseStorageForLogin(stayLoggedIn) {
   }
 }
 
-/** Suuna /app poole Vercelil korrektselt (arvestab BASE_URL). */
-function redirectToApp() {
+/** Suuna Minu tööde vaatesse (/tood) Vercelil korrektselt (arvestab BASE_URL). */
+function redirectToTood() {
   if (typeof window === 'undefined') return;
   try {
     const base = (typeof import.meta !== 'undefined' && import.meta.env?.BASE_URL) || '';
-    const path = (base.replace(/\/$/, '') || '') + '/app';
+    const path = (base.replace(/\/$/, '') || '') + '/tood';
     const url = window.location.origin + path;
     window.location.assign(url);
   } catch (e) {
-    console.warn('[CloudLogin] redirectToApp viga:', e);
-    window.location.assign('/app');
+    console.warn('[CloudLogin] redirectToTood viga:', e);
+    window.location.assign('/tood');
   }
 }
 
@@ -133,9 +133,9 @@ function useCloudLoginWithProvider(mode = 'login', stayLoggedIn = false, onError
               if (onError) onError(payload);
               return;
             }
-            console.log('[CloudLogin] Auth kinnitatud, suuname /app poole (Vercel: redirectToApp)');
+            console.log('[CloudLogin] Auth kinnitatud, suuname /tood poole (Minu tööd)');
             requestAnimationFrame(() => {
-              setTimeout(redirectToApp, 50);
+              setTimeout(redirectToTood, 50);
             });
           } catch (e) {
             alert('Sisselogimise viga: ' + (e?.message ?? String(e)));

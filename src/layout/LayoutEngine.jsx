@@ -55,6 +55,9 @@ const SYSTEM_GAP = 120;
 /** Vaikimisi laius ühe veerandnooti (1/4) kohta figuurnotatsioonis (px). */
 export const FIGURE_BASE_WIDTH = 28;
 
+/** Height of one Figurenotes row (measure box row). Step between lines = FIGURE_ROW_HEIGHT + gap; same rule between every line. */
+export const FIGURE_ROW_HEIGHT = 80;
+
 /**
  * Tagastab figuurnoodi laiuse kestuse järgi (whole=4×, half=2×, quarter=1×, eighth=0.5×, sixteenth=0.25×).
  * @param {string} duration - durationLabel ('1/1', '1/2', '1/4', '1/8', '1/16') või võti ('whole', 'half', ...)
@@ -89,9 +92,13 @@ export function calculateLayout(mode, orientation, data) {
   const availableWidth = dims.width - dims.margin * 2;
   const availablePageHeight = dims.height - dims.margin * 2;
 
+  const figurePageHeight = (typeof data?.pageHeight === 'number' && data.pageHeight > 0)
+    ? data.pageHeight
+    : availablePageHeight;
+
   switch (mode) {
     case 'figure':
-      return calculateFigureGrid(data, availableWidth, availablePageHeight);
+      return calculateFigureGrid(data, availableWidth, figurePageHeight);
     case 'traditional':
       return calculateTraditionalSystems(data, availableWidth, dims, availablePageHeight);
     case 'pedagogical':
@@ -102,17 +109,26 @@ export function calculateLayout(mode, orientation, data) {
 }
 
 /**
- * Figuurnotatsioon: rütmikastid fikseeritud (nt 4 kasti reas), võrdne laius takti kohta.
- * Süsteemide Y: täpne joonestiku keskkohast järgmise keskkohani (staffSpacing).
+ * Figuurnotatsioon: rütmikastid reas; võrdne laius takti kohta rea sees.
+ * Kasutab bar layout tööriista: lineBreakBefore / pageBreakBefore (1-based measure index = break before that measure).
+ * Süsteemide Y: yOffset = systemIndex * staffSpacing (staffSpacing = rea kõrgus + vahe). A4: kui rida ei mahu lehele, pageBreakBefore.
  */
 function calculateFigureGrid(data, availableWidth, availablePageHeight = 0) {
   const measures = data?.measures ?? [];
   const mult = Math.max(0.25, Math.min(3, Number(data?.globalSpacingMultiplier) || 1));
   const rawBoxesPerRow = data?.boxesPerRow ?? DEFAULT_BOXES_PER_ROW;
   const boxesPerRow = Math.max(1, Math.round(rawBoxesPerRow / mult));
+  const lineBreakBefore = new Set(Array.isArray(data?.lineBreakBefore) ? data.lineBreakBefore : []);
+  const pageBreakBefore = new Set(Array.isArray(data?.pageBreakBefore) ? data.pageBreakBefore : []);
   const timeSignature = data?.timeSignature ?? { beats: 4, beatUnit: 4 };
   const beatsPerMeasure = timeSignature?.beats ?? 4;
-  const staffSpacing = Math.max(40, Number(data?.staffSpacing) || SYSTEM_GAP);
+  const staffSpacing = Math.max(FIGURE_ROW_HEIGHT, Number(data?.staffSpacing) || SYSTEM_GAP);
+
+  const effectiveWidth = typeof data?.pageWidth === 'number' && data.pageWidth > 0
+    ? Math.max(200, data.pageWidth - LAYOUT.MARGIN_LEFT - LAYOUT.MARGIN_RIGHT)
+    : availableWidth;
+
+  const pageHeight = availablePageHeight > 0 ? availablePageHeight : null;
 
   if (measures.length === 0) {
     return [{
@@ -127,31 +143,54 @@ function calculateFigureGrid(data, availableWidth, availablePageHeight = 0) {
   }
 
   const systems = [];
-  const boxWidth = availableWidth / boxesPerRow;
+  let lastYOffset = -staffSpacing;
+  let currentRow = [];
 
-  for (let start = 0; start < measures.length; start += boxesPerRow) {
+  const flushRow = (rowIndices) => {
+    if (rowIndices.length === 0) return;
     const sIndex = systems.length;
-    const rowIndices = [];
-    for (let i = 0; i < boxesPerRow && start + i < measures.length; i++) {
-      rowIndices.push(start + i);
-    }
+    const boxWidth = effectiveWidth / rowIndices.length;
     const measureWidths = rowIndices.map(() => boxWidth);
     const totalBeats = rowIndices.reduce((sum, i) => sum + (measures[i].beatCount ?? beatsPerMeasure), 0);
     const pixelsPerBeatForRow = totalBeats > 0 ? (boxWidth * rowIndices.length) / totalBeats : PIXELS_PER_BEAT_DEFAULT;
 
-    const systemY = sIndex * staffSpacing;
-    const pageBreakBefore = availablePageHeight > 0 && sIndex > 0
-      && Math.floor(systemY / availablePageHeight) > Math.floor(((sIndex - 1) * staffSpacing) / availablePageHeight);
+    let systemY = lastYOffset + staffSpacing;
+    const userPageBreak = rowIndices.some((m) => pageBreakBefore.has(m + 1));
+    let doPageBreak = userPageBreak;
+    if (pageHeight != null && pageHeight > 0 && sIndex > 0) {
+      const pageTop = Math.floor(systemY / pageHeight) * pageHeight;
+      const pageBottom = pageTop + pageHeight;
+      if (systemY + staffSpacing > pageBottom) {
+        doPageBreak = true;
+        systemY = pageBottom;
+      }
+    }
 
+    lastYOffset = systemY;
     systems.push({
       systemIndex: sIndex,
-      measureIndices: rowIndices,
+      measureIndices: [...rowIndices],
       measureWidths,
       yOffset: systemY,
       pixelsPerBeat: pixelsPerBeatForRow,
       measureWidth: boxWidth,
-      pageBreakBefore,
+      pageBreakBefore: doPageBreak,
     });
+  };
+
+  for (let i = 0; i < measures.length; i++) {
+    const breakBeforeThis = lineBreakBefore.has(i + 1) || pageBreakBefore.has(i + 1);
+    const fullRow = currentRow.length >= boxesPerRow;
+
+    if ((breakBeforeThis || fullRow) && currentRow.length > 0) {
+      flushRow(currentRow);
+      currentRow = [];
+    }
+    currentRow.push(i);
+  }
+
+  if (currentRow.length > 0) {
+    flushRow(currentRow);
   }
 
   return systems;

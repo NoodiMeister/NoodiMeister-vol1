@@ -115,21 +115,34 @@ export function FigurenotesView({
               const beatsInMeasure = measure.beatCount ?? beatsPerMeasure;
               const beatWidth = measureWidth / beatsInMeasure;
 
+              /** Interpret duration as beats (1=quarter, 0.5=eighth) or measure fraction (0.125=eighth in 4/4). */
+              const durationInBeats = (d) => (d > 0 && d < 0.5 ? d * (beatsInMeasure || 4) : d);
               const getSlotsPerBeat = (beatIndex) => {
                 const beatStart = measure.startBeat + beatIndex;
                 const beatEnd = beatStart + 1;
                 const notesInBeat = measure.notes.filter(n => n.beat >= beatStart && n.beat < beatEnd);
                 if (notesInBeat.length === 0) return 1;
                 const minDur = Math.min(...notesInBeat.map(n => n.duration));
-                return Math.max(1, Math.round(1 / minDur));
+                const minDurBeats = durationInBeats(minDur);
+                return Math.max(1, Math.round(1 / minDurBeats));
+              };
+              /** Slot index by position within beat (order when sorted by beat). */
+              const getSlotIndexInBeat = (note) => {
+                const beatIndex = Math.floor(note.beat - measure.startBeat);
+                const beatStart = measure.startBeat + beatIndex;
+                const beatEnd = beatStart + 1;
+                const notesInBeat = measure.notes
+                  .filter(n => n.beat >= beatStart && n.beat < beatEnd)
+                  .sort((a, b) => (a.beat ?? 0) - (b.beat ?? 0));
+                const idx = notesInBeat.findIndex(n => n === note);
+                return idx >= 0 ? idx : 0;
               };
               const getNoteSlotCenterX = (note) => {
                 const beatInMeasure = note.beat - measure.startBeat;
                 const beatIndex = Math.floor(beatInMeasure);
-                const posInBeat = beatInMeasure - beatIndex;
                 const slotsPerBeat = getSlotsPerBeat(beatIndex);
-                const slotIndex = Math.min(Math.floor(posInBeat * slotsPerBeat), slotsPerBeat - 1);
-                const slotCenter = (slotIndex + 0.5) / slotsPerBeat;
+                const slotIndex = getSlotIndexInBeat(note);
+                const slotCenter = (Math.min(slotIndex, slotsPerBeat - 1) + 0.5) / slotsPerBeat;
                 return measureX + (beatIndex + slotCenter) * beatWidth;
               };
               const getRestBoxWidth = (note) => {
@@ -140,14 +153,22 @@ export function FigurenotesView({
               };
 
               const boxHeight = timelineHeight - 8;
-              const figureSize = Math.max(14, Math.min(48, boxHeight * 0.5));
-              const beatFigurePadding = 4;
+              const figureSizeBase = Math.max(14, Math.min(48, boxHeight * 0.5));
+              const figureSizeCappedByBeat = Math.min(figureSizeBase, beatWidth * 0.82);
+              const figureSizeBaseForMeasure = Math.max(12, figureSizeCappedByBeat);
 
-              const renderFigurenote = (note, x, y, noteIndex, noteWidth) => {
+              /** Scale figure when shorter than quarter so multiple notes fit in one beat: eighth = 0.5, 16th/32nd = 0.25. */
+              const getFigureScaleForDuration = (durLabel) => {
+                if (durLabel === '1/8') return 0.5;
+                if (durLabel === '1/16' || durLabel === '1/32') return 0.25;
+                return 1;
+              };
+
+              const renderFigurenote = (note, x, y, noteIndex, noteWidth, figureSize) => {
                 const pitch = String(note.pitch || '').toUpperCase().replace('H', 'B');
                 const style = getFigureStyle(note.pitch, note.octave);
                 const shapePaths = getShapePathsByOctave(note.octave);
-                const size = figureSize;
+                const size = figureSize ?? figureSizeBase;
                 const isSelected = isNoteSelected ? isNoteSelected(noteIndex) : false;
                 const dur = note.durationLabel || '1/4';
                 const smuflType =
@@ -266,11 +287,12 @@ export function FigurenotesView({
                     );
                   })}
                   {(() => {
-                    let currentX = measureX + FIGURE_START_PADDING;
                     return measure.notes.map((note, noteIdx) => {
-                      const noteWidth = getFigureNoteWidth(note.durationLabel || '1/4', figureBaseWidth);
-                      const figureCenterX = currentX + noteWidth / 2;
-                      currentX += noteWidth;
+                      const dur = note.durationLabel || '1/4';
+                      const scale = getFigureScaleForDuration(dur);
+                      const figureSize = figureSizeBaseForMeasure * scale;
+                      const figureCenterX = getNoteSlotCenterX(note);
+                      const noteWidth = getRestBoxWidth(note);
 
                       let globalNoteIndex = 0;
                       for (let i = 0; i < measureIdx; i++) globalNoteIndex += effectiveMeasures[i].notes.length;
@@ -289,17 +311,16 @@ export function FigurenotesView({
                       const accidentalNudge = (note.accidental === 1 || note.accidental === -1) ? (note.accidental === 1 ? 1 : -1) * Math.max(2, figureSize * 0.2) : 0;
                       const figureX = figureCenterX + accidentalNudge;
                       const labelFontSize = Math.max(8, Math.round(figureSize * 0.625));
-                      const dur = note.durationLabel || '1/4';
                       const tailLen = (dur === '1/1') ? Math.max(20, figureSize * 1.4) : (dur === '1/2') ? Math.max(12, figureSize * 0.85) : 0;
                       const labelY = noteY + figureSize * 0.5 + labelFontSize + tailLen;
-                      const bandLeft = currentX - noteWidth;
+                      const bandLeft = figureCenterX - noteWidth / 2;
                       const bandY = sys.yOffset + 6;
                       const bandH = timelineHeight - 12;
                       const bandColor = getFigureColor(note.pitch);
                       return (
                         <g key={noteIdx} {...noteGroupProps}>
                           <rect x={bandLeft} y={bandY} width={noteWidth} height={bandH} fill={bandColor} opacity="0.2" rx="2" />
-                          {renderFigurenote(note, figureX, noteY, globalNoteIndex, noteWidth)}
+                          {renderFigurenote(note, figureX, noteY, globalNoteIndex, noteWidth, figureSize)}
                           {(note.lyric != null && String(note.lyric).trim() !== '') && (
                             <text x={figureX} y={labelY + 14} textAnchor="middle" fontSize="11" fill="#333" fontFamily={lyricFontFamily}>{note.lyric}</text>
                           )}

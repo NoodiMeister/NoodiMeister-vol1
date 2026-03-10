@@ -1,5 +1,6 @@
 /**
  * Export C clef symbol only (no staff) to PNG. Uses Leland font (cClef U+E05C).
+ * This is the Aldivõti (C-clef) symbol; staff placement is defined by c-clef-on-staff.png.
  * Run: node scripts/export-clef-c-png.js
  * Requires: npm install puppeteer --save-dev, public/fonts/Leland.woff2
  * Writes: docs/symbol-previews/clef-c.png

@@ -20,7 +20,7 @@ const DEFINITIONS = `
     <thead><tr><th>Glyph name</th><th>Codepoint</th><th>Used in PNGs</th></tr></thead>
     <tbody>
       <tr><td>fClef (bass)</td><td><code>U+E062</code></td><td>clef-bass, bass-staff-eb-a-f-d-bb</td></tr>
-      <tr><td>cClef (alto/tenor)</td><td><code>U+E05C</code></td><td>clef-c</td></tr>
+      <tr><td>cClef (Aldivõti / alto)</td><td><code>U+E05C</code></td><td>clef-c; placement: c-clef-on-staff</td></tr>
       <tr><td>noteheadWhole</td><td><code>U+E0A2</code></td><td>note-whole</td></tr>
       <tr><td>noteheadHalf</td><td><code>U+E0A3</code></td><td>note-half-up</td></tr>
       <tr><td>noteheadBlack</td><td><code>U+E0A4</code></td><td>note-quarter-up, note-eighth-up, note-16th-up, note-32nd-up, bass-staff</td></tr>
@@ -38,7 +38,8 @@ const DEFINITIONS = `
     <thead><tr><th>PNG file</th><th>Definition</th></tr></thead>
     <tbody>
       <tr><td>clef-bass.png</td><td>Leland U+E062 (fClef)</td></tr>
-      <tr><td>clef-c.png</td><td>Leland U+E05C (cClef)</td></tr>
+      <tr><td>clef-c.png</td><td>Leland U+E05C (cClef / Aldivõti), symbol only</td></tr>
+      <tr><td>c-clef-on-staff.png</td><td>Aldivõti placement on staff (clef center = middle C); symbol = clef-c.png</td></tr>
       <tr><td>note-whole.png</td><td>Leland U+E0A2</td></tr>
       <tr><td>note-half-up.png</td><td>Leland U+E0A3 + SVG stem</td></tr>
       <tr><td>note-quarter-up.png</td><td>Leland U+E0A4 + SVG stem</td></tr>

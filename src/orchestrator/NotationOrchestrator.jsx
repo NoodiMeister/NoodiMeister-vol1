@@ -114,12 +114,12 @@ function buildMeasuresFromNotes(notes, timeSignature) {
   const notesByMeasure = measures.map(() => []);
   let beat = 0;
   (notes || []).forEach((note) => {
-    const noteBeat = beat;
+    const noteBeat = typeof note.beat === 'number' ? note.beat : beat;
     const measureIndex = Math.min(Math.floor(noteBeat / beatsPerMeasure), measures.length - 1);
     if (measureIndex >= 0 && notesByMeasure[measureIndex]) {
       notesByMeasure[measureIndex].push({ ...note, beat: noteBeat });
     }
-    beat += note.duration;
+    beat = noteBeat + note.duration;
   });
   const effectiveMeasures = measures.map((m, i) => ({ ...m, notes: notesByMeasure[i] || [] }));
   return { measures, effectiveMeasures };

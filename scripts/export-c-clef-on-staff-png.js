@@ -1,6 +1,7 @@
 /**
- * Export C clef (alto clef) on staff to PNG. Uses Leland font (cClef U+E05C).
- * Alignment: the middle "arrow" of the C clef (where the two curves meet) sits on the 3rd staff line (middle line = middle C).
+ * Export C clef (alto clef / Aldivõti) on staff to PNG. Uses Leland font (cClef U+E05C).
+ * Symbol design reference: clef-c.png. This file defines placement on the staff (clef center = middle C).
+ * Alignment: the middle "arrow" of the C clef (where the two curves meet) sits on the reference staff line.
  * Run: node scripts/export-c-clef-on-staff-png.js
  * Requires: npm install puppeteer --save-dev, public/fonts/Leland.woff2
  * Writes: docs/symbol-previews/c-clef-on-staff.png

@@ -79,10 +79,10 @@ export default function LoginPage() {
       requestAnimationFrame(() => {
         setTimeout(() => {
           try {
-            navigate('/app', { replace: true });
+            navigate('/tood', { replace: true });
           } catch (navErr) {
             const base = (typeof import.meta !== 'undefined' && import.meta.env?.BASE_URL) || '';
-            const path = (base.replace(/\/$/, '') || '') + '/app';
+            const path = (base.replace(/\/$/, '') || '') + '/tood';
             window.location.assign(window.location.origin + path);
           }
         }, 400);

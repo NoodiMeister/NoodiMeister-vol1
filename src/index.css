@@ -59,3 +59,16 @@ html, body, #root {
   display: block;
   min-height: 100px;
 }
+
+/* A4 printing: page size and margins so score fits on paper */
+@media print {
+  @page {
+    size: A4;
+    margin: 12mm;
+  }
+  /* Score container fits A4 content area when printing */
+  body {
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+}
