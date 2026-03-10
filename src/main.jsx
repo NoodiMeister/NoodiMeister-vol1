@@ -67,7 +67,7 @@ window.addEventListener('unhandledrejection', (e) => {
   console.error('Unhandled rejection:', e.reason);
 });
 
-// Tööaegsed vead (ReferenceError, COOP jms) – logi täpselt ja ära lase rakendusel vaikselt kukkuda
+// Tööaegsed vead (ReferenceError, COOP jms) – logi täpselt; välti blokeerivat ülekattet
 window.addEventListener('error', (e) => {
   const msg = e.message || '';
   const fromNodeModules = e.filename?.includes('node_modules');
@@ -79,18 +79,22 @@ window.addEventListener('error', (e) => {
     error: e.error,
   });
   if (!fromNodeModules && msg && typeof document !== 'undefined') {
+    // Overlay is on body – check body, not root (overlay is not inside #root)
+    if (document.body.querySelector('[data-auth-error-overlay]')) return;
     const root = document.getElementById('root');
-    if (root && root.firstChild && !root.querySelector('[data-auth-error-overlay]')) {
-      const overlay = document.createElement('div');
-      overlay.setAttribute('data-auth-error-overlay', '1');
-      overlay.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(254,242,242,0.98);color:#991b1b;font-family:sans-serif;padding:24px;overflow:auto;box-sizing:border-box';
-      overlay.innerHTML = '<h2>Viga</h2><p>Rakendus ei kukkunud kokku. Saad selle teate kopeerida.</p><pre style="background:#fff;padding:12px;border-radius:8px;font-size:12px;overflow:auto">' + String(msg + (e.error?.stack ? '\n\n' + e.error.stack : '')).replace(/</g, '&lt;') + '</pre><button type="button" style="margin-top:12px;padding:8px 16px;cursor:pointer;background:#dc2626;color:#fff;border:none;border-radius:8px;font-weight:600">Kopeeri veateade</button>';
-      const copyable = msg + (e.error?.stack ? '\n\n' + e.error.stack : '');
-      overlay.querySelector('button').addEventListener('click', () => {
-        navigator.clipboard.writeText(copyable);
-        overlay.querySelector('button').textContent = 'Kopeeritud';
-      });
-      document.body.appendChild(overlay);
-    }
+    if (!root || !root.firstChild) return;
+    const overlay = document.createElement('div');
+    overlay.setAttribute('data-auth-error-overlay', '1');
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(254,242,242,0.98);color:#991b1b;font-family:sans-serif;padding:24px;overflow:auto;box-sizing:border-box';
+    const copyable = msg + (e.error?.stack ? '\n\n' + e.error.stack : '');
+    overlay.innerHTML = '<h2>Viga</h2><p>Rakendus ei kukkunud kokku. Saad selle teate kopeerida või sulgeda ja proovida edasi.</p><pre style="background:#fff;padding:12px;border-radius:8px;font-size:12px;overflow:auto">' + String(msg + (e.error?.stack ? '\n\n' + e.error.stack : '')).replace(/</g, '&lt;') + '</pre><div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap"><button type="button" data-copy style="padding:8px 16px;cursor:pointer;background:#dc2626;color:#fff;border:none;border-radius:8px;font-weight:600">Kopeeri veateade</button><button type="button" data-close style="padding:8px 16px;cursor:pointer;background:#6b7280;color:#fff;border:none;border-radius:8px;font-weight:600">Sulge ja jätka</button></div>';
+    overlay.querySelector('[data-copy]').addEventListener('click', () => {
+      navigator.clipboard.writeText(copyable);
+      overlay.querySelector('[data-copy]').textContent = 'Kopeeritud';
+    });
+    overlay.querySelector('[data-close]').addEventListener('click', () => {
+      overlay.remove();
+    });
+    document.body.appendChild(overlay);
   }
 });

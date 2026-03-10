@@ -92,27 +92,17 @@ export default function MinuTöödPage() {
     return <div className="loading-screen">Laen Noodimeistrit…</div>;
   }
 
-  const openNew = () => {
-    const base = (typeof import.meta !== 'undefined' && import.meta.env?.BASE_URL) || '';
-    const path = base.replace(/\/$/, '') + '/app?new=1';
-    navigate(path);
-  };
-
-  const openApp = () => {
-    const base = (typeof import.meta !== 'undefined' && import.meta.env?.BASE_URL) || '';
-    const path = base.replace(/\/$/, '') + '/app?local=1';
-    navigate(path);
-  };
-
-  const openFile = (fileId) => {
-    const base = (typeof import.meta !== 'undefined' && import.meta.env?.BASE_URL) || '';
-    const path = base.replace(/\/$/, '') + `/app?fileId=${encodeURIComponent(fileId)}`;
-    navigate(path);
-  };
+  const base = (typeof import.meta !== 'undefined' && import.meta.env?.BASE_URL) || '';
+  const basePath = base.replace(/\/$/, '') || '';
+  const hrefNew = `${basePath}/app?new=1`;
+  const hrefLocal = `${basePath}/app?local=1`;
 
   return (
     <MinuToodErrorBoundary>
-    <div className="min-h-screen flex flex-col bg-gradient-to-br from-amber-50 via-orange-50 to-amber-100">
+    <div
+      className="min-h-screen flex flex-col bg-gradient-to-br from-amber-50 via-orange-50 to-amber-100"
+      style={{ position: 'relative', zIndex: 1, pointerEvents: 'auto' }}
+    >
       <header className="flex-shrink-0 border-b border-amber-200/60 bg-white/70 backdrop-blur-sm">
         <div className="max-w-4xl mx-auto px-6 py-4 flex items-center justify-between">
           <Link to="/" className="flex items-center">
@@ -159,20 +149,18 @@ export default function MinuTöödPage() {
             Brauseris salvestatud viimane töö. Ava see, et jätkata kohalikult salvestatud tööga.
           </p>
           <div className="flex flex-wrap gap-4">
-            <button
-              type="button"
-              onClick={openNew}
-              className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 text-white font-bold shadow-lg hover:shadow-xl hover:from-amber-500 hover:to-orange-500 transition-all"
+            <a
+              href={hrefNew}
+              className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 text-white font-bold shadow-lg hover:shadow-xl hover:from-amber-500 hover:to-orange-500 transition-all no-underline"
             >
               <FilePlus className="w-5 h-5" /> Uus töö
-            </button>
-            <button
-              type="button"
-              onClick={openApp}
-              className="inline-flex items-center gap-2 px-6 py-3 rounded-xl border-2 border-amber-400 bg-white text-amber-800 font-semibold hover:bg-amber-50 transition-colors"
+            </a>
+            <a
+              href={hrefLocal}
+              className="inline-flex items-center gap-2 px-6 py-3 rounded-xl border-2 border-amber-400 bg-white text-amber-800 font-semibold hover:bg-amber-50 transition-colors no-underline"
             >
               <FolderOpen className="w-5 h-5" /> Ava viimati muudetud töö
-            </button>
+            </a>
           </div>
         </div>
 
@@ -196,14 +184,13 @@ export default function MinuTöödPage() {
               <ul className="space-y-2">
                 {files.map((f) => (
                   <li key={f.id}>
-                    <button
-                      type="button"
-                      onClick={() => openFile(f.id)}
-                      className="w-full text-left flex items-center gap-3 px-4 py-3 rounded-xl bg-white border border-amber-200/60 shadow-sm hover:bg-amber-50 hover:border-amber-300 transition-colors"
+                    <a
+                      href={`${basePath}/app?fileId=${encodeURIComponent(f.id)}`}
+                      className="w-full text-left flex items-center gap-3 px-4 py-3 rounded-xl bg-white border border-amber-200/60 shadow-sm hover:bg-amber-50 hover:border-amber-300 transition-colors no-underline text-inherit"
                     >
                       <span className="font-medium text-amber-900 truncate flex-1">{f.name}</span>
                       <span className="text-sm text-amber-600 flex-shrink-0">{formatDate(f.modifiedTime)}</span>
-                    </button>
+                    </a>
                   </li>
                 ))}
               </ul>
