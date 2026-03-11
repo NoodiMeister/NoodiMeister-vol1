@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import {
   getStorageForLogin,
   getStorageForRead,
@@ -8,6 +8,7 @@ import {
   KEY_MICROSOFT_TOKEN,
   KEY_MICROSOFT_EXPIRY,
 } from './services/authStorage';
+import { LOCALE_STORAGE_KEY, DEFAULT_LOCALE, getTranslations } from './i18n';
 
 function getMicrosoftRedirectUri() {
   try {
@@ -44,6 +45,8 @@ function redirectToTood() {
 export default function MicrosoftRedirectHandler() {
   const [status, setStatus] = useState('processing');
   const [errorMessage, setErrorMessage] = useState('');
+  const locale = typeof window !== 'undefined' ? (localStorage.getItem(LOCALE_STORAGE_KEY) || DEFAULT_LOCALE) : DEFAULT_LOCALE;
+  const t = useMemo(() => getTranslations(locale), [locale]);
 
   useEffect(() => {
     let cancelled = false;
@@ -53,7 +56,7 @@ export default function MicrosoftRedirectHandler() {
 
     if (!clientId) {
       setStatus('error');
-      setErrorMessage('VITE_MICROSOFT_CLIENT_ID puudub.');
+      setErrorMessage(t['auth.configMissingClientId'] || 'VITE_MICROSOFT_CLIENT_ID puudub.');
       return;
     }
 
@@ -118,7 +121,7 @@ export default function MicrosoftRedirectHandler() {
         const accessToken = result.accessToken || '';
         if (!accessToken) {
           setStatus('error');
-          setErrorMessage('Access token puudub.');
+          setErrorMessage(t['auth.accessTokenMissing'] || 'Access token puudub.');
           return;
         }
         return fetch('https://graph.microsoft.com/v1.0/me', {
@@ -131,7 +134,7 @@ export default function MicrosoftRedirectHandler() {
             const email = String(emailRaw || '').trim().toLowerCase();
             if (!email) {
               setStatus('error');
-              setErrorMessage('E-maili ei saadud.');
+              setErrorMessage(t['auth.emailNotReceived'] || 'E-maili ei saadud.');
               return;
             }
             const allowed = getMicrosoftTesterEmails();
@@ -151,7 +154,7 @@ export default function MicrosoftRedirectHandler() {
             const storage = getStorageForLogin(false);
             if (!storage) {
               setStatus('error');
-              setErrorMessage('Salvestus ei ole saadaval.');
+              setErrorMessage(t['auth.storageNotAvailable'] || 'Salvestus ei ole saadaval.');
               return;
             }
             storage.setItem(KEY_LOGGED_IN, JSON.stringify(user));
@@ -167,7 +170,7 @@ export default function MicrosoftRedirectHandler() {
             } catch (_) {}
             if (!getLoggedInUser()?.email || !isLoggedIn()) {
               setStatus('error');
-              setErrorMessage('Kinnitamine ebaõnnestus.');
+              setErrorMessage(t['auth.confirmationFailed'] || 'Kinnitamine ebaõnnestus.');
               return;
             }
             setStatus('redirect');
@@ -204,15 +207,15 @@ export default function MicrosoftRedirectHandler() {
         boxSizing: 'border-box',
       }}
     >
-      {status === 'processing' && <p>Microsofti sisselogimine… Töötleme.</p>}
+      {status === 'processing' && <p>{t['auth.microsoftSigningIn']}</p>}
       {status === 'redirect' && (
         <div>
-          <p>Suuname Minu tööde lehele…</p>
+          <p>{t['auth.redirectingToMyWork']}</p>
           <a
             href={typeof window !== 'undefined' ? (window.location.origin + ((import.meta.env?.BASE_URL || '').replace(/\/$/, '') || '') + '/tood') : '/tood'}
             style={{ display: 'inline-block', marginTop: 12, padding: '8px 16px', background: '#b45309', color: '#fff', borderRadius: 8, fontWeight: 600, textDecoration: 'none' }}
           >
-            Kui suunamine ei toimu, klõpsa siia
+            {t['auth.clickIfNotRedirecting']}
           </a>
         </div>
       )}
@@ -237,7 +240,7 @@ export default function MicrosoftRedirectHandler() {
                 textDecoration: 'none',
               }}
             >
-              Tagasi avalehele
+              {t['auth.backToHome']}
             </a>
             <a
               href="/login"
@@ -251,7 +254,7 @@ export default function MicrosoftRedirectHandler() {
                 textDecoration: 'none',
               }}
             >
-              Proovi uuesti
+              {t['auth.tryAgain']}
             </a>
           </div>
         </div>

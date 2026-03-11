@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { FilePlus, FolderOpen, FolderPlus, Cloud, LogIn, Loader2, Globe, User, Settings, ChevronDown, Trash2, X } from 'lucide-react';
+import { FilePlus, FolderOpen, FolderPlus, Cloud, LogIn, Loader2, PenTool, User, Settings, ChevronDown, Trash2, X } from 'lucide-react';
 import * as googleDrive from '../services/googleDrive';
 import * as oneDrive from '../services/oneDrive';
 import * as authStorage from '../services/authStorage';
@@ -14,6 +14,7 @@ class MinuToodErrorBoundary extends React.Component {
   render() {
     if (this.state.error) {
       const msg = this.state.error?.message || String(this.state.error);
+      const title = this.props.errorTitle || 'Viga rakenduse käivitamisel';
       return (
         <div
           style={{
@@ -26,7 +27,7 @@ class MinuToodErrorBoundary extends React.Component {
             fontFamily: 'sans-serif',
           }}
         >
-          <strong>Viga rakenduse käivitamisel:</strong> {msg}
+          <strong>{title}:</strong> {msg}
         </div>
       );
     }
@@ -34,18 +35,18 @@ class MinuToodErrorBoundary extends React.Component {
   }
 }
 
-function formatDate(iso) {
+function formatDate(iso, locale) {
   if (!iso) return '—';
   try {
     const d = new Date(iso);
-    return d.toLocaleDateString('et-EE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    return d.toLocaleDateString(locale === 'en' ? 'en-GB' : 'et-EE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
   } catch {
     return iso;
   }
 }
 
-function formatOneDriveDate(item) {
-  return formatDate(item?.lastModifiedDateTime);
+function formatOneDriveDate(item, locale) {
+  return formatDate(item?.lastModifiedDateTime, locale);
 }
 
 export default function MinuTöödPage() {
@@ -114,12 +115,12 @@ export default function MinuTöödPage() {
       const list = await googleDrive.listNoodimeisterFiles(token, folderId ? { folderId } : {});
       setFiles(list);
     } catch (e) {
-      setError(e?.message || 'Tööde laadimine ebaõnnestus');
+      setError(e?.message || (t['mywork.worksLoadError'] || 'Tööde laadimine ebaõnnestus'));
       setFiles([]);
     } finally {
       setLoading(false);
     }
-  }, [token]);
+  }, [token, t]);
 
   const loadOneDriveFiles = useCallback(async () => {
     if (!microsoftToken) {
@@ -135,12 +136,12 @@ export default function MinuTöödPage() {
       if (result.ok) setOneDriveFiles(result.files || []);
       else setOneDriveError(result.error || '');
     } catch (e) {
-      setOneDriveError(e?.message || 'OneDrive laadimine ebaõnnestus');
+      setOneDriveError(e?.message || (t['mywork.oneDriveLoadError'] || 'OneDrive laadimine ebaõnnestus'));
       setOneDriveFiles([]);
     } finally {
       setOneDriveLoading(false);
     }
-  }, [microsoftToken]);
+  }, [microsoftToken, t]);
 
   useEffect(() => {
     loadFiles();
@@ -164,7 +165,7 @@ export default function MinuTöödPage() {
       await googleDrive.deleteFile(token, fileId);
       loadFiles();
     } catch (e) {
-      setError(e?.message || 'Kustutamine ebaõnnestus');
+      setError(e?.message || (t['account.deleteError'] || 'Kustutamine ebaõnnestus'));
     }
   }, [token, loadFiles, t]);
 
@@ -176,7 +177,7 @@ export default function MinuTöödPage() {
       await oneDrive.deleteFile(microsoftToken, fileId);
       loadOneDriveFiles();
     } catch (e) {
-      setOneDriveError(e?.message || 'Kustutamine ebaõnnestus');
+      setOneDriveError(e?.message || (t['account.deleteError'] || 'Kustutamine ebaõnnestus'));
     }
   }, [microsoftToken, loadOneDriveFiles, t]);
 
@@ -192,29 +193,35 @@ export default function MinuTöödPage() {
         setCreateFolderOpen(false);
         setCreateFolderName('NoodiMeister');
       } else if (provider === 'microsoft' && microsoftToken) {
-        const parentId = authStorage.getOneDriveSaveFolderId() || 'root';
-        const result = await oneDrive.createFolder(microsoftToken, parentId, name);
+        let parentId = authStorage.getOneDriveSaveFolderId() || 'root';
+        let result = await oneDrive.createFolder(microsoftToken, parentId, name);
+        // If saved folder is invalid (deleted or wrong account), retry in root
+        if (!result.ok && parentId !== 'root' && /item not found|not found|404/i.test(String(result?.error || ''))) {
+          authStorage.clearOneDriveSaveFolder();
+          parentId = 'root';
+          result = await oneDrive.createFolder(microsoftToken, parentId, name);
+        }
         if (result.ok && result.id) {
           authStorage.setOneDriveSaveFolderId(result.id);
           setCreateFolderOpen(false);
           setCreateFolderName('NoodiMeister');
         } else {
-          setCreateFolderError(result?.error || 'Kausta loomine ebaõnnestus');
+          setCreateFolderError(result?.error || (t['account.createFolderError'] || 'Kausta loomine ebaõnnestus'));
         }
       }
     } catch (e) {
-      setCreateFolderError(e?.message || 'Kausta loomine ebaõnnestus');
+      setCreateFolderError(e?.message || (t['account.createFolderError'] || 'Kausta loomine ebaõnnestus'));
     } finally {
       setCreateFolderLoading(false);
     }
-  }, [provider, token, microsoftToken, createFolderName]);
+  }, [provider, token, microsoftToken, createFolderName, t]);
 
   useEffect(() => {
     if (authReady && !user) navigate('/login', { replace: true });
   }, [authReady, user, navigate]);
 
   if (!authReady || !user) {
-    return <div className="loading-screen">Laen Noodimeistrit…</div>;
+    return <div className="loading-screen">{t['mywork.loadingApp']}</div>;
   }
 
   const base = (typeof import.meta !== 'undefined' && import.meta.env?.BASE_URL) || '';
@@ -223,7 +230,7 @@ export default function MinuTöödPage() {
   const hrefLocal = `${basePath}/app?local=1`;
 
   return (
-    <MinuToodErrorBoundary>
+    <MinuToodErrorBoundary errorTitle={t['mywork.errorBoundaryTitle']}>
     <div
       className="min-h-screen flex flex-col bg-gradient-to-br from-amber-50 via-orange-50 to-amber-100 dark:bg-black"
       style={{ position: 'relative', zIndex: 1, pointerEvents: 'auto' }}
@@ -283,31 +290,32 @@ export default function MinuTöödPage() {
                 </div>
               )}
             </div>
-            <Link to="/app" className="text-amber-700 dark:text-white hover:text-amber-900 dark:hover:text-white/90 p-1.5 rounded-lg hover:bg-amber-100 dark:hover:bg-white/10 transition-colors" aria-label="Tööriist" title="Tööriist">
-              <Globe className="w-5 h-5" />
+            <Link to="/app" className="inline-flex items-center gap-1.5 text-amber-700 dark:text-white hover:text-amber-900 dark:hover:text-white/90 p-1.5 rounded-lg hover:bg-amber-100 dark:hover:bg-white/10 transition-colors" aria-label={t['nav.openNotationTool'] || 'Ava nooditööriist'} title={t['nav.openNotationTool'] || 'Ava nooditööriist'}>
+              <PenTool className="w-5 h-5" />
+              <span className="text-sm font-medium">{t['nav.openNotationTool'] || 'Tööriist'}</span>
             </Link>
-            <Link to="/konto" className="text-amber-700 hover:text-amber-900 p-1.5 rounded-lg hover:bg-amber-100 transition-colors flex items-center gap-1" title="Minu konto">
-              <User className="w-5 h-5" /> Minu konto
+            <Link to="/konto" className="text-amber-700 dark:text-white hover:text-amber-900 dark:hover:text-white/90 p-1.5 rounded-lg hover:bg-amber-100 dark:hover:bg-white/10 transition-colors flex items-center gap-1" title={t['user.myAccount']}>
+              <User className="w-5 h-5" /> {t['user.myAccount']}
             </Link>
-            <Link to="/" className="text-amber-700 hover:text-amber-900 font-medium">Esileht</Link>
+            <Link to="/" className="text-amber-700 dark:text-white hover:text-amber-900 dark:hover:text-white/90 font-medium">{t['account.home']}</Link>
           </nav>
         </div>
       </header>
 
       <main className="flex-1 max-w-4xl mx-auto w-full px-6 py-10">
-        <h1 className="text-2xl font-bold text-amber-900 mb-2" style={{ fontFamily: 'Georgia, serif' }}>
-          Minu tööd
+        <h1 className="text-2xl font-bold text-amber-900 dark:text-white mb-2" style={{ fontFamily: 'Georgia, serif' }}>
+          {t['account.myWork']}
         </h1>
-        <p className="text-amber-800/90 mb-2">
-          Siin on sinu pilves (Google Drive või OneDrive) ja kohalikult salvestatud tööd. Vali töö avamiseks või alusta uut.
+        <p className="text-amber-800/90 dark:text-white/90 mb-2">
+          {t['mywork.intro']}
         </p>
         {(provider === 'google' || provider === 'microsoft') && (
-          <p className="text-sm text-amber-700/90 mb-6 flex items-center gap-2">
+          <p className="text-sm text-amber-700/90 dark:text-white/80 mb-6 flex items-center gap-2">
             <Settings className="w-4 h-4" />
-            Salvestuskoht: {provider === 'microsoft' ? 'OneDrive' : 'Google Drive'}
+            {t['mywork.storageLocation']}: {provider === 'microsoft' ? 'OneDrive' : 'Google Drive'}
             {' · '}
-            <Link to="/konto" className="text-amber-800 font-medium hover:underline">Minu konto</Link>
-            {' – vaata või muuda salvestuskeskkonda.'}
+            <Link to="/konto" className="text-amber-800 dark:text-white font-medium hover:underline">{t['user.myAccount']}</Link>
+            {' '}{t['mywork.viewOrChangeStorage']}
           </p>
         )}
         {!hasGoogle && !hasMicrosoft && (
@@ -315,15 +323,15 @@ export default function MinuTöödPage() {
             <div className="flex items-start gap-3">
               <Cloud className="w-6 h-6 text-amber-600 flex-shrink-0 mt-0.5" />
               <div>
-                <h2 className="font-semibold text-amber-900 mb-1">Pilves salvestatud tööd</h2>
-                <p className="text-sm text-amber-800/90 mb-4">
-                  Logi sisse Google’i või Microsoftiga, et näha ja avada oma pilves (Google Drive või OneDrive) salvestatud töid.
+                <h2 className="font-semibold text-amber-900 dark:text-white mb-1">{t['mywork.cloudSavedWorks']}</h2>
+                <p className="text-sm text-amber-800/90 dark:text-white/90 mb-4">
+                  {t["mywork.signInToSeeCloud"]}
                 </p>
                 <Link
                   to="/login"
                   className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-amber-600 text-white font-medium hover:bg-amber-500 transition-colors"
                 >
-                  <LogIn className="w-4 h-4" /> Logi sisse
+                  <LogIn className="w-4 h-4" /> {t['account.logIn']}
                 </Link>
               </div>
             </div>
@@ -331,22 +339,22 @@ export default function MinuTöödPage() {
         )}
 
         <div className="mb-8">
-          <h2 className="text-lg font-semibold text-amber-900 mb-3">Viimati muudetud tööd</h2>
-          <p className="text-sm text-amber-800/90 mb-4">
-            Brauseris salvestatud viimane töö. Ava see, et jätkata kohalikult salvestatud tööga.
+          <h2 className="text-lg font-semibold text-amber-900 dark:text-white mb-3">{t['mywork.lastModifiedWorks']}</h2>
+          <p className="text-sm text-amber-800/90 dark:text-white/90 mb-4">
+            {t['mywork.lastModifiedHint']}
           </p>
           <div className="flex flex-wrap gap-4">
             <a
               href={hrefNew}
               className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 text-white font-bold shadow-lg hover:shadow-xl hover:from-amber-500 hover:to-orange-500 transition-all no-underline"
             >
-              <FilePlus className="w-5 h-5" /> Uus töö
+              <FilePlus className="w-5 h-5" /> {t['mywork.newWork']}
             </a>
             <a
               href={hrefLocal}
-              className="inline-flex items-center gap-2 px-6 py-3 rounded-xl border-2 border-amber-400 bg-white text-amber-800 font-semibold hover:bg-amber-50 transition-colors no-underline"
+              className="inline-flex items-center gap-2 px-6 py-3 rounded-xl border-2 border-amber-400 bg-white dark:bg-zinc-900 text-amber-800 dark:text-white font-semibold hover:bg-amber-50 dark:hover:bg-white/10 transition-colors no-underline"
             >
-              <FolderOpen className="w-5 h-5" /> Ava viimati muudetud töö
+              <FolderOpen className="w-5 h-5" /> {t['mywork.openLastModified']}
             </a>
             {(hasGoogle || hasMicrosoft) && (
               <button
@@ -363,10 +371,10 @@ export default function MinuTöödPage() {
 
         {hasGoogle && (
           <section>
-            <h2 className="text-lg font-semibold text-amber-900 mb-3">Pilves salvestatud failid (Google Drive)</h2>
+            <h2 className="text-lg font-semibold text-amber-900 dark:text-white mb-3">{t['mywork.cloudFilesGoogle']}</h2>
             {loading && (
               <div className="flex items-center gap-2 text-amber-700 py-8">
-                <Loader2 className="w-5 h-5 animate-spin" /> Laen töid…
+                <Loader2 className="w-5 h-5 animate-spin" /> {t['mywork.loadingWorks']}
               </div>
             )}
             {error && (
@@ -375,7 +383,7 @@ export default function MinuTöödPage() {
               </div>
             )}
             {!loading && !error && files.length === 0 && (
-              <p className="text-amber-700/90 py-6">Pilves pole veel ühtegi NoodiMeister-faili. Kasuta tööriistas „Pilve salvesta“, et salvestada töid Google Drive’i.</p>
+              <p className="text-amber-700/90 dark:text-white/80 py-6">{t["mywork.noGoogleFilesHint"]}</p>
             )}
             {!loading && files.length > 0 && (
               <ul className="space-y-2">
@@ -387,7 +395,7 @@ export default function MinuTöödPage() {
                     >
                       <img src="/logo.png" alt="" className="h-8 w-8 flex-shrink-0 object-contain" aria-hidden />
                       <span className="font-medium text-amber-900 truncate flex-1">{f.name}</span>
-                      <span className="text-sm text-amber-600 flex-shrink-0">{formatDate(f.modifiedTime)}</span>
+                      <span className="text-sm text-amber-600 dark:text-white/70 flex-shrink-0">{formatDate(f.modifiedTime, locale)}</span>
                     </a>
                     <button
                       type="button"
@@ -407,10 +415,10 @@ export default function MinuTöödPage() {
 
         {hasMicrosoft && (
           <section className="mt-10">
-            <h2 className="text-lg font-semibold text-amber-900 mb-3">Pilves salvestatud failid (OneDrive)</h2>
+            <h2 className="text-lg font-semibold text-amber-900 dark:text-white mb-3">{t['mywork.cloudFilesOneDrive']}</h2>
             {oneDriveLoading && (
               <div className="flex items-center gap-2 text-amber-700 py-8">
-                <Loader2 className="w-5 h-5 animate-spin" /> Laen töid…
+                <Loader2 className="w-5 h-5 animate-spin" /> {t['mywork.loadingWorks']}
               </div>
             )}
             {oneDriveError && (
@@ -419,7 +427,7 @@ export default function MinuTöödPage() {
               </div>
             )}
             {!oneDriveLoading && !oneDriveError && oneDriveFiles.length === 0 && (
-              <p className="text-amber-700/90 py-6">OneDrive’is pole veel ühtegi NoodiMeister-faili. Kasuta tööriistas „Pilve salvesta“, et salvestada töid OneDrive’i.</p>
+              <p className="text-amber-700/90 dark:text-white/80 py-6">{t["mywork.noOneDriveFilesHint"]}</p>
             )}
             {!oneDriveLoading && oneDriveFiles.length > 0 && (
               <ul className="space-y-2">
@@ -431,7 +439,7 @@ export default function MinuTöödPage() {
                     >
                       <img src="/logo.png" alt="" className="h-8 w-8 flex-shrink-0 object-contain" aria-hidden />
                       <span className="font-medium text-amber-900 truncate flex-1">{f.name}</span>
-                      <span className="text-sm text-amber-600 flex-shrink-0">{formatOneDriveDate(f)}</span>
+                      <span className="text-sm text-amber-600 dark:text-white/70 flex-shrink-0">{formatOneDriveDate(f, locale)}</span>
                     </a>
                     <button
                       type="button"

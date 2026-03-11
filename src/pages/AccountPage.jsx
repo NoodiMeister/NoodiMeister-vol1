@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { Link } from 'react-router-dom';
-import { User, Cloud, HardDrive, LogIn, FolderOpen, FolderPlus, Loader2, X, ChevronRight, Settings, ChevronDown, Trash2 } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
+import { User, Cloud, HardDrive, LogIn, LogOut, FolderOpen, FolderPlus, FilePlus, Loader2, X, ChevronRight, Settings, ChevronDown, Trash2 } from 'lucide-react';
 import { LOCALE_STORAGE_KEY, DEFAULT_LOCALE, LOCALES, getTranslations } from '../i18n';
 import { useNoodimeisterOptional } from '../store/NoodimeisterContext';
 import {
@@ -13,6 +13,7 @@ import {
   getOneDriveSaveFolderId,
   setOneDriveSaveFolderId,
   clearOneDriveSaveFolder,
+  clearAuth,
 } from '../services/authStorage';
 import * as googleDrive from '../services/googleDrive';
 import {
@@ -25,6 +26,7 @@ import {
 } from '../services/oneDrive';
 
 export default function AccountPage() {
+  const navigate = useNavigate();
   const [user, setUser] = useState(null);
   const [locale, setLocaleState] = useState(() => {
     try {
@@ -40,6 +42,20 @@ export default function AccountPage() {
   const setThemeMode = (mode) => { if (store?.setTheme) store.setTheme(mode); };
   const t = getTranslations(locale);
 
+  // Ensure theme is applied to document when Account page mounts (e.g. direct nav to /konto)
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('noodimeister-theme');
+      if (raw) {
+        const o = JSON.parse(raw);
+        const mode = o.mode === 'dark' ? 'dark' : 'light';
+        if (typeof document !== 'undefined' && document.documentElement) {
+          document.documentElement.setAttribute('data-theme', mode);
+        }
+      }
+    } catch (_) {}
+  }, []);
+
   const setLocale = (code) => {
     try {
       localStorage.setItem(LOCALE_STORAGE_KEY, code);
@@ -51,6 +67,7 @@ export default function AccountPage() {
   const [microsoftToken, setMicrosoftToken] = useState(null);
   const [oneDriveProfile, setOneDriveProfile] = useState({ state: 'idle', data: null, error: null });
   const [oneDriveFiles, setOneDriveFiles] = useState({ state: 'idle', data: [], error: null });
+  const [googleFiles, setGoogleFiles] = useState({ state: 'idle', data: [], error: null });
 
   const [googleSaveFolderId, setGoogleSaveFolderIdState] = useState(null);
   const [googleSaveFolderName, setGoogleSaveFolderName] = useState('');
@@ -152,6 +169,22 @@ export default function AccountPage() {
     };
   }, [microsoftToken, oneDriveSaveFolderId]);
 
+  useEffect(() => {
+    if (!googleToken) {
+      setGoogleFiles({ state: 'idle', data: [], error: null });
+      return;
+    }
+    let cancelled = false;
+    const folderId = getGoogleSaveFolderId();
+    setGoogleFiles((prev) => ({ ...prev, state: 'loading', data: prev.data || [], error: null }));
+    googleDrive.listNoodimeisterFiles(googleToken, folderId ? { folderId } : {}).then((list) => {
+      if (!cancelled) setGoogleFiles({ state: 'success', data: list || [], error: null });
+    }).catch((e) => {
+      if (!cancelled) setGoogleFiles({ state: 'error', data: [], error: e?.message || (t['account.loadError'] || 'Laadimine ebaõnnestus') });
+    });
+    return () => { cancelled = true; };
+  }, [googleToken, googleSaveFolderId]);
+
   const loadOneDrivePickerFolders = useCallback(async (parentId) => {
     if (!microsoftToken) return;
     setOneDrivePickerLoading(true);
@@ -181,7 +214,7 @@ export default function AccountPage() {
       await oneDriveDeleteFile(microsoftToken, fileId);
       await loadOneDriveFiles();
     } catch (e) {
-      setOneDriveFiles((prev) => ({ ...prev, state: 'error', error: e?.message || 'Kustutamine ebaõnnestus' }));
+      setOneDriveFiles((prev) => ({ ...prev, state: 'error', error: e?.message || (t['account.deleteError'] || 'Kustutamine ebaõnnestus') }));
     }
   }, [microsoftToken, loadOneDriveFiles, t]);
 
@@ -252,10 +285,33 @@ export default function AccountPage() {
       ? 'Google'
       : user?.provider === 'microsoft'
       ? 'Microsoft (OneDrive)'
-      : 'E-mail / muu';
+      : (t['account.providerEmailOther'] || 'E-mail / muu');
+
+  const basePath = (typeof import.meta !== 'undefined' && import.meta.env?.BASE_URL)?.replace(/\/$/, '') || '';
+  const formatDate = (iso) => {
+    if (!iso) return '—';
+    try {
+      const d = new Date(iso);
+      return d.toLocaleDateString(locale === 'en' ? 'en-GB' : 'et-EE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    } catch {
+      return iso;
+    }
+  };
+
+  const handleLogout = () => {
+    clearAuth();
+    setSettingsOpen(false);
+    // Full page navigation so all auth state (including Microsoft/MSAL) is cleared and app reinitializes
+    try {
+      const base = (typeof import.meta !== 'undefined' && import.meta.env?.BASE_URL)?.replace(/\/$/, '') || '';
+      window.location.replace(window.location.origin + base + '/');
+    } catch {
+      window.location.replace('/');
+    }
+  };
 
   return (
-    <div className="min-h-screen flex flex-col bg-gradient-to-br from-amber-50 via-orange-50 to-amber-100 dark:bg-black">
+    <div className="account-page min-h-screen flex flex-col">
       <header className="flex-shrink-0 border-b border-amber-200/60 dark:border-white/20 bg-white/70 dark:bg-black/90 backdrop-blur-sm">
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
           <Link to="/" className="flex items-center">
@@ -274,7 +330,7 @@ export default function AccountPage() {
                 <ChevronDown className={`w-4 h-4 transition-transform ${settingsOpen ? 'rotate-180' : ''}`} />
               </button>
               {settingsOpen && (
-                <div className="absolute right-0 top-full mt-1 min-w-[200px] py-2 rounded-xl bg-white dark:bg-zinc-900 border-2 border-amber-200 dark:border-white/20 shadow-xl z-50">
+                <div className="account-settings-dropdown absolute right-0 top-full mt-1 min-w-[200px] py-2 rounded-xl bg-white dark:bg-zinc-900 border-2 border-amber-200 dark:border-white/20 shadow-xl z-50">
                   <div className="px-3 py-1.5 text-xs font-semibold text-amber-700 dark:text-white/80 uppercase tracking-wider">{t['app.language']}</div>
                   <div className="flex gap-0.5 px-2 pb-2">
                     {LOCALES.map(({ code, name }) => (
@@ -307,6 +363,15 @@ export default function AccountPage() {
                       {t['theme.dark']}
                     </button>
                   </div>
+                  <div className="border-t border-amber-200 dark:border-white/20 my-1" />
+                  <button
+                    type="button"
+                    onClick={handleLogout}
+                    className="w-full flex items-center gap-2 px-3 py-2.5 text-left text-sm font-medium text-red-700 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 transition-colors"
+                    title={t['user.logoutTitle'] || 'Logi välja'}
+                  >
+                    <LogOut className="w-4 h-4" /> {t['user.logout'] || 'Logi välja'}
+                  </button>
                 </div>
               )}
             </div>
@@ -321,7 +386,7 @@ export default function AccountPage() {
       </header>
 
       <main className="flex-1 flex items-center justify-center px-6 py-12">
-        <div className="w-full max-w-2xl bg-white dark:bg-zinc-900 rounded-2xl shadow-xl border-2 border-amber-200 dark:border-white/20 overflow-hidden">
+        <div className="account-card w-full max-w-2xl bg-white dark:bg-zinc-900 rounded-2xl shadow-xl border-2 border-amber-200 dark:border-white/20 overflow-hidden">
           <div className="bg-gradient-to-r from-slate-700 to-slate-800 dark:from-zinc-800 dark:to-zinc-900 text-white px-8 py-6 flex items-center gap-3">
             <User className="w-6 h-6 flex-shrink-0" />
             <div className="min-w-0 flex-1">
@@ -339,16 +404,101 @@ export default function AccountPage() {
             </div>
           </div>
 
-          <div className="p-8 space-y-6 dark:text-white">
+          <div className="account-card-inner p-8 space-y-6 dark:text-white">
             <div className="flex flex-wrap items-center gap-3">
+              <a
+                href={`${basePath}/app?new=1`}
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 text-white font-semibold hover:from-amber-500 hover:to-orange-500 transition-colors shadow-sm no-underline"
+              >
+                <FilePlus className="w-5 h-5" />
+                {t['account.newWork']}
+              </a>
               <Link
                 to="/tood"
-                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-amber-500 text-white font-semibold hover:bg-amber-600 transition-colors shadow-sm"
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl border-2 border-amber-300 dark:border-white/30 bg-amber-50 dark:bg-white/10 text-amber-800 dark:text-white font-semibold hover:bg-amber-100 dark:hover:bg-white/20 transition-colors"
               >
                 <FolderOpen className="w-5 h-5" />
                 {t['account.myWork']}
               </Link>
             </div>
+
+            <section className="space-y-3">
+              <h2 className="text-lg font-semibold text-amber-900 dark:text-white flex items-center gap-2">
+                <FolderOpen className="w-5 h-5 text-amber-700 dark:text-white/80" /> {t['account.myWork']}
+              </h2>
+              <p className="text-sm text-amber-800 dark:text-white/90">
+                {t['account.myWorkFilesHint']}
+              </p>
+              {googleToken && (
+                <div className="space-y-2">
+                  <h3 className="text-sm font-semibold text-amber-900 dark:text-white">{t['account.googleDriveSection']}</h3>
+                  {googleFiles.state === 'loading' && (
+                    <div className="flex items-center gap-2 text-amber-700 dark:text-white/80 py-2">
+                      <Loader2 className="w-4 h-4 animate-spin" /> {t['account.loading']}
+                    </div>
+                  )}
+                  {googleFiles.state === 'error' && (
+                    <p className="text-sm text-red-700 dark:text-red-400">{googleFiles.error}</p>
+                  )}
+                  {googleFiles.state === 'success' && googleFiles.data.length === 0 && (
+                    <p className="text-sm text-amber-800 dark:text-white/80">{t['account.noFilesInCloud']}</p>
+                  )}
+                  {googleFiles.state === 'success' && googleFiles.data.length > 0 && (
+                    <ul className="space-y-1.5 max-h-48 overflow-y-auto">
+                      {googleFiles.data.map((f) => (
+                        <li key={f.id}>
+                          <a
+                            href={`${basePath}/app?fileId=${encodeURIComponent(f.id)}`}
+                            className="flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-50/70 dark:bg-white/10 border border-amber-200/60 dark:border-white/20 hover:bg-amber-100/80 dark:hover:bg-white/20 no-underline text-inherit"
+                          >
+                            <img src="/logo.png" alt="" className="h-6 w-6 flex-shrink-0 object-contain" aria-hidden />
+                            <span className="truncate flex-1 text-sm font-medium">{f.name}</span>
+                            <span className="text-xs text-amber-600 dark:text-white/70 flex-shrink-0">{formatDate(f.modifiedTime)}</span>
+                          </a>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
+              {microsoftToken && (
+                <div className="space-y-2">
+                  <h3 className="text-sm font-semibold text-amber-900 dark:text-white">{t['account.oneDriveSection']}</h3>
+                  {oneDriveFiles.state === 'loading' && (
+                    <div className="flex items-center gap-2 text-amber-700 dark:text-white/80 py-2">
+                      <Loader2 className="w-4 h-4 animate-spin" /> {t['account.loading']}
+                    </div>
+                  )}
+                  {oneDriveFiles.state === 'error' && (
+                    <p className="text-sm text-red-700 dark:text-red-400">{oneDriveFiles.error}</p>
+                  )}
+                  {oneDriveFiles.state === 'success' && oneDriveFiles.data.length === 0 && (
+                    <p className="text-sm text-amber-800 dark:text-white/80">{t['account.noFilesOneDrive']}</p>
+                  )}
+                  {oneDriveFiles.state === 'success' && oneDriveFiles.data.length > 0 && (
+                    <ul className="space-y-1.5 max-h-48 overflow-y-auto">
+                      {oneDriveFiles.data.map((f) => (
+                        <li key={f.id}>
+                          <a
+                            href={`${basePath}/app?fileId=${encodeURIComponent(f.id)}&cloud=onedrive`}
+                            className="flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-50/70 dark:bg-white/10 border border-amber-200/60 dark:border-white/20 hover:bg-amber-100/80 dark:hover:bg-white/20 no-underline text-inherit"
+                          >
+                            <img src="/logo.png" alt="" className="h-6 w-6 flex-shrink-0 object-contain" aria-hidden />
+                            <span className="truncate flex-1 text-sm font-medium">{f.name}</span>
+                            <span className="text-xs text-amber-600 dark:text-white/70 flex-shrink-0">{formatDate(f.lastModifiedDateTime)}</span>
+                          </a>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
+              {!googleToken && !microsoftToken && (
+                <p className="text-sm text-amber-800 dark:text-white/80">
+                  {t['account.noCloudFiles']}
+                </p>
+              )}
+            </section>
 
             <section className="space-y-2">
               <h2 className="text-lg font-semibold text-amber-900 dark:text-white flex items-center gap-2">
@@ -365,6 +515,16 @@ export default function AccountPage() {
                   <p>
                     <span className="font-semibold">{t['account.loginMethod']}:</span> {providerLabel}
                   </p>
+                  <div className="pt-3">
+                    <button
+                      type="button"
+                      onClick={handleLogout}
+                      className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border-2 border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-900/20 text-red-800 dark:text-red-300 font-medium hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
+                      title={t['user.logoutTitle'] || 'Logi välja'}
+                    >
+                      <LogOut className="w-4 h-4" /> {t['user.logout'] || 'Logi välja'}
+                    </button>
+                  </div>
                 </div>
               ) : (
                 <p className="text-sm text-amber-800 dark:text-white/90 flex items-center gap-2">
@@ -379,28 +539,28 @@ export default function AccountPage() {
 
             <section className="space-y-2">
               <h2 className="text-lg font-semibold text-amber-900 dark:text-white flex items-center gap-2">
-                <HardDrive className="w-5 h-5 text-amber-700 dark:text-white/80" /> Kohalik fail
+                <HardDrive className="w-5 h-5 text-amber-700 dark:text-white/80" /> {t['account.localFile']}
               </h2>
               <p className="text-sm text-amber-800 dark:text-white/90">
-                NoodiMeister saab alati salvestada faili sinu arvutisse (ilma kontota). See töötab sõltumata Google'ist või Microsoftist.
+                {t['account.localFileHint']}
               </p>
             </section>
 
             <section className="space-y-3">
               <h2 className="text-lg font-semibold text-amber-900 dark:text-white flex items-center gap-2">
-                <Cloud className="w-5 h-5 text-sky-600 dark:text-white/80" /> Google Drive
+                <Cloud className="w-5 h-5 text-sky-600 dark:text-white/80" /> {t['account.googleDriveSection']}
               </h2>
               {googleToken ? (
                 <>
                   <p className="text-sm text-amber-800 dark:text-white/90">
-                    Oled andnud loa Google Drive'i jaoks. Minu tööde vaates saad näha ja avada oma Google Drive'i NoodiMeisteri faile.
+                    {t['account.googleConnectedHint']}
                   </p>
                   <div className="border border-amber-200 dark:border-white/20 rounded-xl p-4 bg-amber-50/70 dark:bg-white/10 space-y-3">
-                    <p className="text-sm font-semibold text-amber-900 dark:text-white">Salvestuskaust</p>
+                    <p className="text-sm font-semibold text-amber-900 dark:text-white">{t['account.saveFolder']}</p>
                     <p className="text-sm text-amber-800 dark:text-white/90">
                       {googleSaveFolderId
-                        ? `Praegu: ${googleSaveFolderName || googleSaveFolderId}`
-                        : 'Salvestuskaust pole valitud – tööriistas valitakse iga kord (või vali siin).'}
+                        ? (t['account.saveFolderCurrent'] || 'Praegu: {{name}}').replace('{{name}}', googleSaveFolderName || googleSaveFolderId)
+                        : t['account.saveFolderNotSelected']}
                     </p>
                     <div className="flex flex-wrap gap-2">
                       <button
@@ -408,14 +568,14 @@ export default function AccountPage() {
                         onClick={handleGooglePickFolder}
                         className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border-2 border-sky-300 dark:border-white/30 bg-sky-50 dark:bg-white/10 text-sky-800 dark:text-white font-medium hover:bg-sky-100 dark:hover:bg-white/20 text-sm"
                       >
-                        <FolderOpen className="w-4 h-4" /> Vali salvestuskaust
+                        <FolderOpen className="w-4 h-4" /> {t['account.pickSaveFolder']}
                       </button>
                       <div className="flex items-center gap-2">
                         <input
                           type="text"
                           value={googleCreateName}
                           onChange={(e) => setGoogleCreateName(e.target.value)}
-                          placeholder="Kausta nimi"
+                          placeholder={t['account.folderNamePlaceholder']}
                           className="w-36 px-2 py-1.5 rounded border border-amber-200 dark:border-white/30 dark:bg-black/50 dark:text-white text-sm"
                         />
                         <button
@@ -425,7 +585,7 @@ export default function AccountPage() {
                           className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-sky-600 text-white font-medium hover:bg-sky-700 disabled:opacity-60 text-sm"
                         >
                           {googleCreateLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <FolderPlus className="w-4 h-4" />}
-                          Loo uus kaust
+                          {t['account.createNewFolder']}
                         </button>
                       </div>
                       {googleSaveFolderId && (
@@ -438,7 +598,7 @@ export default function AccountPage() {
                           }}
 className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-amber-300 dark:border-white/30 bg-white dark:bg-white/10 text-amber-800 dark:text-white font-medium hover:bg-amber-50 dark:hover:bg-white/20 text-sm"
                         >
-                        <X className="w-4 h-4" /> Eemalda salvestuskaust
+                        <X className="w-4 h-4" /> {t['account.removeSaveFolder']}
                       </button>
                       )}
                     </div>
@@ -446,43 +606,43 @@ className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-amb
                 </>
               ) : (
                 <p className="text-sm text-amber-800 dark:text-white/90">
-                  Google Drive'i pole veel ühendatud. Logi sisse Google'i nupuga, et salvestada ja laadida faile Google Drive'i.
+                  {t['account.googleNotConnected']}
                 </p>
               )}
             </section>
 
             <section className="space-y-3">
               <h2 className="text-lg font-semibold text-amber-900 dark:text-white flex items-center gap-2">
-                <Cloud className="w-5 h-5 text-blue-700 dark:text-white/80" /> OneDrive (Microsoft)
+                <Cloud className="w-5 h-5 text-blue-700 dark:text-white/80" /> {t['account.oneDriveSection']}
               </h2>
               {!microsoftToken && (
                 <p className="text-sm text-amber-800 dark:text-white/90">
-                  Microsofti konto pole veel ühendatud. Logi sisse Microsofti nupuga (login/registreeru), et lubada OneDrive'i kasutamine.
+                  {t['account.oneDriveNotConnected']}
                 </p>
               )}
               {microsoftToken && (
                 <div className="space-y-3 text-sm text-amber-800 dark:text-white/90">
-                  {oneDriveProfile.state === 'loading' && <p>Laen Microsofti profiili…</p>}
+                  {oneDriveProfile.state === 'loading' && <p>{t['account.loadingProfile']}</p>}
                   {oneDriveProfile.state === 'error' && (
                     <p className="text-red-700 dark:text-red-400">
-                      Profiili lugemine ebaõnnestus: {oneDriveProfile.error}
+                      {t['account.profileError']}: {oneDriveProfile.error}
                     </p>
                   )}
                   {oneDriveProfile.state === 'success' && oneDriveProfile.data && (
                     <div className="border border-amber-200 dark:border-white/20 rounded-lg p-3 bg-amber-50/70 dark:bg-white/10">
                       <p>
-                        <span className="font-semibold">OneDrive'i konto:</span>{' '}
+                        <span className="font-semibold">{t['account.oneDriveAccount']}:</span>{' '}
                         {oneDriveProfile.data.displayName || oneDriveProfile.data.mail || '—'}
                       </p>
                     </div>
                   )}
 
                   <div className="border border-amber-200 dark:border-white/20 rounded-xl p-4 bg-amber-50/70 dark:bg-white/10 space-y-3">
-                    <p className="text-sm font-semibold text-amber-900 dark:text-white">Salvestuskaust</p>
+                    <p className="text-sm font-semibold text-amber-900 dark:text-white">{t['account.saveFolder']}</p>
                     <p className="text-sm text-amber-800 dark:text-white/90">
                       {oneDriveSaveFolderId
-                        ? `Praegu: ${oneDriveSaveFolderName || oneDriveSaveFolderId}`
-                        : 'Salvestuskaust pole valitud – failid salvestatakse OneDrive\'i juurkausta.'}
+                        ? (t['account.saveFolderCurrent'] || 'Praegu: {{name}}').replace('{{name}}', oneDriveSaveFolderName || oneDriveSaveFolderId)
+                        : t['account.saveFolderNotSelectedOneDrive']}
                     </p>
                     <div className="flex flex-wrap gap-2">
                       <button
@@ -493,14 +653,14 @@ className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-amb
                         }}
                         className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border-2 border-blue-300 dark:border-white/30 bg-blue-50 dark:bg-white/10 text-blue-800 dark:text-white font-medium hover:bg-blue-100 dark:hover:bg-white/20 text-sm"
                       >
-                        <FolderOpen className="w-4 h-4" /> Vali salvestuskaust
+                        <FolderOpen className="w-4 h-4" /> {t['account.pickSaveFolder']}
                       </button>
                       <div className="flex items-center gap-2">
                         <input
                           type="text"
                           value={oneDriveCreateName}
                           onChange={(e) => setOneDriveCreateName(e.target.value)}
-                          placeholder="Kausta nimi"
+                          placeholder={t['account.folderNamePlaceholder']}
                           className="w-36 px-2 py-1.5 rounded border border-amber-200 dark:border-white/30 dark:bg-black/50 dark:text-white text-sm"
                         />
                         <button
@@ -510,7 +670,7 @@ className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-amb
                           className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700 disabled:opacity-60 text-sm"
                         >
                           {oneDriveCreateLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <FolderPlus className="w-4 h-4" />}
-                          Loo uus kaust
+                          {t['account.createNewFolder']}
                         </button>
                       </div>
                       {oneDriveSaveFolderId && (
@@ -523,27 +683,27 @@ className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-amb
                           }}
 className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-amber-300 dark:border-white/30 bg-white dark:bg-white/10 text-amber-800 dark:text-white font-medium hover:bg-amber-50 dark:hover:bg-white/20 text-sm"
                         >
-                        <X className="w-4 h-4" /> Eemalda salvestuskaust
+                        <X className="w-4 h-4" /> {t['account.removeSaveFolder']}
                         </button>
                       )}
                     </div>
                   </div>
 
-                  {oneDriveFiles.state === 'loading' && <p>Laen OneDrive'i NoodiMeisteri faile…</p>}
+                  {oneDriveFiles.state === 'loading' && <p>{t['account.loadingOneDriveFiles']}</p>}
                   {oneDriveFiles.state === 'error' && (
                     <p className="text-red-700 dark:text-red-400">
-                      OneDrive'i failide lugemine ebaõnnestus: {oneDriveFiles.error}
+                      {t['account.oneDriveLoadError']}: {oneDriveFiles.error}
                     </p>
                   )}
                   {oneDriveFiles.state === 'success' && (
                     <>
                       {oneDriveFiles.data.length === 0 ? (
                         <p className="text-sm text-amber-800 dark:text-white/90">
-                          Valitud kaustas ei leitud veel ühtegi NoodiMeisteri faili. Salvesta tööriistast pilve, et siia failid ilmuda.
+                          {t['account.oneDriveEmptyHint']}
                         </p>
                       ) : (
                         <div className="space-y-1">
-                          <p className="font-semibold text-amber-900 dark:text-white">NoodiMeisteri failid OneDrive'is:</p>
+                          <p className="font-semibold text-amber-900 dark:text-white">{t['account.oneDriveFilesList']}:</p>
                           <ul className="max-h-40 overflow-y-auto text-sm space-y-2">
                             {oneDriveFiles.data.map((f) => (
                               <li key={f.id} className="flex items-center gap-2">
@@ -556,7 +716,7 @@ className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-amb
                                     rel="noreferrer"
                                     className="text-sky-700 dark:text-white underline flex-shrink-0"
                                   >
-                                    Ava OneDrive'is
+                                    {t['account.openInOneDrive']}
                                   </a>
                                 )}
                                 <button
@@ -584,9 +744,9 @@ className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-amb
 
       {oneDrivePickerOpen && microsoftToken && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setOneDrivePickerOpen(false)}>
-          <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-xl border-2 border-amber-200 dark:border-white/20 max-w-md w-full max-h-[80vh] flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
+          <div className="account-picker-modal bg-white dark:bg-zinc-900 rounded-2xl shadow-xl border-2 border-amber-200 dark:border-white/20 max-w-md w-full max-h-[80vh] flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
             <div className="px-4 py-3 border-b border-amber-200 dark:border-white/20 flex items-center justify-between">
-              <h3 className="font-semibold text-amber-900 dark:text-white">Vali OneDrive'i kaust</h3>
+              <h3 className="font-semibold text-amber-900 dark:text-white">{t['account.pickOneDriveFolder']}</h3>
               <button type="button" onClick={() => setOneDrivePickerOpen(false)} className="p-1 rounded hover:bg-amber-100 dark:hover:bg-white/10 text-amber-900 dark:text-white">
                 <X className="w-5 h-5" />
               </button>
@@ -597,7 +757,7 @@ className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-amb
                 onClick={() => setOneDrivePickerPath([])}
                 className="text-amber-700 dark:text-white hover:underline"
               >
-                Juurkaust
+                {t['account.rootFolder']}
               </button>
               {oneDrivePickerPath.map((p, i) => (
                 <React.Fragment key={p.id}>
@@ -615,7 +775,7 @@ className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-amb
             <div className="flex-1 overflow-y-auto p-4">
               {oneDrivePickerLoading ? (
                 <div className="flex items-center gap-2 text-amber-700 dark:text-white py-4">
-                  <Loader2 className="w-5 h-5 animate-spin" /> Laen kaustu…
+                  <Loader2 className="w-5 h-5 animate-spin" /> {t['account.loadingFolders']}
                 </div>
               ) : (
                 <ul className="space-y-1">
@@ -626,7 +786,7 @@ className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-amb
                         onClick={() => setOneDrivePickerPath((prev) => prev.slice(0, -1))}
                         className="w-full text-left flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-amber-100 dark:hover:bg-white/10 text-amber-900 dark:text-white"
                       >
-                        <span className="font-medium">..</span> Ülemine kaust
+                        <span className="font-medium">..</span> {t['account.parentFolder']}
                       </button>
                     </li>
                   )}
@@ -646,7 +806,7 @@ className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-amb
                           onClick={() => handleOneDriveSelectFolder(f.id)}
                           className="px-3 py-1.5 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700"
                         >
-                          Vali
+                          {t['account.selectFolder']}
                         </button>
                       </div>
                     </li>
