@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useGoogleLogin } from '@react-oauth/google';
 import { useNavigate } from 'react-router-dom';
 import { getStorageForLogin, getStorageForRead, getLoggedInUser, isLoggedIn } from '../services/authStorage';
 import { formatAuthError } from '../utils/authError';
+import { PublicClientApplication } from '@azure/msal-browser';
 
 const googleClientId = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_GOOGLE_CLIENT_ID) || '';
 
@@ -16,6 +17,55 @@ function getMicrosoftTesterEmails() {
 const KEY_LOGGED_IN = 'noodimeister-logged-in';
 const KEY_GOOGLE_TOKEN = 'noodimeister-google-token';
 const KEY_GOOGLE_EXPIRY = 'noodimeister-google-token-expiry';
+const KEY_MICROSOFT_TOKEN = 'noodimeister-microsoft-token';
+const KEY_MICROSOFT_EXPIRY = 'noodimeister-microsoft-token-expiry';
+
+const microsoftClientId = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_MICROSOFT_CLIENT_ID) || '';
+const microsoftTenantId = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_MICROSOFT_TENANT_ID) || 'common';
+
+function getMicrosoftRedirectUri() {
+  try {
+    const base = (typeof import.meta !== 'undefined' && import.meta.env?.BASE_URL) || '/';
+    const normalizedBase = base.endsWith('/') ? base : base + '/';
+    return window.location.origin + normalizedBase;
+  } catch {
+    return window.location.origin + '/';
+  }
+}
+
+/** Promise that resolves to an already-initialized MSAL instance. Keyed by origin so 127.0.0.1 vs localhost get correct redirect URI. */
+let msalPromiseByOrigin = {};
+function getOrCreateMsalPromise() {
+  if (typeof window === 'undefined' || !microsoftClientId) return null;
+  const origin = window.location.origin;
+  if (msalPromiseByOrigin[origin]) return msalPromiseByOrigin[origin];
+  const redirectUri = getMicrosoftRedirectUri();
+  const authority = `https://login.microsoftonline.com/${encodeURIComponent(microsoftTenantId || 'common')}`;
+  const instance = new PublicClientApplication({
+    auth: {
+      clientId: microsoftClientId,
+      authority,
+      redirectUri,
+    },
+    cache: {
+      cacheLocation: 'localStorage',
+      storeAuthStateInCookie: false,
+    },
+  });
+  // MSAL v3+: must await initialize() before any other API (e.g. loginPopup).
+  const promise = instance.initialize().then(() => instance).catch((e) => {
+    delete msalPromiseByOrigin[origin];
+    throw e;
+  });
+  msalPromiseByOrigin[origin] = promise;
+  return promise;
+}
+
+async function ensureMsalReady() {
+  const p = getOrCreateMsalPromise();
+  if (!p) return null;
+  return p;
+}
 
 /** Vercel/sisselogimise eelne kontroll: kas salvestus on kirjutatav ja loetav (vältib "kinnitamine ebaõnnestus"). */
 function canUseStorageForLogin(stayLoggedIn) {
@@ -33,6 +83,9 @@ function canUseStorageForLogin(stayLoggedIn) {
   }
 }
 
+/** Synchronous lock so a second Microsoft click cannot run before the first finishes (avoids interaction_in_progress). */
+let microsoftInteractionLock = false;
+
 /** Suuna Minu tööde vaatesse (/tood) Vercelil korrektselt (arvestab BASE_URL). */
 function redirectToTood() {
   if (typeof window === 'undefined') return;
@@ -49,6 +102,7 @@ function redirectToTood() {
 
 function useCloudLoginWithProvider(mode = 'login', stayLoggedIn = false, onError) {
   const navigate = useNavigate();
+  const [microsoftInProgress, setMicrosoftInProgress] = useState(false);
 
   const googleLogin = useGoogleLogin({
     onSuccess: (tokenResponse) => {
@@ -121,13 +175,14 @@ function useCloudLoginWithProvider(mode = 'login', stayLoggedIn = false, onError
               const expiresAt = tokenResponse.expires_in ? Date.now() + tokenResponse.expires_in * 1000 : 0;
               storage.setItem(KEY_GOOGLE_EXPIRY, String(expiresAt));
             }
-            if (mode === 'register') {
+            // Always ensure user is in noodimeister-users so the account is "fully registered" (login or register).
+            try {
               const users = JSON.parse(localStorage.getItem('noodimeister-users') || '[]');
-              if (!users.some(u => u.email === profile.email)) {
+              if (!users.some(u => u && u.email === profile.email)) {
                 users.push({ ...user });
                 localStorage.setItem('noodimeister-users', JSON.stringify(users));
               }
-            }
+            } catch (_) {}
             // Vercel fix: suuna alles siis, kui auth andmed on kinnitatud (loe tagasi), et /app ei laadi enne kui isLoggedIn() töötab.
             // COOP: ära kasuta window.close() – sisselogimine suunab /app poole; close() põhjustaks Cross-Origin-Opener-Policy vigu.
             const readStorage = getStorageForRead();
@@ -191,19 +246,154 @@ function useCloudLoginWithProvider(mode = 'login', stayLoggedIn = false, onError
   };
 
   const handleMicrosoftClick = () => {
-    alert('Microsofti sisselogimine tuleb tulevikus. Kasuta praegu e-maili ja parooli või Google\'i.');
+    if (microsoftInteractionLock) return;
+    microsoftInteractionLock = true;
+    setMicrosoftInProgress(true);
+    (async () => {
+      if (typeof window === 'undefined') return;
+      if (!microsoftClientId) {
+        const msg = 'VITE_MICROSOFT_CLIENT_ID puudub. Lisa .env faili rida (Azure App Registration).';
+        alert('Sisselogimise viga: ' + msg);
+        const payload = formatAuthError('konfiguratsioon', { message: msg });
+        if (onError) onError(payload);
+        return;
+      }
+      if (!canUseStorageForLogin(false) && !canUseStorageForLogin(true)) {
+        const msg = 'Brauser ei luba andmeid salvestada (nt privaatne režiim). Proovi teist brauserit või lülita privaatne režiim välja.';
+        alert('Sisselogimise viga: ' + msg);
+        if (onError) onError(formatAuthError('brauser', { message: msg }));
+        return;
+      }
+
+      // Only User.Read for sign-in so users can consent without org admin. Request Files.ReadWrite later when using OneDrive.
+      const loginScopes = ['User.Read'];
+      const msal = await ensureMsalReady();
+      if (!msal) throw new Error('Microsofti sisselogimise initsialiseerimine ebaõnnestus.');
+
+      const loginResult = await msal.loginPopup({
+        scopes: loginScopes,
+        prompt: 'select_account',
+      });
+
+      const account = loginResult?.account;
+      if (!account) throw new Error('Microsofti konto infot ei saadud');
+
+      const tokenResult = await msal.acquireTokenSilent({ account, scopes: loginScopes }).catch(() => null);
+      const accessToken = tokenResult?.accessToken || loginResult?.accessToken;
+      if (!accessToken) throw new Error('Microsoft access token puudub');
+
+      const r = await fetch('https://graph.microsoft.com/v1.0/me', {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      const profile = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        const detail = profile?.error?.message || profile?.message || `HTTP ${r.status}`;
+        throw { status: r.status, message: detail, ...profile };
+      }
+
+      const emailRaw = profile.mail || profile.userPrincipalName || account.username || '';
+      const email = String(emailRaw || '').trim().toLowerCase();
+      if (!email) throw new Error('E-maili ei saadud Microsoft Graphist');
+
+      const allowed = getMicrosoftTesterEmails();
+      if (allowed.length > 0 && !allowed.includes(email)) {
+        const msg = `Sinu konto (${email}) pole veel Microsofti testijate nimekirjas. Kasutaja ei ole täielikult registreeritud: administraator peab lisama sinu e-maili .env faili muutujasse VITE_MICROSOFT_TESTER_EMAILS (komaga eraldatud) või jätma selle tühjaks, et kõik saaksid sisse logida.`;
+        alert(msg);
+        const payload = formatAuthError('Microsoft OAuth', { code: 'not_allowed', message: msg });
+        if (onError) onError(payload);
+        return;
+      }
+
+      const user = {
+        email,
+        name: profile.displayName || account.name || email.split('@')[0],
+        provider: 'microsoft',
+      };
+
+      if (!canUseStorageForLogin(stayLoggedIn)) {
+        const msg = 'Brauser ei luba andmeid salvestada (nt privaatne režiim). Proovi teist brauserit.';
+        alert('Sisselogimise viga: ' + msg);
+        if (onError) onError(formatAuthError('brauser', { message: msg }));
+        return;
+      }
+
+      const storage = getStorageForLogin(stayLoggedIn);
+      if (!storage) {
+        const msg = 'Brauser ei luba andmeid salvestada (nt privaatne režiim). Proovi teist brauserit.';
+        alert('Sisselogimise viga: ' + msg);
+        const payload = formatAuthError('brauser', { message: msg });
+        if (onError) onError(payload);
+        return;
+      }
+
+      storage.setItem(KEY_LOGGED_IN, JSON.stringify(user));
+      storage.setItem(KEY_MICROSOFT_TOKEN, accessToken);
+      const expiresAt = tokenResult?.expiresOn ? tokenResult.expiresOn.getTime() : 0;
+      storage.setItem(KEY_MICROSOFT_EXPIRY, String(expiresAt));
+
+      // Always ensure user is in noodimeister-users so the account is "fully registered" (login or register).
+      try {
+        const users = JSON.parse(localStorage.getItem('noodimeister-users') || '[]');
+        if (!users.some(u => u && u.email === email)) {
+          users.push({ ...user });
+          localStorage.setItem('noodimeister-users', JSON.stringify(users));
+        }
+      } catch (_) {}
+
+      const readStorage = getStorageForRead();
+      const confirmedUser = getLoggedInUser();
+      const loggedIn = isLoggedIn();
+      if (!readStorage || !confirmedUser?.email || !loggedIn) {
+        const msg = 'Sisselogimine salvestati, kuid kinnitamine ebaõnnestus. Proovi uuesti või teist brauserit.';
+        alert('Sisselogimise viga: ' + msg);
+        const payload = formatAuthError('brauser', { message: msg });
+        if (onError) onError(payload);
+        return;
+      }
+
+      console.log('[CloudLogin] Microsoft auth kinnitatud, suuname /tood poole (Minu tööd)');
+      requestAnimationFrame(() => {
+        setTimeout(redirectToTood, 50);
+      });
+    })().catch((err) => {
+      const isPopupClosed = err?.errorCode === 'user_cancelled' || err?.errorCode === 'popup_window_error' || err?.errorMessage?.includes('user_cancelled');
+      const isInteractionInProgress = err?.errorCode === 'interaction_in_progress' || (err?.message && String(err.message).includes('interaction_in_progress'));
+      if (!isPopupClosed) {
+        const msg = isInteractionInProgress
+          ? 'Sisselogimise aken on juba avatud või eelmine proovimine ei lõppenud. Sulge kõik Microsofti aknad, oota mõni sekund ja proovi uuesti.'
+          : (err?.message || err?.errorMessage || err?.error_description || (err && typeof err === 'object' ? JSON.stringify(err) : String(err)));
+        const popupHint = ' Kui brauser avas Google otsingu või tühja lehe: luba selle saidi hüpikaknad (pop-up) ja proovi uuesti.';
+        alert('Sisselogimise viga: ' + msg + popupHint);
+        console.error('[CloudLogin] Microsoft OAuth viga:', err);
+        const payload = formatAuthError('Microsoft OAuth', err && typeof err === 'object' ? err : new Error(String(err)));
+        if (onError) onError(payload);
+      }
+    }).finally(() => {
+      microsoftInteractionLock = false;
+      setMicrosoftInProgress(false);
+    });
   };
 
   const handleAppleClick = () => {
     alert('Apple sisselogimine tuleb tulevikus. Kasuta praegu e-maili ja parooli või Google\'i.');
   };
 
-  return { handleGoogleClick, handleMicrosoftClick, handleAppleClick };
+  return { handleGoogleClick, handleMicrosoftClick, handleAppleClick, microsoftInProgress };
 }
 
 function CloudLoginButtonsInner({ mode = 'login', stayLoggedIn = false, onError }) {
-  const { handleGoogleClick, handleMicrosoftClick, handleAppleClick } = useCloudLoginWithProvider(mode, stayLoggedIn, onError);
+  const { handleGoogleClick, handleMicrosoftClick, handleAppleClick, microsoftInProgress } = useCloudLoginWithProvider(mode, stayLoggedIn, onError);
   const label = mode === 'register' ? 'Või registreeru pilveteenusega' : 'Või logi sisse pilveteenusega';
+  const googleEnabled = !!googleClientId;
+  const microsoftEnabled = !!microsoftClientId;
+  const appleEnabled = false;
+
+  // Start MSAL initialization as soon as login/register page is shown so it's ready when user clicks Microsoft.
+  useEffect(() => {
+    if (microsoftClientId && typeof window !== 'undefined') {
+      getOrCreateMsalPromise();
+    }
+  }, []);
 
   return (
     <div className="space-y-3">
@@ -219,7 +409,11 @@ function CloudLoginButtonsInner({ mode = 'login', stayLoggedIn = false, onError 
         <button
           type="button"
           onClick={handleGoogleClick}
-          className="flex items-center justify-center gap-3 w-full py-2.5 px-4 rounded-lg border-2 border-amber-200 bg-white text-amber-900 font-medium hover:bg-amber-50 hover:border-amber-300 transition-all"
+          disabled={!googleEnabled}
+          className={[
+            "flex items-center justify-center gap-3 w-full py-2.5 px-4 rounded-lg border-2 border-amber-200 bg-white text-amber-900 font-medium transition-all",
+            googleEnabled ? "hover:bg-amber-50 hover:border-amber-300" : "opacity-60 cursor-not-allowed"
+          ].join(' ')}
         >
           <svg className="w-5 h-5" viewBox="0 0 24 24">
             <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
@@ -232,7 +426,11 @@ function CloudLoginButtonsInner({ mode = 'login', stayLoggedIn = false, onError 
         <button
           type="button"
           onClick={handleMicrosoftClick}
-          className="flex items-center justify-center gap-3 w-full py-2.5 px-4 rounded-lg border-2 border-amber-200 bg-white text-amber-900 font-medium hover:bg-amber-50 hover:border-amber-300 transition-all"
+          disabled={!microsoftClientId || microsoftInProgress}
+          className={[
+            "flex items-center justify-center gap-3 w-full py-2.5 px-4 rounded-lg border-2 border-amber-200 bg-white text-amber-900 font-medium transition-all",
+            (microsoftClientId && !microsoftInProgress) ? "hover:bg-amber-50 hover:border-amber-300" : "opacity-60 cursor-not-allowed"
+          ].join(' ')}
         >
           <svg className="w-5 h-5" viewBox="0 0 23 23">
             <path fill="#f35325" d="M1 1h10v10H1z"/>
@@ -240,12 +438,16 @@ function CloudLoginButtonsInner({ mode = 'login', stayLoggedIn = false, onError 
             <path fill="#05a6f0" d="M1 12h10v10H1z"/>
             <path fill="#ffba08" d="M12 12h10v10H12z"/>
           </svg>
-          Microsoft
+          {microsoftInProgress ? '...' : 'Microsoft'}
         </button>
         <button
           type="button"
           onClick={handleAppleClick}
-          className="flex items-center justify-center gap-3 w-full py-2.5 px-4 rounded-lg border-2 border-amber-200 bg-white text-amber-900 font-medium hover:bg-amber-50 hover:border-amber-300 transition-all"
+          disabled={!appleEnabled}
+          className={[
+            "flex items-center justify-center gap-3 w-full py-2.5 px-4 rounded-lg border-2 border-amber-200 bg-white text-amber-900 font-medium transition-all",
+            appleEnabled ? "hover:bg-amber-50 hover:border-amber-300" : "opacity-60 cursor-not-allowed"
+          ].join(' ')}
         >
           <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
             <path d="M17.05 20.28c-.98.95-2.05.8-3.08.35-1.09-.46-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.35C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09l.01-.01zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z"/>
@@ -253,25 +455,13 @@ function CloudLoginButtonsInner({ mode = 'login', stayLoggedIn = false, onError 
           Apple
         </button>
       </div>
+      {!googleEnabled && <p className="text-xs text-amber-600 text-center">Google: lisa `VITE_GOOGLE_CLIENT_ID` .env faili.</p>}
+      {!microsoftEnabled && <p className="text-xs text-amber-600 text-center">Microsoft: lisa `VITE_MICROSOFT_CLIENT_ID` .env faili.</p>}
+      {!appleEnabled && <p className="text-xs text-amber-600 text-center">Apple: tuleb hiljem.</p>}
     </div>
   );
 }
 
 export function CloudLoginButtons({ mode = 'login', stayLoggedIn = false, onError }) {
-  if (!googleClientId) {
-    return (
-      <div className="space-y-3">
-        <div className="relative">
-          <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-amber-200" /></div>
-          <div className="relative flex justify-center text-sm">
-            <span className="px-2 bg-white text-amber-700 font-medium">
-              {mode === 'register' ? 'Või registreeru pilveteenusega' : 'Või logi sisse pilveteenusega'}
-            </span>
-          </div>
-        </div>
-        <p className="text-xs text-amber-600 text-center">Google: lisa VITE_GOOGLE_CLIENT_ID .env faili.</p>
-      </div>
-    );
-  }
   return <CloudLoginButtonsInner mode={mode} stayLoggedIn={stayLoggedIn} onError={onError} />;
 }

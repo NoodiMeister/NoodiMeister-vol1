@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { LogIn, Mail, Lock } from 'lucide-react';
 import { CloudLoginButtons } from '../components/CloudLogin';
@@ -13,6 +13,16 @@ export default function LoginPage() {
   const [message, setMessage] = useState('');
   const [errorDetail, setErrorDetail] = useState(null);
   const [stayLoggedIn, setStayLoggedIn] = useState(false);
+  const [hashStrippedHint, setHashStrippedHint] = useState(false);
+
+  useEffect(() => {
+    try {
+      if (sessionStorage.getItem('noodimeister-microsoft-hash-stripped') === '1') {
+        sessionStorage.removeItem('noodimeister-microsoft-hash-stripped');
+        setHashStrippedHint(true);
+      }
+    } catch (_) {}
+  }, []);
 
   const setError = (msg, detail) => {
     setMessage(msg);
@@ -114,6 +124,11 @@ export default function LoginPage() {
             <p className="text-slate-200 text-sm mt-1">Kontoga saad noodiprojekte hallata ja soovi korral salvestada pilve (nt Google Drive). Ilma kontota saad tööriista kasutada ja faili kohalikult salvestada.</p>
           </div>
           <div className="px-8 pt-6 pb-2">
+            {hashStrippedHint && (
+              <div className="rounded-lg bg-sky-50 border border-sky-200 p-3 text-sm text-sky-800 mb-3">
+                Microsofti sisselogimine avati selles aknas. Lubage hüpikaknad (pop-up) saidi jaoks ja proovige Microsofti nuppu uuesti.
+              </div>
+            )}
             <div className="rounded-lg bg-amber-50 border border-amber-200/60 p-3 text-sm text-amber-800/90">
               <strong>Salvestus:</strong> kohalik fail või pilv (sisselogimisel Google’iga saad hiljem salvestada Google Drivesse).
             </div>

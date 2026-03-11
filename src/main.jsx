@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client';
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import './utils/notationConstants'; // Lae enne Appi – vältib TDZ/ReferenceError lazy chunkides (Vercel)
 import App from './App';
+import MicrosoftPopupCallback from './MicrosoftPopupCallback';
 import './index.css';
 
 // Teema enne esimest joonistust (vältib vilkumist)
@@ -18,6 +19,8 @@ import './index.css';
     }
   } catch (_) { /* ignore */ }
 })();
+
+// Microsoft: if URL has #code=, we always run the callback (popup can lose window.opener after redirect). Do not strip.
 
 function showFatalError(message, detail) {
   const el = document.getElementById('root');
@@ -49,13 +52,17 @@ try {
   const rootEl = document.getElementById('root');
   if (!rootEl) throw new Error('Element #root ei leitud. Kontrolli index.html.');
   const root = ReactDOM.createRoot(rootEl);
-  // StrictMode välja: võib põhjustada "Cannot access 'Tr' before initialization" sõltuvustes
-  const app = <App />;
 
-  if (googleClientId) {
-    root.render(<GoogleOAuthProvider clientId={googleClientId}>{app}</GoogleOAuthProvider>);
+  const hasMicrosoftCode = typeof window !== 'undefined' && window.location.hash && /[#&]code=/.test(window.location.hash);
+  if (hasMicrosoftCode) {
+    root.render(<MicrosoftPopupCallback />);
   } else {
-    root.render(app);
+    const app = <App />;
+    if (googleClientId) {
+      root.render(<GoogleOAuthProvider clientId={googleClientId}>{app}</GoogleOAuthProvider>);
+    } else {
+      root.render(app);
+    }
   }
 } catch (err) {
   console.error(err);

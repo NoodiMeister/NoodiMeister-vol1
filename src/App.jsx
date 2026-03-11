@@ -8,6 +8,7 @@ const LoginPage = lazy(() => import('./pages/LoginPage'));
 const HinnakiriPage = lazy(() => import('./pages/HinnakiriPage'));
 const ToetaPage = lazy(() => import('./pages/ToetaPage'));
 const UserDashboard = lazy(() => import('./components/UserDashboard'));
+const AccountPage = lazy(() => import('./pages/AccountPage'));
 const NoodiMeister = lazy(() => import('./noodimeister-complete'));
 const PianoDemoPage = lazy(() => import('./pages/PianoDemoPage'));
 const SymbolGalleryPage = lazy(() => import('./pages/SymbolGalleryPage'));
@@ -41,6 +42,12 @@ function RegisterOrRedirect() {
 function MinuToodOrRedirect() {
   if (!isLoggedIn()) return <Navigate to="/login" replace />;
   return <UserDashboard />;
+}
+
+/** Minu konto – näitab kasutaja infot ja pilvesalvestuse (Google, OneDrive) olekut. */
+function AccountOrRedirect() {
+  if (!isLoggedIn()) return <Navigate to="/login" replace />;
+  return <AccountPage />;
 }
 
 /** Sisselogitud kasutaja suuna /app pealt Minu tööde vaatesse, kui ei avata konkreetset faili, uut tööd ega viimati muudetud tööd (local=1). */
@@ -160,10 +167,13 @@ function AppRoutes() {
       <Suspense fallback={<div style={{ padding: 24, textAlign: 'center' }}>Laen…</div>}>
         <Routes>
           <Route path="/app" element={<AppOrRedirect />} />
+          {/* Part window (separate browser tab/window): renders editor, filtered by ?staffId=... */}
+          <Route path="/part" element={<NoodiMeister />} />
           <Route path="/gallery/figurenotes" element={<FigurenotesSymbolGalleryPage />} />
           <Route path="/gallery" element={<SymbolGalleryPage />} />
           <Route path="/piano" element={<PianoDemoPage />} />
           <Route path="/tood" element={<MinuToodOrRedirect />} />
+          <Route path="/konto" element={<AccountOrRedirect />} />
           <Route path="/login" element={<LoginOrRedirect />} />
           <Route path="/registreeru" element={<RegisterOrRedirect />} />
           <Route path="/hinnakiri" element={<HinnakiriPage />} />

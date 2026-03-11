@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { UserPlus, Mail, Lock, User } from 'lucide-react';
 import { CloudLoginButtons } from '../components/CloudLogin';
@@ -16,6 +16,16 @@ export default function RegisterPage() {
   const [message, setMessage] = useState('');
   const [errorDetail, setErrorDetail] = useState(null);
   const [stayLoggedIn, setStayLoggedIn] = useState(false);
+  const [hashStrippedHint, setHashStrippedHint] = useState(false);
+
+  useEffect(() => {
+    try {
+      if (sessionStorage.getItem('noodimeister-microsoft-hash-stripped') === '1') {
+        sessionStorage.removeItem('noodimeister-microsoft-hash-stripped');
+        setHashStrippedHint(true);
+      }
+    } catch (_) {}
+  }, []);
 
   const setError = (msg, detail) => {
     setMessage(msg);
@@ -44,8 +54,12 @@ export default function RegisterPage() {
     try {
       const users = JSON.parse(localStorage.getItem('noodimeister-users') || '[]');
       if (users.some(u => u.email === form.email)) {
-        const payload = formatAuthError('registreerimine', { code: 'email_exists', message: 'Selle e-mailiga konto on juba olemas.' });
+        const payload = formatAuthError('registreerimine', {
+          code: 'email_exists',
+          message: 'Selle e-mailiga konto on juba olemas. Suuname sisselogimise lehele.'
+        });
         setError(payload.fullMessage, payload);
+        setTimeout(() => navigate('/login'), 1500);
         return;
       }
       users.push({ name: form.name, email: form.email, password: form.password });
@@ -79,6 +93,11 @@ export default function RegisterPage() {
             <p className="text-amber-100 text-sm mt-1">Loo konto, et projekte hallata ja salvestada kohalikult või pilve (Google Drive jms). E-mail + parool või registreeru Google’iga.</p>
           </div>
           <div className="px-8 pt-6 pb-2">
+            {hashStrippedHint && (
+              <div className="rounded-lg bg-sky-50 border border-sky-200 p-3 text-sm text-sky-800 mb-3">
+                Microsofti sisselogimine avati selles aknas. Lubage hüpikaknad (pop-up) saidi jaoks ja proovige Microsofti nuppu uuesti.
+              </div>
+            )}
             <div className="rounded-lg bg-amber-50 border border-amber-200/60 p-3 text-sm text-amber-800/90">
               <strong>Miks konto?</strong> Projektide üle vaatamine, salvestuskeskkonna valik (kohalik / pilv) ja tulevikus jagamine — kõik ühe konto all.
             </div>

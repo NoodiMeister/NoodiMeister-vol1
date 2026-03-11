@@ -4,9 +4,11 @@
  * Väljalogimine (clearAuth) tühjendab salvestuse ainult nupu "Logi välja" kaudu.
  */
 
-const KEY_LOGGED_IN = 'noodimeister-logged-in';
-const KEY_GOOGLE_TOKEN = 'noodimeister-google-token';
-const KEY_GOOGLE_EXPIRY = 'noodimeister-google-token-expiry';
+export const KEY_LOGGED_IN = 'noodimeister-logged-in';
+export const KEY_GOOGLE_TOKEN = 'noodimeister-google-token';
+export const KEY_GOOGLE_EXPIRY = 'noodimeister-google-token-expiry';
+export const KEY_MICROSOFT_TOKEN = 'noodimeister-microsoft-token';
+export const KEY_MICROSOFT_EXPIRY = 'noodimeister-microsoft-token-expiry';
 
 function safeStorage(storage) {
   if (typeof window === 'undefined' || !storage) return null;
@@ -83,6 +85,20 @@ export function getStoredTokenFromAuth() {
   return token;
 }
 
+/** Microsoft token (Graph/OneDrive) – loetakse samast salvestusest kui sisselogimine. */
+export function getStoredMicrosoftTokenFromAuth() {
+  const storage = getStorageForRead();
+  if (!storage) return null;
+  const token = storage.getItem(KEY_MICROSOFT_TOKEN);
+  const expiry = storage.getItem(KEY_MICROSOFT_EXPIRY);
+  if (!token) return null;
+  if (expiry && Date.now() > Number(expiry)) {
+    clearAuth();
+    return null;
+  }
+  return token;
+}
+
 /** Tühjenda sisselogimine ja token mõlemast salvestusest (väljalogimine). */
 export function clearAuth() {
   if (typeof window === 'undefined') return;
@@ -92,6 +108,8 @@ export function clearAuth() {
         s.removeItem(KEY_LOGGED_IN);
         s.removeItem(KEY_GOOGLE_TOKEN);
         s.removeItem(KEY_GOOGLE_EXPIRY);
+        s.removeItem(KEY_MICROSOFT_TOKEN);
+        s.removeItem(KEY_MICROSOFT_EXPIRY);
       }
     });
   } catch (_) {}
