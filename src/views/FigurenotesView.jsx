@@ -14,7 +14,8 @@ import { getShapePathsByOctave, getFigureStyle } from '../constants/FigureNotesL
 const LAYOUT = { MARGIN_LEFT: 60, MEASURE_MIN_WIDTH: 28 };
 const FIGURE_START_PADDING = 8;
 const PAGE_BREAK_GAP = 80;
-const barLineWidth = 5;
+/** Reference size (px) for which bar line and padding design values were chosen. */
+const NOTATION_SIZE_REF = 75;
 
 function getFigurenoteTextColor(pitch) {
   const p = String(pitch || '').toUpperCase();
@@ -24,7 +25,7 @@ function getFigurenoteTextColor(pitch) {
 /** Reference size used when design was at 16px; scale = size/16. */
 const TIME_SIG_REF = 16;
 
-function renderTimeSignature(timeSignature, timeSignatureMode, centerY, notationSize = TIME_SIG_REF) {
+function renderTimeSignature(timeSignature, timeSignatureMode, centerY, notationSize = TIME_SIG_REF, textColor = '#333', noteFill = '#333') {
   const scale = notationSize / TIME_SIG_REF;
   const x = 45;
   const y = centerY;
@@ -48,26 +49,26 @@ function renderTimeSignature(timeSignature, timeSignatureMode, centerY, notation
       const q = 6 * scale;
       switch (timeSignature.beatUnit) {
         case 1:
-          return <ellipse cx={noteX} cy={noteY} rx={r1} ry={r1y} fill="none" stroke="#333" strokeWidth={strokeW} />;
+          return <ellipse cx={noteX} cy={noteY} rx={r1} ry={r1y} fill="none" stroke={textColor} strokeWidth={strokeW} />;
         case 2:
-          return (<><ellipse cx={noteX} cy={noteY} rx={r2} ry={r2y} fill="none" stroke="#333" strokeWidth={strokeW} /><line x1={stemX} y1={noteY} x2={stemX} y2={noteY + stemLen} stroke="#333" strokeWidth={strokeW} /></>);
+          return (<><ellipse cx={noteX} cy={noteY} rx={r2} ry={r2y} fill="none" stroke={textColor} strokeWidth={strokeW} /><line x1={stemX} y1={noteY} x2={stemX} y2={noteY + stemLen} stroke={textColor} strokeWidth={strokeW} /></>);
         case 4:
-          return (<><ellipse cx={noteX} cy={noteY} rx={r2} ry={r2y} fill="#333" /><line x1={stemX} y1={noteY} x2={stemX} y2={noteY + stemLen} stroke="#333" strokeWidth={strokeW} /></>);
+          return (<><ellipse cx={noteX} cy={noteY} rx={r2} ry={r2y} fill={noteFill} /><line x1={stemX} y1={noteY} x2={stemX} y2={noteY + stemLen} stroke={textColor} strokeWidth={strokeW} /></>);
         case 8:
-          return (<><ellipse cx={noteX} cy={noteY} rx={r2} ry={r2y} fill="#333" /><line x1={stemX} y1={noteY} x2={stemX} y2={noteY + stemLen} stroke="#333" strokeWidth={strokeW} /><path d={`M ${stemX} ${noteY + stemLen} Q ${stemX - q} ${noteY + stemLen - 2} ${stemX} ${noteY + stemLen - 5}`} fill="#333" /></>);
+          return (<><ellipse cx={noteX} cy={noteY} rx={r2} ry={r2y} fill={noteFill} /><line x1={stemX} y1={noteY} x2={stemX} y2={noteY + stemLen} stroke={textColor} strokeWidth={strokeW} /><path d={`M ${stemX} ${noteY + stemLen} Q ${stemX - q} ${noteY + stemLen - 2} ${stemX} ${noteY + stemLen - 5}`} fill={noteFill} /></>);
         case 16:
-          return (<><ellipse cx={noteX} cy={noteY} rx={r2} ry={r2y} fill="#333" /><line x1={stemX} y1={noteY} x2={stemX} y2={noteY + stemLen} stroke="#333" strokeWidth={strokeW} /><path d={`M ${stemX} ${noteY + stemLen} Q ${stemX - q} ${noteY + stemLen - 2} ${stemX} ${noteY + stemLen - 5} M ${stemX} ${noteY + stemLen - 3} Q ${stemX - q} ${noteY + stemLen - 5} ${stemX} ${noteY + stemLen - 8}`} fill="#333" /></>);
+          return (<><ellipse cx={noteX} cy={noteY} rx={r2} ry={r2y} fill={noteFill} /><line x1={stemX} y1={noteY} x2={stemX} y2={noteY + stemLen} stroke={textColor} strokeWidth={strokeW} /><path d={`M ${stemX} ${noteY + stemLen} Q ${stemX - q} ${noteY + stemLen - 2} ${stemX} ${noteY + stemLen - 5} M ${stemX} ${noteY + stemLen - 3} Q ${stemX - q} ${noteY + stemLen - 5} ${stemX} ${noteY + stemLen - 8}`} fill={noteFill} /></>);
         default:
-          return <text x={noteX} y={noteY + stemLen} textAnchor="middle" fontSize={fDenFallback} fontWeight="bold" fill="#333">{timeSignature.beatUnit}</text>;
+          return <text x={noteX} y={noteY + stemLen} textAnchor="middle" fontSize={fDenFallback} fontWeight="bold" fill={textColor}>{timeSignature.beatUnit}</text>;
       }
     };
-    return (<g><text x={x} y={yNum} textAnchor="middle" fontSize={fNum} fontWeight="bold" fill="#333">{timeSignature.beats}</text><line x1={x - lineHalf} y1={yLine} x2={x + lineHalf} y2={yLine} stroke="#333" strokeWidth={strokeW} />{getNoteSymbolForDenominator()}</g>);
+    return (<g><text x={x} y={yNum} textAnchor="middle" fontSize={fNum} fontWeight="bold" fill={textColor}>{timeSignature.beats}</text><line x1={x - lineHalf} y1={yLine} x2={x + lineHalf} y2={yLine} stroke={textColor} strokeWidth={strokeW} />{getNoteSymbolForDenominator()}</g>);
   }
   return (
     <g>
-      <text x={x} y={yNum} textAnchor="middle" fontSize={fNum} fontWeight="bold" fill="#333">{timeSignature.beats}</text>
-      <line x1={x - lineHalf} y1={yLine} x2={x + lineHalf} y2={yLine} stroke="#333" strokeWidth={strokeW} />
-      <text x={x} y={yDen} textAnchor="middle" fontSize={fDen} fontWeight="bold" fill="#333">{timeSignature.beatUnit}</text>
+      <text x={x} y={yNum} textAnchor="middle" fontSize={fNum} fontWeight="bold" fill={textColor}>{timeSignature.beats}</text>
+      <line x1={x - lineHalf} y1={yLine} x2={x + lineHalf} y2={yLine} stroke={textColor} strokeWidth={strokeW} />
+      <text x={x} y={yDen} textAnchor="middle" fontSize={fDen} fontWeight="bold" fill={textColor}>{timeSignature.beatUnit}</text>
     </g>
   );
 }
@@ -101,9 +102,18 @@ export function FigurenotesView({
   figureBaseWidth = FIGURE_BASE_WIDTH,
   showStaffSpacerHandles = false,
   onStaffSpacerMouseDown,
+  themeColors,
 }) {
   const centerY = timelineHeight / 2;
   const beatsPerMeasure = timeSignature?.beats ?? 4;
+  const timeSigTextColor = themeColors?.textColor ?? '#333';
+  const timeSigNoteFill = themeColors?.noteFill ?? '#333';
+
+  /** Scale beat-box padding and barlines with Noodigraafika suurus so they match note size. */
+  const notationScale = Math.max(0.5, figurenotesSize / NOTATION_SIZE_REF);
+  const padVertical = Math.max(2, Math.round(4 * notationScale));
+  const barLineInset = Math.max(2, Math.round(5 * notationScale));
+  const barLineWidth = Math.max(2, Math.round(5 * notationScale));
 
   return (
     <>
@@ -132,13 +142,13 @@ export function FigurenotesView({
 
             {/* Taktide number – JO-võtit ei ole; skaleeritud figurenotesSize-ga, max 12px */}
             {showBarNumbers && sys.measureIndices.length > 0 && (
-              <text x={20} y={sys.yOffset + 12} fontSize={Math.min(12, Math.round(10 * (figurenotesSize / 16)))} fontWeight="bold" fill="#555" textAnchor="middle" fontFamily="sans-serif">
+              <text x={20} y={sys.yOffset + Math.max(10, barLineInset + 4)} fontSize={Math.min(12, Math.round(10 * (figurenotesSize / 16)))} fontWeight="bold" fill="#555" textAnchor="middle" fontFamily="sans-serif">
                 {sys.measureIndices[0] + 1}
               </text>
             )}
 
             {sys.systemIndex === 0 && (
-              <g transform={`translate(0, ${sys.yOffset})`}>{renderTimeSignature(timeSignature, timeSignatureMode, centerY, timeSignatureSize ?? 16)}</g>
+              <g transform={`translate(0, ${sys.yOffset})`}>{renderTimeSignature(timeSignature, timeSignatureMode, centerY, timeSignatureSize ?? 16, timeSigTextColor, timeSigNoteFill)}</g>
             )}
 
             {sys.measureIndices.map((measureIdx, j) => {
@@ -187,7 +197,7 @@ export function FigurenotesView({
                 return beatWidth / slotsPerBeat;
               };
 
-              const boxHeight = timelineHeight - 8;
+              const boxHeight = timelineHeight - 2 * padVertical;
               /** User-chosen notation size (px). Shapes are never stretched or capped by beat width — kept intact. */
               const figureSizeBase = Math.max(12, Math.min(96, figurenotesSize));
               const figureSizeBaseForMeasure = figureSizeBase;
@@ -200,7 +210,7 @@ export function FigurenotesView({
               };
 
               /* Bottom of beat box row for long-duration rectangle (so long notes don't overlap barlines). */
-              const beatBoxBottomY = sys.yOffset + timelineHeight - 4;
+              const beatBoxBottomY = sys.yOffset + timelineHeight - padVertical;
 
               const renderFigurenote = (note, x, y, noteIndex, noteWidth, figureSize) => {
                 const pitch = String(note.pitch || '').toUpperCase().replace('H', 'B');
@@ -215,12 +225,12 @@ export function FigurenotesView({
                       : dur === '1/8' ? 'eighth'
                         : dur === '1/16' || dur === '1/32' ? 'sixteenth'
                           : 'quarter';
-                /* Long rhythm (1/2, 1/1): one rectangle at bottom of beat box, under figure layer — no overlap with barline. */
+                /* Long rhythm (1/2, 1/1): rectangle starts at middle of figure, extends right: base size/2 + size/4 per longer rhythm. */
                 const hasTail = dur === '1/2' || dur === '1/1';
                 const tailSize = hasTail ? size / 2 : 0;
                 const numTailSquares = dur === '1/1' ? 2 : dur === '1/2' ? 1 : 0;
-                const totalTailWidth = numTailSquares * tailSize;
-                const figureCenterX = hasTail ? x - totalTailWidth / 2 : x;
+                const longRectWidth = hasTail ? size / 2 + numTailSquares * (size / 4) : 0;
+                const figureCenterX = x;
                 const stemLength = 26;
                 const stemX = figureCenterX + size / 2 + 1;
                 const stemY1 = y;
@@ -234,12 +244,12 @@ export function FigurenotesView({
                 const effectiveStroke = style.stroke ?? 'none';
                 const effectiveStrokeWidth = style.strokeWidth ?? 0;
 
-                /* Long-duration rectangle: square→rectangle at bottom of beat box, drawn under figure layer. */
+                /* Long-duration rectangle: left at middle of figure, width = size/2 + (size/4) per longer rhythm, at bottom of beat box, under figure layer. */
                 const longDurationRectEl = hasTail && numTailSquares > 0 && (
                   <rect
-                    x={figureCenterX - totalTailWidth / 2}
+                    x={figureCenterX}
                     y={beatBoxBottomY - tailSize}
-                    width={totalTailWidth}
+                    width={longRectWidth}
                     height={tailSize}
                     fill={fill}
                     stroke={effectiveStroke}
@@ -331,25 +341,25 @@ export function FigurenotesView({
               return (
                 <g key={measureIdx}>
                   {/* Taktikast + löögivõre */}
-                  <rect x={measureX} y={sys.yOffset + 4} width={measureWidth} height={timelineHeight - 8} fill="transparent" stroke="#c8c8c8" strokeWidth="1.5" />
+                  <rect x={measureX} y={sys.yOffset + padVertical} width={measureWidth} height={boxHeight} fill="transparent" stroke="#c8c8c8" strokeWidth="1.5" />
                   {Array.from({ length: Math.max(0, Math.ceil(beatsInMeasure) - 1) }, (_, b) => (
-                    <line key={`beat-${b}`} x1={measureX + (b + 1) * beatWidth} y1={sys.yOffset + 4} x2={measureX + (b + 1) * beatWidth} y2={sys.yOffset + timelineHeight - 4} stroke="#e0e0e0" strokeWidth="1" />
+                    <line key={`beat-${b}`} x1={measureX + (b + 1) * beatWidth} y1={sys.yOffset + padVertical} x2={measureX + (b + 1) * beatWidth} y2={sys.yOffset + timelineHeight - padVertical} stroke="#e0e0e0" strokeWidth="1" />
                   ))}
                   {/* Tahvel/sõrm: puudeala löögikastidele – noodi lisamine soovitud löögile */}
                   {onBeatSlotClick && Array.from({ length: Math.ceil(beatsInMeasure) }, (_, beatIndex) => (
                     <rect
                       key={`beat-hit-${beatIndex}`}
                       x={measureX + beatIndex * beatWidth}
-                      y={sys.yOffset + 4}
+                      y={sys.yOffset + padVertical}
                       width={beatWidth}
-                      height={timelineHeight - 8}
+                      height={boxHeight}
                       fill="transparent"
                       style={{ cursor: 'pointer' }}
                       onPointerDown={(e) => handleBeatSlot(beatIndex, e)}
                     />
                   ))}
                   {measureWidth < (LAYOUT.MEASURE_MIN_WIDTH || 28) && (
-                    <rect x={measureX - 1} y={sys.yOffset + 2} width={measureWidth + 2} height={timelineHeight - 4} fill="none" stroke="#dc2626" strokeWidth={2} strokeDasharray="4 2" rx={2} />
+                    <rect x={measureX - 1} y={sys.yOffset + 2} width={measureWidth + 2} height={timelineHeight - 2 * padVertical} fill="none" stroke="#dc2626" strokeWidth={2} strokeDasharray="4 2" rx={2} />
                   )}
                   {showLayoutBreakIcons && typeof onToggleLineBreakAfter === 'function' && (
                     <g className="cursor-pointer" onClick={(e) => { e.stopPropagation(); onToggleLineBreakAfter(measureIdx); }} style={{ pointerEvents: 'auto' }} title={translateLabel ? translateLabel('layout.lineBreakAfter') : 'Reavahetus selle takti järel'}>
@@ -357,13 +367,13 @@ export function FigurenotesView({
                       <path d={`M ${measureX + measureWidth / 2 - 4} ${sys.yOffset - 10} L ${measureX + measureWidth / 2} ${sys.yOffset - 14} L ${measureX + measureWidth / 2 + 4} ${sys.yOffset - 10}`} fill="none" stroke="#92400e" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
                     </g>
                   )}
-                  {j !== 0 && <line x1={measureX} y1={sys.yOffset + 5} x2={measureX} y2={sys.yOffset + timelineHeight - 5} stroke="#1a1a1a" strokeWidth={barLineWidth} />}
+                  {j !== 0 && <line x1={measureX} y1={sys.yOffset + barLineInset} x2={measureX} y2={sys.yOffset + timelineHeight - barLineInset} stroke="#1a1a1a" strokeWidth={barLineWidth} />}
                   {measureIdx === sys.measureIndices[sys.measureIndices.length - 1] && (
-                    <line x1={measureX + measureWidth} y1={sys.yOffset + 5} x2={measureX + measureWidth} y2={sys.yOffset + timelineHeight - 5} stroke="#1a1a1a" strokeWidth={barLineWidth} />
+                    <line x1={measureX + measureWidth} y1={sys.yOffset + barLineInset} x2={measureX + measureWidth} y2={sys.yOffset + timelineHeight - barLineInset} stroke="#1a1a1a" strokeWidth={barLineWidth} />
                   )}
                   {chords.filter(c => c.beatPosition >= measure.startBeat && c.beatPosition < measure.endBeat).map((chord) => {
                     const chordX = measureX + (chord.beatPosition - measure.startBeat) * beatWidth;
-                    const chordY = sys.yOffset + 8;
+                    const chordY = sys.yOffset + padVertical + 4;
                     return (
                       <g key={chord.id}>
                         <text x={chordX} y={chordY} textAnchor="start" fontSize={Math.round(14 * (figurenotesSize / 16))} fontWeight="bold" fill="#1a1a1a" fontFamily="sans-serif">{chord.chord}</text>
@@ -398,8 +408,8 @@ export function FigurenotesView({
                       const labelFontSize = Math.max(8, Math.round(figureSize * 0.625));
                       const labelY = noteY + figureSize * 0.5 + labelFontSize;
                       const bandLeft = figureCenterX - noteWidth / 2;
-                      const bandY = sys.yOffset + 6;
-                      const bandH = timelineHeight - 12;
+                      const bandY = sys.yOffset + padVertical + 2;
+                      const bandH = timelineHeight - 2 * (padVertical + 2);
                       const bandColor = getFigureColor(note.pitch);
                       return (
                         <g key={noteIdx} {...noteGroupProps}>

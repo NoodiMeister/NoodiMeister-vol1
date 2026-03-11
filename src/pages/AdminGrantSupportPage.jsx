@@ -3,9 +3,9 @@
  * Nõuab: sisselogitud kasutaja, kelle e-mail on ADMIN_EMAILS nimekirjas, ja administraatori parooli.
  * Parool tuleb vahetada iga 3 kuud.
  */
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Shield, Loader2, CheckCircle, AlertCircle, Lock, KeyRound } from 'lucide-react';
+import { Shield, Loader2, CheckCircle, AlertCircle, Lock, KeyRound, List, ExternalLink } from 'lucide-react';
 import { useNoodimeisterOptional } from '../store/NoodimeisterContext';
 import * as authStorage from '../services/authStorage';
 
@@ -52,6 +52,8 @@ export default function AdminGrantSupportPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [result, setResult] = useState(null);
+  const [supportList, setSupportList] = useState([]);
+  const [listLoading, setListLoading] = useState(false);
 
   useEffect(() => {
     if (!email) {
@@ -206,6 +208,7 @@ export default function AdminGrantSupportPage() {
       if (res.ok && data.ok) {
         setResult(data);
         setEmailsText('');
+        fetchSupportList();
       } else {
         setError(data.error || 'Viga');
       }
@@ -219,6 +222,24 @@ export default function AdminGrantSupportPage() {
     saveToken('');
     setStep(email ? 'enterPassword' : 'notLoggedIn');
   };
+
+  const fetchSupportList = useCallback(() => {
+    if (!token) return;
+    setListLoading(true);
+    fetch(`${getApiBase()}/api/admin/list-support`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.list) setSupportList(data.list);
+      })
+      .catch(() => setSupportList([]))
+      .finally(() => setListLoading(false));
+  }, [token]);
+
+  useEffect(() => {
+    if (step === 'grant' && token) fetchSupportList();
+  }, [step, token, fetchSupportList]);
 
   if (step === 'loading') {
     return (
@@ -357,11 +378,59 @@ export default function AdminGrantSupportPage() {
             <>
               <h1 className="text-xl font-bold text-slate-900 dark:text-white mb-2 flex items-center gap-2">
                 <Shield className="w-6 h-6 text-amber-600" />
-                Anna täisfunktsioon (e-arve / organisatsioon)
+                Administraatori töölaud
               </h1>
-              <p className="text-sm text-slate-600 dark:text-white/70 mb-6">
-                Sisesta organisatsiooni kasutajate e-mailid ja kehtivuse lõppkuupäev. Väljalogimiseks administraatori seansi: <button type="button" onClick={handleLogout} className="underline text-amber-600 hover:text-amber-500">logi administraatorist välja</button>.
+              <p className="text-sm text-slate-600 dark:text-white/70 mb-4">
+                Väljalogimiseks: <button type="button" onClick={handleLogout} className="underline text-amber-600 hover:text-amber-500">logi administraatorist välja</button>.
               </p>
+
+              <div className="mb-6 p-4 rounded-xl bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-white/10">
+                <h2 className="text-sm font-semibold text-slate-700 dark:text-white mb-2 flex items-center gap-2">
+                  <ExternalLink className="w-4 h-4" /> Rakenduse lingid
+                </h2>
+                <div className="flex flex-wrap gap-2 text-sm">
+                  <Link to="/tood" className="px-3 py-1.5 rounded-lg bg-white dark:bg-zinc-700 text-slate-700 dark:text-white border border-slate-200 dark:border-white/20 hover:bg-amber-50 dark:hover:bg-zinc-600" target="_blank" rel="noopener noreferrer">Minu tööd</Link>
+                  <Link to="/app" className="px-3 py-1.5 rounded-lg bg-white dark:bg-zinc-700 text-slate-700 dark:text-white border border-slate-200 dark:border-white/20 hover:bg-amber-50 dark:hover:bg-zinc-600" target="_blank" rel="noopener noreferrer">Tööriist (noodiredaktor)</Link>
+                  <Link to="/hinnakiri" className="px-3 py-1.5 rounded-lg bg-white dark:bg-zinc-700 text-slate-700 dark:text-white border border-slate-200 dark:border-white/20 hover:bg-amber-50 dark:hover:bg-zinc-600" target="_blank" rel="noopener noreferrer">Hinnakiri</Link>
+                  <Link to="/toeta" className="px-3 py-1.5 rounded-lg bg-white dark:bg-zinc-700 text-slate-700 dark:text-white border border-slate-200 dark:border-white/20 hover:bg-amber-50 dark:hover:bg-zinc-600" target="_blank" rel="noopener noreferrer">Toeta</Link>
+                  <Link to="/konto" className="px-3 py-1.5 rounded-lg bg-white dark:bg-zinc-700 text-slate-700 dark:text-white border border-slate-200 dark:border-white/20 hover:bg-amber-50 dark:hover:bg-zinc-600" target="_blank" rel="noopener noreferrer">Minu konto</Link>
+                  <Link to="/" className="px-3 py-1.5 rounded-lg bg-white dark:bg-zinc-700 text-slate-700 dark:text-white border border-slate-200 dark:border-white/20 hover:bg-amber-50 dark:hover:bg-zinc-600" target="_blank" rel="noopener noreferrer">Avaleht</Link>
+                </div>
+              </div>
+
+              <div className="mb-6">
+                <h2 className="text-sm font-semibold text-slate-700 dark:text-white mb-2 flex items-center gap-2">
+                  <List className="w-4 h-4" /> Toetuse saanud kontod
+                </h2>
+                {listLoading ? (
+                  <p className="text-sm text-slate-500">Laen nimekirja…</p>
+                ) : supportList.length === 0 ? (
+                  <p className="text-sm text-slate-500 dark:text-white/60">Ühtegi toetust pole veel antud või nimekiri on tühi.</p>
+                ) : (
+                  <div className="rounded-xl border border-slate-200 dark:border-white/20 overflow-hidden">
+                    <table className="w-full text-sm text-left">
+                      <thead className="bg-slate-100 dark:bg-zinc-800 text-slate-600 dark:text-white/80">
+                        <tr>
+                          <th className="px-3 py-2 font-medium">E-mail</th>
+                          <th className="px-3 py-2 font-medium">Kehtib kuni</th>
+                          <th className="px-3 py-2 font-medium">Märkus</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-200 dark:divide-white/10">
+                        {supportList.map((row) => (
+                          <tr key={row.email} className="bg-white dark:bg-zinc-800/50">
+                            <td className="px-3 py-2 font-mono text-slate-800 dark:text-white">{row.email}</td>
+                            <td className="px-3 py-2 text-slate-600 dark:text-white/80">{row.supportUntil || '—'}</td>
+                            <td className="px-3 py-2 text-slate-500 dark:text-white/60 max-w-[180px] truncate" title={row.note || ''}>{row.note || '—'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
+              <h2 className="text-sm font-semibold text-slate-700 dark:text-white mb-2">Anna täisfunktsioon (e-arve / organisatsioon)</h2>
               <form onSubmit={handleGrant} className="space-y-4">
                 <div>
                   <label className="block text-sm font-semibold text-slate-700 dark:text-white mb-1">E-mailid (üks reale või komadega)</label>

@@ -4,7 +4,7 @@
  * Kui parool õige (või esialgne seadistamine): tagastab { ok: true, token }.
  * Esialgne seadistamine: kui parooli pole, vaja ka body.secret === ADMIN_SECRET.
  */
-import { isAdminEmail, getPasswordHash, getPasswordSalt, verifyPassword, setPassword, createJWT, adminStatus } from './_lib.js';
+import { isAdminEmailAsync, getPasswordHash, getPasswordSalt, verifyPassword, setPassword, createJWT, adminStatus } from './_lib.js';
 
 async function parseBody(req) {
   if (req.body && typeof req.body === 'object') return req.body;
@@ -41,7 +41,7 @@ export default async function handler(req, res) {
   if (!email) {
     return res.status(400).json({ error: 'email required' });
   }
-  if (!isAdminEmail(email)) {
+  if (!(await isAdminEmailAsync(email))) {
     return res.status(403).json({ error: 'Not an administrator' });
   }
 

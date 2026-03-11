@@ -1156,6 +1156,7 @@ function NoodiMeisterCore({ icons }) {
   const [pedagogicalPlayheadStyle, setPedagogicalPlayheadStyle] = useState('line'); // 'line' | 'violin' | 'smiley' | 'custom'
   const [pedagogicalPlayheadEmoji, setPedagogicalPlayheadEmoji] = useState('🎵'); // kasutub kui style === 'custom'; seadetes "Kursori karakter"
   const [pedagogicalPlayheadEmojiSize, setPedagogicalPlayheadEmojiSize] = useState(32); // HEV: 20–60 px
+  const [cursorLineStrokeWidth, setCursorLineStrokeWidth] = useState(4); // N-mode / reading cursor line thickness (1–8 px)
   const [pedagogicalPlayheadMovement, setPedagogicalPlayheadMovement] = useState('arch'); // 'arch' (distance-dependent) | 'horizontal'
   const [isExportingAnimation, setIsExportingAnimation] = useState(false);
   const [isExportingPdf, setIsExportingPdf] = useState(false);
@@ -2173,6 +2174,7 @@ function NoodiMeisterCore({ icons }) {
     pedagogicalPlayheadStyle,
     pedagogicalPlayheadEmoji,
     pedagogicalPlayheadEmojiSize,
+    cursorLineStrokeWidth,
     pedagogicalPlayheadMovement,
     chords,
     textBoxes,
@@ -2184,7 +2186,7 @@ function NoodiMeisterCore({ icons }) {
     pageDesignLayer,
     visibleStaves: visibleStaves.length === staves.length ? visibleStaves : staves.map(() => true),
     intermissionLabels
-  }), [staves, activeStaffIndex, staffYOffsets, measureStretchFactors, systemYOffsets, visibleStaves, intermissionLabels, timeSignature, timeSignatureMode, keySignature, staffLines, notationStyle, pixelsPerBeat, notationMode, instrumentNotationVariant, cursorPosition, addedMeasures, setupCompleted, songTitle, author, pickupEnabled, pickupQuantity, pickupDuration, pageOrientation, layoutMeasuresPerLine, layoutLineBreakBefore, layoutPageBreakBefore, layoutSystemGap, layoutPartsGap, layoutConnectedBarlines, layoutGlobalSpacingMultiplier, viewMode, partLayoutMeasuresPerLine, partLayoutLineBreakBefore, partLayoutPageBreakBefore, showPageNavigator, pageFlowDirection, visibleToolIds, tuningReferenceNote, tuningReferenceOctave, tuningReferenceHz, playNoteOnInsert, figurenotesSize, figurenotesStems, timeSignatureSize, showBarNumbers, showRhythmSyllables, showAllNoteLabels, enableEmojiOverlays, joClefStaffPosition, relativeNotationShowKeySignature, relativeNotationShowTraditionalClef, isPedagogicalProject, pedagogicalAudioBpm, pedagogicalAudioPlaybackRate, pedagogicalPlayheadStyle, pedagogicalPlayheadEmoji, pedagogicalPlayheadEmojiSize, pedagogicalPlayheadMovement, chords, textBoxes, documentFontFamily, lyricFontFamily, pageDesignDataUrl, pageDesignOpacity, pageDesignFit, pageDesignLayer]);
+  }), [staves, activeStaffIndex, staffYOffsets, measureStretchFactors, systemYOffsets, visibleStaves, intermissionLabels, timeSignature, timeSignatureMode, keySignature, staffLines, notationStyle, pixelsPerBeat, notationMode, instrumentNotationVariant, cursorPosition, addedMeasures, setupCompleted, songTitle, author, pickupEnabled, pickupQuantity, pickupDuration, pageOrientation, layoutMeasuresPerLine, layoutLineBreakBefore, layoutPageBreakBefore, layoutSystemGap, layoutPartsGap, layoutConnectedBarlines, layoutGlobalSpacingMultiplier, viewMode, partLayoutMeasuresPerLine, partLayoutLineBreakBefore, partLayoutPageBreakBefore, showPageNavigator, pageFlowDirection, visibleToolIds, tuningReferenceNote, tuningReferenceOctave, tuningReferenceHz, playNoteOnInsert, figurenotesSize, figurenotesStems, timeSignatureSize, showBarNumbers, showRhythmSyllables, showAllNoteLabels, enableEmojiOverlays, joClefStaffPosition, relativeNotationShowKeySignature, relativeNotationShowTraditionalClef, isPedagogicalProject, pedagogicalAudioBpm, pedagogicalAudioPlaybackRate, pedagogicalPlayheadStyle, pedagogicalPlayheadEmoji, pedagogicalPlayheadEmojiSize, cursorLineStrokeWidth, pedagogicalPlayheadMovement, chords, textBoxes, documentFontFamily, lyricFontFamily, pageDesignDataUrl, pageDesignOpacity, pageDesignFit, pageDesignLayer]);
 
   const saveToStorageSync = useCallback(() => {
     try {
@@ -2265,6 +2267,7 @@ function NoodiMeisterCore({ icons }) {
     pedagogicalPlayheadStyle,
     pedagogicalPlayheadEmoji,
     pedagogicalPlayheadEmojiSize,
+    cursorLineStrokeWidth,
     pedagogicalPlayheadMovement,
     staves,
     activeStaffIndex,
@@ -2280,7 +2283,7 @@ function NoodiMeisterCore({ icons }) {
     pageDesignLayer,
     visibleStaves: visibleStaves.length === staves.length ? visibleStaves : staves.map(() => true),
     intermissionLabels
-  }), [songTitle, author, notationStyle, notationMode, isPedagogicalProject, timeSignature, timeSignatureMode, keySignature, staffLines, pixelsPerBeat, instrumentNotationVariant, pickupEnabled, pickupQuantity, pickupDuration, setupCompleted, cursorPosition, addedMeasures, pageOrientation, layoutMeasuresPerLine, layoutLineBreakBefore, layoutPageBreakBefore, layoutSystemGap, layoutPartsGap, layoutConnectedBarlines, layoutGlobalSpacingMultiplier, viewMode, partLayoutMeasuresPerLine, partLayoutLineBreakBefore, partLayoutPageBreakBefore, showPageNavigator, pageFlowDirection, visibleToolIds, tuningReferenceNote, tuningReferenceOctave, tuningReferenceHz, playNoteOnInsert, figurenotesSize, figurenotesStems, timeSignatureSize, showBarNumbers, showRhythmSyllables, showAllNoteLabels, enableEmojiOverlays, joClefStaffPosition, relativeNotationShowKeySignature, relativeNotationShowTraditionalClef, pedagogicalAudioBpm, pedagogicalAudioPlaybackRate, pedagogicalPlayheadStyle, pedagogicalPlayheadEmoji, pedagogicalPlayheadEmojiSize, pedagogicalPlayheadMovement, staves, activeStaffIndex, staffYOffsets, measureStretchFactors, systemYOffsets, visibleStaves, intermissionLabels, chords, textBoxes, pageDesignDataUrl, pageDesignOpacity, pageDesignFit, pageDesignLayer]);
+  }), [songTitle, author, notationStyle, notationMode, isPedagogicalProject, timeSignature, timeSignatureMode, keySignature, staffLines, pixelsPerBeat, instrumentNotationVariant, pickupEnabled, pickupQuantity, pickupDuration, setupCompleted, cursorPosition, addedMeasures, pageOrientation, layoutMeasuresPerLine, layoutLineBreakBefore, layoutPageBreakBefore, layoutSystemGap, layoutPartsGap, layoutConnectedBarlines, layoutGlobalSpacingMultiplier, viewMode, partLayoutMeasuresPerLine, partLayoutLineBreakBefore, partLayoutPageBreakBefore, showPageNavigator, pageFlowDirection, visibleToolIds, tuningReferenceNote, tuningReferenceOctave, tuningReferenceHz, playNoteOnInsert, figurenotesSize, figurenotesStems, timeSignatureSize, showBarNumbers, showRhythmSyllables, showAllNoteLabels, enableEmojiOverlays, joClefStaffPosition, relativeNotationShowKeySignature, relativeNotationShowTraditionalClef, pedagogicalAudioBpm, pedagogicalAudioPlaybackRate, pedagogicalPlayheadStyle, pedagogicalPlayheadEmoji, pedagogicalPlayheadEmojiSize, cursorLineStrokeWidth, pedagogicalPlayheadMovement, staves, activeStaffIndex, staffYOffsets, measureStretchFactors, systemYOffsets, visibleStaves, intermissionLabels, chords, textBoxes, pageDesignDataUrl, pageDesignOpacity, pageDesignFit, pageDesignLayer]);
 
   // Download project file (future: replace with upload to Google Drive / OneDrive)
   const downloadProject = useCallback(() => {
@@ -2348,6 +2351,7 @@ function NoodiMeisterCore({ icons }) {
       if (data.pedagogicalPlayheadEmoji != null) setPedagogicalPlayheadEmoji(data.pedagogicalPlayheadEmoji);
       if (data.pedagogicalPlayheadEmojiSize != null) setPedagogicalPlayheadEmojiSize(Math.max(20, Math.min(60, data.pedagogicalPlayheadEmojiSize)));
       if (data.pedagogicalPlayheadMovement === 'arch' || data.pedagogicalPlayheadMovement === 'horizontal') setPedagogicalPlayheadMovement(data.pedagogicalPlayheadMovement);
+      if (data.cursorLineStrokeWidth != null) setCursorLineStrokeWidth(Math.max(1, Math.min(8, data.cursorLineStrokeWidth)));
       if (data.pedagogicalAudioData) {
         try {
           const binary = atob(data.pedagogicalAudioData);
@@ -2598,6 +2602,7 @@ function NoodiMeisterCore({ icons }) {
         if (data.pedagogicalPlayheadEmoji != null) setPedagogicalPlayheadEmoji(data.pedagogicalPlayheadEmoji);
         if (data.pedagogicalPlayheadEmojiSize != null) setPedagogicalPlayheadEmojiSize(Math.max(20, Math.min(60, data.pedagogicalPlayheadEmojiSize)));
         if (data.pedagogicalPlayheadMovement === 'arch' || data.pedagogicalPlayheadMovement === 'horizontal') setPedagogicalPlayheadMovement(data.pedagogicalPlayheadMovement);
+        if (data.cursorLineStrokeWidth != null) setCursorLineStrokeWidth(Math.max(1, Math.min(8, data.cursorLineStrokeWidth)));
         if (data.pedagogicalAudioData) {
           try {
             const binary = atob(data.pedagogicalAudioData);
@@ -2860,6 +2865,7 @@ function NoodiMeisterCore({ icons }) {
           if (data.pedagogicalPlayheadEmoji != null) setPedagogicalPlayheadEmoji(data.pedagogicalPlayheadEmoji);
           if (data.pedagogicalPlayheadEmojiSize != null) setPedagogicalPlayheadEmojiSize(Math.max(20, Math.min(60, data.pedagogicalPlayheadEmojiSize)));
           if (data.pedagogicalPlayheadMovement === 'arch' || data.pedagogicalPlayheadMovement === 'horizontal') setPedagogicalPlayheadMovement(data.pedagogicalPlayheadMovement);
+          if (data.cursorLineStrokeWidth != null) setCursorLineStrokeWidth(Math.max(1, Math.min(8, data.cursorLineStrokeWidth)));
           if (data.pedagogicalAudioData) {
             try {
               const binary = atob(data.pedagogicalAudioData);
@@ -3807,16 +3813,11 @@ function NoodiMeisterCore({ icons }) {
           const step = e.code === 'ArrowUp' ? 1 : -1;
           const firstIdx = selectionStart >= 0 && selectionEnd >= 0 ? Math.min(selectionStart, selectionEnd) : selectedNoteIndex;
           const firstNote = notes[firstIdx];
-          // Figuurnotatsioon: nool üles/alla muudab kujundit (oktavi); tavaline noodikirje: Shift/Cmd+noolega oktav, ilma shiftita diatooniline samm
-          if (notationStyle === 'FIGURENOTES') {
+          // Arrow Up/Down = one note up/down (pitch class in key, same octave). Shift+Arrow = octave change.
+          if (e.shiftKey || modKey) {
             applyToSelectedNotes(n => ({ octave: shiftOctave(n.octave, dir) }));
             if (firstNote && !firstNote.isRest && playNoteOnInsert) {
-              playPianoNote(firstNote.pitch, shiftOctave(firstNote.octave, dir), 0);
-            }
-          } else if (e.shiftKey || modKey) {
-            applyToSelectedNotes(n => ({ octave: shiftOctave(n.octave, dir) }));
-            if (firstNote && !firstNote.isRest && playNoteOnInsert) {
-              playPianoNote(firstNote.pitch, shiftOctave(firstNote.octave, dir), 0);
+              playPianoNote(firstNote.pitch, shiftOctave(firstNote.octave, dir), firstNote.accidental ?? 0);
             }
           } else {
             applyToSelectedNotes((n) => {
@@ -3912,7 +3913,7 @@ function NoodiMeisterCore({ icons }) {
           setCursorPosition(prev => Math.min(maxCursor, prev + cursorStep));
           return;
         }
-        // Cursor on a note (moved back with Arrow L/R): Arrow Up/Down = pitch/position; Shift+Arrow = octave; Figurenotes = shape
+        // Cursor on a note: Arrow Up/Down = one note up/down (pitch class); Shift+Arrow = octave change
         if (e.code === 'ArrowUp' || e.code === 'ArrowDown') {
           const noteIdx = getNoteIndexAtCursor();
           if (noteIdx >= 0) {
@@ -3920,17 +3921,12 @@ function NoodiMeisterCore({ icons }) {
             const dir = e.code === 'ArrowUp' ? 1 : -1;
             saveToHistory(notes);
             if (e.shiftKey || modKey) {
-              const newOctave = shiftOctave(notes[noteIdx].octave, dir);
+              const note = notes[noteIdx];
+              const newOctave = shiftOctave(note.octave, dir);
               setNotes(prev => prev.map((n, i) => i === noteIdx ? { ...n, octave: newOctave } : n));
-              setGhostPitch(notes[noteIdx].pitch);
+              setGhostPitch(note.pitch);
               setGhostOctave(newOctave);
-              if (playNoteOnInsert) playPianoNote(notes[noteIdx].pitch, newOctave, 0);
-            } else if (notationStyle === 'FIGURENOTES') {
-              const newOctave = shiftOctave(notes[noteIdx].octave, dir);
-              setNotes(prev => prev.map((n, i) => i === noteIdx ? { ...n, octave: newOctave } : n));
-              setGhostPitch(notes[noteIdx].pitch);
-              setGhostOctave(newOctave);
-              if (playNoteOnInsert) playPianoNote(notes[noteIdx].pitch, newOctave, 0);
+              if (playNoteOnInsert) playPianoNote(note.pitch, newOctave, note.accidental ?? 0);
             } else {
               const note = notes[noteIdx];
               const updated = shiftPitchClassSameOctave(note.pitch, note.octave, note.accidental ?? 0, dir, keySignature);
@@ -4254,35 +4250,23 @@ function NoodiMeisterCore({ icons }) {
 
       // Normal input mode (when N is ON) – Ghost note + add
       if (!activeToolbox && noteInputMode) {
-        // Arrow Up/Down – Figuurnotatsioonis oktav (kujund), muul viisil diatooniline samm ghostil
+        // Arrow Up/Down = one note up/down (pitch class in key). Shift+Arrow = octave change.
         if (e.code === 'ArrowUp' && !e.shiftKey) {
           e.preventDefault();
-          if (notationStyle === 'FIGURENOTES') {
-            const newOct = shiftOctave(ghostOctave, 1);
-            setGhostOctave(newOct);
-            if (playNoteOnInsert) playPianoNote(ghostPitch, newOct, 0);
-          } else {
-            const next = shiftPitchClassSameOctave(ghostPitch, ghostOctave, ghostAccidental, 1, keySignature);
-            setGhostPitch(next.pitch);
-            setGhostOctave(next.octave);
-            setGhostAccidental(next.accidental ?? 0);
-            if (playNoteOnInsert) playPianoNote(next.pitch, next.octave, next.accidental ?? 0);
-          }
+          const next = shiftPitchClassSameOctave(ghostPitch, ghostOctave, ghostAccidental, 1, keySignature);
+          setGhostPitch(next.pitch);
+          setGhostOctave(next.octave);
+          setGhostAccidental(next.accidental ?? 0);
+          if (playNoteOnInsert) playPianoNote(next.pitch, next.octave, next.accidental ?? 0);
           return;
         }
         if (e.code === 'ArrowDown' && !e.shiftKey) {
           e.preventDefault();
-          if (notationStyle === 'FIGURENOTES') {
-            const newOct = shiftOctave(ghostOctave, -1);
-            setGhostOctave(newOct);
-            if (playNoteOnInsert) playPianoNote(ghostPitch, newOct, 0);
-          } else {
-            const next = shiftPitchClassSameOctave(ghostPitch, ghostOctave, ghostAccidental, -1, keySignature);
-            setGhostPitch(next.pitch);
-            setGhostOctave(next.octave);
-            setGhostAccidental(next.accidental ?? 0);
-            if (playNoteOnInsert) playPianoNote(next.pitch, next.octave, next.accidental ?? 0);
-          }
+          const next = shiftPitchClassSameOctave(ghostPitch, ghostOctave, ghostAccidental, -1, keySignature);
+          setGhostPitch(next.pitch);
+          setGhostOctave(next.octave);
+          setGhostAccidental(next.accidental ?? 0);
+          if (playNoteOnInsert) playPianoNote(next.pitch, next.octave, next.accidental ?? 0);
           return;
         }
         // Shift+Arrow Up/Down – octave jump on ghost note (traditional)
@@ -4465,29 +4449,31 @@ function NoodiMeisterCore({ icons }) {
     pdfExportOptionsRef.current = { pageFlowDirection, pageWidth };
   }, [pageFlowDirection, pageWidth]);
   const a4PageHeightPx = (pageWidth || LAYOUT.PAGE_WIDTH_MIN) * LAYOUT.A4_HEIGHT_RATIO;
+  /** Figurenotes row height (beat-box / line) scales with Noodigraafika suurus so barlines and box match note size. */
+  const figurenotesRowHeight = Math.max(FIGURE_ROW_HEIGHT, Math.round(FIGURE_ROW_HEIGHT * figurenotesSize / 75));
   const logicalContentHeight = useMemo(() => {
     if (notationStyle === 'FIGURENOTES') {
-      const data = { measures, timeSignature, staffSpacing: FIGURE_ROW_HEIGHT + layoutSystemGap, globalSpacingMultiplier: layoutGlobalSpacingMultiplier, boxesPerRow: effectiveLayoutMeasuresPerLine || 4, pageWidth: pageWidth || LAYOUT.PAGE_WIDTH_MIN, pageHeight: a4PageHeightPx, lineBreakBefore: effectiveLayoutLineBreakBefore, pageBreakBefore: effectiveLayoutPageBreakBefore };
+      const data = { measures, timeSignature, staffSpacing: figurenotesRowHeight + layoutSystemGap, globalSpacingMultiplier: layoutGlobalSpacingMultiplier, boxesPerRow: effectiveLayoutMeasuresPerLine || 4, pageWidth: pageWidth || LAYOUT.PAGE_WIDTH_MIN, pageHeight: a4PageHeightPx, lineBreakBefore: effectiveLayoutLineBreakBefore, pageBreakBefore: effectiveLayoutPageBreakBefore };
       const sys = calculateLayout('figure', pageOrientation === 'landscape' ? 'landscape' : 'portrait', data);
       const lastY = sys.length > 0 ? sys[sys.length - 1].yOffset + (systemYOffsets[sys.length - 1] ?? 0) : 0;
-      return sys.length > 0 ? lastY + FIGURE_ROW_HEIGHT + 40 : FIGURE_ROW_HEIGHT + 40;
+      return sys.length > 0 ? lastY + figurenotesRowHeight + 40 : figurenotesRowHeight + 40;
     }
     const opts = { measuresPerLine: effectiveLayoutMeasuresPerLine, lineBreakBefore: effectiveLayoutLineBreakBefore, pageBreakBefore: effectiveLayoutPageBreakBefore, systemGap: layoutSystemGap, staffCount: staves.length, measureStretchFactors, globalSpacingMultiplier: layoutGlobalSpacingMultiplier, pageHeight: a4PageHeightPx };
     const sys = computeLayout(measures, timeSignature, pixelsPerBeat, pageWidth || LAYOUT.PAGE_WIDTH_MIN, opts);
     const n = staves.length || 1;
     const lastY = sys.length > 0 ? sys[sys.length - 1].yOffset + (systemYOffsets[sys.length - 1] ?? 0) : 0;
     return sys.length > 0 ? lastY + n * getStaffHeight() + 40 : n * getStaffHeight() + 40;
-  }, [notationStyle, measures, timeSignature, pixelsPerBeat, pageWidth, pageOrientation, effectiveLayoutMeasuresPerLine, effectiveLayoutLineBreakBefore, effectiveLayoutPageBreakBefore, layoutSystemGap, layoutGlobalSpacingMultiplier, staves.length, measureStretchFactors, systemYOffsets, a4PageHeightPx]);
+  }, [notationStyle, measures, timeSignature, pixelsPerBeat, pageWidth, pageOrientation, effectiveLayoutMeasuresPerLine, effectiveLayoutLineBreakBefore, effectiveLayoutPageBreakBefore, layoutSystemGap, layoutGlobalSpacingMultiplier, staves.length, measureStretchFactors, systemYOffsets, a4PageHeightPx, figurenotesRowHeight, figurenotesSize]);
   const systemsForScore = useMemo(() => {
     if (notationStyle === 'FIGURENOTES') {
-      const data = { measures, timeSignature, staffSpacing: FIGURE_ROW_HEIGHT + layoutSystemGap, globalSpacingMultiplier: layoutGlobalSpacingMultiplier, boxesPerRow: effectiveLayoutMeasuresPerLine || 4, pageWidth: pageWidth || LAYOUT.PAGE_WIDTH_MIN, pageHeight: a4PageHeightPx, lineBreakBefore: effectiveLayoutLineBreakBefore, pageBreakBefore: effectiveLayoutPageBreakBefore };
+      const data = { measures, timeSignature, staffSpacing: figurenotesRowHeight + layoutSystemGap, globalSpacingMultiplier: layoutGlobalSpacingMultiplier, boxesPerRow: effectiveLayoutMeasuresPerLine || 4, pageWidth: pageWidth || LAYOUT.PAGE_WIDTH_MIN, pageHeight: a4PageHeightPx, lineBreakBefore: effectiveLayoutLineBreakBefore, pageBreakBefore: effectiveLayoutPageBreakBefore };
       const raw = calculateLayout('figure', pageOrientation === 'landscape' ? 'landscape' : 'portrait', data);
       return raw.map((s, i) => ({ ...s, yOffset: s.yOffset + (systemYOffsets[i] ?? 0) }));
     }
     const opts = { measuresPerLine: effectiveLayoutMeasuresPerLine, lineBreakBefore: effectiveLayoutLineBreakBefore, pageBreakBefore: effectiveLayoutPageBreakBefore, systemGap: layoutSystemGap, staffCount: staves.length, measureStretchFactors, globalSpacingMultiplier: layoutGlobalSpacingMultiplier, pageHeight: a4PageHeightPx };
     const raw = computeLayout(measures, timeSignature, pixelsPerBeat, pageWidth || LAYOUT.PAGE_WIDTH_MIN, opts);
     return raw.map((s, i) => ({ ...s, yOffset: s.yOffset + (systemYOffsets[i] ?? 0) }));
-  }, [notationStyle, measures, timeSignature, pixelsPerBeat, pageWidth, pageOrientation, effectiveLayoutMeasuresPerLine, effectiveLayoutLineBreakBefore, effectiveLayoutPageBreakBefore, layoutSystemGap, layoutGlobalSpacingMultiplier, staves.length, measureStretchFactors, systemYOffsets, a4PageHeightPx]);
+  }, [notationStyle, measures, timeSignature, pixelsPerBeat, pageWidth, pageOrientation, effectiveLayoutMeasuresPerLine, effectiveLayoutLineBreakBefore, effectiveLayoutPageBreakBefore, layoutSystemGap, layoutGlobalSpacingMultiplier, staves.length, measureStretchFactors, systemYOffsets, a4PageHeightPx, figurenotesRowHeight]);
   useEffect(() => { systemsForScoreRef.current = systemsForScore; }, [systemsForScore]);
   // Nutikas fookus: ainult valitud read; vähem ridu = suurem rea kõrgus (HEV/solfedž)
   const visibleStaffList = useMemo(() => {
@@ -4499,7 +4485,7 @@ function NoodiMeisterCore({ icons }) {
   }, [staves, visibleStaves]);
   const FOCUS_STAFF_HEIGHT = 280; // Kui osa ridu peidetud, suurendatakse nähtavad read (HEV/solfedž)
   const effectiveStaffHeight = notationStyle === 'FIGURENOTES'
-    ? FIGURE_ROW_HEIGHT
+    ? figurenotesRowHeight
     : (visibleStaffList.length > 0 && visibleStaffList.length < staves.length
       ? FOCUS_STAFF_HEIGHT
       : getStaffHeight());
@@ -6273,6 +6259,40 @@ function NoodiMeisterCore({ icons }) {
                       })}
                     </div>
                   )}
+                  {activeToolbox === 'notehead' && (
+                    <div className="mt-3 pt-3 border-t border-amber-200 w-full space-y-3">
+                      <div className="text-xs font-bold text-amber-900 uppercase">{t('cursor.rulerTitle')}</div>
+                      <div className="flex flex-col gap-2">
+                        <label className="flex items-center gap-2">
+                          <span className="text-xs font-medium text-amber-900 shrink-0">{t('cursor.lineThickness')}</span>
+                          <input
+                            type="range"
+                            min={1}
+                            max={8}
+                            step={1}
+                            value={cursorLineStrokeWidth}
+                            onChange={(e) => { const v = parseInt(e.target.value, 10); if (!isNaN(v)) { dirtyRef.current = true; setCursorLineStrokeWidth(Math.max(1, Math.min(8, v))); } }}
+                            className="flex-1 h-2 rounded-lg appearance-none bg-amber-100 accent-amber-600"
+                          />
+                          <span className="text-xs text-amber-800 w-6">{cursorLineStrokeWidth} px</span>
+                        </label>
+                        <label className="flex items-center gap-2">
+                          <span className="text-xs font-medium text-amber-900 shrink-0">{t('cursor.playheadSize')}</span>
+                          <input
+                            type="range"
+                            min={20}
+                            max={60}
+                            step={2}
+                            value={pedagogicalPlayheadEmojiSize}
+                            onChange={(e) => { const v = parseInt(e.target.value, 10); if (!isNaN(v)) { dirtyRef.current = true; setPedagogicalPlayheadEmojiSize(Math.max(20, Math.min(60, v))); } }}
+                            className="flex-1 h-2 rounded-lg appearance-none bg-amber-100 accent-amber-600"
+                          />
+                          <span className="text-xs text-amber-800 w-10">{pedagogicalPlayheadEmojiSize} px</span>
+                        </label>
+                      </div>
+                      <p className="text-[10px] text-amber-600">{t('cursor.rulerHint')}</p>
+                    </div>
+                  )}
                   {activeToolbox === 'clefs' && toolboxes.clefs?.options && (
                     <div className="grid grid-cols-2 gap-2" role="group" aria-label={t('toolbox.clefs')}>
                       {(toolboxes.clefs.options.filter((o) => o.value !== 'jo' || notationMode === 'vabanotatsioon')).map((option) => {
@@ -7010,6 +7030,7 @@ function NoodiMeisterCore({ icons }) {
                   pedagogicalPlayheadStyle={pedagogicalPlayheadStyle}
                   pedagogicalPlayheadEmoji={pedagogicalPlayheadEmoji}
                   pedagogicalPlayheadEmojiSize={pedagogicalPlayheadEmojiSize}
+                  cursorLineStrokeWidth={cursorLineStrokeWidth}
                   pedagogicalPlayheadMovement={pedagogicalPlayheadMovement}
                   isPedagogicalAudioPlaying={isPedagogicalAudioPlaying}
                   isExportingAnimation={isExportingAnimation}
@@ -7303,7 +7324,7 @@ function getFingeringForNote(pitch, octave, instrumentId) {
 }
 
 // Timeline Component – multi-system layout (VexFlow loogika). (PAGE_BREAK_GAP on defineeritud üleval.)
-function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, pageWidth, cursorPosition, notationMode, staffLines, clefType, keySignature = 'C', relativeNotationShowKeySignature = false, relativeNotationShowTraditionalClef = false, onJoClefPositionChange, joClefFocused = false, onJoClefFocus, instrument = 'single-staff-treble', instrumentNotationVariant = 'standard', instrumentConfig = {}, showBarNumbers = true, showRhythmSyllables = false, joClefStaffPosition: joClefStaffPositionProp, showAllNoteLabels = false, enableEmojiOverlays = true, onNoteTeacherLabelChange, onNoteLabelClick, chords = [], isDotted, isRest, selectedDuration, noteInputMode, selectedNoteIndex, isNoteSelected, notes: allNotes, onStaffAddNote, onNoteClick, onNotePitchChange, ghostPitch, ghostOctave, onFigureBeatClick, notationStyle, layoutMeasuresPerLine = 4, layoutLineBreakBefore = [], layoutPageBreakBefore = [], layoutSystemGap = 120, layoutPartsGap, layoutConnectedBarlines = false, staffIndexInScore = 0, systemTotalHeight, layoutGlobalSpacingMultiplier = 1, systems: systemsProp, baseYOffset = 0, isActiveStaff = true, staffCount = 1, staffHeight: staffHeightProp, figurenotesSize = 16, figurenotesStems = false, timeSignatureSize = 16, themeColors: themeColorsProp, pedagogicalPlayheadStyle = 'line', pedagogicalPlayheadEmoji = '🎵', pedagogicalPlayheadEmojiSize = 32, pedagogicalPlayheadMovement = 'arch', isPedagogicalAudioPlaying = false, isExportingAnimation = false, exportCursorRef, scoreContainerRef, pageFlowDirection = 'vertical', isFirstInBraceGroup = false, braceGroupSize = 0, lyricFontFamily = 'sans-serif', translateLabel, showLayoutBreakIcons = false, showStaffSpacerHandles = false, onSystemYOffsetChange, onToggleLineBreakAfter }) {
+function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, pageWidth, cursorPosition, notationMode, staffLines, clefType, keySignature = 'C', relativeNotationShowKeySignature = false, relativeNotationShowTraditionalClef = false, onJoClefPositionChange, joClefFocused = false, onJoClefFocus, instrument = 'single-staff-treble', instrumentNotationVariant = 'standard', instrumentConfig = {}, showBarNumbers = true, showRhythmSyllables = false, joClefStaffPosition: joClefStaffPositionProp, showAllNoteLabels = false, enableEmojiOverlays = true, onNoteTeacherLabelChange, onNoteLabelClick, chords = [], isDotted, isRest, selectedDuration, noteInputMode, selectedNoteIndex, isNoteSelected, notes: allNotes, onStaffAddNote, onNoteClick, onNotePitchChange, ghostPitch, ghostOctave, onFigureBeatClick, notationStyle, layoutMeasuresPerLine = 4, layoutLineBreakBefore = [], layoutPageBreakBefore = [], layoutSystemGap = 120, layoutPartsGap, layoutConnectedBarlines = false, staffIndexInScore = 0, systemTotalHeight, layoutGlobalSpacingMultiplier = 1, systems: systemsProp, baseYOffset = 0, isActiveStaff = true, staffCount = 1, staffHeight: staffHeightProp, figurenotesSize = 16, figurenotesStems = false, timeSignatureSize = 16, themeColors: themeColorsProp, pedagogicalPlayheadStyle = 'line', pedagogicalPlayheadEmoji = '🎵', pedagogicalPlayheadEmojiSize = 32, cursorLineStrokeWidth = 4, pedagogicalPlayheadMovement = 'arch', isPedagogicalAudioPlaying = false, isExportingAnimation = false, exportCursorRef, scoreContainerRef, pageFlowDirection = 'vertical', isFirstInBraceGroup = false, braceGroupSize = 0, lyricFontFamily = 'sans-serif', translateLabel, showLayoutBreakIcons = false, showStaffSpacerHandles = false, onSystemYOffsetChange, onToggleLineBreakAfter }) {
   if (typeof GLOBAL_NOTATION_CONFIG === 'undefined' || !GLOBAL_NOTATION_CONFIG || GLOBAL_NOTATION_CONFIG.EMOJIS === false) return null;
   const themeColors = themeColorsProp || { staffLineColor: '#000', noteFill: '#1a1a1a', textColor: '#1a1a1a', scoreBg: '#fffbf0', isDark: false };
   const safeKey = keySignature ?? 'C';
@@ -7316,7 +7337,9 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
   const tabStrings = isTabMode && instCfg?.strings ? instCfg.strings : 0;
   const tabTuning = isTabMode && instCfg?.tuning ? instCfg.tuning : [];
 
-  const barLineWidth = isFigurenotesMode ? 5 : 2;
+  const barLineWidth = isFigurenotesMode ? Math.max(2, Math.round(5 * figurenotesSize / 75)) : 2;
+  /** Cursor/playhead line inset so it aligns with beat-box (scaled with Noodigraafika suurus in figurenotes). */
+  const cursorInset = isFigurenotesMode ? Math.max(2, Math.round(5 * figurenotesSize / 75)) : 5;
   const BEAT_BOX_STROKE = '#b0b0b0';
   const layoutOptions = { measuresPerLine: layoutMeasuresPerLine, lineBreakBefore: layoutLineBreakBefore, pageBreakBefore: layoutPageBreakBefore, systemGap: layoutSystemGap, staffCount, globalSpacingMultiplier: layoutGlobalSpacingMultiplier };
   const systemsComputed = systemsProp ?? computeLayout(measures, timeSignature, pixelsPerBeat, pageWidth || LAYOUT.PAGE_WIDTH_MIN, layoutOptions);
@@ -7829,6 +7852,7 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
           figureBaseWidth={FIGURE_BASE_WIDTH * (layoutGlobalSpacingMultiplier ?? 1)}
           showStaffSpacerHandles={showStaffSpacerHandles && typeof onSystemYOffsetChange === 'function'}
           onStaffSpacerMouseDown={typeof onSystemYOffsetChange === 'function' ? (systemIndex) => (e) => { e.stopPropagation(); setStaffSpacerDrag({ systemIndex, startClientY: e.clientY, cumulativeDelta: 0 }); } : undefined}
+          themeColors={themeColors}
         />
       ) : (
         <TraditionalNotationView
@@ -7872,6 +7896,7 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
           getStaffHeight={getStaffHeight}
           showStaffSpacerHandles={showStaffSpacerHandles && typeof onSystemYOffsetChange === 'function'}
           onStaffSpacerMouseDown={typeof onSystemYOffsetChange === 'function' ? (systemIndex) => (e) => { e.stopPropagation(); setStaffSpacerDrag({ systemIndex, startClientY: e.clientY, cumulativeDelta: 0 }); } : undefined}
+          themeColors={themeColors}
           instrument={instrument}
           instrumentNotationVariant={instrumentNotationVariant}
           connectedBarlines={layoutConnectedBarlines && staffCount > 1}
@@ -7926,11 +7951,11 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
           {showLine ? (
             <line
               x1={cursorX}
-              y1={cursorInfo.system.yOffset + 5}
+              y1={cursorInfo.system.yOffset + cursorInset}
               x2={cursorX}
-              y2={cursorInfo.system.yOffset + timelineHeight - 5}
+              y2={cursorInfo.system.yOffset + timelineHeight - cursorInset}
               stroke="#2563eb"
-              strokeWidth="3"
+              strokeWidth={cursorLineStrokeWidth}
               opacity="0.8"
             >
               <animate attributeName="opacity" values="0.8;0.3;0.8" dur="1s" repeatCount="indefinite" />
@@ -7939,11 +7964,11 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
             <>
               <line
                 x1={cursorX}
-                y1={cursorInfo.system.yOffset + 5}
+                y1={cursorInfo.system.yOffset + cursorInset}
                 x2={cursorX}
-                y2={cursorInfo.system.yOffset + timelineHeight - 5}
+                y2={cursorInfo.system.yOffset + timelineHeight - cursorInset}
                 stroke="#2563eb"
-                strokeWidth="1.5"
+                strokeWidth={Math.max(1, Math.round(cursorLineStrokeWidth * 0.6))}
                 opacity="0.4"
               />
               <text

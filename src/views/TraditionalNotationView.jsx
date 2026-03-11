@@ -120,7 +120,7 @@ function Flags({ stemX, stemEndY, staffSpace, stemUp, count = 1 }) {
   return <g>{elements}</g>;
 }
 
-function renderTimeSignature(timeSignature, timeSignatureMode, centerY) {
+function renderTimeSignature(timeSignature, timeSignatureMode, centerY, textColor = '#333', noteFill = '#333') {
   const x = 45;
   const y = centerY;
   if (timeSignatureMode === 'pedagogical') {
@@ -129,21 +129,21 @@ function renderTimeSignature(timeSignature, timeSignatureMode, centerY) {
       const noteY = y + 18;
       const noteX = x;
       switch (timeSignature.beatUnit) {
-        case 1: return <ellipse cx={noteX} cy={noteY} rx="5" ry="3" fill="none" stroke="#333" strokeWidth="1.5" />;
-        case 2: return (<><ellipse cx={noteX} cy={noteY} rx="4" ry="2.5" fill="none" stroke="#333" strokeWidth="1.5" /><line x1={stemX} y1={noteY} x2={stemX} y2={noteY + 20} stroke="#333" strokeWidth="1.5" /></>);
-        case 4: return (<><ellipse cx={noteX} cy={noteY} rx="4" ry="2.5" fill="#333" /><line x1={stemX} y1={noteY} x2={stemX} y2={noteY + 20} stroke="#333" strokeWidth="1.5" /></>);
-        case 8: return (<><ellipse cx={noteX} cy={noteY} rx="4" ry="2.5" fill="#333" /><line x1={stemX} y1={noteY} x2={stemX} y2={noteY + 20} stroke="#333" strokeWidth="1.5" /><path d={`M ${stemX} ${noteY + 20} Q ${stemX - 6} ${noteY + 18} ${stemX} ${noteY + 15}`} fill="#333" /></>);
-        case 16: return (<><ellipse cx={noteX} cy={noteY} rx="4" ry="2.5" fill="#333" /><line x1={stemX} y1={noteY} x2={stemX} y2={noteY + 20} stroke="#333" strokeWidth="1.5" /><path d={`M ${stemX} ${noteY + 20} Q ${stemX - 6} ${noteY + 18} ${stemX} ${noteY + 15} M ${stemX} ${noteY + 17} Q ${stemX - 6} ${noteY + 15} ${stemX} ${noteY + 12}`} fill="#333" /></>);
-        default: return <text x={noteX} y={noteY + 20} textAnchor="middle" fontSize="16" fontWeight="bold" fill="#333">{timeSignature.beatUnit}</text>;
+        case 1: return <ellipse cx={noteX} cy={noteY} rx="5" ry="3" fill="none" stroke={textColor} strokeWidth="1.5" />;
+        case 2: return (<><ellipse cx={noteX} cy={noteY} rx="4" ry="2.5" fill="none" stroke={textColor} strokeWidth="1.5" /><line x1={stemX} y1={noteY} x2={stemX} y2={noteY + 20} stroke={textColor} strokeWidth="1.5" /></>);
+        case 4: return (<><ellipse cx={noteX} cy={noteY} rx="4" ry="2.5" fill={noteFill} /><line x1={stemX} y1={noteY} x2={stemX} y2={noteY + 20} stroke={textColor} strokeWidth="1.5" /></>);
+        case 8: return (<><ellipse cx={noteX} cy={noteY} rx="4" ry="2.5" fill={noteFill} /><line x1={stemX} y1={noteY} x2={stemX} y2={noteY + 20} stroke={textColor} strokeWidth="1.5" /><path d={`M ${stemX} ${noteY + 20} Q ${stemX - 6} ${noteY + 18} ${stemX} ${noteY + 15}`} fill={noteFill} /></>);
+        case 16: return (<><ellipse cx={noteX} cy={noteY} rx="4" ry="2.5" fill={noteFill} /><line x1={stemX} y1={noteY} x2={stemX} y2={noteY + 20} stroke={textColor} strokeWidth="1.5" /><path d={`M ${stemX} ${noteY + 20} Q ${stemX - 6} ${noteY + 18} ${stemX} ${noteY + 15} M ${stemX} ${noteY + 17} Q ${stemX - 6} ${noteY + 15} ${stemX} ${noteY + 12}`} fill={noteFill} /></>);
+        default: return <text x={noteX} y={noteY + 20} textAnchor="middle" fontSize="16" fontWeight="bold" fill={textColor}>{timeSignature.beatUnit}</text>;
       }
     };
-    return (<g><text x={x} y={y - 8} textAnchor="middle" fontSize="18" fontWeight="bold" fill="#333">{timeSignature.beats}</text><line x1={x - 10} y1={y + 2} x2={x + 10} y2={y + 2} stroke="#333" strokeWidth="1.5" />{getNoteSymbolForDenominator()}</g>);
+    return (<g><text x={x} y={y - 8} textAnchor="middle" fontSize="18" fontWeight="bold" fill={textColor}>{timeSignature.beats}</text><line x1={x - 10} y1={y + 2} x2={x + 10} y2={y + 2} stroke={textColor} strokeWidth="1.5" />{getNoteSymbolForDenominator()}</g>);
   }
   return (
     <g>
-      <text x={x} y={y - 8} textAnchor="middle" fontSize="18" fontWeight="bold" fill="#333">{timeSignature.beats}</text>
-      <line x1={x - 10} y1={y + 2} x2={x + 10} y2={y + 2} stroke="#333" strokeWidth="1.5" />
-      <text x={x} y={y + 20} textAnchor="middle" fontSize="18" fontWeight="bold" fill="#333">{timeSignature.beatUnit}</text>
+      <text x={x} y={y - 8} textAnchor="middle" fontSize="18" fontWeight="bold" fill={textColor}>{timeSignature.beats}</text>
+      <line x1={x - 10} y1={y + 2} x2={x + 10} y2={y + 2} stroke={textColor} strokeWidth="1.5" />
+      <text x={x} y={y + 20} textAnchor="middle" fontSize="18" fontWeight="bold" fill={textColor}>{timeSignature.beatUnit}</text>
     </g>
   );
 }
@@ -212,9 +212,12 @@ export function TraditionalNotationView({
   connectedBarlines = false,
   staffIndexInScore = 0,
   systemTotalHeight,
+  themeColors,
 }) {
   const spacing = staffSpaceProp ?? STAFF_SPACE;
   const centerY = timelineHeight / 2;
+  const timeSigTextColor = themeColors?.textColor ?? '#333';
+  const timeSigNoteFill = themeColors?.noteFill ?? '#333';
   const [noteDrag, setNoteDrag] = useState(null); // { noteIndex, staffY } when dragging a note to change pitch
   const lastPitchRef = useRef(null); // avoid duplicate updates when pitch unchanged
   useEffect(() => {
@@ -484,7 +487,7 @@ export function TraditionalNotationView({
                   )}
 
                   {sys.systemIndex === 0 && staffIndex === 0 && (
-                    <g transform={`translate(0, ${staffY})`}>{renderTimeSignature(timeSignature, timeSignatureMode, centerY)}</g>
+                    <g transform={`translate(0, ${staffY})`}>{renderTimeSignature(timeSignature, timeSignatureMode, centerY, timeSigTextColor, timeSigNoteFill)}</g>
                   )}
 
                   {/* Taktid: jooned, akordid, nootid (per staff) */}

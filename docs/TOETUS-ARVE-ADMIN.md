@@ -2,11 +2,17 @@
 
 See juhend kirjeldab voogu, kui **organisatsioon** (nt kool, asutus) soovib rakendust toetada ja kasutada, kuid **ei saa maksta pangakaardi ega pangaülekandega** – ainult **arvega** (e-arvega). Administraator (sina) saad organisatsioonilt konkreetsed **kasutajate e-mailid**, kellele soovitakse täisfunktsiooni, ja annad neile ligipääsu rakenduse kaudu.
 
+## Ühekordne administraatori registreerimine
+
+- **Aadress:** `https://noodimeister.ee/administraator-registreerimine`. Sellel lehel saab **ainult üks kord** registreerida **ühe** administraatori konto. Pärast seda ei saa keegi teine enam siin kontot luua.
+- **Kuidas:** ava leht, sisesta **ADMIN_SECRET** (salajane võti), oma **e-mail** ja **administraatori parool** (min 8 tähemärki). Pärast kinnitamist on see e-mail ainus administraatori konto. Seejärel loo (kui pole veel) tavaline NoodiMeisteri konto **sama e-mailiga** (registreeru või Google/Microsoft), mine `/administraator` ja sisesta äsja valitud administraatori parool.
+- Kui administraator on juba registreeritud, leht näitab teadet ja linki `/administraator`-ile. Rohkem kontosid lisada ei saa.
+
 ## Peidetud administraatori leht
 
-- **Aadress:** `https://noodimeister.ee/administraator` (või sinu domeen). Leht **ei ole** avaliku menüü ega jaluse link – ligipääs ainult otse URLi kaudu.
-- **Nõuded:** oled **sisselogitud** oma administraatori kontoga ja sisestad **administraatori parooli** (eraldi sisselogimise paroolist). Parool tuleb vahetada **iga 3 kuud**.
-- **Kes on administraator:** Vercel keskkonnamuutuja `ADMIN_EMAILS` (komadega eraldatud e-mailid). Ainult nende e-mailidega sisseloginud kasutajad näevad administraatori vorme ja saavad anda täisfunktsiooni.
+- **Aadress:** `https://noodimeister.ee/administraator`. Leht **ei ole** avaliku menüü ega jaluse link – ligipääs ainult otse URLi kaudu.
+- **Nõuded:** oled **sisselogitud** oma administraatori kontoga (sama e-mail, mis ühekordsel registreerimisel) ja sisestad **administraatori parooli**. Parool tuleb vahetada **iga 3 kuud**.
+- **Kes on administraator:** kas (1) ühekordsel registreerimisel määratud ainus e-mail (salvestatakse KV-sse), või (2) kui registreerimist pole tehtud, siis Vercel `ADMIN_EMAILS`. Ainult selle e-mailiga sisseloginud kasutaja pääseb administraatori töölauale.
 
 ## Ülevaade voost
 
@@ -18,8 +24,8 @@ See juhend kirjeldab voogu, kui **organisatsioon** (nt kool, asutus) soovib rake
 
 | Muutuja | Kirjeldus |
 |---------|-----------|
-| **ADMIN_EMAILS** | Komadega eraldatud administraatori e-mailid (nt `info@la-stravaganza.com`). Ainult need kontod pääsevad /administraator lehele. |
-| **ADMIN_SECRET** | Salajane võti. Kasutatakse: (1) esialgse administraatori parooli seadistamiseks (üks kord); (2) API otse autentimiseks (header `X-Admin-Secret`), kui ei kasuta JWT-d. |
+| **ADMIN_SECRET** | Salajane võti. Vajalik: (1) ühekordsel registreerimisel lehel /administraator-registreerimine; (2) API otse autentimiseks (header `X-Admin-Secret`). |
+| **ADMIN_EMAILS** | Kui ühekordset registreerimist **pole** tehtud: komadega eraldatud e-mailid, kes pääsevad /administraator lehele. Kui registreerimine on tehtud, kasutatakse ainult KV-s salvestatud ainsat administraatori e-maili. |
 
 ## Administraatori parool ja 3 kuud
 
@@ -35,7 +41,7 @@ Parool salvestatakse räsitult (KV); ADMIN_SECRET jääb ainult keskkonnamuutuja
 2. Kui ei ole sisselogitud, suunatakse sisselogimise lehele (pärast sisselogimist tagasi /administraator).
 3. Sisesta **administraatori parool** (või esmakordsel seadistamisel ADMIN_SECRET ja uus parool).
 4. Kui süsteem palub, **vaheta parool** (praegune + uus).
-5. Vormil: kleepi **e-mailide nimekiri**, vali **Toetus kehtib kuni**, vajuta **Anna täisfunktsioon**.
+5. **Töölaual** saad: näha **toetuse saanud kontode nimekirja** (e-mail, kehtib kuni, märkus), avada **rakenduse lingid** (Minu tööd, tööriist, hinnakiri, toeta, konto, avaleht) ja **anna täisfunktsiooni** uutele e-mailidele (vorm: e-mailid, kehtivuse lõpp, märkus).
 
 Vana aadress **/admin** suunab automaatselt **/administraator**-ile.
 

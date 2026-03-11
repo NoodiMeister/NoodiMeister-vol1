@@ -3,10 +3,11 @@
  * Autentimine: X-Admin-Secret (ADMIN_SECRET) VÕI Authorization: Bearer <JWT> (pärast parooli sisestamist).
  */
 import { kv } from '@vercel/kv';
-import { verifyJWT, isAdminEmail } from './_lib.js';
+import { verifyJWT, isAdminEmailAsync } from './_lib.js';
 
 const KEY_PREFIX = 'support:';
 const NOTE_PREFIX = 'support_note:';
+const KEY_SUPPORT_INDEX = 'support_index';
 
 function normalizeEmail(email) {
   return String(email).trim().toLowerCase();
@@ -47,7 +48,7 @@ export default async function handler(req, res) {
   let authorized = false;
   if (bearer) {
     const email = verifyJWT(bearer);
-    if (email && isAdminEmail(email)) authorized = true;
+    if (email && (await isAdminEmailAsync(email))) authorized = true;
   }
   if (!authorized && secret && adminHeader === secret) authorized = true;
   if (!authorized) {
@@ -81,10 +82,15 @@ export default async function handler(req, res) {
   const note = typeof body.note === 'string' ? body.note.trim().slice(0, 500) : '';
 
   try {
+    let index = await kv.get(KEY_SUPPORT_INDEX);
+    if (!Array.isArray(index)) index = [];
+    const indexSet = new Set(index.map((e) => String(e).trim().toLowerCase()).filter((e) => e));
     for (const email of emails) {
       await kv.set(KEY_PREFIX + email, supportUntil);
       if (note) await kv.set(NOTE_PREFIX + email, note);
+      indexSet.add(email);
     }
+    await kv.set(KEY_SUPPORT_INDEX, [...indexSet]);
     return res.status(200).json({
       ok: true,
       granted: emails.length,

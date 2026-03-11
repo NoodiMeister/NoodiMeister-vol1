@@ -8,6 +8,7 @@ import { kv } from '@vercel/kv';
 const KEY_HASH = 'admin_password_hash';
 const KEY_SALT = 'admin_password_salt';
 const KEY_CHANGED_AT = 'admin_password_changed_at';
+const KEY_PRIMARY_EMAIL = 'admin_primary_email';
 const SCRIPT_LEN = 64;
 const SALT_LEN = 32;
 const JWT_EXPIRY_HOURS = 8;
@@ -16,6 +17,22 @@ const PASSWORD_CHANGE_MONTHS = 3;
 export function getAdminEmails() {
   const raw = process.env.ADMIN_EMAILS || '';
   return raw.split(',').map((e) => e.trim().toLowerCase()).filter(Boolean);
+}
+
+/** Administraatori e-mailid: kui on ühekordselt registreeritud (admin_primary_email), siis ainult see; muul juhul ADMIN_EMAILS. */
+export async function getAdminEmailsAsync() {
+  const primary = await kv.get(KEY_PRIMARY_EMAIL);
+  if (primary && typeof primary === 'string') {
+    const e = primary.trim().toLowerCase();
+    if (e) return [e];
+  }
+  return getAdminEmails();
+}
+
+export async function isAdminEmailAsync(email) {
+  const e = String(email).trim().toLowerCase();
+  const list = await getAdminEmailsAsync();
+  return list.includes(e);
 }
 
 export function isAdminEmail(email) {
@@ -99,7 +116,7 @@ export function verifyJWT(token) {
 }
 
 export async function adminStatus(email) {
-  const allowed = isAdminEmail(email);
+  const allowed = await isAdminEmailAsync(email);
   const hash = await getPasswordHash();
   const hasPasswordSet = !!hash;
   const changedAt = await getPasswordChangedAt();

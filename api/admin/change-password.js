@@ -3,7 +3,7 @@
  * Header: Authorization: Bearer <JWT>
  * Body: { currentPassword, newPassword }
  */
-import { verifyJWT, isAdminEmail, updatePassword, createJWT } from './_lib.js';
+import { verifyJWT, isAdminEmailAsync, updatePassword, createJWT } from './_lib.js';
 
 async function parseBody(req) {
   if (req.body && typeof req.body === 'object') return req.body;
@@ -35,7 +35,7 @@ export default async function handler(req, res) {
 
   const token = req.headers['authorization']?.replace(/^Bearer\s+/i, '');
   const email = verifyJWT(token);
-  if (!email || !isAdminEmail(email)) {
+  if (!email || !(await isAdminEmailAsync(email))) {
     return res.status(401).json({ error: 'Invalid or expired session' });
   }
 

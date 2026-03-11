@@ -3,7 +3,7 @@
  * Body: { email, secret, newPassword }
  * Ainult kui parooli pole veel seatud; secret peab võrduma ADMIN_SECRET.
  */
-import { isAdminEmail, getPasswordHash, setPassword, createJWT } from './_lib.js';
+import { isAdminEmailAsync, getPasswordHash, setPassword, createJWT } from './_lib.js';
 
 async function parseBody(req) {
   if (req.body && typeof req.body === 'object') return req.body;
@@ -38,7 +38,7 @@ export default async function handler(req, res) {
   const secret = body.secret;
   const newPassword = body.newPassword;
 
-  if (!email || !isAdminEmail(email)) {
+  if (!email || !(await isAdminEmailAsync(email))) {
     return res.status(403).json({ error: 'Not an administrator' });
   }
   const adminSecret = process.env.ADMIN_SECRET;
