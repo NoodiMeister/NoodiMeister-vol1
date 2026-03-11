@@ -7,6 +7,7 @@ const RegisterPage = lazy(() => import('./pages/RegisterPage'));
 const LoginPage = lazy(() => import('./pages/LoginPage'));
 const HinnakiriPage = lazy(() => import('./pages/HinnakiriPage'));
 const ToetaPage = lazy(() => import('./pages/ToetaPage'));
+const AdminGrantSupportPage = lazy(() => import('./pages/AdminGrantSupportPage'));
 const UserDashboard = lazy(() => import('./components/UserDashboard'));
 const AccountPage = lazy(() => import('./pages/AccountPage'));
 const NoodiMeister = lazy(() => import('./noodimeister-complete'));
@@ -197,6 +198,7 @@ function AppRoutes() {
           <Route path="/registreeru" element={<RegisterOrRedirect />} />
           <Route path="/hinnakiri" element={<HinnakiriPage />} />
           <Route path="/toeta" element={<ToetaPage />} />
+          <Route path="/admin" element={<AdminGrantSupportPage />} />
           <Route path="/" element={<LandingOrRedirect />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

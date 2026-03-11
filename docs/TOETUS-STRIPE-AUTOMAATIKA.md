@@ -1,15 +1,18 @@
 # Toetuse automatiseerimine (Stripe)
 
 Selle juhendi järgi saab programmeerida nii, et:
-- kasutaja maksab **kaardiga** Stripe’i kaudu (IBAN’it käsitsi sisestama ei pea);
+- kasutaja maksab **kaardiga või pangaga** Stripe’i kaudu (kaart, SEPA, iDEAL, Sofort jms – vt allpool);
 - **programm loeb ise ära**, kas ja kuni millal kasutajal on toetus kehtiv;
 - täisfunktsioon lubatakse ainult siis, kui toetus on kehtiv (või kui ta on sisselogitud ja toetuse kontrolli pole veel sisse lülitatud).
+
+**PayPal ja panga link (Eesti):** vt eraldi juhendit [TOETUS-PAYPAL-PANK.md](./TOETUS-PAYPAL-PANK.md).  
+**Organisatsioon maksab e-arvega:** vt [TOETUS-ARVE-ADMIN.md](./TOETUS-ARVE-ADMIN.md) – admin annab nimekirjas olevatele kontodele täisfunktsiooni.
 
 ## Ülevaade voost
 
 1. Kasutaja valib hinnakirjal/toeta lehel kuude arvu ja vajutab „Toeta“.
 2. Kui ta on sisselogitud, frontend kutsub backend’i API-d **Create Checkout Session** (Stripe).
-3. Kasutaja suunatakse Stripe Checkout lehele ja maksab kaardiga.
+3. Kasutaja suunatakse Stripe Checkout lehele ja valib makseviisi (kaart, SEPA, iDEAL, Sofort jms).
 4. Pärast edukat makset Stripe kutsub sinu backend’i **webhook’iga** – backend salvestab: „see e-mail on toetanud kuni kuupäev X“.
 5. Frontend küsib vajadusel API-st **toetuse staatust** (e-maili järgi) ja näitab täisfunktsiooni või demo režiimi.
 
@@ -19,8 +22,9 @@ Andmebaas (Vercel KV või Supabase) hoiab seost: `e-mail → toetus kehtib kuni 
 
 1. Loo konto: [dashboard.stripe.com](https://dashboard.stripe.com).
 2. **Developers → API keys**: kopeeri **Publishable key** (pk_…) ja **Secret key** (sk_…).
-3. **Developers → Webhooks**: lisa endpoint `https://SINU-DOMEEN.vercel.app/api/stripe-webhook`, sündmus **checkout.session.completed**.
-4. Loo **Webhook signing secret** (whsec_…) ja lisa see keskkonnamuutujate hulka.
+3. **Settings → Payment methods**: lülita sisse soovitud makseviisid (Card, SEPA Direct Debit, iDEAL, Sofort, Bancontact, giropay jms). Stripe näitab Checkout’is ainult lubatud ja valuutaga (EUR) ühilduvad meetodid.
+4. **Developers → Webhooks**: lisa endpoint `https://SINU-DOMEEN.vercel.app/api/stripe-webhook`, sündmus **checkout.session.completed**.
+5. Loo **Webhook signing secret** (whsec_…) ja lisa see keskkonnamuutujate hulka.
 
 Keskkonnamuutujad (Vercel Project → Settings → Environment Variables):
 
@@ -82,7 +86,7 @@ Stripe webhook kontrollib signatuuri; selleks on vaja **toorkeha** (raw body), m
 
 | Samm | Kus | Mis |
 |------|-----|-----|
-| Makse | Stripe Checkout | Kasutaja maksab kaardiga; IBAN’it ei ole vaja. |
+| Makse | Stripe Checkout | Kaart, SEPA, iDEAL, Sofort jms – valik Stripe Dashboard’is. |
 | Kirje „X toetas kuni Y“ | Webhook → andmebaas | `stripe-webhook` + Vercel KV (või Supabase). |
 | „Kas mul on täisfunktsioon?“ | Frontend | `support-status` API → `supportUntil` → `hasFullAccess`. |
 

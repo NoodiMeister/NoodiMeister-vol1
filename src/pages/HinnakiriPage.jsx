@@ -172,8 +172,10 @@ export default function HinnakiriPage() {
               Toetust saad teha pärast registreerumist või sisselogimist. Makseviisid:
             </p>
             <ul className="text-sm text-amber-800/90 dark:text-white/90 space-y-2 mb-3 list-disc list-inside">
-              <li><strong>Kaardiga</strong> – ühekordne makse oma debit- või krediitkaardiga (turvaline maksekeskkond).</li>
-              <li><strong>Pangakontoga</strong> – ülekandega meie pangaarvele (IBAN ja selgitus saad pärast „Toeta“ valimist või e-kirjas).</li>
+              <li><strong>Kaardiga</strong> – ühekordne makse debit- või krediitkaardiga (Stripe).</li>
+              <li><strong>Pangaga</strong> – SEPA, iDEAL, Sofort jms (Stripe Checkout’is, sõltuvalt riigist).</li>
+              <li>Soovi korral võid toetada ka <strong>ülekandega</strong> meie pangaarvele (IBAN ja viide e-kirjas).</li>
+              <li><strong>Organisatsioonid (nt koolid)</strong> – e-arvega; võta ühendust (info@la-stravaganza.com), saadame arve ja anname nimetatud kontodele täisfunktsiooni.</li>
             </ul>
             <p className="text-sm text-amber-800/90 dark:text-white/90">
               <strong>Kuhu raha läheb?</strong> Toetused lähevad NoodiMeistri arenduse ja ülalpidamise kulude katteks (serverid, domeenid, edasiarendus). Teenust pakub La Stravaganza (info@la-stravaganza.com).
