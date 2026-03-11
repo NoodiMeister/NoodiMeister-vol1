@@ -3,6 +3,13 @@
 // Precomposed notes (note+stem+flag in one glyph) = font design; use these instead of drawing stem/flag by hand.
 
 export const SMUFL_GLYPH = Object.freeze({
+  // Staff brackets and dividers (system bracket = bracketTop + line + bracketBottom)
+  brace: '\uE000',
+  bracket: '\uE002',
+  bracketTop: '\uE003',
+  bracketBottom: '\uE004',
+  systemDivider: '\uE007',
+
   // Clefs
   gClef: '\uE050',
   cClef: '\uE05C',

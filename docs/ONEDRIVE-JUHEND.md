@@ -39,7 +39,7 @@ Seega **ainult Google’il on „mootor“** – Microsoft ja Apple on placehold
    - `User.Read` (profiil, sisselogimine)
    - `Files.ReadWrite` või `Files.ReadWrite.AppFolder` (OneDrive failid)
    - `offline_access` (refresh token, valikuline)
-6. **Grant admin consent** (kui on organisatsiooni konto).
+6. **Grant admin consent** (kui on organisatsiooni konto). Kui **kasutaja** on organisatsiooni kontoga (nt @kool.ee) ja näeb teadet *„Need admin approval – NoodiMeister needs permission…“*, peab **organisatsiooni Microsofti administraator** andma admin consent oma tenant’is. Juhend administraatorile: [MICROSOFT-ORGANISATSIOON-ADMIN.md](./MICROSOFT-ORGANISATSIOON-ADMIN.md).
 
 **Testija-nimekiri (valikuline):** keskkonnamuutuja `VITE_MICROSOFT_TESTER_EMAILS` (komaga eraldatud e-mailid). Kui see on **tühi**, saavad **kõik** Microsofti kontod sisse logida. Kui täidad (nt `raido.lill@paikesekool.parnu.ee`), saavad ainult need e-mailid lõpuni – kasulik enne avalikku avaldamist. **Avaldamiseks igaühele:** jäta `VITE_MICROSOFT_TESTER_EMAILS` tühjaks nii kohalikus `.env` kui Vercel / tootmise keskkonnamuutujates.
 

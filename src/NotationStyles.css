@@ -37,10 +37,14 @@
   background: var(--bg-color);
 }
 
-/* Account page (Minu konto) – use theme variables so dark mode is guaranteed */
+/* Account page (Minu konto) – full black in dark mode, all text and icons white */
 .account-page {
   background: var(--bg-color) !important;
   color: var(--text-color) !important;
+}
+[data-theme="dark"] .account-page {
+  background: #000 !important;
+  color: #fff !important;
 }
 .account-page .account-card {
   background: var(--score-bg) !important;
@@ -48,8 +52,18 @@
   border-color: rgba(0, 0, 0, 0.1) !important;
 }
 [data-theme="dark"] .account-page .account-card {
-  background: #0a0a0a !important;
+  background: #000 !important;
   border-color: rgba(255, 255, 255, 0.2) !important;
+  color: #fff !important;
+}
+/* Card top strip (Minu konto header) – black in dark, white text */
+[data-theme="dark"] .account-page .account-card .account-card-header,
+[data-theme="dark"] .account-page .account-card > div:first-child {
+  background: #000 !important;
+  color: #fff !important;
+}
+[data-theme="dark"] .account-page .account-card .account-card-header *,
+[data-theme="dark"] .account-page .account-card > div:first-child * {
   color: #fff !important;
 }
 .account-page .account-card-inner {
@@ -80,15 +94,25 @@
 [data-theme="dark"] .account-page header button {
   color: #fff !important;
 }
+[data-theme="dark"] .account-page header svg,
+[data-theme="dark"] .account-page .account-card svg,
+[data-theme="dark"] .account-page .account-card-inner svg {
+  color: #fff !important;
+  stroke: #fff !important;
+}
 [data-theme="dark"] .account-page .account-settings-dropdown {
-  background: #0a0a0a !important;
+  background: #000 !important;
   border-color: rgba(255, 255, 255, 0.2) !important;
 }
 [data-theme="dark"] .account-page .account-settings-dropdown * {
   color: #fff !important;
 }
+[data-theme="dark"] .account-page .account-settings-dropdown svg {
+  color: #fff !important;
+  stroke: #fff !important;
+}
 [data-theme="dark"] .account-page .account-picker-modal {
-  background: #0a0a0a !important;
+  background: #000 !important;
   border-color: rgba(255, 255, 255, 0.2) !important;
   color: #fff !important;
 }
@@ -98,6 +122,9 @@
 [data-theme="dark"] .account-page .account-picker-modal input {
   background: rgba(255, 255, 255, 0.08) !important;
   border-color: rgba(255, 255, 255, 0.3) !important;
+}
+[data-theme="dark"] .account-page main {
+  background: transparent !important;
 }
 
 

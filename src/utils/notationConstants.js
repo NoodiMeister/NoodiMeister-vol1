@@ -22,6 +22,52 @@ export const DEFAULT_SHOW_ALL_NOTE_LABELS = false;
 /** Letter name → semitone above C (0–11). Rule: no need to list every key. */
 const PITCH_CLASS = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
 
+/** Order of pitch letters for diatonic scale steps. */
+export const PITCH_ORDER = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
+
+/**
+ * Semitone 0–11 for a note (letter + accidental).
+ * @param {string} letter - C, D, E, F, G, A, B
+ * @param {number} [accidental=0] - -1 = flat, 0 = natural, 1 = sharp
+ */
+export function getPitchSemitone(letter, accidental = 0) {
+  const base = PITCH_CLASS[letter?.toUpperCase?.()];
+  if (base === undefined) return 0;
+  return ((base + (accidental ?? 0)) % 12 + 12) % 12;
+}
+
+/** Major scale intervals (semitones) from root: 1st, 2nd, ... 7th. */
+const MAJOR_SCALE_INTERVALS = [0, 2, 4, 5, 7, 9, 11];
+
+/**
+ * Diatonic scale (major) for the given key. Each degree has letter, accidental, and semitone.
+ * E.g. D major → [{ letter: 'D', accidental: 0 }, { letter: 'E', accidental: 0 }, { letter: 'F', accidental: 1 }, ...]
+ * @param {string} keyName - e.g. 'C', 'G', 'D', 'F', 'Bb', 'F#'
+ * @returns {{ letter: string, accidental: number, semitone: number }[]}
+ */
+export function getDiatonicScaleForKey(keyName) {
+  if (!keyName || typeof keyName !== 'string') keyName = 'C';
+  const rootSemitone = getSemitonesFromKey(keyName);
+  const keyLetter = keyName.trim().slice(0, 1).toUpperCase();
+  const keyLetterIndex = PITCH_ORDER.indexOf(keyLetter);
+  if (keyLetterIndex < 0) return PITCH_ORDER.map((letter, i) => ({
+    letter,
+    accidental: 0,
+    semitone: (PITCH_CLASS[letter] + 12) % 12
+  }));
+
+  const scale = [];
+  for (let i = 0; i < 7; i++) {
+    const letter = PITCH_ORDER[(keyLetterIndex + i) % 7];
+    const targetSemitone = (rootSemitone + MAJOR_SCALE_INTERVALS[i]) % 12;
+    const letterBase = PITCH_CLASS[letter];
+    let diff = (targetSemitone - letterBase + 12) % 12;
+    const accidental = diff === 0 ? 0 : diff === 1 ? 1 : diff === 11 ? -1 : 0;
+    scale.push({ letter, accidental, semitone: targetSemitone });
+  }
+  return scale;
+}
+
 /**
  * Semitones from C for any key name (rule-based).
  * Key = letter + optional accidental: "C", "G", "Bb", "F#", "Ab", "C#", etc.

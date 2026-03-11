@@ -386,8 +386,8 @@ export default function AccountPage() {
       </header>
 
       <main className="flex-1 flex items-center justify-center px-6 py-12">
-        <div className="account-card w-full max-w-2xl bg-white dark:bg-zinc-900 rounded-2xl shadow-xl border-2 border-amber-200 dark:border-white/20 overflow-hidden">
-          <div className="bg-gradient-to-r from-slate-700 to-slate-800 dark:from-zinc-800 dark:to-zinc-900 text-white px-8 py-6 flex items-center gap-3">
+        <div className="account-card w-full max-w-2xl bg-white dark:bg-black rounded-2xl shadow-xl border-2 border-amber-200 dark:border-white/20 overflow-hidden">
+          <div className="account-card-header bg-gradient-to-r from-slate-700 to-slate-800 text-white px-8 py-6 flex items-center gap-3">
             <User className="w-6 h-6 flex-shrink-0" />
             <div className="min-w-0 flex-1">
               <h1 className="text-2xl font-bold" style={{ fontFamily: 'Georgia, serif' }}>

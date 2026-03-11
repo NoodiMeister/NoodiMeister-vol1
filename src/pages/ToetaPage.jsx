@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { Heart, LogIn, UserPlus } from 'lucide-react';
+import { Heart, LogIn, UserPlus, Loader2 } from 'lucide-react';
+import { useNoodimeisterOptional } from '../store/NoodimeisterContext';
+import { createCheckoutSession } from '../services/supportApi';
 
 const PRICE_PER_MONTH = 5;
 const DISCOUNT_12_MONTHS = 55; // 12 kuud soodushinnaga 55 €
@@ -14,6 +16,14 @@ function calcTotal(kuud) {
 
 export default function ToetaPage() {
   const [searchParams] = useSearchParams();
+  const ctx = useNoodimeisterOptional();
+  const user = ctx?.user;
+  const isLoggedIn = !!user?.email;
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const success = searchParams.get('success') === '1';
+  const canceled = searchParams.get('canceled') === '1';
+
   const preselected = searchParams.get('kuud');
   const [months, setMonths] = useState(() => {
     const k = preselected ? parseInt(preselected, 10) : 1;
@@ -28,6 +38,19 @@ export default function ToetaPage() {
 
   const total = calcTotal(months);
   const isValid = total !== null;
+
+  const handleStartCheckout = async () => {
+    if (!isValid || !isLoggedIn || !user?.email) return;
+    setError('');
+    setLoading(true);
+    const result = await createCheckoutSession(months, user.email);
+    setLoading(false);
+    if (result.url) {
+      window.location.href = result.url;
+      return;
+    }
+    setError(result.error || 'Maksekeskkonna avamine ebaõnnestus.');
+  };
 
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-amber-50 via-orange-50 to-amber-100 dark:bg-black">
@@ -99,19 +122,57 @@ export default function ToetaPage() {
             )}
           </div>
 
+          {success && (
+            <div className="mb-6 p-4 rounded-xl bg-emerald-100 dark:bg-emerald-900/40 text-emerald-800 dark:text-emerald-200 text-sm">
+              Täname! Makse õnnestus. Täisfunktsioon on nüüd aktiivne valitud perioodi vältel.
+            </div>
+          )}
+          {canceled && (
+            <div className="mb-6 p-4 rounded-xl bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-200 text-sm">
+              Makset ei tehtud. Saad uuesti proovida või valida teise perioodi.
+            </div>
+          )}
+          {error && (
+            <div className="mb-6 p-4 rounded-xl bg-red-100 dark:bg-red-900/40 text-red-800 dark:text-red-200 text-sm">
+              {error}
+            </div>
+          )}
+
+          <p className="text-sm text-amber-700/90 dark:text-white/80 mb-4">
+            {isLoggedIn
+              ? 'Makse toimub turvaliselt Stripe kaudu (kaart). Toetused lähevad NoodiMeistri arenduse ja ülalpidamise kulude katteks.'
+              : 'Pärast registreerumist või sisselogimist saad maksta kaardiga. Toetused lähevad NoodiMeistri arenduse ja ülalpidamise kulude katteks.'}
+          </p>
+
           <div className="flex flex-col sm:flex-row gap-3">
-            <Link
-              to="/registreeru"
-              className={`flex-1 inline-flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-semibold shadow-md transition-all ${
-                isValid
-                  ? 'bg-gradient-to-r from-amber-600 to-orange-600 text-white hover:from-amber-500 hover:to-orange-500'
-                  : 'bg-amber-200 text-amber-600 cursor-not-allowed pointer-events-none'
-              }`}
-              aria-disabled={!isValid}
-            >
-              <Heart className="w-5 h-5" />
-              Jätka toetamisega
-            </Link>
+            {isLoggedIn ? (
+              <button
+                type="button"
+                onClick={handleStartCheckout}
+                disabled={!isValid || loading}
+                className={`flex-1 inline-flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-semibold shadow-md transition-all ${
+                  isValid && !loading
+                    ? 'bg-gradient-to-r from-amber-600 to-orange-600 text-white hover:from-amber-500 hover:to-orange-500'
+                    : 'bg-amber-200 text-amber-600 cursor-not-allowed'
+                }`}
+              >
+                {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Heart className="w-5 h-5" />}
+                {loading ? 'Suuname maksele…' : 'Maksa kaardiga'}
+              </button>
+            ) : (
+              <Link
+                to="/registreeru"
+                className={`flex-1 inline-flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-semibold shadow-md transition-all ${
+                  isValid
+                    ? 'bg-gradient-to-r from-amber-600 to-orange-600 text-white hover:from-amber-500 hover:to-orange-500'
+                    : 'bg-amber-200 text-amber-600 cursor-not-allowed pointer-events-none'
+                }`}
+                aria-disabled={!isValid}
+              >
+                <Heart className="w-5 h-5" />
+                Jätka toetamisega (registreeru või logi sisse)
+              </Link>
+            )}
             <Link
               to="/login"
               className="inline-flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-medium border-2 border-amber-400 bg-white text-amber-800 hover:bg-amber-50 transition-colors"

@@ -4,6 +4,7 @@
  */
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import * as authStorage from '../services/authStorage';
+import { getSupportStatus } from '../services/supportApi';
 
 const NoodimeisterContext = createContext(null);
 
@@ -41,8 +42,16 @@ export function NoodimeisterProvider({ children }) {
   /** Praegune avatud fail (Google Drive id või null = uus töö). Kasutatakse salvestamise ja navigeerimise jaoks. */
   const [currentFileId, setCurrentFileId] = useState(null);
   const [currentFileName, setCurrentFileName] = useState('');
+  /** Toetuse kehtivus (YYYY-MM-DD); null = ei tea või API puudub (siis täisfunktsioon sisseloginutele). */
+  const [supportUntil, setSupportUntil] = useState(null);
 
   const isLoggedIn = !!user?.email;
+
+  /** Täisfunktsioon: sisselogitud ja (toetus kehtib tänaseni või toetuse API pole kasutusel). */
+  const hasFullAccess = isLoggedIn && (
+    supportUntil === null
+    || (typeof supportUntil === 'string' && supportUntil >= new Date().toISOString().slice(0, 10))
+  );
 
   const setUser = useCallback((u) => {
     setUserState(u);
@@ -58,6 +67,18 @@ export function NoodimeisterProvider({ children }) {
   useEffect(() => {
     setUserState(authStorage.getLoggedInUser());
   }, []);
+
+  useEffect(() => {
+    if (!user?.email) {
+      setSupportUntil(null);
+      return;
+    }
+    let cancelled = false;
+    getSupportStatus(user.email).then(({ supportUntil: until }) => {
+      if (!cancelled) setSupportUntil(until);
+    });
+    return () => { cancelled = true; };
+  }, [user?.email]);
 
   useEffect(() => {
     try {
@@ -83,6 +104,9 @@ export function NoodimeisterProvider({ children }) {
     user,
     setUser,
     isLoggedIn,
+    hasFullAccess,
+    supportUntil,
+    setSupportUntil,
     logout,
     theme,
     setTheme,

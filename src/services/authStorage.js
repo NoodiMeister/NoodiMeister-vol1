@@ -151,6 +151,19 @@ export function clearOneDriveSaveFolder() {
   } catch (_) {}
 }
 
+/** Clear MSAL (Microsoft) cache from localStorage so the next Microsoft sign-in shows the login screen. */
+function clearMsalCache() {
+  if (typeof window === 'undefined' || !window.localStorage) return;
+  try {
+    const keys = [];
+    for (let i = 0; i < window.localStorage.length; i++) {
+      const key = window.localStorage.key(i);
+      if (key && key.startsWith('msal.')) keys.push(key);
+    }
+    keys.forEach((k) => window.localStorage.removeItem(k));
+  } catch (_) {}
+}
+
 /** Tühjenda sisselogimine ja token mõlemast salvestusest (väljalogimine). */
 export function clearAuth() {
   if (typeof window === 'undefined') return;
@@ -166,5 +179,6 @@ export function clearAuth() {
         s.removeItem(KEY_ONEDRIVE_SAVE_FOLDER);
       }
     });
+    clearMsalCache();
   } catch (_) {}
 }

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { FilePlus, FolderOpen, FolderPlus, Cloud, LogIn, Loader2, PenTool, User, Settings, ChevronDown, Trash2, X } from 'lucide-react';
+import { FilePlus, Folder, FolderOpen, FolderPlus, Cloud, LogIn, Loader2, PenTool, User, Settings, ChevronDown, Trash2, X } from 'lucide-react';
 import * as googleDrive from '../services/googleDrive';
 import * as oneDrive from '../services/oneDrive';
 import * as authStorage from '../services/authStorage';
@@ -71,6 +71,9 @@ export default function MinuTöödPage() {
   const [createFolderName, setCreateFolderName] = useState('NoodiMeister');
   const [createFolderLoading, setCreateFolderLoading] = useState(false);
   const [createFolderError, setCreateFolderError] = useState(null);
+  const [googleSaveFolderName, setGoogleSaveFolderName] = useState('');
+  const [googleFolderExpanded, setGoogleFolderExpanded] = useState(true);
+  const [oneDriveFolderExpanded, setOneDriveFolderExpanded] = useState(true);
   const settingsRef = useRef(null);
   const store = useNoodimeisterOptional();
   const themeMode = store?.theme?.mode ?? 'light';
@@ -150,6 +153,26 @@ export default function MinuTöödPage() {
     loadOneDriveFiles();
   }, [loadOneDriveFiles]);
 
+  // Load Google save folder name when we have a folder ID (so user sees where files are saved)
+  useEffect(() => {
+    if (!token) {
+      setGoogleSaveFolderName('');
+      return;
+    }
+    const folderId = authStorage.getGoogleSaveFolderId();
+    if (!folderId) {
+      setGoogleSaveFolderName('');
+      return;
+    }
+    let cancelled = false;
+    googleDrive.getFolderMetadata(token, folderId).then((meta) => {
+      if (!cancelled && meta?.name) setGoogleSaveFolderName(meta.name);
+    }).catch(() => {
+      if (!cancelled) setGoogleSaveFolderName('');
+    });
+    return () => { cancelled = true; };
+  }, [token, files]);
+
   const setLocale = (code) => {
     try {
       localStorage.setItem(LOCALE_STORAGE_KEY, code);
@@ -190,8 +213,10 @@ export default function MinuTöödPage() {
       if (provider === 'google' && token) {
         const folderId = await googleDrive.createFolder(token, 'root', name);
         authStorage.setGoogleSaveFolderId(folderId);
+        setGoogleSaveFolderName(name);
         setCreateFolderOpen(false);
         setCreateFolderName('NoodiMeister');
+        await loadFiles();
       } else if (provider === 'microsoft' && microsoftToken) {
         let parentId = authStorage.getOneDriveSaveFolderId() || 'root';
         let result = await oneDrive.createFolder(microsoftToken, parentId, name);
@@ -205,6 +230,7 @@ export default function MinuTöödPage() {
           authStorage.setOneDriveSaveFolderId(result.id);
           setCreateFolderOpen(false);
           setCreateFolderName('NoodiMeister');
+          await loadOneDriveFiles();
         } else {
           setCreateFolderError(result?.error || (t['account.createFolderError'] || 'Kausta loomine ebaõnnestus'));
         }
@@ -214,7 +240,7 @@ export default function MinuTöödPage() {
     } finally {
       setCreateFolderLoading(false);
     }
-  }, [provider, token, microsoftToken, createFolderName, t]);
+  }, [provider, token, microsoftToken, createFolderName, t, loadFiles, loadOneDriveFiles]);
 
   useEffect(() => {
     if (authReady && !user) navigate('/login', { replace: true });
@@ -290,7 +316,7 @@ export default function MinuTöödPage() {
                 </div>
               )}
             </div>
-            <Link to="/app" className="inline-flex items-center gap-1.5 text-amber-700 dark:text-white hover:text-amber-900 dark:hover:text-white/90 p-1.5 rounded-lg hover:bg-amber-100 dark:hover:bg-white/10 transition-colors" aria-label={t['nav.openNotationTool'] || 'Ava nooditööriist'} title={t['nav.openNotationTool'] || 'Ava nooditööriist'}>
+            <Link to="/app?local=1" className="inline-flex items-center gap-1.5 text-amber-700 dark:text-white hover:text-amber-900 dark:hover:text-white/90 p-1.5 rounded-lg hover:bg-amber-100 dark:hover:bg-white/10 transition-colors" aria-label={t['nav.openNotationTool'] || 'Ava nooditööriist'} title={t['nav.openNotationTool'] || 'Ava nooditööriist'}>
               <PenTool className="w-5 h-5" />
               <span className="text-sm font-medium">{t['nav.openNotationTool'] || 'Tööriist'}</span>
             </Link>
@@ -382,33 +408,67 @@ export default function MinuTöödPage() {
                 {error}
               </div>
             )}
-            {!loading && !error && files.length === 0 && (
-              <p className="text-amber-700/90 dark:text-white/80 py-6">{t["mywork.noGoogleFilesHint"]}</p>
+            {!loading && !error && (googleSaveFolderName || files.length > 0) && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setGoogleFolderExpanded((v) => !v)}
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 border-amber-300/80 dark:border-amber-500/50 bg-amber-50/80 dark:bg-amber-950/40 hover:bg-amber-100/80 dark:hover:bg-amber-900/30 transition-colors text-left"
+                  aria-expanded={googleFolderExpanded}
+                  aria-label={googleFolderExpanded ? (t['mywork.collapseFolder'] || 'Sulge kaust') : (t['mywork.expandFolder'] || 'Ava kaust')}
+                >
+                  {googleFolderExpanded ? (
+                    <FolderOpen className="w-8 h-8 flex-shrink-0 text-amber-600 dark:text-amber-400" aria-hidden />
+                  ) : (
+                    <Folder className="w-8 h-8 flex-shrink-0 text-amber-600 dark:text-amber-400" aria-hidden />
+                  )}
+                  <span className="font-semibold text-amber-900 dark:text-white flex-1">
+                    {googleSaveFolderName || (t['mywork.saveFolderLabel'] || 'Salvestuskaust')}
+                  </span>
+                  <span className="text-sm text-amber-700 dark:text-white/80 flex-shrink-0">
+                    {t['mywork.saveFolderHint'] || 'Uued failid salvestatakse siia.'}
+                  </span>
+                  <ChevronDown className={`w-5 h-5 flex-shrink-0 text-amber-700 dark:text-white/80 transition-transform ${googleFolderExpanded ? 'rotate-180' : ''}`} />
+                </button>
+                {googleFolderExpanded && (
+                  <ul className="space-y-2 mt-2 ml-4 pl-6 border-l-2 border-amber-200/60 dark:border-amber-600/40" role="list">
+                    {files.length === 0 ? (
+                      <li className="py-4 text-sm text-amber-700/90 dark:text-white/80 pl-2">
+                        {t["mywork.noGoogleFilesHint"]}
+                      </li>
+                    ) : (
+                      files.map((f, index) => (
+                        <li
+                          key={f.id}
+                          className="flex items-center gap-2"
+                          style={{ marginLeft: `${Math.min(index * 4, 12)}px` }}
+                        >
+                          <a
+                            href={`${basePath}/app?fileId=${encodeURIComponent(f.id)}`}
+                            className="flex-1 min-w-0 text-left flex items-center gap-3 px-4 py-3 rounded-xl bg-white dark:bg-zinc-900 border border-amber-200/60 dark:border-white/20 shadow-sm hover:bg-amber-50 dark:hover:bg-white/10 hover:border-amber-300 dark:hover:border-white/30 transition-colors no-underline text-inherit text-amber-900 dark:text-white"
+                          >
+                            <img src="/logo.png" alt="" className="h-8 w-8 flex-shrink-0 object-contain" aria-hidden />
+                            <span className="font-medium text-amber-900 dark:text-white truncate flex-1">{f.name}</span>
+                            <span className="text-sm text-amber-600 dark:text-white/70 flex-shrink-0">{formatDate(f.modifiedTime, locale)}</span>
+                          </a>
+                          <button
+                            type="button"
+                            onClick={(e) => { e.preventDefault(); handleDeleteGoogleFile(f.id, f.name); }}
+                            className="p-2 rounded-lg text-red-600 hover:bg-red-50 hover:text-red-700 border border-transparent hover:border-red-200 transition-colors"
+                            title={t['file.delete'] || 'Kustuta fail'}
+                            aria-label={t['file.delete'] || 'Kustuta fail'}
+                          >
+                            <Trash2 className="w-5 h-5" />
+                          </button>
+                        </li>
+                      ))
+                    )}
+                  </ul>
+                )}
+              </>
             )}
-            {!loading && files.length > 0 && (
-              <ul className="space-y-2">
-                {files.map((f) => (
-                  <li key={f.id} className="flex items-center gap-2">
-                    <a
-                      href={`${basePath}/app?fileId=${encodeURIComponent(f.id)}`}
-                      className="flex-1 min-w-0 text-left flex items-center gap-3 px-4 py-3 rounded-xl bg-white dark:bg-zinc-900 border border-amber-200/60 dark:border-white/20 shadow-sm hover:bg-amber-50 dark:hover:bg-white/10 hover:border-amber-300 dark:hover:border-white/30 transition-colors no-underline text-inherit text-amber-900 dark:text-white"
-                    >
-                      <img src="/logo.png" alt="" className="h-8 w-8 flex-shrink-0 object-contain" aria-hidden />
-                      <span className="font-medium text-amber-900 truncate flex-1">{f.name}</span>
-                      <span className="text-sm text-amber-600 dark:text-white/70 flex-shrink-0">{formatDate(f.modifiedTime, locale)}</span>
-                    </a>
-                    <button
-                      type="button"
-                      onClick={(e) => { e.preventDefault(); handleDeleteGoogleFile(f.id, f.name); }}
-                      className="p-2 rounded-lg text-red-600 hover:bg-red-50 hover:text-red-700 border border-transparent hover:border-red-200 transition-colors"
-                      title={t['file.delete'] || 'Kustuta fail'}
-                      aria-label={t['file.delete'] || 'Kustuta fail'}
-                    >
-                      <Trash2 className="w-5 h-5" />
-                    </button>
-                  </li>
-                ))}
-              </ul>
+            {!loading && !error && !googleSaveFolderName && files.length === 0 && (
+              <p className="text-amber-700/90 dark:text-white/80 py-6">{t["mywork.noGoogleFilesHint"]}</p>
             )}
           </section>
         )}
@@ -426,33 +486,64 @@ export default function MinuTöödPage() {
                 {oneDriveError}
               </div>
             )}
-            {!oneDriveLoading && !oneDriveError && oneDriveFiles.length === 0 && (
-              <p className="text-amber-700/90 dark:text-white/80 py-6">{t["mywork.noOneDriveFilesHint"]}</p>
-            )}
-            {!oneDriveLoading && oneDriveFiles.length > 0 && (
-              <ul className="space-y-2">
-                {oneDriveFiles.map((f) => (
-                  <li key={f.id} className="flex items-center gap-2">
-                    <a
-                      href={`${basePath}/app?fileId=${encodeURIComponent(f.id)}&cloud=onedrive`}
-                      className="flex-1 min-w-0 text-left flex items-center gap-3 px-4 py-3 rounded-xl bg-white dark:bg-zinc-900 border border-amber-200/60 dark:border-white/20 shadow-sm hover:bg-amber-50 dark:hover:bg-white/10 hover:border-amber-300 dark:hover:border-white/30 transition-colors no-underline text-inherit text-amber-900 dark:text-white"
-                    >
-                      <img src="/logo.png" alt="" className="h-8 w-8 flex-shrink-0 object-contain" aria-hidden />
-                      <span className="font-medium text-amber-900 truncate flex-1">{f.name}</span>
-                      <span className="text-sm text-amber-600 dark:text-white/70 flex-shrink-0">{formatOneDriveDate(f, locale)}</span>
-                    </a>
-                    <button
-                      type="button"
-                      onClick={(e) => { e.preventDefault(); handleDeleteOneDriveFile(f.id, f.name); }}
-                      className="p-2 rounded-lg text-red-600 hover:bg-red-50 hover:text-red-700 border border-transparent hover:border-red-200 transition-colors"
-                      title={t['file.delete'] || 'Kustuta fail'}
-                      aria-label={t['file.delete'] || 'Kustuta fail'}
-                    >
-                      <Trash2 className="w-5 h-5" />
-                    </button>
-                  </li>
-                ))}
-              </ul>
+            {!oneDriveLoading && !oneDriveError && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setOneDriveFolderExpanded((v) => !v)}
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 border-amber-300/80 dark:border-amber-500/50 bg-amber-50/80 dark:bg-amber-950/40 hover:bg-amber-100/80 dark:hover:bg-amber-900/30 transition-colors text-left"
+                  aria-expanded={oneDriveFolderExpanded}
+                  aria-label={oneDriveFolderExpanded ? (t['mywork.collapseFolder'] || 'Sulge kaust') : (t['mywork.expandFolder'] || 'Ava kaust')}
+                >
+                  {oneDriveFolderExpanded ? (
+                    <FolderOpen className="w-8 h-8 flex-shrink-0 text-amber-600 dark:text-amber-400" aria-hidden />
+                  ) : (
+                    <Folder className="w-8 h-8 flex-shrink-0 text-amber-600 dark:text-amber-400" aria-hidden />
+                  )}
+                  <span className="font-semibold text-amber-900 dark:text-white flex-1">
+                    OneDrive
+                  </span>
+                  <span className="text-sm text-amber-700 dark:text-white/80 flex-shrink-0">
+                    {t['mywork.saveFolderHint'] || 'Uued failid salvestatakse siia.'}
+                  </span>
+                  <ChevronDown className={`w-5 h-5 flex-shrink-0 text-amber-700 dark:text-white/80 transition-transform ${oneDriveFolderExpanded ? 'rotate-180' : ''}`} />
+                </button>
+                {oneDriveFolderExpanded && (
+                  <ul className="space-y-2 mt-2 ml-4 pl-6 border-l-2 border-amber-200/60 dark:border-amber-600/40" role="list">
+                    {oneDriveFiles.length === 0 ? (
+                      <li className="py-4 text-sm text-amber-700/90 dark:text-white/80 pl-2">
+                        {t["mywork.noOneDriveFilesHint"]}
+                      </li>
+                    ) : (
+                      oneDriveFiles.map((f, index) => (
+                        <li
+                          key={f.id}
+                          className="flex items-center gap-2"
+                          style={{ marginLeft: `${Math.min(index * 4, 12)}px` }}
+                        >
+                          <a
+                            href={`${basePath}/app?fileId=${encodeURIComponent(f.id)}&cloud=onedrive`}
+                            className="flex-1 min-w-0 text-left flex items-center gap-3 px-4 py-3 rounded-xl bg-white dark:bg-zinc-900 border border-amber-200/60 dark:border-white/20 shadow-sm hover:bg-amber-50 dark:hover:bg-white/10 hover:border-amber-300 dark:hover:border-white/30 transition-colors no-underline text-inherit text-amber-900 dark:text-white"
+                          >
+                            <img src="/logo.png" alt="" className="h-8 w-8 flex-shrink-0 object-contain" aria-hidden />
+                            <span className="font-medium text-amber-900 dark:text-white truncate flex-1">{f.name}</span>
+                            <span className="text-sm text-amber-600 dark:text-white/70 flex-shrink-0">{formatOneDriveDate(f, locale)}</span>
+                          </a>
+                          <button
+                            type="button"
+                            onClick={(e) => { e.preventDefault(); handleDeleteOneDriveFile(f.id, f.name); }}
+                            className="p-2 rounded-lg text-red-600 hover:bg-red-50 hover:text-red-700 border border-transparent hover:border-red-200 transition-colors"
+                            title={t['file.delete'] || 'Kustuta fail'}
+                            aria-label={t['file.delete'] || 'Kustuta fail'}
+                          >
+                            <Trash2 className="w-5 h-5" />
+                          </button>
+                        </li>
+                      ))
+                    )}
+                  </ul>
+                )}
+              </>
             )}
           </section>
         )}

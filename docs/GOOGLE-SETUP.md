@@ -89,6 +89,15 @@ Token kehtib umbes 1 tundi; pärast aegumist tuleb uuesti **Logi sisse** → **G
 
 ---
 
+## Kui tuleb „Need admin approval“ (kooli / organisatsiooni konto)
+
+Kui sisselogimine toimub **organisatsiooni** e-mailiga (nt @kool.ee, @ettevote.ee) ja teade ütleb, et **NoodiMeister needs permission that only an admin can grant**:
+
+- Põhjus: Google Workspace’i organisatsioonides peab **administraator** lubama kinnitamata (unverified) rakendused.
+- Lahendus: **Organisatsiooni Google’i administraator** peab Admin Console’is lubama NoodiMeisteri (kolmanda osapoole rakenduste juurdepääsu seaded). Täpsed sammud: [GOOGLE-ORGANISATSIOON-ADMIN.md](./GOOGLE-ORGANISATSIOON-ADMIN.md).
+
+---
+
 ## Kui tuleb „Error 400: redirect_uri_mismatch“
 
 1. Vaata veateatest või brauseri aadressiribalt **päritolu** (nt `https://noodi-meister-vol1-c7ms0vldp-la-stravaganza.vercel.app`).

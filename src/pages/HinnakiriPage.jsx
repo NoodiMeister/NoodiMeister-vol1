@@ -165,6 +165,21 @@ export default function HinnakiriPage() {
             </p>
           </div>
 
+          {/* Kuidas ja kuhu toetada */}
+          <div className="rounded-2xl border-2 border-amber-300/60 dark:border-amber-500/40 bg-amber-50/90 dark:bg-zinc-900/80 p-6 mb-8">
+            <h3 className="font-semibold text-amber-900 dark:text-white mb-3">Kuidas toetust teha ja kuhu raha läheb?</h3>
+            <p className="text-sm text-amber-800/90 dark:text-white/90 mb-3">
+              Toetust saad teha pärast registreerumist või sisselogimist. Makseviisid:
+            </p>
+            <ul className="text-sm text-amber-800/90 dark:text-white/90 space-y-2 mb-3 list-disc list-inside">
+              <li><strong>Kaardiga</strong> – ühekordne makse oma debit- või krediitkaardiga (turvaline maksekeskkond).</li>
+              <li><strong>Pangakontoga</strong> – ülekandega meie pangaarvele (IBAN ja selgitus saad pärast „Toeta“ valimist või e-kirjas).</li>
+            </ul>
+            <p className="text-sm text-amber-800/90 dark:text-white/90">
+              <strong>Kuhu raha läheb?</strong> Toetused lähevad NoodiMeistri arenduse ja ülalpidamise kulude katteks (serverid, domeenid, edasiarendus). Teenust pakub La Stravaganza (info@la-stravaganza.com).
+            </p>
+          </div>
+
           <p className="mt-6 text-center text-sm text-amber-700/80">
             Küsimused või ettepanekud rakenduse või kuutasu kohta? Kirjuta meile:{' '}
             <a href="mailto:info@la-stravaganza.com" className="underline hover:text-amber-800 font-medium">info@la-stravaganza.com</a>

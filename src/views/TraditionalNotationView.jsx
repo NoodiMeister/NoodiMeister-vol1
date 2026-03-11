@@ -209,6 +209,9 @@ export function TraditionalNotationView({
   onStaffSpacerMouseDown, // (systemIndex) => (e) => { ... } – ridade vertikaalne liigutamine (Layout)
   instrument = 'piano',
   instrumentNotationVariant = 'standard',
+  connectedBarlines = false,
+  staffIndexInScore = 0,
+  systemTotalHeight,
 }) {
   const spacing = staffSpaceProp ?? STAFF_SPACE;
   const centerY = timelineHeight / 2;
@@ -261,13 +264,51 @@ export function TraditionalNotationView({
 
   const staffList = multiStaff ? instruments : [{ id: '_single', name: '', clef: clefType }];
 
+  /** System bracket (Leland): bracketTop + vertical line + bracketBottom when multiple staves and connected barlines */
+  const showSystemBracket = connectedBarlines && staffIndexInScore === 0 && typeof systemTotalHeight === 'number' && systemTotalHeight > 0;
+  const systemBracketX = 10;
+  const systemBracketCapSize = 14;
+
   return (
     <g className="traditional-notation">
       {systems.map((sys) => {
         const pageIndex = isHorizontal ? Math.floor(sys.yOffset / a4PageHeight) : 0;
         const groupTransform = isHorizontal && pageWidth ? `translate(${pageIndex * pageWidth}, ${-pageIndex * a4PageHeight})` : undefined;
+        const bracketTopY = sys.yOffset;
+        const bracketBottomY = sys.yOffset + systemTotalHeight;
         return (
           <g key={sys.systemIndex} transform={groupTransform}>
+            {/* System bracket from Leland (SMuFL bracketTop + line + bracketBottom) – groups all parts in one system */}
+            {showSystemBracket && (
+              <g aria-hidden="true">
+                <SmuflGlyph
+                  x={systemBracketX}
+                  y={bracketTopY}
+                  glyph={SMUFL_GLYPH.bracketTop}
+                  fontSize={systemBracketCapSize}
+                  fill="#1a1a1a"
+                  textAnchor="middle"
+                  dominantBaseline="hanging"
+                />
+                <line
+                  x1={systemBracketX}
+                  y1={bracketTopY + systemBracketCapSize}
+                  x2={systemBracketX}
+                  y2={bracketBottomY - systemBracketCapSize}
+                  stroke="#1a1a1a"
+                  strokeWidth={Math.max(2, spacing * 0.2)}
+                />
+                <SmuflGlyph
+                  x={systemBracketX}
+                  y={bracketBottomY}
+                  glyph={SMUFL_GLYPH.bracketBottom}
+                  fontSize={systemBracketCapSize}
+                  fill="#1a1a1a"
+                  textAnchor="middle"
+                  dominantBaseline="text-after-edge"
+                />
+              </g>
+            )}
             {showStaffSpacerHandles && typeof onStaffSpacerMouseDown === 'function' && (
               <rect
                 x={0}
@@ -285,20 +326,27 @@ export function TraditionalNotationView({
             {sys.pageBreakBefore && (
               <line x1={0} y1={sys.yOffset - PAGE_BREAK_GAP / 2} x2={pageWidth || 800} y2={sys.yOffset - PAGE_BREAK_GAP / 2} stroke="#c4b896" strokeWidth={1} strokeDasharray="4 4" />
             )}
-            {/* Grand Staff klamber (ainult traditsioonilisel, mitte figuurnotatsioonil) */}
+            {/* Piano Grand Staff brace (Leland SMuFL brace) – connects treble and bass staves */}
             {isFirstInBraceGroup && braceGroupSize >= 2 && !multiStaff && (() => {
               const staffH = getStaffHeight();
               const grandGap = Math.max(80, Math.min(100, 90));
               const braceH = braceGroupSize * staffH + grandGap;
               const top = sys.yOffset + 2;
               const bottom = sys.yOffset + braceH - 2;
-              const lineX = 16;
-              const braceLeft = 2;
-              const pathD = `M ${lineX - 2} ${top} Q ${braceLeft} ${top + braceH * 0.25} ${braceLeft} ${top + braceH / 2} Q ${braceLeft} ${bottom - braceH * 0.25} ${lineX - 2} ${bottom}`;
+              const braceCenterY = (top + bottom) / 2;
+              const braceFontSize = Math.max(40, bottom - top);
+              const braceX = 14;
               return (
-                <g>
-                  <line x1={lineX} y1={top} x2={lineX} y2={bottom} stroke="#000" strokeWidth="3" />
-                  <path d={pathD} fill="none" stroke="#000" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                <g aria-hidden="true">
+                  <SmuflGlyph
+                    x={braceX}
+                    y={braceCenterY}
+                    glyph={SMUFL_GLYPH.brace}
+                    fontSize={braceFontSize}
+                    fill="#1a1a1a"
+                    textAnchor="middle"
+                    dominantBaseline="middle"
+                  />
                 </g>
               );
             })()}
@@ -502,9 +550,29 @@ export function TraditionalNotationView({
                         <path d={`M ${measureX + measureWidth / 2 - 4} ${staffY - 10} L ${measureX + measureWidth / 2} ${staffY - 14} L ${measureX + measureWidth / 2 + 4} ${staffY - 10}`} fill="none" stroke="#92400e" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
                       </g>
                     )}
-                    {j !== 0 && <line x1={measureX} y1={staffY + firstLineY} x2={measureX} y2={staffY + lastLineY} stroke="#1a1a1a" strokeWidth={getThinBarlineThickness(spacing)} />}
-                    {measureIdx === sys.measureIndices[sys.measureIndices.length - 1] && (
-                      <line x1={measureX + measureWidth} y1={staffY + firstLineY} x2={measureX + measureWidth} y2={staffY + lastLineY} stroke="#1a1a1a" strokeWidth={getThinBarlineThickness(spacing)} />
+                    {!(connectedBarlines && staffIndexInScore > 0) && (
+                      <>
+                        {j !== 0 && (
+                          <line
+                            x1={measureX}
+                            y1={connectedBarlines && staffIndexInScore === 0 ? 0 : staffY + firstLineY}
+                            x2={measureX}
+                            y2={connectedBarlines && staffIndexInScore === 0 ? (systemTotalHeight ?? (staffY + lastLineY)) : staffY + lastLineY}
+                            stroke="#1a1a1a"
+                            strokeWidth={getThinBarlineThickness(spacing)}
+                          />
+                        )}
+                        {measureIdx === sys.measureIndices[sys.measureIndices.length - 1] && (
+                          <line
+                            x1={measureX + measureWidth}
+                            y1={connectedBarlines && staffIndexInScore === 0 ? 0 : staffY + firstLineY}
+                            x2={measureX + measureWidth}
+                            y2={connectedBarlines && staffIndexInScore === 0 ? (systemTotalHeight ?? (staffY + lastLineY)) : staffY + lastLineY}
+                            stroke="#1a1a1a"
+                            strokeWidth={getThinBarlineThickness(spacing)}
+                          />
+                        )}
+                      </>
                     )}
                     {chords.filter(c => c.beatPosition >= measure.startBeat && c.beatPosition < measure.endBeat).map((chord) => {
                       const chordX = measureX + (chord.beatPosition - measure.startBeat) * beatWidth;

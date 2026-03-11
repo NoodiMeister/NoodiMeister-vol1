@@ -99,6 +99,8 @@ export function FigurenotesView({
   a4PageHeight = 400,
   pageFlowDirection = 'vertical',
   figureBaseWidth = FIGURE_BASE_WIDTH,
+  showStaffSpacerHandles = false,
+  onStaffSpacerMouseDown,
 }) {
   const centerY = timelineHeight / 2;
   const beatsPerMeasure = timeSignature?.beats ?? 4;
@@ -110,6 +112,20 @@ export function FigurenotesView({
         const groupTransform = isHorizontal && pageWidth ? `translate(${pageIndex * pageWidth}, ${-pageIndex * a4PageHeight})` : undefined;
         return (
           <g key={sys.systemIndex} transform={groupTransform}>
+            {showStaffSpacerHandles && typeof onStaffSpacerMouseDown === 'function' && (
+              <rect
+                x={0}
+                y={sys.yOffset}
+                width={14}
+                height={timelineHeight}
+                fill="#e5e7eb"
+                stroke="#9ca3af"
+                strokeWidth={1}
+                rx={2}
+                style={{ cursor: 'ns-resize' }}
+                onMouseDown={(e) => onStaffSpacerMouseDown(sys.systemIndex)(e)}
+              />
+            )}
             {sys.pageBreakBefore && (
               <line x1={0} y1={sys.yOffset - PAGE_BREAK_GAP / 2} x2={pageWidth || 800} y2={sys.yOffset - PAGE_BREAK_GAP / 2} stroke="#c4b896" strokeWidth={1} strokeDasharray="4 4" />
             )}
@@ -183,6 +199,9 @@ export function FigurenotesView({
                 return 1;
               };
 
+              /* Bottom of beat box row for long-duration rectangle (so long notes don't overlap barlines). */
+              const beatBoxBottomY = sys.yOffset + timelineHeight - 4;
+
               const renderFigurenote = (note, x, y, noteIndex, noteWidth, figureSize) => {
                 const pitch = String(note.pitch || '').toUpperCase().replace('H', 'B');
                 const style = getFigureStyle(note.pitch, note.octave);
@@ -196,7 +215,7 @@ export function FigurenotesView({
                       : dur === '1/8' ? 'eighth'
                         : dur === '1/16' || dur === '1/32' ? 'sixteenth'
                           : 'quarter';
-                /* Rhythm tail: half (1/2) = 1 square, whole (1/1) = 2 squares, each square half the figure size; length measured by the bar. */
+                /* Long rhythm (1/2, 1/1): one rectangle at bottom of beat box, under figure layer — no overlap with barline. */
                 const hasTail = dur === '1/2' || dur === '1/1';
                 const tailSize = hasTail ? size / 2 : 0;
                 const numTailSquares = dur === '1/1' ? 2 : dur === '1/2' ? 1 : 0;
@@ -214,6 +233,20 @@ export function FigurenotesView({
                 const fill = style.fill ?? '#C7BAB7';
                 const effectiveStroke = style.stroke ?? 'none';
                 const effectiveStrokeWidth = style.strokeWidth ?? 0;
+
+                /* Long-duration rectangle: square→rectangle at bottom of beat box, drawn under figure layer. */
+                const longDurationRectEl = hasTail && numTailSquares > 0 && (
+                  <rect
+                    x={figureCenterX - totalTailWidth / 2}
+                    y={beatBoxBottomY - tailSize}
+                    width={totalTailWidth}
+                    height={tailSize}
+                    fill={fill}
+                    stroke={effectiveStroke}
+                    strokeWidth={effectiveStrokeWidth}
+                    vectorEffect="non-scaling-stroke"
+                  />
+                );
 
                 /* Quarter (1/4) and all durations: use a square SVG and preserve aspect ratio so shapes
                    are never stretched — perfect circle, square, X, or triangle (not oval/rectangular). */
@@ -244,30 +277,10 @@ export function FigurenotesView({
                   </svg>
                 );
 
-                const tailSquaresEl = hasTail && numTailSquares > 0 && (
-                  <g>
-                    {Array.from({ length: numTailSquares }, (_, i) => {
-                      const tailX = figureCenterX + size / 2 + i * tailSize;
-                      const tailY = y - tailSize / 2;
-                      return (
-                        <rect
-                          key={i}
-                          x={tailX}
-                          y={tailY}
-                          width={tailSize}
-                          height={tailSize}
-                          fill={fill}
-                          stroke={effectiveStroke}
-                          strokeWidth={effectiveStrokeWidth}
-                          vectorEffect="non-scaling-stroke"
-                        />
-                      );
-                    })}
-                  </g>
-                );
-
                 return (
                   <g>
+                    {/* Long-duration bar: rectangle at bottom of beat box, slightly under figure layer */}
+                    {longDurationRectEl}
                     {/* Pedagoogiline aluskiht: SMuFL notehead (Leland) */}
                     <SmuflGlyph
                       x={figureCenterX}
@@ -278,7 +291,6 @@ export function FigurenotesView({
                       style={{ opacity: 0.18 }}
                     />
                     {shapeEl}
-                    {tailSquaresEl}
                     <text x={figureCenterX} y={y} textAnchor="middle" dominantBaseline="central" fill={textColor} fontSize={Math.max(8, size * 0.5)} fontWeight="bold">
                       {String(note.pitch || '').toUpperCase().replace('H', 'B')}
                     </text>
@@ -297,8 +309,10 @@ export function FigurenotesView({
                       const strokeW2 = Math.max(1.5, size * 0.1);
                       const stroke = '#1a1a1a';
                       if (note.accidental === 1) {
+                        // Sharp: diagonal arrow up-right (↗)
                         return (<g stroke={stroke} fill="none" strokeWidth={strokeW2} strokeLinecap="round" strokeLinejoin="round"><line x1={figureCenterX - arrowLen / 2} y1={arrowY + arrowLen / 2} x2={figureCenterX + arrowLen / 2} y2={arrowY - arrowLen / 2} /><path d={`M ${figureCenterX + arrowLen / 2} ${arrowY - arrowLen / 2} L ${figureCenterX + arrowLen / 2 - head} ${arrowY - arrowLen / 2 + head * 0.6} M ${figureCenterX + arrowLen / 2} ${arrowY - arrowLen / 2} L ${figureCenterX + arrowLen / 2 - head * 0.6} ${arrowY - arrowLen / 2 + head}`} /></g>);
                       }
+                      // Flat: diagonal arrow to the left (↖)
                       return (<g stroke={stroke} fill="none" strokeWidth={strokeW2} strokeLinecap="round" strokeLinejoin="round"><line x1={figureCenterX + arrowLen / 2} y1={arrowY + arrowLen / 2} x2={figureCenterX - arrowLen / 2} y2={arrowY - arrowLen / 2} /><path d={`M ${figureCenterX - arrowLen / 2} ${arrowY - arrowLen / 2} L ${figureCenterX - arrowLen / 2 + head} ${arrowY - arrowLen / 2 + head * 0.6} M ${figureCenterX - arrowLen / 2} ${arrowY - arrowLen / 2} L ${figureCenterX - arrowLen / 2 + head * 0.6} ${arrowY - arrowLen / 2 + head}`} /></g>);
                     })()}
                     {isSelected && <circle cx={figureCenterX} cy={y} r={size / 2 + 4} fill="none" stroke="#2563eb" strokeWidth="2" opacity="0.5" />}
@@ -309,7 +323,7 @@ export function FigurenotesView({
               const handleBeatSlot = (beatIndex, e) => {
                 if (typeof onBeatSlotClick !== 'function') return;
                 e.stopPropagation();
-                if (e.pointerType === 'touch' || e.pointerType === 'pen') e.preventDefault?.();
+                e.preventDefault?.();
                 const beatPosition = measure.startBeat + beatIndex;
                 onBeatSlotClick(beatPosition);
               };
@@ -331,8 +345,7 @@ export function FigurenotesView({
                       height={timelineHeight - 8}
                       fill="transparent"
                       style={{ cursor: 'pointer' }}
-                      onClick={(e) => handleBeatSlot(beatIndex, e)}
-                      onPointerDown={(e) => { if (e.pointerType !== 'mouse') handleBeatSlot(beatIndex, e); }}
+                      onPointerDown={(e) => handleBeatSlot(beatIndex, e)}
                     />
                   ))}
                   {measureWidth < (LAYOUT.MEASURE_MIN_WIDTH || 28) && (
