@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { LogIn, Mail, Lock } from 'lucide-react';
 import { CloudLoginButtons } from '../components/CloudLogin';
 import { AuthErrorBlock } from '../components/AuthErrorBlock';
@@ -8,6 +8,9 @@ import { formatAuthError } from '../utils/authError';
 
 export default function LoginPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const redirectTo = searchParams.get('redirect');
+  const safeRedirect = redirectTo && redirectTo.startsWith('/') && !redirectTo.startsWith('//') ? redirectTo : '/tood';
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [message, setMessage] = useState('');
@@ -89,10 +92,10 @@ export default function LoginPage() {
       requestAnimationFrame(() => {
         setTimeout(() => {
           try {
-            navigate('/tood', { replace: true });
+            navigate(safeRedirect, { replace: true });
           } catch (navErr) {
             const base = (typeof import.meta !== 'undefined' && import.meta.env?.BASE_URL) || '';
-            const path = (base.replace(/\/$/, '') || '') + '/tood';
+            const path = (base.replace(/\/$/, '') || '') + safeRedirect;
             window.location.assign(window.location.origin + path);
           }
         }, 400);

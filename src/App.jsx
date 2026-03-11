@@ -198,7 +198,8 @@ function AppRoutes() {
           <Route path="/registreeru" element={<RegisterOrRedirect />} />
           <Route path="/hinnakiri" element={<HinnakiriPage />} />
           <Route path="/toeta" element={<ToetaPage />} />
-          <Route path="/admin" element={<AdminGrantSupportPage />} />
+          <Route path="/administraator" element={<AdminGrantSupportPage />} />
+          <Route path="/admin" element={<Navigate to="/administraator" replace />} />
           <Route path="/" element={<LandingOrRedirect />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

@@ -2,70 +2,70 @@
 
 See juhend kirjeldab voogu, kui **organisatsioon** (nt kool, asutus) soovib rakendust toetada ja kasutada, kuid **ei saa maksta pangakaardi ega pangaülekandega** – ainult **arvega** (e-arvega). Administraator (sina) saad organisatsioonilt konkreetsed **kasutajate e-mailid**, kellele soovitakse täisfunktsiooni, ja annad neile ligipääsu rakenduse kaudu.
 
+## Peidetud administraatori leht
+
+- **Aadress:** `https://noodimeister.ee/administraator` (või sinu domeen). Leht **ei ole** avaliku menüü ega jaluse link – ligipääs ainult otse URLi kaudu.
+- **Nõuded:** oled **sisselogitud** oma administraatori kontoga ja sisestad **administraatori parooli** (eraldi sisselogimise paroolist). Parool tuleb vahetada **iga 3 kuud**.
+- **Kes on administraator:** Vercel keskkonnamuutuja `ADMIN_EMAILS` (komadega eraldatud e-mailid). Ainult nende e-mailidega sisseloginud kasutajad näevad administraatori vorme ja saavad anda täisfunktsiooni.
+
 ## Ülevaade voost
 
-1. **Organisatsioon** (nt Pärnu Päikese kool) võtab sinuga ühendust (e-post, telefon) ja teatab:
-   - tahame toetada NoodiMeistrit ja kasutada täisfunktsiooni;
-   - maksame **e-arvega** (mitte kaardiga ega ülekandega);
-   - siin on **kasutajate e-mailide nimekiri**, kellele soovime ligipääsu.
+1. **Organisatsioon** (nt Pärnu Päikese kool) võtab sinuga ühendust ja teatab: toetame, maksame e-arvega, siin on kasutajate e-mailid.
+2. **Sina:** koostad e-arve oma süsteemis; pärast laekumist avad **/administraator**, logid sisse oma kontoga, sisestad administraatori parooli ja annad nimekirjas olevatele kontodele täisfunktsiooni.
+3. **Rakendus:** need kasutajad saavad täisfunktsiooni kuni sinu määratud kuupäevani (sama KV kui Stripe puhul).
 
-2. **Sina (administraator):**
-   - koostad organisatsioonile **e-arve** (väljaspool NoodiMeisterit – oma raamatupidamise/arvestuse süsteemiga);
-   - pärast arve laekumist (või kokkuleppel enne) avad NoodiMeistri **administraatori lehe** ja annad nimekirjas olevatele kontodele täisfunktsiooni kehtivuse.
+## Keskkonnamuutujad (Vercel)
 
-3. **Rakendus:** need kasutajad logivad sisse oma e-mailiga; rakendus loeb toetuse staatuse (sama KV andmebaas kui Stripe puhul) ja lubab **täisfunktsiooni** kuni sinu määratud kuupäevani.
+| Muutuja | Kirjeldus |
+|---------|-----------|
+| **ADMIN_EMAILS** | Komadega eraldatud administraatori e-mailid (nt `info@la-stravaganza.com`). Ainult need kontod pääsevad /administraator lehele. |
+| **ADMIN_SECRET** | Salajane võti. Kasutatakse: (1) esialgse administraatori parooli seadistamiseks (üks kord); (2) API otse autentimiseks (header `X-Admin-Secret`), kui ei kasuta JWT-d. |
 
-## Mida sul vaja on
+## Administraatori parool ja 3 kuud
 
-- **Vercel KV** (või muu salvestus), kuhu toetuse kehtivus kirjutatakse – sama, mida kasutavad ka Stripe ja support-status API.
-- **ADMIN_SECRET** – tugev salasõna/parool, mida keegi teine ei tea. Seadistad selle **Vercel → Project → Settings → Environment Variables**: `ADMIN_SECRET` = (sinu valitud väärtus).
+- **Esimene kord:** kui administraatori parooli pole veel seatud, pead sisestama **ADMIN_SECRET** (salajane võti) ja valima uue administraatori parooli (vähemalt 8 tähemärki). Seda teed ainult üks kord.
+- **Järgmised korrad:** avad /administraator, logid sisse oma kontoga (e-mail ADMIN_EMAILS nimekirjas), sisestad **administraatori parooli** ja saad ligipääsu vormile „Anna täisfunktsioon”.
+- **Iga 3 kuud:** süsteem palub parooli vahetada. Sisestad praeguse ja uue parooli; pärast seda saad jätkata.
 
-## Kuidas administraator ligipääsu annab
+Parool salvestatakse räsitult (KV); ADMIN_SECRET jääb ainult keskkonnamuutujasse.
 
-### Variant 1: Admin-leht brauseris (soovitus)
+## Kuidas ligipääsu annad (administraatori lehel)
 
-1. Ava **https://SINU-DOMEEN.vercel.app/admin** (või `http://localhost:5173/admin` kohalikult).
-2. Sisesta **Administraatori parool** (sama mis `ADMIN_SECRET` keskkonnas).
-3. Kleepi **e-mailide nimekiri** (üks reale või komadega eraldatuna).
-4. Vali **Toetus kehtib kuni** (kuupäev).
-5. Valikuline: **Märkus** (nt „Pärnu Päikese kool, arve 2024-001”).
-6. Vajuta **Anna täisfunktsioon**.
+1. Ava **https://SINU-DOMEEN/administraator**.
+2. Kui ei ole sisselogitud, suunatakse sisselogimise lehele (pärast sisselogimist tagasi /administraator).
+3. Sisesta **administraatori parool** (või esmakordsel seadistamisel ADMIN_SECRET ja uus parool).
+4. Kui süsteem palub, **vaheta parool** (praegune + uus).
+5. Vormil: kleepi **e-mailide nimekiri**, vali **Toetus kehtib kuni**, vajuta **Anna täisfunktsioon**.
 
-Rakendus saadab päringu backend’ile; kui parool klapib, kirjutatakse iga e-maili kohta andmebaasi „toetus kehtib kuni YYYY-MM-DD”. Need kasutajad saavad kohe täisfunktsiooni kuni selle kuupäevani.
+Vana aadress **/admin** suunab automaatselt **/administraator**-ile.
 
-### Variant 2: API otse (skript, Postman)
+## API otse (valikuline)
 
-Kui soovid automatiseerida või kasutada oma skripti:
+Kui soovid skriptiga või Postmaniga anda ligipääsu, saad endiselt kasutada headerit **X-Admin-Secret** (võrdub ADMIN_SECRET):
 
 ```http
 POST /api/admin/grant-support
 Content-Type: application/json
-X-Admin-Secret: <SINU_ADMIN_SECRET>
+X-Admin-Secret: <ADMIN_SECRET>
 
-{
-  "emails": ["opetaja@kool.ee", "opilane@kool.ee"],
-  "supportUntil": "2026-08-31",
-  "note": "Pärnu Päikese kool, arve 2024-001"
-}
+{ "emails": ["a@kool.ee"], "supportUntil": "2026-08-31", "note": "Pärnu Päikese kool" }
 ```
 
-- **emails** – massiiv e-mailidega või üks string (read või komadega eraldatud).
-- **supportUntil** – kuupäev kujul `YYYY-MM-DD`.
-- **note** – valikuline märkus (salvestatakse, et hiljem teada saada, kellele ja mille kohta).
+Või pärast parooli sisestamist brauseris saad seansi (JWT); API aktsepteerib ka **Authorization: Bearer &lt;JWT&gt;** (sama, mida brauser saadab).
 
 ## Turvalisus
 
-- **ADMIN_SECRET** hoia ainult keskkonnamuutujas (Vercel); ära lisa seda koodi ega avalikku repositooriumi.
-- Admin-leht (`/admin`) on avalikult nähtav (igaüks võib lehe avada); ligipääs toimub **ainult parooli** kaudu. Kasuta tugevat parooli ja ära jaga seda.
-- Soovi korral võid admin-lehe peita (nt ei lisa avalikku menüüsse linki) – ligipääs siis otse aadressi `/admin` kaudu.
+- **ADMIN_EMAILS** ja **ADMIN_SECRET** hoia Vercel keskkonnas; ära lisa neid koodi ega repositooriumi.
+- Leht /administraator on avalikult laaditav (URL on teada), kuid sisu ja toimingud on kaitstud: ainult ADMIN_EMAILS kontod ja õige administraatori parool (või ADMIN_SECRET API puhul) annavad ligipääsu.
+- Parool salvestatakse räsitult; 3-kuine vahetus vähendab riski.
 
 ## Kokkuvõte
 
 | Samm | Kes | Mis |
 |------|-----|-----|
-| Taotlus | Organisatsioon | Ühendus sinuga; nimekiri e-mailidega; makse e-arvega. |
-| Arve | Sina | Koostad e-arve oma süsteemis; saadad organisatsioonile. |
-| Ligipääsu andmine | Sina | Ava `/admin`, sisesta parool ja e-mailid, vali kehtivuse lõpp, kinnita. |
-| Täisfunktsioon | Rakendus | Kasutajad logivad sisse; rakendus loeb toetuse KV-st ja lubab täisfunktsiooni. |
+| Taotlus | Organisatsioon | Ühendus; nimekiri e-mailidega; makse e-arvega. |
+| Arve | Sina | Koostad e-arve oma süsteemis. |
+| Ligipääsu andmine | Sina | Ava /administraator, logi sisse, sisesta admin-parool (vaheta 3 kuu järel), anna e-mailidele kehtivus. |
+| Täisfunktsioon | Rakendus | Kasutajad logivad sisse; rakendus loeb toetuse KV-st. |
 
-Sama andmebaas (Vercel KV võti `support:<email>`) kasutab nii Stripe makseid kui ka administraatori poolt antud ligipääsu – seega üksik kasutaja võib omada nii kaardiga makstud toetust kui ka organisatsiooni e-arvega antud ligipääsu; kehtib see kuupäev, mis on kaugeim tulevikus.
+Sama KV (`support:<email>`) kasutavad nii Stripe maksed kui ka administraatori antud ligipääs; kehtib kaugeim kuupäev.

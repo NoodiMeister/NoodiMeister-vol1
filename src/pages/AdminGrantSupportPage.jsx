@@ -1,26 +1,395 @@
 /**
- * Administraatori leht – tööriistad tulevad koos makselahendusega (pärast esitlust).
+ * Peidetud administraatori leht: noodimeister.ee/administraator
+ * Nõuab: sisselogitud kasutaja, kelle e-mail on ADMIN_EMAILS nimekirjas, ja administraatori parooli.
+ * Parool tuleb vahetada iga 3 kuud.
  */
-import React from 'react';
-import { Link } from 'react-router-dom';
-import { Shield } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { Shield, Loader2, CheckCircle, AlertCircle, Lock, KeyRound } from 'lucide-react';
+import { useNoodimeisterOptional } from '../store/NoodimeisterContext';
+import * as authStorage from '../services/authStorage';
+
+const JWT_STORAGE_KEY = 'noodimeister-admin-jwt';
+const PASSWORD_CHANGE_MONTHS = 3;
+
+function getApiBase() {
+  if (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_BASE) {
+    return import.meta.env.VITE_API_BASE.replace(/\/$/, '');
+  }
+  if (typeof window !== 'undefined' && window.location?.origin) {
+    return window.location.origin;
+  }
+  return '';
+}
 
 export default function AdminGrantSupportPage() {
-  return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-slate-100 dark:bg-zinc-900 px-6">
-      <div className="max-w-md w-full rounded-2xl bg-white dark:bg-zinc-800 border border-slate-200 dark:border-white/10 p-8 text-center shadow-lg">
-        <Shield className="w-12 h-12 text-slate-400 dark:text-white/50 mx-auto mb-4" />
-        <h1 className="text-xl font-bold text-slate-800 dark:text-white mb-2">Administraatori tööriistad</h1>
-        <p className="text-sm text-slate-600 dark:text-white/70 mb-6">
-          Toetuse andmise ja makselahenduse haldamise tööriistad lisatakse pärast esitlust.
-        </p>
-        <Link
-          to="/"
-          className="inline-flex items-center justify-center px-4 py-2 rounded-lg bg-slate-700 text-white font-medium hover:bg-slate-600 transition-colors"
-        >
-          Tagasi avalehele
-        </Link>
+  const navigate = useNavigate();
+  const ctx = useNoodimeisterOptional();
+  const user = ctx?.user;
+  const email = user?.email?.trim()?.toLowerCase() || '';
+
+  const [step, setStep] = useState('loading'); // loading | notLoggedIn | notAllowed | setInitial | enterPassword | changePassword | grant
+  const [status, setStatus] = useState(null); // { allowed, hasPasswordSet, mustChangePassword }
+  const [token, setToken] = useState(() => {
+    try {
+      return sessionStorage.getItem(JWT_STORAGE_KEY) || '';
+    } catch {
+      return '';
+    }
+  });
+
+  const [secret, setSecret] = useState('');
+  const [password, setPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [emailsText, setEmailsText] = useState('');
+  const [supportUntil, setSupportUntil] = useState(() => {
+    const d = new Date();
+    d.setFullYear(d.getFullYear() + 1);
+    return d.toISOString().slice(0, 10);
+  });
+  const [note, setNote] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [result, setResult] = useState(null);
+
+  useEffect(() => {
+    if (!email) {
+      setStep('notLoggedIn');
+      return;
+    }
+    let cancelled = false;
+    setStep('loading');
+    fetch(`${getApiBase()}/api/admin/status?email=${encodeURIComponent(email)}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (cancelled) return;
+        setStatus(data);
+        if (!data.allowed) {
+          setStep('notAllowed');
+          return;
+        }
+        if (!data.hasPasswordSet) {
+          setStep('setInitial');
+          return;
+        }
+        if (data.mustChangePassword) {
+          setStep(token ? 'changePassword' : 'enterPassword');
+          return;
+        }
+        if (token) {
+          setStep('grant');
+          return;
+        }
+        setStep('enterPassword');
+      })
+      .catch(() => {
+        if (!cancelled) setStep('notAllowed');
+      });
+    return () => { cancelled = true; };
+  }, [email]);
+
+  const saveToken = (t) => {
+    setToken(t);
+    try {
+      if (t) sessionStorage.setItem(JWT_STORAGE_KEY, t);
+      else sessionStorage.removeItem(JWT_STORAGE_KEY);
+    } catch (_) {}
+  };
+
+  const handleSetInitial = async (e) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+    try {
+      const res = await fetch(`${getApiBase()}/api/admin/set-initial-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, secret, newPassword }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.token) {
+        saveToken(data.token);
+        setStep('grant');
+        setSecret('');
+        setNewPassword('');
+      } else {
+        setError(data.error || 'Viga');
+      }
+    } catch (err) {
+      setError(err?.message || 'Võrguviga');
+    }
+    setLoading(false);
+  };
+
+  const handleVerifyPassword = async (e) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+    try {
+      const res = await fetch(`${getApiBase()}/api/admin/verify-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password, ...(status?.hasPasswordSet ? {} : { secret }) }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.token) {
+        saveToken(data.token);
+        if (data.mustChangePassword) {
+          setStep('changePassword');
+          setPassword('');
+        } else {
+          setStep('grant');
+          setPassword('');
+        }
+      } else {
+        setError(data.error || 'Vale parool või viga');
+      }
+    } catch (err) {
+      setError(err?.message || 'Võrguviga');
+    }
+    setLoading(false);
+  };
+
+  const handleChangePassword = async (e) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+    try {
+      const res = await fetch(`${getApiBase()}/api/admin/change-password`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({ currentPassword: currentPassword, newPassword: newPassword }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.token) {
+        saveToken(data.token);
+        setStep('grant');
+        setCurrentPassword('');
+        setNewPassword('');
+      } else {
+        setError(data.error || 'Viga');
+      }
+    } catch (err) {
+      setError(err?.message || 'Võrguviga');
+    }
+    setLoading(false);
+  };
+
+  const handleGrant = async (e) => {
+    e.preventDefault();
+    setError('');
+    setResult(null);
+    const emails = emailsText
+      .split(/[\n,;]+/)
+      .map((s) => s.trim().toLowerCase())
+      .filter((s) => s && s.includes('@'));
+    if (emails.length === 0) {
+      setError('Sisesta vähemalt üks e-mail.');
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await fetch(`${getApiBase()}/api/admin/grant-support`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({ emails, supportUntil, note: note.trim() || undefined }),
+      });
+      const data = await res.json().catch(() => ({}));
+      setLoading(false);
+      if (res.ok && data.ok) {
+        setResult(data);
+        setEmailsText('');
+      } else {
+        setError(data.error || 'Viga');
+      }
+    } catch (err) {
+      setLoading(false);
+      setError(err?.message || 'Võrguviga');
+    }
+  };
+
+  const handleLogout = () => {
+    saveToken('');
+    setStep(email ? 'enterPassword' : 'notLoggedIn');
+  };
+
+  if (step === 'loading') {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-100 dark:bg-zinc-900">
+        <Loader2 className="w-10 h-10 animate-spin text-amber-600 mb-4" />
+        <p className="text-slate-600 dark:text-white/70">Laen…</p>
       </div>
+    );
+  }
+
+  if (step === 'notLoggedIn') {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-100 dark:bg-zinc-900 px-6">
+        <div className="max-w-md w-full rounded-2xl bg-white dark:bg-zinc-800 border border-slate-200 dark:border-white/10 p-8 text-center shadow-lg">
+          <Lock className="w-12 h-12 text-slate-400 mx-auto mb-4" />
+          <h1 className="text-xl font-bold text-slate-800 dark:text-white mb-2">Administraator</h1>
+          <p className="text-sm text-slate-600 dark:text-white/70 mb-6">
+            Selle lehe kasutamiseks pead olema sisselogitud.
+          </p>
+          <Link
+            to={`/login?redirect=${encodeURIComponent('/administraator')}`}
+            className="inline-flex items-center justify-center px-4 py-2 rounded-lg bg-amber-600 text-white font-medium hover:bg-amber-500"
+          >
+            Logi sisse
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  if (step === 'notAllowed') {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-100 dark:bg-zinc-900 px-6">
+        <div className="max-w-md w-full rounded-2xl bg-white dark:bg-zinc-800 border border-slate-200 dark:border-white/10 p-8 text-center shadow-lg">
+          <AlertCircle className="w-12 h-12 text-amber-500 mx-auto mb-4" />
+          <h1 className="text-xl font-bold text-slate-800 dark:text-white mb-2">Ligipääs piiratud</h1>
+          <p className="text-sm text-slate-600 dark:text-white/70 mb-6">
+            Sul ei ole administraatori õigusi.
+          </p>
+          <Link to="/" className="inline-flex items-center justify-center px-4 py-2 rounded-lg bg-slate-600 text-white font-medium hover:bg-slate-500">
+            Tagasi
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  const layout = (
+    <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-zinc-900">
+      <header className="flex-shrink-0 border-b border-slate-200 dark:border-white/10 bg-white dark:bg-zinc-800">
+        <div className="max-w-xl mx-auto px-6 py-4 flex items-center justify-between">
+          <Link to="/" className="text-slate-600 dark:text-white/80 font-medium">← NoodiMeister</Link>
+          <span className="flex items-center gap-2 text-sm text-slate-500 dark:text-white/60">
+            <Shield className="w-4 h-4" /> Administraator
+            {email && <span className="hidden sm:inline">({email})</span>}
+          </span>
+        </div>
+      </header>
+      <main className="flex-1 px-6 py-8">
+        <div className="max-w-xl mx-auto">
+          {step === 'setInitial' && (
+            <>
+              <h1 className="text-xl font-bold text-slate-900 dark:text-white mb-2 flex items-center gap-2">
+                <KeyRound className="w-6 h-6 text-amber-600" />
+                Esialgne parooli seadistamine
+              </h1>
+              <p className="text-sm text-slate-600 dark:text-white/70 mb-6">
+                Sisesta salajane võti (ADMIN_SECRET keskkonnamuutujast) ja vali administraatori parool (vähemalt 8 tähemärki). Parooli tuleb vahetada iga {PASSWORD_CHANGE_MONTHS} kuu järel.
+              </p>
+              <form onSubmit={handleSetInitial} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 dark:text-white mb-1">Salajane võti (ADMIN_SECRET)</label>
+                  <input type="password" value={secret} onChange={(e) => setSecret(e.target.value)} required className="w-full px-4 py-2 rounded-xl border border-slate-200 dark:border-white/20 bg-white dark:bg-zinc-800 text-slate-900 dark:text-white" autoComplete="off" />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 dark:text-white mb-1">Uus parool (min 8 tähemärki)</label>
+                  <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required minLength={8} className="w-full px-4 py-2 rounded-xl border border-slate-200 dark:border-white/20 bg-white dark:bg-zinc-800 text-slate-900 dark:text-white" autoComplete="new-password" />
+                </div>
+                {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+                <button type="submit" disabled={loading} className="w-full py-2 rounded-xl font-semibold bg-amber-600 text-white hover:bg-amber-500 disabled:opacity-50 flex items-center justify-center gap-2">
+                  {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : null} Seadista parool
+                </button>
+              </form>
+            </>
+          )}
+
+          {step === 'enterPassword' && (
+            <>
+              <h1 className="text-xl font-bold text-slate-900 dark:text-white mb-2 flex items-center gap-2">
+                <Lock className="w-6 h-6 text-amber-600" />
+                Sisesta administraatori parool
+              </h1>
+              <p className="text-sm text-slate-600 dark:text-white/70 mb-6">
+                Parool tuleb vahetada iga {PASSWORD_CHANGE_MONTHS} kuu järel. Kui süsteem palub, vaheta parool pärast sisselogimist.
+              </p>
+              <form onSubmit={handleVerifyPassword} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 dark:text-white mb-1">Parool</label>
+                  <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required className="w-full px-4 py-2 rounded-xl border border-slate-200 dark:border-white/20 bg-white dark:bg-zinc-800 text-slate-900 dark:text-white" autoComplete="current-password" />
+                </div>
+                {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+                <button type="submit" disabled={loading} className="w-full py-2 rounded-xl font-semibold bg-amber-600 text-white hover:bg-amber-500 disabled:opacity-50 flex items-center justify-center gap-2">
+                  {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : null} Jätka
+                </button>
+              </form>
+            </>
+          )}
+
+          {step === 'changePassword' && (
+            <>
+              <h1 className="text-xl font-bold text-slate-900 dark:text-white mb-2 flex items-center gap-2">
+                <KeyRound className="w-6 h-6 text-amber-600" />
+                Vaheta parool
+              </h1>
+              <p className="text-sm text-slate-600 dark:text-white/70 mb-6">
+                Administraatori parool tuleb vahetada iga {PASSWORD_CHANGE_MONTHS} kuu järel. Sisesta praegune ja uus parool.
+              </p>
+              <form onSubmit={handleChangePassword} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 dark:text-white mb-1">Praegune parool</label>
+                  <input type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} required className="w-full px-4 py-2 rounded-xl border border-slate-200 dark:border-white/20 bg-white dark:bg-zinc-800 text-slate-900 dark:text-white" autoComplete="current-password" />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 dark:text-white mb-1">Uus parool (min 8 tähemärki)</label>
+                  <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required minLength={8} className="w-full px-4 py-2 rounded-xl border border-slate-200 dark:border-white/20 bg-white dark:bg-zinc-800 text-slate-900 dark:text-white" autoComplete="new-password" />
+                </div>
+                {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+                <button type="submit" disabled={loading} className="w-full py-2 rounded-xl font-semibold bg-amber-600 text-white hover:bg-amber-500 disabled:opacity-50 flex items-center justify-center gap-2">
+                  {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : null} Vaheta parool
+                </button>
+              </form>
+            </>
+          )}
+
+          {step === 'grant' && (
+            <>
+              <h1 className="text-xl font-bold text-slate-900 dark:text-white mb-2 flex items-center gap-2">
+                <Shield className="w-6 h-6 text-amber-600" />
+                Anna täisfunktsioon (e-arve / organisatsioon)
+              </h1>
+              <p className="text-sm text-slate-600 dark:text-white/70 mb-6">
+                Sisesta organisatsiooni kasutajate e-mailid ja kehtivuse lõppkuupäev. Väljalogimiseks administraatori seansi: <button type="button" onClick={handleLogout} className="underline text-amber-600 hover:text-amber-500">logi administraatorist välja</button>.
+              </p>
+              <form onSubmit={handleGrant} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 dark:text-white mb-1">E-mailid (üks reale või komadega)</label>
+                  <textarea rows={5} value={emailsText} onChange={(e) => setEmailsText(e.target.value)} placeholder="opetaja@kool.ee&#10;opilane@kool.ee" className="w-full px-4 py-2 rounded-xl border border-slate-200 dark:border-white/20 bg-white dark:bg-zinc-800 text-slate-900 dark:text-white font-mono text-sm" />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 dark:text-white mb-1">Toetus kehtib kuni</label>
+                  <input type="date" value={supportUntil} onChange={(e) => setSupportUntil(e.target.value)} className="w-full px-4 py-2 rounded-xl border border-slate-200 dark:border-white/20 bg-white dark:bg-zinc-800 text-slate-900 dark:text-white" />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 dark:text-white mb-1">Märkus (valikuline)</label>
+                  <input type="text" value={note} onChange={(e) => setNote(e.target.value)} placeholder="nt Pärnu Päikese kool, arve 2024-001" className="w-full px-4 py-2 rounded-xl border border-slate-200 dark:border-white/20 bg-white dark:bg-zinc-800 text-slate-900 dark:text-white" />
+                </div>
+                {error && <p className="text-sm text-red-600 dark:text-red-400 flex items-center gap-1"><AlertCircle className="w-4 h-4" /> {error}</p>}
+                {result && <p className="text-sm text-emerald-600 dark:text-emerald-400 flex items-center gap-1"><CheckCircle className="w-4 h-4" /> Täisfunktsioon antud {result.granted} kontole, kehtib kuni {result.supportUntil}.</p>}
+                <button type="submit" disabled={loading} className="w-full py-2 rounded-xl font-semibold bg-amber-600 text-white hover:bg-amber-500 disabled:opacity-50 flex items-center justify-center gap-2">
+                  {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : null} Anna täisfunktsioon
+                </button>
+              </form>
+            </>
+          )}
+        </div>
+      </main>
+      <footer className="flex-shrink-0 py-4 text-center text-xs text-slate-500 dark:text-white/50 border-t border-slate-200 dark:border-white/10">
+        <Link to="/hinnakiri" className="underline">Hinnakiri</Link> · <Link to="/" className="underline">Avaleht</Link>
+      </footer>
     </div>
   );
+
+  return layout;
 }

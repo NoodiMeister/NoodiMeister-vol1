@@ -830,6 +830,9 @@ function NoodiMeisterCore({ icons }) {
   const instrumentConfig = useMemo(() => getInstrumentConfig(t), [t]);
   const toolboxes = useMemo(() => getToolboxes(t, instrumentConfig), [t, instrumentConfig]);
 
+  const store = useNoodimeisterOptional();
+  const hasFullAccess = store?.hasFullAccess ?? authStorage.isLoggedIn();
+
   // JO-võti ja noodigraafika state (GLOBAL_NOTATION_CONFIG on faili alguses)
   const [joClefFocused, setJoClefFocused] = useState(false);
   const [joClefStaffPosition, setJoClefStaffPosition] = useState(DEFAULT_JO_CLEF_STAFF_POSITION);
