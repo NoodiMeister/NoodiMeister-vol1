@@ -7,7 +7,7 @@ To **see** the symbol designs as images in Cursor or any viewer:
 ## View in Cursor (images, not code)
 
 1. Open the **PNG files** in this folder:
-   - `clef-bass.png`, `clef-c.png`, `note-whole.png`, `rest-whole.png`, `rest-quarter.png`, etc.
+   - `clef-bass.png`, `clef-c.png`, `figurenotes-C.png`, `octave-4-circle.png`, etc.
 
 **Aldivõti (C-clef / alto clef):** The symbol design is in **`clef-c.png`**. Staff placement (clef center = middle C) is defined by **`c-clef-on-staff.png`** — use that image as the reference for how the C-clef sits on the staff.
 
@@ -35,4 +35,4 @@ npm run export-symbols
 
 - **Figurenotes** letter PNGs (`figurenotes-A.png` … `figurenotes-G.png`) are regenerated as needed; `figurenotes-table.html` expects them in this folder.
 - **Figurenotes** PNGs match the app (path-based).
-- **Traditional** clefs/notes/rests in the app use Leland (SMuFL); the preview PNGs here use path-based equivalents so export never depends on a browser or font.
+- **Traditional** clefs in the app use Leland (SMuFL); clef preview PNGs here use path-based equivalents. Note/rest symbols are not exported as PNGs (the rhythm toolbox uses inline SVG in the app).

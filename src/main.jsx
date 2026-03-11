@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client';
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import './utils/notationConstants'; // Lae enne Appi – vältib TDZ/ReferenceError lazy chunkides (Vercel)
 import App from './App';
+import MicrosoftRedirectHandler from './MicrosoftRedirectHandler';
 import './index.css';
 
 // Teema enne esimest joonistust (vältib vilkumist)
@@ -50,11 +51,19 @@ try {
   if (!rootEl) throw new Error('Element #root ei leitud. Kontrolli index.html.');
   const root = ReactDOM.createRoot(rootEl);
 
-  const app = <App />;
-  if (googleClientId) {
-    root.render(<GoogleOAuthProvider clientId={googleClientId}>{app}</GoogleOAuthProvider>);
+  const hasMicrosoftCode =
+    typeof window !== 'undefined' &&
+    /[#?]/.test(window.location.href) &&
+    (/[#&]code=/.test(window.location.hash || '') || /[?&]code=/.test(window.location.search || ''));
+  if (hasMicrosoftCode) {
+    root.render(<MicrosoftRedirectHandler />);
   } else {
-    root.render(app);
+    const app = <App />;
+    if (googleClientId) {
+      root.render(<GoogleOAuthProvider clientId={googleClientId}>{app}</GoogleOAuthProvider>);
+    } else {
+      root.render(app);
+    }
   }
 } catch (err) {
   console.error(err);

@@ -21,36 +21,53 @@ function getFigurenoteTextColor(pitch) {
   return (p === 'A' || p === 'E' || p === 'B') ? '#000000' : '#ffffff';
 }
 
-function renderTimeSignature(timeSignature, timeSignatureMode, centerY) {
+/** Reference size used when design was at 16px; scale = size/16. */
+const TIME_SIG_REF = 16;
+
+function renderTimeSignature(timeSignature, timeSignatureMode, centerY, notationSize = TIME_SIG_REF) {
+  const scale = notationSize / TIME_SIG_REF;
   const x = 45;
   const y = centerY;
+  const fNum = Math.round(18 * scale);
+  const fDen = Math.round(18 * scale);
+  const fDenFallback = Math.round(16 * scale);
+  const lineHalf = 10 * scale;
+  const yNum = y - 8 * scale;
+  const yLine = y + 2 * scale;
+  const yDen = y + 20 * scale;
+  const stemOff = 4 * scale;
+  const noteY = y + 18 * scale;
+  const stemLen = 20 * scale;
+  const strokeW = Math.max(1, 1.5 * scale);
   if (timeSignatureMode === 'pedagogical') {
-    const stemX = x - 4;
+    const stemX = x - stemOff;
     const getNoteSymbolForDenominator = () => {
-      const noteY = y + 18;
       const noteX = x;
+      const r1 = 5 * scale; const r1y = 3 * scale;
+      const r2 = 4 * scale; const r2y = 2.5 * scale;
+      const q = 6 * scale;
       switch (timeSignature.beatUnit) {
         case 1:
-          return <ellipse cx={noteX} cy={noteY} rx="5" ry="3" fill="none" stroke="#333" strokeWidth="1.5" />;
+          return <ellipse cx={noteX} cy={noteY} rx={r1} ry={r1y} fill="none" stroke="#333" strokeWidth={strokeW} />;
         case 2:
-          return (<><ellipse cx={noteX} cy={noteY} rx="4" ry="2.5" fill="none" stroke="#333" strokeWidth="1.5" /><line x1={stemX} y1={noteY} x2={stemX} y2={noteY + 20} stroke="#333" strokeWidth="1.5" /></>);
+          return (<><ellipse cx={noteX} cy={noteY} rx={r2} ry={r2y} fill="none" stroke="#333" strokeWidth={strokeW} /><line x1={stemX} y1={noteY} x2={stemX} y2={noteY + stemLen} stroke="#333" strokeWidth={strokeW} /></>);
         case 4:
-          return (<><ellipse cx={noteX} cy={noteY} rx="4" ry="2.5" fill="#333" /><line x1={stemX} y1={noteY} x2={stemX} y2={noteY + 20} stroke="#333" strokeWidth="1.5" /></>);
+          return (<><ellipse cx={noteX} cy={noteY} rx={r2} ry={r2y} fill="#333" /><line x1={stemX} y1={noteY} x2={stemX} y2={noteY + stemLen} stroke="#333" strokeWidth={strokeW} /></>);
         case 8:
-          return (<><ellipse cx={noteX} cy={noteY} rx="4" ry="2.5" fill="#333" /><line x1={stemX} y1={noteY} x2={stemX} y2={noteY + 20} stroke="#333" strokeWidth="1.5" /><path d={`M ${stemX} ${noteY + 20} Q ${stemX - 6} ${noteY + 18} ${stemX} ${noteY + 15}`} fill="#333" /></>);
+          return (<><ellipse cx={noteX} cy={noteY} rx={r2} ry={r2y} fill="#333" /><line x1={stemX} y1={noteY} x2={stemX} y2={noteY + stemLen} stroke="#333" strokeWidth={strokeW} /><path d={`M ${stemX} ${noteY + stemLen} Q ${stemX - q} ${noteY + stemLen - 2} ${stemX} ${noteY + stemLen - 5}`} fill="#333" /></>);
         case 16:
-          return (<><ellipse cx={noteX} cy={noteY} rx="4" ry="2.5" fill="#333" /><line x1={stemX} y1={noteY} x2={stemX} y2={noteY + 20} stroke="#333" strokeWidth="1.5" /><path d={`M ${stemX} ${noteY + 20} Q ${stemX - 6} ${noteY + 18} ${stemX} ${noteY + 15} M ${stemX} ${noteY + 17} Q ${stemX - 6} ${noteY + 15} ${stemX} ${noteY + 12}`} fill="#333" /></>);
+          return (<><ellipse cx={noteX} cy={noteY} rx={r2} ry={r2y} fill="#333" /><line x1={stemX} y1={noteY} x2={stemX} y2={noteY + stemLen} stroke="#333" strokeWidth={strokeW} /><path d={`M ${stemX} ${noteY + stemLen} Q ${stemX - q} ${noteY + stemLen - 2} ${stemX} ${noteY + stemLen - 5} M ${stemX} ${noteY + stemLen - 3} Q ${stemX - q} ${noteY + stemLen - 5} ${stemX} ${noteY + stemLen - 8}`} fill="#333" /></>);
         default:
-          return <text x={noteX} y={noteY + 20} textAnchor="middle" fontSize="16" fontWeight="bold" fill="#333">{timeSignature.beatUnit}</text>;
+          return <text x={noteX} y={noteY + stemLen} textAnchor="middle" fontSize={fDenFallback} fontWeight="bold" fill="#333">{timeSignature.beatUnit}</text>;
       }
     };
-    return (<g><text x={x} y={y - 8} textAnchor="middle" fontSize="18" fontWeight="bold" fill="#333">{timeSignature.beats}</text><line x1={x - 10} y1={y + 2} x2={x + 10} y2={y + 2} stroke="#333" strokeWidth="1.5" />{getNoteSymbolForDenominator()}</g>);
+    return (<g><text x={x} y={yNum} textAnchor="middle" fontSize={fNum} fontWeight="bold" fill="#333">{timeSignature.beats}</text><line x1={x - lineHalf} y1={yLine} x2={x + lineHalf} y2={yLine} stroke="#333" strokeWidth={strokeW} />{getNoteSymbolForDenominator()}</g>);
   }
   return (
     <g>
-      <text x={x} y={y - 8} textAnchor="middle" fontSize="18" fontWeight="bold" fill="#333">{timeSignature.beats}</text>
-      <line x1={x - 10} y1={y + 2} x2={x + 10} y2={y + 2} stroke="#333" strokeWidth="1.5" />
-      <text x={x} y={y + 20} textAnchor="middle" fontSize="18" fontWeight="bold" fill="#333">{timeSignature.beatUnit}</text>
+      <text x={x} y={yNum} textAnchor="middle" fontSize={fNum} fontWeight="bold" fill="#333">{timeSignature.beats}</text>
+      <line x1={x - lineHalf} y1={yLine} x2={x + lineHalf} y2={yLine} stroke="#333" strokeWidth={strokeW} />
+      <text x={x} y={yDen} textAnchor="middle" fontSize={fDen} fontWeight="bold" fill="#333">{timeSignature.beatUnit}</text>
     </g>
   );
 }
@@ -95,15 +112,15 @@ export function FigurenotesView({
               <line x1={0} y1={sys.yOffset - PAGE_BREAK_GAP / 2} x2={pageWidth || 800} y2={sys.yOffset - PAGE_BREAK_GAP / 2} stroke="#c4b896" strokeWidth={1} strokeDasharray="4 4" />
             )}
 
-            {/* Taktide number – JO-võtit ei ole */}
+            {/* Taktide number – JO-võtit ei ole; skaleeritud figurenotesSize-ga */}
             {showBarNumbers && sys.measureIndices.length > 0 && (
-              <text x={20} y={sys.yOffset + 12} fontSize="14" fontWeight="bold" fill="#555" textAnchor="middle" fontFamily="sans-serif">
+              <text x={20} y={sys.yOffset + 12} fontSize={Math.round(14 * (figurenotesSize / 16))} fontWeight="bold" fill="#555" textAnchor="middle" fontFamily="sans-serif">
                 {sys.measureIndices[0] + 1}
               </text>
             )}
 
             {sys.systemIndex === 0 && (
-              <g transform={`translate(0, ${sys.yOffset})`}>{renderTimeSignature(timeSignature, timeSignatureMode, centerY)}</g>
+              <g transform={`translate(0, ${sys.yOffset})`}>{renderTimeSignature(timeSignature, timeSignatureMode, centerY, figurenotesSize)}</g>
             )}
 
             {sys.measureIndices.map((measureIdx, j) => {
@@ -283,8 +300,8 @@ export function FigurenotesView({
                     const chordY = sys.yOffset + 8;
                     return (
                       <g key={chord.id}>
-                        <text x={chordX} y={chordY} textAnchor="start" fontSize="14" fontWeight="bold" fill="#1a1a1a" fontFamily="sans-serif">{chord.chord}</text>
-                        {chord.figuredBass && <text x={chordX} y={chordY + 14} textAnchor="start" fontSize="11" fill="#555" fontFamily="serif">{chord.figuredBass}</text>}
+                        <text x={chordX} y={chordY} textAnchor="start" fontSize={Math.round(14 * (figurenotesSize / 16))} fontWeight="bold" fill="#1a1a1a" fontFamily="sans-serif">{chord.chord}</text>
+                        {chord.figuredBass && <text x={chordX} y={chordY + Math.round(14 * (figurenotesSize / 16))} textAnchor="start" fontSize={Math.round(11 * (figurenotesSize / 16))} fill="#555" fontFamily="serif">{chord.figuredBass}</text>}
                       </g>
                     );
                   })}
@@ -324,7 +341,7 @@ export function FigurenotesView({
                           <rect x={bandLeft} y={bandY} width={noteWidth} height={bandH} fill={bandColor} opacity="0.2" rx="2" />
                           {renderFigurenote(note, figureX, noteY, globalNoteIndex, noteWidth, figureSize)}
                           {(note.lyric != null && String(note.lyric).trim() !== '') && (
-                            <text x={figureX} y={labelY + 14} textAnchor="middle" fontSize="11" fill="#333" fontFamily={lyricFontFamily}>{note.lyric}</text>
+                            <text x={figureX} y={labelY + Math.round(14 * (figurenotesSize / 16))} textAnchor="middle" fontSize={Math.round(11 * (figurenotesSize / 16))} fill="#333" fontFamily={lyricFontFamily}>{note.lyric}</text>
                           )}
                         </g>
                       );

@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from 'react';
-import { PublicClientApplication } from '@azure/msal-browser';
 import {
   getStorageForLogin,
   getStorageForRead,
@@ -11,12 +10,8 @@ import {
 } from './services/authStorage';
 
 function getMicrosoftRedirectUri() {
-  try {
-    const base = (import.meta.env?.BASE_URL || '/').replace(/\/$/, '') + '/';
-    return window.location.origin + base;
-  } catch {
-    return window.location.origin + '/';
-  }
+  const base = (import.meta.env?.BASE_URL || '/').replace(/\/$/, '') + '/';
+  return window.location.origin + base;
 }
 
 function getMicrosoftTesterEmails() {
@@ -36,11 +31,10 @@ function redirectToTood() {
 }
 
 /**
- * Renders when the app loads with #code= (Microsoft redirect).
- * Popup: runs handleRedirectPromise() so opener's loginPopup() resolves, then closes.
- * Main window: runs handleRedirectPromise(), then completes login (profile, storage, redirect to /tood).
+ * Shown when the app loads with ?code= or #code= (Microsoft redirect flow).
+ * Uses window.msal from CDN, runs handleRedirectPromise(), then saves user and redirects to /tood.
  */
-export default function MicrosoftPopupCallback() {
+export default function MicrosoftRedirectHandler() {
   const [status, setStatus] = useState('processing');
   const [errorMessage, setErrorMessage] = useState('');
 
@@ -56,26 +50,42 @@ export default function MicrosoftPopupCallback() {
       return;
     }
 
-    const authority = `https://login.microsoftonline.com/${encodeURIComponent(tenantId)}`;
-    const pca = new PublicClientApplication({
-      auth: { clientId, authority, redirectUri },
-      cache: { cacheLocation: 'localStorage', storeAuthStateInCookie: false },
-    });
+    function run() {
+      if (!window.msal?.PublicClientApplication) return Promise.resolve(null);
+      const authority = `https://login.microsoftonline.com/${encodeURIComponent(tenantId)}`;
+      const pca = new window.msal.PublicClientApplication({
+        auth: { clientId, authority, redirectUri },
+        cache: { cacheLocation: 'localStorage', storeAuthStateInCookie: false },
+      });
+      return pca.initialize().then(() => pca.handleRedirectPromise());
+    }
 
-    pca
-      .initialize()
-      .then(() => pca.handleRedirectPromise())
+    function waitForMsal() {
+      if (window.msal?.PublicClientApplication) return Promise.resolve();
+      return new Promise((resolve) => {
+        let attempts = 0;
+        const t = setInterval(() => {
+          attempts++;
+          if (window.msal?.PublicClientApplication) {
+            clearInterval(t);
+            resolve();
+            return;
+          }
+          if (attempts >= 50) {
+            clearInterval(t);
+            resolve();
+          }
+        }, 200);
+      });
+    }
+
+    waitForMsal()
+      .then(() => run())
       .then((result) => {
         if (cancelled) return;
-        if (window.opener) {
-          setStatus('closing');
-          window.close();
-          return;
-        }
-        // Main window: complete login and redirect
         if (!result?.account) {
           setStatus('error');
-          setErrorMessage('Konto infot ei saadud.');
+          setErrorMessage('Konto infot ei saadud. Proovi uuesti.');
           return;
         }
         const account = result.account;
@@ -112,7 +122,7 @@ export default function MicrosoftPopupCallback() {
             const storage = getStorageForLogin(false);
             if (!storage) {
               setStatus('error');
-              setErrorMessage('Salvestus ei ole saadaval (nt privaatne režiim).');
+              setErrorMessage('Salvestus ei ole saadaval.');
               return;
             }
             storage.setItem(KEY_LOGGED_IN, JSON.stringify(user));
@@ -126,19 +136,18 @@ export default function MicrosoftPopupCallback() {
                 localStorage.setItem('noodimeister-users', JSON.stringify(users));
               }
             } catch (_) {}
-            const confirmedUser = getLoggedInUser();
-            if (!confirmedUser?.email || !isLoggedIn()) {
+            if (!getLoggedInUser()?.email || !isLoggedIn()) {
               setStatus('error');
               setErrorMessage('Kinnitamine ebaõnnestus.');
               return;
             }
-            setStatus('closing');
+            setStatus('redirect');
             redirectToTood();
           });
       })
       .catch((err) => {
         if (cancelled) return;
-        console.error('[MicrosoftPopupCallback]', err);
+        console.error('[MicrosoftRedirectHandler]', err);
         setStatus('error');
         setErrorMessage(err?.message || err?.errorMessage || String(err));
       });
@@ -161,27 +170,26 @@ export default function MicrosoftPopupCallback() {
         boxSizing: 'border-box',
       }}
     >
-      {status === 'processing' && <p>Sisselogimine… Sulgeme akna.</p>}
-      {status === 'closing' && <p>Sulgeme akna…</p>}
+      {status === 'processing' && <p>Microsofti sisselogimine… Töötleme.</p>}
+      {status === 'redirect' && <p>Suuname Minu tööde lehele…</p>}
       {status === 'error' && (
         <div>
-          <p>Viga. {errorMessage}</p>
-          <button
-            type="button"
-            onClick={() => window.close()}
+          <p>{errorMessage}</p>
+          <a
+            href="/"
             style={{
+              display: 'inline-block',
               marginTop: 12,
               padding: '8px 16px',
-              cursor: 'pointer',
               background: '#b45309',
               color: '#fff',
-              border: 'none',
               borderRadius: 8,
               fontWeight: 600,
+              textDecoration: 'none',
             }}
           >
-            Sulge aken
-          </button>
+            Tagasi avalehele
+          </a>
         </div>
       )}
     </div>

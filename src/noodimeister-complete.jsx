@@ -248,6 +248,22 @@ var RHYTHM_PATTERN_ICONS = {
       <line x1="4" y1="5" x2="20" y2="5" strokeWidth="1.3" strokeLinecap="round"/>
       <text x="12" y="2" textAnchor="middle" fontSize="5.5" fontWeight="bold" fill="currentColor">3</text>
     </svg>
+  ),
+  'triplet-8': (
+    <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5" stroke="currentColor" strokeWidth="1.1">
+      <ellipse cx="5" cy="17" rx="2" ry="1.6" fill="currentColor"/><ellipse cx="12" cy="17" rx="2" ry="1.6" fill="currentColor"/><ellipse cx="19" cy="17" rx="2" ry="1.6" fill="currentColor"/>
+      <line x1="6.5" y1="17" x2="6.5" y2="5" strokeWidth="1.1"/><line x1="12" y1="17" x2="12" y2="5" strokeWidth="1.1"/><line x1="17.5" y1="17" x2="17.5" y2="5" strokeWidth="1.1"/>
+      <line x1="4" y1="5" x2="20" y2="5" strokeWidth="1.3" strokeLinecap="round"/>
+      <text x="12" y="2" textAnchor="middle" fontSize="5.5" fontWeight="bold" fill="currentColor">3</text>
+    </svg>
+  ),
+  'triplet-4': (
+    <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5" stroke="currentColor" strokeWidth="1.1">
+      <ellipse cx="5" cy="17" rx="2.2" ry="1.8" fill="currentColor"/><ellipse cx="12" cy="17" rx="2.2" ry="1.8" fill="currentColor"/><ellipse cx="19" cy="17" rx="2.2" ry="1.8" fill="currentColor"/>
+      <line x1="7" y1="17" x2="7" y2="5" strokeWidth="1.1"/><line x1="12" y1="17" x2="12" y2="5" strokeWidth="1.1"/><line x1="17" y1="17" x2="17" y2="5" strokeWidth="1.1"/>
+      <line x1="4" y1="5" x2="20" y2="5" strokeWidth="1.3" strokeLinecap="round"/>
+      <text x="12" y="2" textAnchor="middle" fontSize="5.5" fontWeight="bold" fill="currentColor">3</text>
+    </svg>
   )
 };
 
@@ -549,6 +565,8 @@ function getToolboxes(t, instrumentConfig) {
         { id: '8/16', label: t('note.pattern8sixteenth'), value: '8/16', key: null, code: null },
         { id: '1/8+2/16', label: t('note.patternEighthTwoSixteenth'), value: '1/8+2/16', key: null, code: null },
         { id: '2/16+1/8', label: t('note.patternTwoSixteenthEighth'), value: '2/16+1/8', key: null, code: null },
+        { id: 'triplet-8', label: t('note.tripletEighth'), value: 'triplet-8', key: null, code: null },
+        { id: 'triplet-4', label: t('note.tripletQuarter'), value: 'triplet-4', key: null, code: null },
         { id: 'rest', label: t('note.rest'), value: 'rest', key: '0', code: 'Digit0' },
         { id: 'dotted', label: t('note.dotted'), value: 'dotted', key: '.', code: 'Period' }
       ]
@@ -671,7 +689,7 @@ function getToolboxes(t, instrumentConfig) {
         { id: 'staff-5', label: t('layout.staff5'), value: 5, key: '1' },
         { id: 'staff-1', label: t('layout.staff1'), value: 1, key: '2' },
         { id: 'grid-only', label: t('layout.gridOnly'), value: 'gridOnly', key: 'G' },
-        { id: 'spacing-normal', label: t('layout.spacingNormal'), value: 80, key: '3' },
+        { id: 'spacing-normal', label: t('layout.spacingNormal'), value: 75, key: '3' },
         { id: 'spacing-loose', label: t('layout.spacingLoose'), value: 120, key: '4' }
       ]
     },
@@ -806,7 +824,7 @@ function NoodiMeisterCore({ icons }) {
   // Tuplet mode: null = normal; { type: 3|5|6|7, inSpaceOf: 2|4 } – triool 3 in 2, kvintool 5 in 4, jne. Aktiveeritakse Cmd/Ctrl+3,5,6,7
   const [tupletMode, setTupletMode] = useState(null);
   const [timeSignature, setTimeSignature] = useState({ beats: 4, beatUnit: 4 });
-  const [pixelsPerBeat, setPixelsPerBeat] = useState(80);
+  const [pixelsPerBeat, setPixelsPerBeat] = useState(75); // laius löögi kohta (px), vaikimisi 75 (vastab noodigraafika vaikimisi suurusele)
   const [cursorPosition, setCursorPosition] = useState(3);
   const [keySignature, setKeySignature] = useState('C');
   const [staffLines, setStaffLines] = useState(5);
@@ -1065,7 +1083,7 @@ function NoodiMeisterCore({ icons }) {
   const [tuningReferenceOctave, setTuningReferenceOctave] = useState(3);
   const [tuningReferenceHz, setTuningReferenceHz] = useState(440);
   const [playNoteOnInsert, setPlayNoteOnInsert] = useState(true);
-  const [figurenotesSize, setFigurenotesSize] = useState(16); // Noodigraafika suurus (figuurid ja noodid), 12–96 px
+  const [figurenotesSize, setFigurenotesSize] = useState(75); // Noodigraafika suurus (figuurid ja noodid), 12–96 px (vaikimisi 75)
   const [figurenotesStems, setFigurenotesStems] = useState(false); // Figuurnotatsioonis rütmi näitamine noodivartega (vaikimisi välja)
   const [showBarNumbers, setShowBarNumbers] = useState(true); // Taktide numbrid iga rea alguses noodivõtme kohal
   const [showRhythmSyllables, setShowRhythmSyllables] = useState(DEFAULT_SHOW_RHYTHM_SYLLABLES);
@@ -1090,6 +1108,8 @@ function NoodiMeisterCore({ icons }) {
   const [pedagogicalAudioBpm, setPedagogicalAudioBpm] = useState(120);
   const [pedagogicalAudioDuration, setPedagogicalAudioDuration] = useState(0); // sekundites
   const [isPedagogicalAudioPlaying, setIsPedagogicalAudioPlaying] = useState(false);
+  const [pedagogicalAudioPlaybackRate, setPedagogicalAudioPlaybackRate] = useState(1.0); // 0.5–2.0
+  const [pedagogicalAudioCurrentTime, setPedagogicalAudioCurrentTime] = useState(0);
   // Animeeritud notatsioon: nooti lugeva kursori kuju (püstine joon, emoji)
   const [pedagogicalPlayheadStyle, setPedagogicalPlayheadStyle] = useState('line'); // 'line' | 'violin' | 'smiley' | 'custom'
   const [pedagogicalPlayheadEmoji, setPedagogicalPlayheadEmoji] = useState('🎵'); // kasutub kui style === 'custom'; seadetes "Kursori karakter"
@@ -1101,6 +1121,14 @@ function NoodiMeisterCore({ icons }) {
   const pedagogicalAudioDataRef = useRef(null); // base64 string (salvestamiseks)
   const pedagogicalAudioUrlRef = useRef(null); // object URL (revoke vahetusel)
   const pedagogicalAudioInputRef = useRef(null);
+  const pedagogicalAudioImportInputRef = useRef(null);
+  const musicXmlInputRef = useRef(null);
+  const pageDesignInputRef = useRef(null);
+
+  // Kasutaja imporditud lehe "frame"/taust (PNG/SVG)
+  const [pageDesignDataUrl, setPageDesignDataUrl] = useState(null);
+  const [pageDesignOpacity, setPageDesignOpacity] = useState(0.25);
+  const [pageDesignFit, setPageDesignFit] = useState('cover'); // 'cover' | 'contain'
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [saveCloudDialogOpen, setSaveCloudDialogOpen] = useState(false);
   const [themeMode, setThemeMode] = useState(() => getStoredTheme().mode);
@@ -1117,7 +1145,7 @@ function NoodiMeisterCore({ icons }) {
   }, [themeMode]);
   // Rippmenüüd tööriistaribal: 'file' | 'view' | null (Seaded on Faili all)
   const [headerMenuOpen, setHeaderMenuOpen] = useState(null);
-  const [fileSubmenuOpen, setFileSubmenuOpen] = useState(null); // 'seaded' | null
+  const [fileSubmenuOpen, setFileSubmenuOpen] = useState(null); // 'seaded' | 'exportAnimation' | 'import' | null
   const [viewSubmenuOpen, setViewSubmenuOpen] = useState(null); // 'orientation' | 'navigator' | 'flow' | null
   const [pageFlowDirection, setPageFlowDirection] = useState('vertical'); // 'vertical' | 'horizontal'
   const headerMenuRef = useRef(null);
@@ -1187,11 +1215,19 @@ function NoodiMeisterCore({ icons }) {
   const projectFileInputRef = useRef(null);
   const dirtyRef = useRef(false);
   const lastPersistedRef = useRef(null);
+  const syncChannelRef = useRef(null);
+  const syncClientIdRef = useRef((typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `sync-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+  const syncRevisionRef = useRef(0);
+  const syncApplyingRemoteRef = useRef(false);
+  const syncLastAppliedRevisionRef = useRef(0);
+  const syncBroadcastTimeoutRef = useRef(null);
   const audioContextRef = useRef(null);
   const soundfontCacheRef = useRef(Object.create(null)); // instrumentId -> Soundfont player (MuseScore-style GM)
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const isNewWorkFlow = searchParams.get('new') === '1';
+  const partStaffId = searchParams.get('staffId');
+  const isPartWindow = !!partStaffId;
   const [newWorkSetupOpen, setNewWorkSetupOpen] = useState(false);
   // Uue töö seadistuse vormi väljad (küsitakse enne töö loomist)
   const [wizardNotationMethod, setWizardNotationMethod] = useState('traditional'); // 'traditional' | 'figurenotes' | 'vabanotatsioon' | 'pedagogical'
@@ -1206,6 +1242,45 @@ function NoodiMeisterCore({ icons }) {
   useEffect(() => {
     if (isNewWorkFlow) setNewWorkSetupOpen(true);
   }, [isNewWorkFlow]);
+
+  const partWindowStaffIndices = useMemo(() => {
+    if (!partStaffId) return null;
+    const idx = staves.findIndex((s) => String(s.id) === String(partStaffId));
+    if (idx < 0) return null;
+    const braceId = staves[idx]?.braceGroupId;
+    if (braceId) {
+      const group = staves
+        .map((s, i) => ({ s, i }))
+        .filter(({ s }) => s.braceGroupId === braceId)
+        .map(({ i }) => i);
+      return group.length ? group : [idx];
+    }
+    return [idx];
+  }, [partStaffId, staves]);
+
+  const partWindowTitle = useMemo(() => {
+    if (!isPartWindow) return '';
+    const idx = partWindowStaffIndices?.[0];
+    if (typeof idx !== 'number' || idx < 0) return '';
+    const staff = staves[idx];
+    if (!staff) return '';
+    const explicit = String(staff.name || '').trim();
+    if (explicit) return explicit;
+    const cfg = instrumentConfig?.[staff.instrumentId];
+    return String(cfg?.label || cfg?.name || staff.instrumentId || '').trim();
+  }, [isPartWindow, partWindowStaffIndices, staves, instrumentConfig]);
+
+  useEffect(() => {
+    if (!isPartWindow) return;
+    if (!partWindowStaffIndices || partWindowStaffIndices.length === 0) return;
+    setViewMode('part');
+    setActiveStaffIndex(partWindowStaffIndices[0]);
+    setVisibleStaves((prev) => {
+      const next = staves.map((_, i) => partWindowStaffIndices.includes(i));
+      const same = Array.isArray(prev) && prev.length === next.length && prev.every((v, i) => !!v === !!next[i]);
+      return same ? prev : next;
+    });
+  }, [isPartWindow, partWindowStaffIndices, staves]);
 
   // Enne brauseri/lehe sulgemist hoiatab salvestamata muudatuste korral (töö kaotamine)
   useEffect(() => {
@@ -1309,6 +1384,350 @@ function NoodiMeisterCore({ icons }) {
     reader.readAsDataURL(file);
     e.target.value = '';
   }, []);
+
+  const clampNumber = (num, min, max) => Math.max(min, Math.min(max, num));
+
+  const handleImportPageDesignFile = useCallback((e) => {
+    const file = e.target?.files?.[0];
+    if (!file) return;
+    const name = String(file.name || '').toLowerCase();
+    const okType = file.type === 'image/png' || file.type === 'image/svg+xml' || name.endsWith('.svg') || name.endsWith('.png');
+    if (!okType) {
+      setSaveFeedback('Toetatud: PNG või SVG');
+      setTimeout(() => setSaveFeedback(''), 2200);
+      e.target.value = '';
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = typeof reader.result === 'string' ? reader.result : null;
+      if (dataUrl) {
+        setPageDesignDataUrl(dataUrl);
+        dirtyRef.current = true;
+      }
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  }, []);
+
+  const musicXmlTypeToDurationLabel = (type) => {
+    const base = {
+      whole: '1/1',
+      half: '1/2',
+      quarter: '1/4',
+      eighth: '1/8',
+      '16th': '1/16',
+      '32nd': '1/32',
+    }[String(type || '').toLowerCase()];
+    return base || '1/4';
+  };
+
+  const durationLabelToBeatsLocal = (durationLabel) => {
+    const map = { '1/1': 4, '1/2': 2, '1/4': 1, '1/8': 0.5, '1/16': 0.25, '1/32': 0.125 };
+    return map[durationLabel] ?? 1;
+  };
+
+  const beatsPerMeasureFromTimeSig = (ts) => {
+    const beats = Number(ts?.beats) || 4;
+    const beatUnit = Number(ts?.beatUnit) || 4;
+    // Internal unit in this editor is quarter=1. MusicXML divisions are also per quarter.
+    // Measure length in quarters = beats * (4/beatUnit). (If beatUnit is missing, defaults to 4/4.)
+    return beats * (4 / beatUnit);
+  };
+
+  const makeId = (prefix) => (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+  const fillGapWithRests = (startBeat, endBeat) => {
+    const rests = [];
+    let t = startBeat;
+    const durationsOrdered = [
+      { beats: 4, label: '1/1' },
+      { beats: 2, label: '1/2' },
+      { beats: 1, label: '1/4' },
+      { beats: 0.5, label: '1/8' },
+      { beats: 0.25, label: '1/16' },
+      { beats: 0.125, label: '1/32' },
+    ];
+    const remaining = () => endBeat - t;
+    while (remaining() > 1e-6) {
+      const r = remaining();
+      const d = durationsOrdered.find((x) => x.beats <= r + 1e-6) || durationsOrdered[durationsOrdered.length - 1];
+      rests.push({
+        id: makeId('rest'),
+        pitch: 'C',
+        octave: 4,
+        duration: d.beats,
+        durationLabel: d.label,
+        isDotted: false,
+        isRest: true,
+        beat: t,
+      });
+      t += d.beats;
+      if (rests.length > 20000) break;
+    }
+    return rests;
+  };
+
+  const normalizeNotesToGlobalTimeline = (notes, totalBeats) => {
+    const sorted = [...(notes || [])].sort((a, b) => (Number(a.beat) || 0) - (Number(b.beat) || 0));
+    const out = [];
+    let cur = 0;
+    for (const n of sorted) {
+      const b = Number(n.beat) || 0;
+      const dur = Number(n.duration) || 0;
+      if (b > cur + 1e-6) out.push(...fillGapWithRests(cur, b));
+      out.push({ ...n, beat: b });
+      cur = Math.max(cur, b + dur);
+    }
+    if (totalBeats > cur + 1e-6) out.push(...fillGapWithRests(cur, totalBeats));
+    // Remove beat property for compatibility (the renderer can handle it, but most editor logic uses implicit order).
+    return out.map(({ beat, ...rest }) => rest);
+  };
+
+  const parseMusicXmlToOrchestration = (xmlText, fallbackFileName = '') => {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(xmlText, 'application/xml');
+    const parseErr = doc.querySelector('parsererror');
+    if (parseErr) throw new Error('Vigane XML');
+
+    const score = doc.querySelector('score-partwise, score-timewise');
+    if (!score) throw new Error('Pole MusicXML (score-partwise)');
+
+    const songTitleRaw =
+      doc.querySelector('work work-title')?.textContent ||
+      doc.querySelector('movement-title')?.textContent ||
+      '';
+    const composerRaw =
+      doc.querySelector('identification creator[type="composer"]')?.textContent ||
+      doc.querySelector('identification creator')?.textContent ||
+      '';
+    const songTitle = String(songTitleRaw || '').trim() || String(fallbackFileName || '').replace(/\.(musicxml|xml)$/i, '');
+    const author = String(composerRaw || '').trim();
+
+    // Global time signature (fallback 4/4). We’ll take the first one found.
+    let beats = 4;
+    let beatUnit = 4;
+    const timeEl = doc.querySelector('attributes time');
+    if (timeEl) {
+      const b = parseInt(timeEl.querySelector('beats')?.textContent || '4', 10);
+      const bt = parseInt(timeEl.querySelector('beat-type')?.textContent || '4', 10);
+      if (!Number.isNaN(b) && b > 0) beats = b;
+      if (!Number.isNaN(bt) && bt > 0) beatUnit = bt;
+    }
+    const timeSignature = { beats, beatUnit };
+    const beatsPerMeasure = beatsPerMeasureFromTimeSig(timeSignature);
+
+    // Part list to get human-readable names
+    const partNameById = {};
+    Array.from(doc.querySelectorAll('part-list score-part')).forEach((sp) => {
+      const id = sp.getAttribute('id') || '';
+      const name = sp.querySelector('part-name')?.textContent || '';
+      if (id) partNameById[id] = String(name).trim() || id;
+    });
+
+    const parts = Array.from(doc.querySelectorAll('part'));
+    if (!parts.length) throw new Error('MusicXML: part puudub');
+
+    const parsedParts = parts.map((partEl, partIndex) => {
+      const partId = partEl.getAttribute('id') || `P${partIndex + 1}`;
+      const instrumentName = partNameById[partId] || partId;
+      let divisionsPerQuarter = 1;
+      let usesStaff2 = false;
+
+      // detect staves=2 from attributes
+      Array.from(partEl.querySelectorAll('measure')).forEach((m) => {
+        const stavesEl = m.querySelector('attributes staves');
+        if (stavesEl && String(stavesEl.textContent || '').trim() === '2') usesStaff2 = true;
+        const divEl = m.querySelector('attributes divisions');
+        if (divEl) {
+          const v = parseInt(divEl.textContent || '1', 10);
+          if (!Number.isNaN(v) && v > 0) divisionsPerQuarter = v;
+        }
+      });
+      if (partEl.querySelector('note staff')?.textContent?.trim?.() === '2') usesStaff2 = true;
+
+      const staffNotesByStaffNo = { 1: [], 2: [] };
+      let globalDivPosByStaff = { 1: 0, 2: 0 };
+      let measureIndex = 0;
+
+      const measures = Array.from(partEl.querySelectorAll('measure'));
+      measures.forEach((measureEl) => {
+        // update divisions if specified in this measure
+        const divEl = measureEl.querySelector('attributes divisions');
+        if (divEl) {
+          const v = parseInt(divEl.textContent || '1', 10);
+          if (!Number.isNaN(v) && v > 0) divisionsPerQuarter = v;
+        }
+        // update time signature if specified in this measure (we still keep global, but can refresh)
+        const time = measureEl.querySelector('attributes time');
+        if (time) {
+          const b = parseInt(time.querySelector('beats')?.textContent || String(beats), 10);
+          const bt = parseInt(time.querySelector('beat-type')?.textContent || String(beatUnit), 10);
+          if (!Number.isNaN(b) && b > 0) beats = b;
+          if (!Number.isNaN(bt) && bt > 0) beatUnit = bt;
+        }
+
+        // Reset per-measure cursor for each staff, but keep global position based on measure index.
+        const baseBeat = measureIndex * beatsPerMeasure;
+        let cursorDivByStaff = { 1: 0, 2: 0 };
+
+        const children = Array.from(measureEl.childNodes).filter((n) => n.nodeType === 1);
+        children.forEach((node) => {
+          const tag = node.nodeName;
+          if (tag === 'note') {
+            const voice = node.querySelector('voice')?.textContent?.trim?.();
+            if (voice && voice !== '1') return; // keep voice 1 by default
+            const staffNoRaw = node.querySelector('staff')?.textContent?.trim?.();
+            const staffNo = staffNoRaw === '2' ? 2 : 1;
+            if (staffNo === 2) usesStaff2 = true;
+
+            const isChord = !!node.querySelector('chord');
+            if (isChord) return;
+
+            const durDiv = parseInt(node.querySelector('duration')?.textContent || '0', 10);
+            const type = node.querySelector('type')?.textContent || 'quarter';
+            const durationLabel = musicXmlTypeToDurationLabel(type);
+            const dots = node.querySelectorAll('dot').length;
+            const isDottedLocal = dots > 0;
+            const fallbackBeats = durationLabelToBeatsLocal(durationLabel) * (isDottedLocal ? 1.5 : 1);
+            const durationBeats = (Number.isFinite(durDiv) && durDiv > 0 && divisionsPerQuarter > 0)
+              ? (durDiv / divisionsPerQuarter)
+              : fallbackBeats;
+
+            const beatPos = baseBeat + (cursorDivByStaff[staffNo] / divisionsPerQuarter);
+            const isRestNode = !!node.querySelector('rest');
+            const id = makeId('mx');
+            if (isRestNode) {
+              staffNotesByStaffNo[staffNo].push({
+                id,
+                pitch: 'C',
+                octave: 4,
+                duration: durationBeats,
+                durationLabel,
+                isDotted: isDottedLocal,
+                isRest: true,
+                beat: beatPos,
+              });
+            } else {
+              const step = node.querySelector('pitch step')?.textContent || 'C';
+              const octave = parseInt(node.querySelector('pitch octave')?.textContent || '4', 10);
+              const alter = parseInt(node.querySelector('pitch alter')?.textContent || '0', 10);
+              staffNotesByStaffNo[staffNo].push({
+                id,
+                pitch: String(step || 'C').toUpperCase(),
+                octave: Number.isNaN(octave) ? 4 : octave,
+                accidental: Number.isNaN(alter) ? 0 : clampNumber(alter, -2, 2),
+                duration: durationBeats,
+                durationLabel,
+                isDotted: isDottedLocal,
+                isRest: false,
+                beat: beatPos,
+              });
+            }
+
+            // advance cursor for that staff
+            const advanceDiv = (Number.isFinite(durDiv) && durDiv > 0) ? durDiv : Math.round(durationBeats * divisionsPerQuarter);
+            cursorDivByStaff[staffNo] += advanceDiv;
+            globalDivPosByStaff[staffNo] = Math.max(globalDivPosByStaff[staffNo], measureIndex * beatsPerMeasure * divisionsPerQuarter + cursorDivByStaff[staffNo]);
+          } else if (tag === 'forward' || tag === 'backup') {
+            const durDiv = parseInt(node.querySelector('duration')?.textContent || '0', 10);
+            if (!Number.isFinite(durDiv) || durDiv <= 0) return;
+            // forward/backup apply to staff 1 by default (MusicXML), unless we can infer otherwise.
+            const staffNo = 1;
+            cursorDivByStaff[staffNo] += (tag === 'forward' ? durDiv : -durDiv);
+            cursorDivByStaff[staffNo] = Math.max(0, cursorDivByStaff[staffNo]);
+          }
+        });
+
+        measureIndex += 1;
+      });
+
+      const totalBeatsStaff1 = globalDivPosByStaff[1] / divisionsPerQuarter;
+      const totalBeatsStaff2 = globalDivPosByStaff[2] / divisionsPerQuarter;
+      const totalBeats = Math.max(totalBeatsStaff1, totalBeatsStaff2);
+
+      const normalized1 = normalizeNotesToGlobalTimeline(staffNotesByStaffNo[1], totalBeats);
+      const normalized2 = usesStaff2 ? normalizeNotesToGlobalTimeline(staffNotesByStaffNo[2], totalBeats) : [];
+
+      return {
+        partId,
+        instrumentName,
+        usesStaff2,
+        notesStaff1: normalized1,
+        notesStaff2: normalized2,
+      };
+    });
+
+    const timeSigOut = { beats, beatUnit };
+    return { songTitle, author, timeSignature: timeSigOut, parts: parsedParts };
+  };
+
+  const handleImportMusicXmlFile = useCallback((e) => {
+    const file = e.target?.files?.[0];
+    if (!file) return;
+    const name = String(file.name || '').toLowerCase();
+    if (!(file.type.includes('xml') || name.endsWith('.xml') || name.endsWith('.musicxml'))) {
+      setSaveFeedback('Toetatud: MusicXML (.xml / .musicxml)');
+      setTimeout(() => setSaveFeedback(''), 2200);
+      e.target.value = '';
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const txt = typeof reader.result === 'string' ? reader.result : '';
+        const parsed = parseMusicXmlToOrchestration(txt, file?.name || '');
+        stopPedagogicalPlayback();
+        setTimeSignature(parsed.timeSignature);
+        if (parsed.songTitle) setSongTitle(parsed.songTitle);
+        if (parsed.author) setAuthor(parsed.author);
+
+        const braceIds = {};
+        const newStaves = [];
+        parsed.parts.forEach((p) => {
+          const safeName = (p.instrumentName || '').toLowerCase();
+          const instrumentId =
+            safeName.includes('violin') || safeName.includes('viiul') ? 'violin' :
+            safeName.includes('voice') || safeName.includes('laul') ? 'voice' :
+            safeName.includes('cello') ? 'bass' :
+            safeName.includes('piano') || safeName.includes('klaver') ? 'piano' :
+            'piano';
+
+          if (p.usesStaff2) {
+            const braceGroupId = braceIds[p.partId] || makeId('brace');
+            braceIds[p.partId] = braceGroupId;
+            newStaves.push({ id: makeId('staff'), instrumentId, clefType: 'treble', notes: p.notesStaff1, braceGroupId, notationMode: notationMode === 'vabanotatsioon' ? 'pedagogical' : 'traditional', name: p.instrumentName });
+            newStaves.push({ id: makeId('staff'), instrumentId, clefType: 'bass', notes: p.notesStaff2, braceGroupId, notationMode: notationMode === 'vabanotatsioon' ? 'pedagogical' : 'traditional', name: p.instrumentName });
+          } else {
+            newStaves.push({ id: makeId('staff'), instrumentId, clefType: 'treble', notes: p.notesStaff1, notationMode: notationMode === 'vabanotatsioon' ? 'pedagogical' : 'traditional', name: p.instrumentName });
+          }
+        });
+        if (newStaves.length > 0) {
+          const staffDur = (s) => (s?.notes || []).reduce((acc, n) => acc + (Number(n.duration) || 0), 0);
+          const maxBeats = Math.max(0, ...newStaves.map(staffDur));
+          const padded = newStaves.map((s) => {
+            const cur = staffDur(s);
+            if (maxBeats <= cur + 1e-6) return s;
+            const tailRests = fillGapWithRests(cur, maxBeats).map(({ beat, ...rest }) => rest);
+            return { ...s, notes: [...(s.notes || []), ...tailRests] };
+          });
+          setStaves(padded);
+          setActiveStaffIndex(0);
+        }
+        setCursorPosition(0);
+        setSetupCompleted(true);
+        dirtyRef.current = true;
+        setSaveFeedback('MusicXML imporditud');
+        setTimeout(() => setSaveFeedback(''), 1800);
+      } catch (err) {
+        console.error(err);
+        setSaveFeedback('MusicXML import ebaõnnestus');
+        setTimeout(() => setSaveFeedback(''), 2200);
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  }, [notationMode, stopPedagogicalPlayback]);
   const stopPedagogicalPlayback = useCallback(() => {
     if (pedagogicalPlaybackIntervalRef.current) {
       clearInterval(pedagogicalPlaybackIntervalRef.current);
@@ -1320,11 +1739,13 @@ function NoodiMeisterCore({ icons }) {
       pedagogicalAudioRef.current = null;
     }
     setIsPedagogicalAudioPlaying(false);
+    setPedagogicalAudioCurrentTime(0);
   }, []);
   const startPedagogicalPlayback = useCallback(() => {
     if (!pedagogicalAudioUrl) return;
     if (pedagogicalPlaybackIntervalRef.current) return;
     const audio = new Audio(pedagogicalAudioUrl);
+    audio.playbackRate = clampNumber(Number(pedagogicalAudioPlaybackRate) || 1, 0.5, 2);
     pedagogicalAudioRef.current = audio;
     const bpm = Math.max(20, Math.min(300, pedagogicalAudioBpm));
     audio.play().then(() => {
@@ -1332,6 +1753,7 @@ function NoodiMeisterCore({ icons }) {
       pedagogicalPlaybackIntervalRef.current = setInterval(() => {
         const totalBeats = notes.reduce((acc, n) => acc + n.duration, 0);
         const beat = (audio.currentTime * bpm) / 60;
+        setPedagogicalAudioCurrentTime(audio.currentTime || 0);
         setCursorPosition(prev => {
           const next = Math.max(0, Math.min(totalBeats, beat));
           return next;
@@ -1341,6 +1763,7 @@ function NoodiMeisterCore({ icons }) {
           pedagogicalPlaybackIntervalRef.current = null;
           setIsPedagogicalAudioPlaying(false);
           setCursorPosition(0);
+          setPedagogicalAudioCurrentTime(0);
         }
       }, 50);
     }).catch(() => setIsPedagogicalAudioPlaying(false));
@@ -1348,7 +1771,18 @@ function NoodiMeisterCore({ icons }) {
       stopPedagogicalPlayback();
       setCursorPosition(0);
     };
-  }, [pedagogicalAudioUrl, pedagogicalAudioBpm, notes, stopPedagogicalPlayback]);
+  }, [pedagogicalAudioUrl, pedagogicalAudioBpm, notes, stopPedagogicalPlayback, pedagogicalAudioPlaybackRate]);
+
+  const seekPedagogicalAudio = useCallback((deltaSeconds) => {
+    if (!pedagogicalAudioUrl) return;
+    const audio = pedagogicalAudioRef.current || new Audio(pedagogicalAudioUrl);
+    audio.playbackRate = clampNumber(Number(pedagogicalAudioPlaybackRate) || 1, 0.5, 2);
+    pedagogicalAudioRef.current = audio;
+    const dur = Number.isFinite(audio.duration) && audio.duration > 0 ? audio.duration : (pedagogicalAudioDuration || 0);
+    const nextTime = clampNumber((audio.currentTime || 0) + (Number(deltaSeconds) || 0), 0, dur > 0 ? dur : 1e9);
+    audio.currentTime = nextTime;
+    setPedagogicalAudioCurrentTime(nextTime);
+  }, [pedagogicalAudioUrl, pedagogicalAudioDuration, pedagogicalAudioPlaybackRate]);
   useEffect(() => {
     return () => {
       if (pedagogicalPlaybackIntervalRef.current) clearInterval(pedagogicalPlaybackIntervalRef.current);
@@ -1662,6 +2096,7 @@ function NoodiMeisterCore({ icons }) {
     relativeNotationShowTraditionalClef,
     isPedagogicalProject,
     pedagogicalAudioBpm,
+    pedagogicalAudioPlaybackRate,
     pedagogicalAudioData: pedagogicalAudioDataRef.current || undefined,
     pedagogicalPlayheadStyle,
     pedagogicalPlayheadEmoji,
@@ -1670,9 +2105,12 @@ function NoodiMeisterCore({ icons }) {
     textBoxes,
     documentFontFamily,
     lyricFontFamily,
+    pageDesignDataUrl: pageDesignDataUrl || undefined,
+    pageDesignOpacity,
+    pageDesignFit,
     visibleStaves: visibleStaves.length === staves.length ? visibleStaves : staves.map(() => true),
     intermissionLabels
-  }), [staves, activeStaffIndex, staffYOffsets, measureStretchFactors, systemYOffsets, visibleStaves, intermissionLabels, timeSignature, timeSignatureMode, keySignature, staffLines, notationStyle, pixelsPerBeat, notationMode, instrumentNotationVariant, cursorPosition, addedMeasures, setupCompleted, songTitle, author, pickupEnabled, pickupQuantity, pickupDuration, pageOrientation, layoutMeasuresPerLine, layoutLineBreakBefore, layoutPageBreakBefore, layoutSystemGap, layoutGlobalSpacingMultiplier, viewMode, partLayoutMeasuresPerLine, partLayoutLineBreakBefore, partLayoutPageBreakBefore, showPageNavigator, pageFlowDirection, visibleToolIds, tuningReferenceNote, tuningReferenceOctave, tuningReferenceHz, playNoteOnInsert, figurenotesSize, figurenotesStems, showBarNumbers, showRhythmSyllables, showAllNoteLabels, enableEmojiOverlays, joClefStaffPosition, relativeNotationShowKeySignature, relativeNotationShowTraditionalClef, isPedagogicalProject, pedagogicalAudioBpm, pedagogicalPlayheadStyle, pedagogicalPlayheadEmoji, pedagogicalPlayheadEmojiSize, chords, textBoxes, documentFontFamily, lyricFontFamily]);
+  }), [staves, activeStaffIndex, staffYOffsets, measureStretchFactors, systemYOffsets, visibleStaves, intermissionLabels, timeSignature, timeSignatureMode, keySignature, staffLines, notationStyle, pixelsPerBeat, notationMode, instrumentNotationVariant, cursorPosition, addedMeasures, setupCompleted, songTitle, author, pickupEnabled, pickupQuantity, pickupDuration, pageOrientation, layoutMeasuresPerLine, layoutLineBreakBefore, layoutPageBreakBefore, layoutSystemGap, layoutGlobalSpacingMultiplier, viewMode, partLayoutMeasuresPerLine, partLayoutLineBreakBefore, partLayoutPageBreakBefore, showPageNavigator, pageFlowDirection, visibleToolIds, tuningReferenceNote, tuningReferenceOctave, tuningReferenceHz, playNoteOnInsert, figurenotesSize, figurenotesStems, showBarNumbers, showRhythmSyllables, showAllNoteLabels, enableEmojiOverlays, joClefStaffPosition, relativeNotationShowKeySignature, relativeNotationShowTraditionalClef, isPedagogicalProject, pedagogicalAudioBpm, pedagogicalAudioPlaybackRate, pedagogicalPlayheadStyle, pedagogicalPlayheadEmoji, pedagogicalPlayheadEmojiSize, chords, textBoxes, documentFontFamily, lyricFontFamily, pageDesignDataUrl, pageDesignOpacity, pageDesignFit]);
 
   const saveToStorageSync = useCallback(() => {
     try {
@@ -1747,6 +2185,7 @@ function NoodiMeisterCore({ icons }) {
     relativeNotationShowKeySignature,
     relativeNotationShowTraditionalClef,
     pedagogicalAudioBpm,
+    pedagogicalAudioPlaybackRate,
     pedagogicalAudioData: pedagogicalAudioDataRef.current || undefined,
     pedagogicalPlayheadStyle,
     pedagogicalPlayheadEmoji,
@@ -1758,9 +2197,12 @@ function NoodiMeisterCore({ icons }) {
     scoreData: staves[0]?.notes,
     chords,
     textBoxes,
+    pageDesignDataUrl: pageDesignDataUrl || undefined,
+    pageDesignOpacity,
+    pageDesignFit,
     visibleStaves: visibleStaves.length === staves.length ? visibleStaves : staves.map(() => true),
     intermissionLabels
-  }), [songTitle, author, notationStyle, notationMode, isPedagogicalProject, timeSignature, timeSignatureMode, keySignature, staffLines, pixelsPerBeat, instrumentNotationVariant, pickupEnabled, pickupQuantity, pickupDuration, setupCompleted, cursorPosition, addedMeasures, pageOrientation, layoutMeasuresPerLine, layoutLineBreakBefore, layoutPageBreakBefore, layoutSystemGap, layoutGlobalSpacingMultiplier, viewMode, partLayoutMeasuresPerLine, partLayoutLineBreakBefore, partLayoutPageBreakBefore, showPageNavigator, pageFlowDirection, visibleToolIds, tuningReferenceNote, tuningReferenceOctave, tuningReferenceHz, playNoteOnInsert, figurenotesSize, figurenotesStems, showBarNumbers, showRhythmSyllables, showAllNoteLabels, enableEmojiOverlays, joClefStaffPosition, relativeNotationShowKeySignature, relativeNotationShowTraditionalClef, pedagogicalAudioBpm, pedagogicalPlayheadStyle, pedagogicalPlayheadEmoji, pedagogicalPlayheadEmojiSize, staves, activeStaffIndex, staffYOffsets, measureStretchFactors, systemYOffsets, visibleStaves, intermissionLabels, chords, textBoxes]);
+  }), [songTitle, author, notationStyle, notationMode, isPedagogicalProject, timeSignature, timeSignatureMode, keySignature, staffLines, pixelsPerBeat, instrumentNotationVariant, pickupEnabled, pickupQuantity, pickupDuration, setupCompleted, cursorPosition, addedMeasures, pageOrientation, layoutMeasuresPerLine, layoutLineBreakBefore, layoutPageBreakBefore, layoutSystemGap, layoutGlobalSpacingMultiplier, viewMode, partLayoutMeasuresPerLine, partLayoutLineBreakBefore, partLayoutPageBreakBefore, showPageNavigator, pageFlowDirection, visibleToolIds, tuningReferenceNote, tuningReferenceOctave, tuningReferenceHz, playNoteOnInsert, figurenotesSize, figurenotesStems, showBarNumbers, showRhythmSyllables, showAllNoteLabels, enableEmojiOverlays, joClefStaffPosition, relativeNotationShowKeySignature, relativeNotationShowTraditionalClef, pedagogicalAudioBpm, pedagogicalAudioPlaybackRate, pedagogicalPlayheadStyle, pedagogicalPlayheadEmoji, pedagogicalPlayheadEmojiSize, staves, activeStaffIndex, staffYOffsets, measureStretchFactors, systemYOffsets, visibleStaves, intermissionLabels, chords, textBoxes, pageDesignDataUrl, pageDesignOpacity, pageDesignFit]);
 
   // Download project file (future: replace with upload to Google Drive / OneDrive)
   const downloadProject = useCallback(() => {
@@ -1822,6 +2264,7 @@ function NoodiMeisterCore({ icons }) {
       if (data.figurenotesStems != null) setFigurenotesStems(!!data.figurenotesStems);
       if (data.isPedagogicalProject != null) setIsPedagogicalProject(!!data.isPedagogicalProject);
       if (data.pedagogicalAudioBpm != null) setPedagogicalAudioBpm(Math.max(20, Math.min(300, data.pedagogicalAudioBpm)));
+      if (data.pedagogicalAudioPlaybackRate != null) setPedagogicalAudioPlaybackRate(clampNumber(Number(data.pedagogicalAudioPlaybackRate) || 1, 0.5, 2));
       if (data.pedagogicalPlayheadStyle) setPedagogicalPlayheadStyle(data.pedagogicalPlayheadStyle);
       if (data.pedagogicalPlayheadEmoji != null) setPedagogicalPlayheadEmoji(data.pedagogicalPlayheadEmoji);
       if (data.pedagogicalPlayheadEmojiSize != null) setPedagogicalPlayheadEmojiSize(Math.max(20, Math.min(60, data.pedagogicalPlayheadEmojiSize)));
@@ -1877,6 +2320,9 @@ function NoodiMeisterCore({ icons }) {
       if (data.relativeNotationShowTraditionalClef != null) setRelativeNotationShowTraditionalClef(data.relativeNotationShowTraditionalClef);
       if (data.isPedagogicalProject != null) setIsPedagogicalProject(!!data.isPedagogicalProject);
       if (Array.isArray(data.chords)) setChords(data.chords);
+      if (data.pageDesignDataUrl != null) setPageDesignDataUrl(data.pageDesignDataUrl || null);
+      if (data.pageDesignOpacity != null) setPageDesignOpacity(clampNumber(Number(data.pageDesignOpacity) || 0.25, 0, 1));
+      if (data.pageDesignFit === 'cover' || data.pageDesignFit === 'contain') setPageDesignFit(data.pageDesignFit);
       if (Array.isArray(data.textBoxes)) setTextBoxes(data.textBoxes);
       if (Array.isArray(data.visibleStaves)) setVisibleStaves(data.visibleStaves);
       if (Array.isArray(data.intermissionLabels)) setIntermissionLabels(data.intermissionLabels);
@@ -1890,6 +2336,73 @@ function NoodiMeisterCore({ icons }) {
       return false;
     }
   }, [clearDirty]);
+
+  // Cross-window sync (main score <-> part windows). Two-way, last-write-wins, avoids loops via sourceId+revision.
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof BroadcastChannel === 'undefined') return;
+    const ch = new BroadcastChannel('noodimeister-sync');
+    syncChannelRef.current = ch;
+    const onMsg = (ev) => {
+      const msg = ev?.data;
+      if (!msg || msg.type !== 'state') return;
+      if (msg.sourceId === syncClientIdRef.current) return;
+      if (typeof msg.revision !== 'number') return;
+      if (msg.revision <= syncLastAppliedRevisionRef.current) return;
+      syncLastAppliedRevisionRef.current = msg.revision;
+      syncApplyingRemoteRef.current = true;
+      try {
+        importProject(msg.payload);
+      } finally {
+        setTimeout(() => { syncApplyingRemoteRef.current = false; }, 0);
+      }
+    };
+    ch.addEventListener('message', onMsg);
+    return () => {
+      try { ch.removeEventListener('message', onMsg); } catch (_) {}
+      try { ch.close(); } catch (_) {}
+      syncChannelRef.current = null;
+    };
+  }, [importProject]);
+
+  const sanitizeSyncPayload = useCallback((state) => {
+    // Sync should carry musical content + metadata, not per-window UI state.
+    const p = { ...(state || {}) };
+    delete p.visibleStaves;
+    delete p.viewMode;
+    delete p.partLayoutMeasuresPerLine;
+    delete p.partLayoutLineBreakBefore;
+    delete p.partLayoutPageBreakBefore;
+    delete p.showPageNavigator;
+    delete p.pageFlowDirection;
+    delete p.visibleToolIds;
+    delete p.toolboxPaletteVisible;
+    return p;
+  }, []);
+
+  useEffect(() => {
+    if (!syncChannelRef.current) return;
+    if (syncApplyingRemoteRef.current) return;
+    if (syncBroadcastTimeoutRef.current) clearTimeout(syncBroadcastTimeoutRef.current);
+    syncBroadcastTimeoutRef.current = setTimeout(() => {
+      try {
+        if (!syncChannelRef.current) return;
+        if (syncApplyingRemoteRef.current) return;
+        const raw = getPersistedState();
+        const payload = sanitizeSyncPayload(raw);
+        const nextRev = (syncRevisionRef.current || 0) + 1;
+        syncRevisionRef.current = nextRev;
+        syncChannelRef.current.postMessage({
+          type: 'state',
+          sourceId: syncClientIdRef.current,
+          revision: nextRev,
+          payload,
+        });
+      } catch (_) {}
+    }, 200);
+    return () => {
+      if (syncBroadcastTimeoutRef.current) clearTimeout(syncBroadcastTimeoutRef.current);
+    };
+  }, [getPersistedState, importProject, sanitizeSyncPayload]);
 
   const handleOpenProjectFile = useCallback((e) => {
     const file = e.target.files?.[0];
@@ -2552,14 +3065,20 @@ function NoodiMeisterCore({ icons }) {
     }
   }, [notes, cursorPosition, ghostOctave, saveToHistory, setNotes, playPianoNote, playNoteOnInsert]);
 
-  // Liitrütmimustrid: iga element { durationLabel, duration }
-  const RHYTHM_PATTERN_NOTES = useMemo(() => ({
-    '2/8': [{ durationLabel: '1/8', duration: 0.5 }, { durationLabel: '1/8', duration: 0.5 }],
-    '4/16': Array(4).fill({ durationLabel: '1/16', duration: 0.25 }),
-    '8/16': Array(8).fill({ durationLabel: '1/16', duration: 0.25 }),
-    '1/8+2/16': [{ durationLabel: '1/8', duration: 0.5 }, { durationLabel: '1/16', duration: 0.25 }, { durationLabel: '1/16', duration: 0.25 }],
-    '2/16+1/8': [{ durationLabel: '1/16', duration: 0.25 }, { durationLabel: '1/16', duration: 0.25 }, { durationLabel: '1/8', duration: 0.5 }]
-  }), []);
+  // Liitrütmimustrid: iga element { durationLabel, duration, tuplet? }
+  const RHYTHM_PATTERN_NOTES = useMemo(() => {
+    const triplet32 = { type: 3, inSpaceOf: 2 };
+    return {
+      '2/8': [{ durationLabel: '1/8', duration: 0.5 }, { durationLabel: '1/8', duration: 0.5 }],
+      '4/16': Array(4).fill({ durationLabel: '1/16', duration: 0.25 }),
+      '8/16': Array(8).fill({ durationLabel: '1/16', duration: 0.25 }),
+      '1/8+2/16': [{ durationLabel: '1/8', duration: 0.5 }, { durationLabel: '1/16', duration: 0.25 }, { durationLabel: '1/16', duration: 0.25 }],
+      '2/16+1/8': [{ durationLabel: '1/16', duration: 0.25 }, { durationLabel: '1/16', duration: 0.25 }, { durationLabel: '1/8', duration: 0.5 }],
+      // Irregular (triplet) patterns in 4/4: two variations
+      'triplet-8': Array(3).fill({ durationLabel: '1/8', duration: 1 / 3, tuplet: triplet32 }),
+      'triplet-4': Array(3).fill({ durationLabel: '1/4', duration: 2 / 3, tuplet: triplet32 })
+    };
+  }, []);
 
   const insertPatternAtCursor = useCallback((patternKey) => {
     const pattern = RHYTHM_PATTERN_NOTES[patternKey];
@@ -2567,7 +3086,7 @@ function NoodiMeisterCore({ icons }) {
     const totalBeatsNow = notes.reduce((acc, n) => acc + n.duration, 0);
     const totalDuration = pattern.reduce((s, n) => s + n.duration, 0);
     if (!isLoggedIn() && totalBeatsNow + totalDuration > DEMO_MAX_BEATS) return;
-    const newNotes = pattern.map(({ durationLabel, duration }, i) => ({
+    const newNotes = pattern.map(({ durationLabel, duration, tuplet }, i) => ({
       id: Date.now() + i,
       pitch: ghostPitch,
       octave: ghostOctave,
@@ -2575,7 +3094,8 @@ function NoodiMeisterCore({ icons }) {
       durationLabel,
       isDotted: false,
       isRest: isRest,
-      lyric: ''
+      lyric: '',
+      ...(tuplet && { tuplet })
     }));
     saveToHistory(notes);
     setNotes(prev => [...prev, ...newNotes]);
@@ -2617,7 +3137,7 @@ function NoodiMeisterCore({ icons }) {
       case 'rhythm': {
         const selected = getSelectedNotes();
         const hasSelection = selected.length > 0;
-        const patternKeys = ['2/8', '4/16', '8/16', '1/8+2/16', '2/16+1/8'];
+        const patternKeys = ['2/8', '4/16', '8/16', '1/8+2/16', '2/16+1/8', 'triplet-8', 'triplet-4'];
         if (patternKeys.includes(option.value)) {
           insertPatternAtCursor(option.value);
           setActiveToolbox(null);
@@ -4601,9 +5121,17 @@ function NoodiMeisterCore({ icons }) {
             <Link to="/" className="inline-flex items-center text-amber-50 hover:opacity-90 transition-opacity">
               <img src="/logo.png" alt="NoodiMeister" className="h-9 w-auto" />
             </Link>
+            {isPartWindow && partWindowTitle && (
+              <div className="text-sm sm:text-base font-semibold text-amber-100 truncate max-w-[60vw]" title={partWindowTitle}>
+                {partWindowTitle}
+              </div>
+            )}
           </div>
           {/* Rida 2: rippmenüüd ja kõik käsud */}
           <div className="flex flex-wrap items-center gap-2" ref={headerMenuRef}>
+              <input ref={musicXmlInputRef} type="file" accept=".xml,.musicxml,application/xml,text/xml" className="hidden" onChange={handleImportMusicXmlFile} />
+              <input ref={pageDesignInputRef} type="file" accept=".png,.svg,image/png,image/svg+xml" className="hidden" onChange={handleImportPageDesignFile} />
+              <input ref={pedagogicalAudioImportInputRef} type="file" accept="audio/*" className="hidden" onChange={handlePedagogicalAudioFile} />
               <button
                 onClick={addMeasure}
                 className="inline-flex items-center gap-2 px-4 py-2 rounded-lg font-semibold text-sm bg-slate-600 text-white shadow-md hover:bg-slate-500 hover:shadow-lg active:scale-[0.98] transition-all duration-200 border border-slate-700/50"
@@ -4670,6 +5198,48 @@ function NoodiMeisterCore({ icons }) {
                     >
                       <CloudDownload className="w-4 h-4" /> {t('file.loadCloud')}
                     </button>
+                    <div className="my-1 border-t border-slate-600" />
+                    {/* Import – lehe disain / MusicXML / heli */}
+                    <div className="relative" onMouseEnter={() => setFileSubmenuOpen('import')} onMouseLeave={() => setFileSubmenuOpen(null)}>
+                      <button
+                        type="button"
+                        onClick={() => setFileSubmenuOpen(prev => prev === 'import' ? null : 'import')}
+                        className="w-full flex items-center justify-between gap-2 px-3 py-2 text-left text-sm text-amber-50 hover:bg-slate-600"
+                        title="Impordi: lehe taust (PNG/SVG), MusicXML, heli"
+                      >
+                        <span className="flex items-center gap-2">
+                          <FolderOpen className="w-4 h-4" />
+                          Import…
+                        </span>
+                        <ChevronDown className="w-4 h-4 rotate-[-90deg]" />
+                      </button>
+                      {fileSubmenuOpen === 'import' && (
+                        <div className="absolute left-full top-0 ml-0 min-w-[240px] py-1 rounded-lg bg-slate-700 border border-slate-600 shadow-xl z-50">
+                          <button
+                            type="button"
+                            onClick={() => { pageDesignInputRef.current?.click(); setHeaderMenuOpen(null); setFileSubmenuOpen(null); }}
+                            className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-amber-50 hover:bg-slate-600"
+                          >
+                            <Layout className="w-4 h-4" /> Lehe disain (PNG/SVG)
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => { musicXmlInputRef.current?.click(); setHeaderMenuOpen(null); setFileSubmenuOpen(null); }}
+                            className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-amber-50 hover:bg-slate-600"
+                          >
+                            <Music2 className="w-4 h-4" /> MusicXML (.xml)
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => { pedagogicalAudioImportInputRef.current?.click(); setHeaderMenuOpen(null); setFileSubmenuOpen(null); }}
+                            className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-amber-50 hover:bg-slate-600"
+                          >
+                            {icons?.Play && <icons.Play className="w-4 h-4" />}
+                            Heli pedagoogikale (MP3/WAV)
+                          </button>
+                        </div>
+                      )}
+                    </div>
                     <div className="my-1 border-t border-slate-600" />
                     <button
                       type="button"
@@ -4792,6 +5362,20 @@ function NoodiMeisterCore({ icons }) {
                     <div className="px-3 py-1.5 text-xs font-semibold text-amber-200 uppercase tracking-wider">{t('view.menuTitle')}</div>
                     <button type="button" onClick={() => { dirtyRef.current = true; setViewMode('score'); setHeaderMenuOpen(null); }} className={`w-full flex items-center gap-2 px-3 py-2 text-left text-sm ${viewMode === 'score' ? 'bg-amber-600 text-white' : 'text-amber-50 hover:bg-slate-600'}`} title={t('view.scoreHint')}>{t('view.score')}</button>
                     <button type="button" onClick={() => { dirtyRef.current = true; setViewMode('part'); setHeaderMenuOpen(null); }} className={`w-full flex items-center gap-2 px-3 py-2 text-left text-sm ${viewMode === 'part' ? 'bg-amber-600 text-white' : 'text-amber-50 hover:bg-slate-600'}`} title={t('view.partHint')}>{t('view.part')}</button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const staff = staves?.[activeStaffIndex];
+                        if (!staff?.id) return;
+                        const url = `/part?staffId=${encodeURIComponent(String(staff.id))}`;
+                        window.open(url, '_blank', 'noopener');
+                        setHeaderMenuOpen(null);
+                      }}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-amber-50 hover:bg-slate-600"
+                      title="Ava aktiivne instrument eraldi aknas"
+                    >
+                      <ArrowRight className="w-4 h-4" /> Ava aktiivne part eraldi aknas
+                    </button>
                     <div className="my-1 border-t border-slate-600" />
                     {/* Lehekülje suund */}
                     <div className="relative" onMouseEnter={() => setViewSubmenuOpen('orientation')} onMouseLeave={() => setViewSubmenuOpen(null)}>
@@ -5064,7 +5648,7 @@ function NoodiMeisterCore({ icons }) {
                               <img src={RHYTHM_SYLLABLE_IMAGES[option.value]} alt={option.label} className="w-5 h-5 object-contain" onError={(e) => { e.target.style.display = 'none'; e.target.nextElementSibling?.classList.remove('hidden'); }} />
                               <span className="hidden"><RhythmIcon duration={option.value} /></span>
                             </>
-                          ) : option.value === 'rest' ? <RhythmIcon duration={selectedDuration} isRest={true} /> : option.value === 'dotted' ? <RhythmIcon duration={selectedDuration} isDotted={true} /> : ['2/8','4/16','8/16','1/8+2/16','2/16+1/8'].includes(option.value) ? <RhythmPatternIcon pattern={option.value} /> : ['1/1','1/2','1/4','1/8','1/16','1/32'].includes(option.value) ? (<><RhythmIcon duration={option.value} /><RhythmIcon duration={option.value} isRest={true} /></>) : null}
+                          ) : option.value === 'rest' ? <RhythmIcon duration={selectedDuration} isRest={true} /> : option.value === 'dotted' ? <RhythmIcon duration={selectedDuration} isDotted={true} /> : ['2/8','4/16','8/16','1/8+2/16','2/16+1/8','triplet-8','triplet-4'].includes(option.value) ? <RhythmPatternIcon pattern={option.value} /> : ['1/1','1/2','1/4','1/8','1/16','1/32'].includes(option.value) ? (<><RhythmIcon duration={option.value} /><RhythmIcon duration={option.value} isRest={true} /></>) : null}
                         </span>
                         {option.key != null && <kbd className="text-[10px] font-mono bg-amber-200/80 text-amber-900 px-1.5 py-0.5 rounded">{option.key}</kbd>}
                       </button>
@@ -5368,6 +5952,25 @@ function NoodiMeisterCore({ icons }) {
                           <span className="text-sm font-medium text-amber-900">px</span>
                         </div>
                       </div>
+                      <div className="mb-3">
+                        <h4 className="text-xs font-bold text-amber-900 uppercase mb-1">{t('layout.pixelsPerBeatLabel')} (px)</h4>
+                        <p className="text-xs text-amber-700 mb-1">{t('layout.pixelsPerBeatHint')}</p>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="number"
+                            min={40}
+                            max={200}
+                            step={1}
+                            value={pixelsPerBeat}
+                            onChange={(e) => {
+                              const v = parseInt(e.target.value, 10);
+                              if (!isNaN(v)) { dirtyRef.current = true; setPixelsPerBeat(Math.max(40, Math.min(200, v))); }
+                            }}
+                            className="w-20 px-2 py-1.5 rounded border-2 border-amber-200 bg-amber-50 text-amber-900"
+                          />
+                          <span className="text-sm font-medium text-amber-900">px</span>
+                        </div>
+                      </div>
                       <p className="text-xs text-amber-700 mb-1">Paigutuse muudatus kehtib kursorit sisaldava takti suhtes. Liigu kursoriga (← →) soovitud takti.</p>
                       <div className="mb-2 px-2 py-1.5 rounded bg-amber-100 border border-amber-200 text-amber-900 text-sm font-medium">{t('layout.cursorInMeasure')}: {cursorMeasureIndex + 1}</div>
                       <div className="grid grid-cols-2 gap-1 text-xs">
@@ -5381,7 +5984,7 @@ function NoodiMeisterCore({ icons }) {
                         <button type="button" title={t('layout.compressMeasureShortcut')} onClick={() => { dirtyRef.current = true; setMeasureStretchFactors((prev) => { const next = [...(prev || [])]; while (next.length <= cursorMeasureIndex) next.push(1); next[cursorMeasureIndex] = Math.max(0.25, (next[cursorMeasureIndex] ?? 1) - 0.1); return next; }); }} className="py-1.5 px-2 rounded bg-slate-100 text-slate-800 hover:bg-slate-200 font-medium">{t('layout.compressMeasure')}</button>
                         <button type="button" title={t('layout.stretchMeasureShortcut')} onClick={() => { dirtyRef.current = true; setMeasureStretchFactors((prev) => { const next = [...(prev || [])]; while (next.length <= cursorMeasureIndex) next.push(1); next[cursorMeasureIndex] = Math.min(4, (next[cursorMeasureIndex] ?? 1) + 0.1); return next; }); }} className="py-1.5 px-2 rounded bg-slate-100 text-slate-800 hover:bg-slate-200 font-medium">{t('layout.stretchMeasure')}</button>
                       </div>
-                      <button type="button" onClick={() => { dirtyRef.current = true; (viewMode === 'score' ? setLayoutLineBreakBefore : setPartLayoutLineBreakBefore)([]); (viewMode === 'score' ? setLayoutPageBreakBefore : setPartLayoutPageBreakBefore)([]); (viewMode === 'score' ? setLayoutMeasuresPerLine : setPartLayoutMeasuresPerLine)(0); setMeasureStretchFactors([]); setSystemYOffsets([]); setLayoutGlobalSpacingMultiplier(1); }} className="mt-3 w-full py-2 px-3 rounded-lg bg-slate-100 text-slate-800 text-sm font-semibold hover:bg-slate-200 border border-slate-300" title={t('layout.resetLayoutHint')}>{t('layout.resetLayout')}</button>
+                      <button type="button" onClick={() => { dirtyRef.current = true; (viewMode === 'score' ? setLayoutLineBreakBefore : setPartLayoutLineBreakBefore)([]); (viewMode === 'score' ? setLayoutPageBreakBefore : setPartLayoutPageBreakBefore)([]); (viewMode === 'score' ? setLayoutMeasuresPerLine : setPartLayoutMeasuresPerLine)(0); setMeasureStretchFactors([]); setSystemYOffsets([]); setLayoutGlobalSpacingMultiplier(1); setPixelsPerBeat(75); }} className="mt-3 w-full py-2 px-3 rounded-lg bg-slate-100 text-slate-800 text-sm font-semibold hover:bg-slate-200 border border-slate-300" title={t('layout.resetLayoutHint')}>{t('layout.resetLayout')}</button>
                     </div>
                     <div className="mt-4 pt-4 border-t-2 border-amber-200">
                       <h4 className="text-xs font-bold text-amber-900 uppercase mb-2">{t('layout.projectFile')}</h4>
@@ -5661,6 +6264,19 @@ function NoodiMeisterCore({ icons }) {
               if (!Number.isNaN(optionIndex) && toolboxes.rhythm?.options?.[optionIndex]) handleToolboxSelection(optionIndex);
             }}
           >
+              {pageDesignDataUrl && (
+                <div
+                  aria-hidden="true"
+                  className="absolute inset-0 pointer-events-none"
+                  style={{
+                    backgroundImage: `url(${pageDesignDataUrl})`,
+                    backgroundRepeat: 'no-repeat',
+                    backgroundPosition: 'center',
+                    backgroundSize: pageDesignFit === 'contain' ? 'contain' : 'cover',
+                    opacity: clampNumber(Number(pageDesignOpacity) || 0.25, 0, 1),
+                  }}
+                />
+              )}
               <div ref={scoreContentRef} className="relative" onClick={handleScoreContentClick} role="presentation">
               {/* Pealkiri muudetav otse lehel (nagu Google Docs); horizontal: constrained to first page width so title is centered on first page */}
               <div
@@ -5695,6 +6311,49 @@ function NoodiMeisterCore({ icons }) {
                   <button type="button" onClick={() => { clearAllNoteLabels(); }} className="px-2 py-1 rounded text-sm bg-amber-200 text-amber-900 hover:bg-amber-300 border border-amber-300">
                     {t('teacher.clearAllAnnotations')}
                   </button>
+                  {pedagogicalAudioUrl && (
+                    <div className="flex flex-wrap items-center gap-2 border-l border-amber-300 pl-3">
+                      <span className="text-xs font-semibold text-amber-800">{t('pedagogical.audio')}:</span>
+                      <button
+                        type="button"
+                        onClick={isPedagogicalAudioPlaying ? stopPedagogicalPlayback : startPedagogicalPlayback}
+                        className="px-2 py-1 rounded text-sm bg-violet-600 text-white hover:bg-violet-500"
+                      >
+                        {icons?.Play && !isPedagogicalAudioPlaying && <icons.Play className="w-4 h-4 inline-block mr-1" />}
+                        {icons?.Pause && isPedagogicalAudioPlaying && <icons.Pause className="w-4 h-4 inline-block mr-1" />}
+                        {isPedagogicalAudioPlaying ? t('pedagogical.pause') : t('pedagogical.play')}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => stopPedagogicalPlayback()}
+                        className="px-2 py-1 rounded text-sm bg-slate-200 text-slate-900 hover:bg-slate-300 border border-slate-300"
+                      >
+                        Stop
+                      </button>
+                      <button type="button" onClick={() => seekPedagogicalAudio(-5)} className="px-2 py-1 rounded text-sm bg-slate-100 text-slate-800 hover:bg-slate-200 border border-slate-200">-5s</button>
+                      <button type="button" onClick={() => seekPedagogicalAudio(5)} className="px-2 py-1 rounded text-sm bg-slate-100 text-slate-800 hover:bg-slate-200 border border-slate-200">+5s</button>
+                      <label className="flex items-center gap-2">
+                        <span className="text-xs text-amber-800">Tempo</span>
+                        <input
+                          type="range"
+                          min={0.5}
+                          max={2}
+                          step={0.05}
+                          value={pedagogicalAudioPlaybackRate}
+                          onChange={(e) => {
+                            const v = clampNumber(Number(e.target.value) || 1, 0.5, 2);
+                            setPedagogicalAudioPlaybackRate(v);
+                            dirtyRef.current = true;
+                            if (pedagogicalAudioRef.current) pedagogicalAudioRef.current.playbackRate = v;
+                          }}
+                        />
+                        <span className="text-xs text-amber-800 w-10">{Math.round(pedagogicalAudioPlaybackRate * 100)}%</span>
+                      </label>
+                      <span className="text-xs text-amber-700">
+                        {Math.floor(pedagogicalAudioCurrentTime)}s / {Math.floor(pedagogicalAudioDuration || 0)}s
+                      </span>
+                    </div>
+                  )}
                   {staves.length > 1 && (
                     <div className="flex flex-wrap items-center gap-2 border-l border-amber-300 pl-3">
                       <span className="text-xs font-semibold text-amber-800">{t('teacher.showStaves')}:</span>
@@ -5836,6 +6495,7 @@ function NoodiMeisterCore({ icons }) {
                   }}
                   systems={systemsForScore}
                   baseYOffset={baseYOffset}
+                  isActiveStaff={staffIdx === activeStaffIndex}
                   staffCount={visibleStaffList.length > 0 ? visibleStaffList.length : staves.length}
                   staffHeight={effectiveStaffHeight}
                   showBarNumbers={showBarNumbers}
@@ -6140,7 +6800,7 @@ function getFingeringForNote(pitch, octave, instrumentId) {
 }
 
 // Timeline Component – multi-system layout (VexFlow loogika). (PAGE_BREAK_GAP on defineeritud üleval.)
-function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, pageWidth, cursorPosition, notationMode, staffLines, clefType, keySignature = 'C', relativeNotationShowKeySignature = false, relativeNotationShowTraditionalClef = false, onJoClefPositionChange, joClefFocused = false, onJoClefFocus, instrument = 'piano', instrumentNotationVariant = 'standard', instrumentConfig = {}, showBarNumbers = true, showRhythmSyllables = false, joClefStaffPosition: joClefStaffPositionProp, showAllNoteLabels = false, enableEmojiOverlays = true, onNoteTeacherLabelChange, onNoteLabelClick, chords = [], isDotted, isRest, selectedDuration, noteInputMode, selectedNoteIndex, isNoteSelected, notes: allNotes, onStaffAddNote, onNoteClick, onNotePitchChange, ghostPitch, ghostOctave, notationStyle, layoutMeasuresPerLine = 4, layoutLineBreakBefore = [], layoutPageBreakBefore = [], layoutSystemGap = 120, layoutGlobalSpacingMultiplier = 1, systems: systemsProp, baseYOffset = 0, staffCount = 1, staffHeight: staffHeightProp, figurenotesSize = 16, figurenotesStems = false, themeColors: themeColorsProp, pedagogicalPlayheadStyle = 'line', pedagogicalPlayheadEmoji = '🎵', pedagogicalPlayheadEmojiSize = 32, isPedagogicalAudioPlaying = false, isExportingAnimation = false, exportCursorRef, scoreContainerRef, pageFlowDirection = 'vertical', isFirstInBraceGroup = false, braceGroupSize = 0, lyricFontFamily = 'sans-serif', translateLabel, showLayoutBreakIcons = false, showStaffSpacerHandles = false, onSystemYOffsetChange, onToggleLineBreakAfter }) {
+function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, pageWidth, cursorPosition, notationMode, staffLines, clefType, keySignature = 'C', relativeNotationShowKeySignature = false, relativeNotationShowTraditionalClef = false, onJoClefPositionChange, joClefFocused = false, onJoClefFocus, instrument = 'piano', instrumentNotationVariant = 'standard', instrumentConfig = {}, showBarNumbers = true, showRhythmSyllables = false, joClefStaffPosition: joClefStaffPositionProp, showAllNoteLabels = false, enableEmojiOverlays = true, onNoteTeacherLabelChange, onNoteLabelClick, chords = [], isDotted, isRest, selectedDuration, noteInputMode, selectedNoteIndex, isNoteSelected, notes: allNotes, onStaffAddNote, onNoteClick, onNotePitchChange, ghostPitch, ghostOctave, notationStyle, layoutMeasuresPerLine = 4, layoutLineBreakBefore = [], layoutPageBreakBefore = [], layoutSystemGap = 120, layoutGlobalSpacingMultiplier = 1, systems: systemsProp, baseYOffset = 0, isActiveStaff = true, staffCount = 1, staffHeight: staffHeightProp, figurenotesSize = 16, figurenotesStems = false, themeColors: themeColorsProp, pedagogicalPlayheadStyle = 'line', pedagogicalPlayheadEmoji = '🎵', pedagogicalPlayheadEmojiSize = 32, isPedagogicalAudioPlaying = false, isExportingAnimation = false, exportCursorRef, scoreContainerRef, pageFlowDirection = 'vertical', isFirstInBraceGroup = false, braceGroupSize = 0, lyricFontFamily = 'sans-serif', translateLabel, showLayoutBreakIcons = false, showStaffSpacerHandles = false, onSystemYOffsetChange, onToggleLineBreakAfter }) {
   if (typeof GLOBAL_NOTATION_CONFIG === 'undefined' || !GLOBAL_NOTATION_CONFIG || GLOBAL_NOTATION_CONFIG.EMOJIS === false) return null;
   const themeColors = themeColorsProp || { staffLineColor: '#000', noteFill: '#1a1a1a', textColor: '#1a1a1a', scoreBg: '#fffbf0', isDark: false };
   const safeKey = keySignature ?? 'C';
@@ -6707,8 +7367,9 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
       )}
 
 
-      {/* Cursor + Ghost note (only visible when note input mode is ON) – slot center. Dünaamiline: tühi väli = joon, muidu emoji. Rütmiline hüpe: y = base_y - |A·sin(π·beat_progress)| */}
-      {noteInputMode && cursorInfo && cursorSlotCenterXValid && (() => {
+      {/* Cursor + Ghost note (only visible when note input mode is ON) – slot center. In figurenotes, show only on active staff so the insertion point is clear. */}
+      {noteInputMode && cursorInfo && (cursorSlotCenterXValid || (isFigurenotesMode && isActiveStaff)) && (!isFigurenotesMode || isActiveStaff) && (() => {
+        const cursorX = (cursorSlotCenterX != null && Number.isFinite(cursorSlotCenterX)) ? cursorSlotCenterX : (marginLeft + 40);
         const cursorChar = (pedagogicalPlayheadEmoji || '').trim();
         const showLine = cursorChar === '';
         const displayEmoji = cursorChar || '🎵';
@@ -6724,7 +7385,7 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
             const svgR = timelineSvgRef.current.getBoundingClientRect();
             const containerR = scoreContainerRef.current.getBoundingClientRect();
             exportCursorRef.current = {
-              x: cursorSlotCenterX + svgR.left - containerR.left,
+              x: cursorX + svgR.left - containerR.left,
               y: cursorInfo.system.yOffset + emojiCenterY + svgR.top - containerR.top,
               emoji: displayEmoji,
               size: emojiSizePx
@@ -6735,9 +7396,9 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
         <g>
           {showLine ? (
             <line
-              x1={cursorSlotCenterX}
+              x1={cursorX}
               y1={cursorInfo.system.yOffset + 5}
-              x2={cursorSlotCenterX}
+              x2={cursorX}
               y2={cursorInfo.system.yOffset + timelineHeight - 5}
               stroke="#2563eb"
               strokeWidth="3"
@@ -6748,16 +7409,16 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
           ) : (
             <>
               <line
-                x1={cursorSlotCenterX}
+                x1={cursorX}
                 y1={cursorInfo.system.yOffset + 5}
-                x2={cursorSlotCenterX}
+                x2={cursorX}
                 y2={cursorInfo.system.yOffset + timelineHeight - 5}
                 stroke="#2563eb"
                 strokeWidth="1.5"
                 opacity="0.4"
               />
               <text
-                x={cursorSlotCenterX}
+                x={cursorX}
                 y={cursorEmojiY}
                 textAnchor="middle"
                 dominantBaseline="middle"
@@ -6776,11 +7437,11 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
                   const widths = sys.measureWidths ?? [sys.measureWidth ?? timeSignature.beats * 80];
                   const beatW = (widths[0] ?? sys.measureWidth) / (timeSignature.beats || 1);
                   const zSize = Math.min(beatW * 0.55, 26);
-                  return <text x={cursorSlotCenterX} y={cursorInfo.system.yOffset + centerY + zSize * 0.2} textAnchor="middle" fontSize={zSize} fontWeight="bold" fill="#dc2626" fontFamily="serif">Z</text>;
+                  return <text x={cursorX} y={cursorInfo.system.yOffset + centerY + zSize * 0.2} textAnchor="middle" fontSize={zSize} fontWeight="bold" fill="#dc2626" fontFamily="serif">Z</text>;
                 })()
               : (() => {
                   const restY = cursorInfo.system.yOffset + centerY;
-                  const x = cursorSlotCenterX;
+                  const x = cursorX;
                   const scale = 0.9;
                   const w = 8 * scale, h = 3 * scale;
                   const dur = (typeof selectedDuration === 'string' ? selectedDuration : null) || '1/4';
@@ -6793,7 +7454,7 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
                 })()
           ) : ghostPitch && ghostOctave ? (
             (() => {
-              const cx = cursorSlotCenterX;
+              const cx = cursorX;
               const pitchY = getPitchY(ghostPitch, ghostOctave);
               const cy = cursorInfo.system.yOffset + (notationMode === 'figurenotes' ? centerY : pitchY);
               const stemUp = pitchY > middleLineY;
@@ -6859,12 +7520,12 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
               return <g opacity="0.85"><circle cx={cx} cy={cy} r="9" fill="none" stroke={themeColors.textColor}/><text x={cx} y={cy+3} textAnchor="middle" fontSize="11" fontWeight="bold" fill={themeColors.textColor}>{ghostPitch}</text><line x1={stemX} y1={cy} x2={stemX} y2={stemY2} stroke={themeColors.textColor} strokeWidth="1.5"/></g>;
             })()
           ) : (
-            <circle cx={cursorSlotCenterX} cy={cursorInfo.system.yOffset + centerY} r="6" fill="#2563eb" stroke="white" strokeWidth="2">
+            <circle cx={cursorX} cy={cursorInfo.system.yOffset + centerY} r="6" fill="#2563eb" stroke="white" strokeWidth="2">
               <animate attributeName="r" values="6;8;6" dur="1s" repeatCount="indefinite" />
             </circle>
           )}
           {isDotted && !isRest && ghostPitch && (
-            <circle cx={cursorSlotCenterX + 12} cy={cursorInfo.system.yOffset + (notationMode === 'figurenotes' ? centerY : getPitchY(ghostPitch, ghostOctave))} r="3" fill="#f59e0b" stroke="white" strokeWidth="1">
+            <circle cx={cursorX + 12} cy={cursorInfo.system.yOffset + (notationMode === 'figurenotes' ? centerY : getPitchY(ghostPitch, ghostOctave))} r="3" fill="#f59e0b" stroke="white" strokeWidth="1">
               <animate attributeName="opacity" values="1;0.5;1" dur="0.8s" repeatCount="indefinite" />
             </circle>
           )}

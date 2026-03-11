@@ -21,15 +21,10 @@ const DEFINITIONS = `
     <tbody>
       <tr><td>fClef (bass)</td><td><code>U+E062</code></td><td>clef-bass, bass-staff-eb-a-f-d-bb</td></tr>
       <tr><td>cClef (Aldivõti / alto)</td><td><code>U+E05C</code></td><td>clef-c; placement: c-clef-on-staff</td></tr>
-      <tr><td>noteheadWhole</td><td><code>U+E0A2</code></td><td>note-whole</td></tr>
-      <tr><td>noteheadHalf</td><td><code>U+E0A3</code></td><td>note-half-up</td></tr>
-      <tr><td>noteheadBlack</td><td><code>U+E0A4</code></td><td>note-quarter-up, note-eighth-up, note-16th-up, note-32nd-up, bass-staff</td></tr>
-      <tr><td>restWhole</td><td><code>U+E4E3</code></td><td>rest-whole</td></tr>
-      <tr><td>restHalf</td><td><code>U+E4E4</code></td><td>rest-half</td></tr>
-      <tr><td>restQuarter</td><td><code>U+E4E5</code></td><td>rest-quarter</td></tr>
-      <tr><td>rest8th</td><td><code>U+E4E6</code></td><td>rest-eighth</td></tr>
-      <tr><td>rest16th</td><td><code>U+E4E7</code></td><td>rest-16th</td></tr>
-      <tr><td>rest32nd</td><td><code>U+E4E8</code></td><td>rest-32nd</td></tr>
+      <tr><td>noteheadWhole</td><td><code>U+E0A2</code></td><td>bass-staff (noteheads)</td></tr>
+      <tr><td>noteheadHalf</td><td><code>U+E0A3</code></td><td>—</td></tr>
+      <tr><td>noteheadBlack</td><td><code>U+E0A4</code></td><td>bass-staff (noteheads)</td></tr>
+      <tr><td>restWhole … rest32nd</td><td><code>U+E4E3</code>–<code>U+E4E8</code></td><td>— (app uses Leland; no PNG previews)</td></tr>
       <tr><td>flat</td><td><code>U+E260</code></td><td>bass-staff (E♭, B♭)</td></tr>
     </tbody>
   </table>
@@ -40,13 +35,6 @@ const DEFINITIONS = `
       <tr><td>clef-bass.png</td><td>Leland U+E062 (fClef)</td></tr>
       <tr><td>clef-c.png</td><td>Leland U+E05C (cClef / Aldivõti), symbol only</td></tr>
       <tr><td>c-clef-on-staff.png</td><td>Aldivõti placement on staff (clef center = middle C); symbol = clef-c.png</td></tr>
-      <tr><td>note-whole.png</td><td>Leland U+E0A2</td></tr>
-      <tr><td>note-half-up.png</td><td>Leland U+E0A3 + SVG stem</td></tr>
-      <tr><td>note-quarter-up.png</td><td>Leland U+E0A4 + SVG stem</td></tr>
-      <tr><td>note-eighth-up.png</td><td>Leland U+E0A4 + stem + 1 flag</td></tr>
-      <tr><td>note-16th-up.png</td><td>Leland U+E0A4 + stem + 2 flags</td></tr>
-      <tr><td>note-32nd-up.png</td><td>Leland U+E0A4 + stem + 3 flags</td></tr>
-      <tr><td>rest-whole.png … rest-32nd.png</td><td>Leland rest glyphs; fallback SVG paths</td></tr>
       <tr><td>figurenotes-A.png … G.png</td><td>SVG path: colored shapes (FIGURE_SHAPES)</td></tr>
       <tr><td>octave-1-empty … octave-5-triangle</td><td>SVG: dashed square, X, square, circle, triangle</td></tr>
       <tr><td>octave-2-cross-coordinate-table.png</td><td>SVG: grid + X hexagons</td></tr>

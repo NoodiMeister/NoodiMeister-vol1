@@ -26,20 +26,40 @@ function getMicrosoftRedirectUri() {
   try {
     const base = (typeof import.meta !== 'undefined' && import.meta.env?.BASE_URL) || '/';
     const normalizedBase = base.endsWith('/') ? base : base + '/';
-    return window.location.origin + normalizedBase + 'auth/microsoft-popup.html';
+    return window.location.origin + normalizedBase;
   } catch {
-    return window.location.origin + '/auth/microsoft-popup.html';
+    return window.location.origin + '/';
   }
+}
+
+/** Wait for MSAL CDN script to set window.msal (poll up to 10s). */
+function waitForMsal() {
+  if (typeof window === 'undefined') return Promise.resolve(false);
+  if (window.msal?.PublicClientApplication) return Promise.resolve(true);
+  return new Promise((resolve) => {
+    let attempts = 0;
+    const maxAttempts = 50;
+    const t = setInterval(() => {
+      attempts++;
+      if (window.msal?.PublicClientApplication) {
+        clearInterval(t);
+        resolve(true);
+        return;
+      }
+      if (attempts >= maxAttempts) {
+        clearInterval(t);
+        console.error('[CloudLogin] MSAL CDN script ei laadinud aja jooksul.');
+        resolve(false);
+      }
+    }, 200);
+  });
 }
 
 /** Promise that resolves to an already-initialized MSAL instance (global msal from CDN). */
 let msalPromiseByOrigin = {};
 function getOrCreateMsalPromise() {
   if (typeof window === 'undefined' || !microsoftClientId) return null;
-  if (!window.msal || !window.msal.PublicClientApplication) {
-    console.error('[CloudLogin] MSAL CDN script (window.msal) puudub.');
-    return null;
-  }
+  if (!window.msal?.PublicClientApplication) return null;
   const origin = window.location.origin;
   if (msalPromiseByOrigin[origin]) return msalPromiseByOrigin[origin];
   const redirectUri = getMicrosoftRedirectUri();
@@ -64,6 +84,8 @@ function getOrCreateMsalPromise() {
 }
 
 async function ensureMsalReady() {
+  const ok = await waitForMsal();
+  if (!ok) return null;
   const p = getOrCreateMsalPromise();
   if (!p) return null;
   return p;
@@ -270,93 +292,13 @@ function useCloudLoginWithProvider(mode = 'login', stayLoggedIn = false, onError
       // Only User.Read for sign-in so users can consent without org admin. Request Files.ReadWrite later when using OneDrive.
       const loginScopes = ['User.Read'];
       const msal = await ensureMsalReady();
-      if (!msal) throw new Error('Microsofti sisselogimise initsialiseerimine ebaõnnestus.');
+      if (!msal) throw new Error('Microsofti sisselogimise teek ei laadinud. Lülita reklaamide blokeerija välja sellel lehel või proovi teist brauserit.');
 
-      const loginResult = await msal.loginPopup({
+      await msal.loginRedirect({
         scopes: loginScopes,
         prompt: 'select_account',
       });
-
-      const account = loginResult?.account;
-      if (!account) throw new Error('Microsofti konto infot ei saadud');
-
-      const tokenResult = await msal.acquireTokenSilent({ account, scopes: loginScopes }).catch(() => null);
-      const accessToken = tokenResult?.accessToken || loginResult?.accessToken;
-      if (!accessToken) throw new Error('Microsoft access token puudub');
-
-      const r = await fetch('https://graph.microsoft.com/v1.0/me', {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
-      const profile = await r.json().catch(() => ({}));
-      if (!r.ok) {
-        const detail = profile?.error?.message || profile?.message || `HTTP ${r.status}`;
-        throw { status: r.status, message: detail, ...profile };
-      }
-
-      const emailRaw = profile.mail || profile.userPrincipalName || account.username || '';
-      const email = String(emailRaw || '').trim().toLowerCase();
-      if (!email) throw new Error('E-maili ei saadud Microsoft Graphist');
-
-      const allowed = getMicrosoftTesterEmails();
-      if (allowed.length > 0 && !allowed.includes(email)) {
-        const msg = `Sinu konto (${email}) pole veel Microsofti testijate nimekirjas. Kasutaja ei ole täielikult registreeritud: administraator peab lisama sinu e-maili .env faili muutujasse VITE_MICROSOFT_TESTER_EMAILS (komaga eraldatud) või jätma selle tühjaks, et kõik saaksid sisse logida.`;
-        alert(msg);
-        const payload = formatAuthError('Microsoft OAuth', { code: 'not_allowed', message: msg });
-        if (onError) onError(payload);
-        return;
-      }
-
-      const user = {
-        email,
-        name: profile.displayName || account.name || email.split('@')[0],
-        provider: 'microsoft',
-      };
-
-      if (!canUseStorageForLogin(stayLoggedIn)) {
-        const msg = 'Brauser ei luba andmeid salvestada (nt privaatne režiim). Proovi teist brauserit.';
-        alert('Sisselogimise viga: ' + msg);
-        if (onError) onError(formatAuthError('brauser', { message: msg }));
-        return;
-      }
-
-      const storage = getStorageForLogin(stayLoggedIn);
-      if (!storage) {
-        const msg = 'Brauser ei luba andmeid salvestada (nt privaatne režiim). Proovi teist brauserit.';
-        alert('Sisselogimise viga: ' + msg);
-        const payload = formatAuthError('brauser', { message: msg });
-        if (onError) onError(payload);
-        return;
-      }
-
-      storage.setItem(KEY_LOGGED_IN, JSON.stringify(user));
-      storage.setItem(KEY_MICROSOFT_TOKEN, accessToken);
-      const expiresAt = tokenResult?.expiresOn ? tokenResult.expiresOn.getTime() : 0;
-      storage.setItem(KEY_MICROSOFT_EXPIRY, String(expiresAt));
-
-      // Always ensure user is in noodimeister-users so the account is "fully registered" (login or register).
-      try {
-        const users = JSON.parse(localStorage.getItem('noodimeister-users') || '[]');
-        if (!users.some(u => u && u.email === email)) {
-          users.push({ ...user });
-          localStorage.setItem('noodimeister-users', JSON.stringify(users));
-        }
-      } catch (_) {}
-
-      const readStorage = getStorageForRead();
-      const confirmedUser = getLoggedInUser();
-      const loggedIn = isLoggedIn();
-      if (!readStorage || !confirmedUser?.email || !loggedIn) {
-        const msg = 'Sisselogimine salvestati, kuid kinnitamine ebaõnnestus. Proovi uuesti või teist brauserit.';
-        alert('Sisselogimise viga: ' + msg);
-        const payload = formatAuthError('brauser', { message: msg });
-        if (onError) onError(payload);
-        return;
-      }
-
-      console.log('[CloudLogin] Microsoft auth kinnitatud, suuname /tood poole (Minu tööd)');
-      requestAnimationFrame(() => {
-        setTimeout(redirectToTood, 50);
-      });
+      return;
     })().catch((err) => {
       const isPopupClosed = err?.errorCode === 'user_cancelled' || err?.errorCode === 'popup_window_error' || err?.errorMessage?.includes('user_cancelled');
       const isInteractionInProgress = err?.errorCode === 'interaction_in_progress' || (err?.message && String(err.message).includes('interaction_in_progress'));

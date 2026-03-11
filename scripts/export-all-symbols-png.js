@@ -33,28 +33,6 @@ function safeId(id) {
 const BASS_CLEF_PATH = `<g transform="translate(-46.2, 78.5) scale(4.62) translate(-5, -12)"><path fill="#1a1a1a" d="M12.4,2.5 C9.8,2.5,7.6,3.4,5.9,5.2 C4.2,7,3.3,9.2,3.3,11.8 c0,2.8,1,5.2,2.9,7.1 c1.9,1.9,4.3,2.9,7.1,2.9 c2.1,0,4-0.6,5.6-1.9 l-1.3-1.6 c-1.2,0.9-2.7,1.4-4.3,1.4 c-2.2,0-4.1-0.8-5.6-2.3 c-1.5-1.5-2.2-3.4-2.2-5.6 c0-2.2,0.8-4.1,2.3-5.6 c1.5-1.5,3.4-2.3,5.6-2.3 c3.2,0,5.9,2,7,4.8 h2.3 C21.6,6,17.5,2.5,12.4,2.5 z"/><circle cx="15" cy="-5" r="1.8" fill="#1a1a1a"/><circle cx="15" cy="0" r="1.8" fill="#1a1a1a"/></g>`;
 // C clef: two vertical bars + C curve
 const C_CLEF_PATH = '<g stroke="#1a1a1a" fill="none" stroke-width="4" stroke-linecap="round"><line x1="-14" y1="-55" x2="-14" y2="55"/><line x1="14" y1="-55" x2="14" y2="55"/><path d="M14 0 Q-14 0 -14 -28 Q14 -55 14 -28 M14 28 Q-14 28 -14 0 Q14 28 14 0"/></g>';
-// Note shapes (path/circle/ellipse + stem + flags)
-const NOTE_WHOLE_PATH = '<ellipse cx="0" cy="0" rx="28" ry="16" fill="none" stroke="#1a1a1a" stroke-width="2.5"/>';
-const NOTE_HALF_PATH = '<ellipse cx="0" cy="0" rx="25" ry="14" fill="none" stroke="#1a1a1a" stroke-width="2.5"/><line x1="12" y1="0" x2="12" y2="-88" stroke="#1a1a1a" stroke-width="2.5"/>';
-const NOTE_QUARTER_PATH = '<circle cx="0" cy="0" r="18" fill="#1a1a1a"/><line x1="18" y1="0" x2="18" y2="-85" stroke="#1a1a1a" stroke-width="2.5"/>';
-const stemR = 18;
-const stemY = -85;   // stem-up: tip at y = -85
-const stemYDown = 85; // stem-down: tip at y = +85
-// Flag for stem UP: on right of stem, going right then back (dy offsets from stem tip)
-const flag = (dy) => `<path d="M${stemR} ${stemY} L${stemR + 14} ${stemY + dy} L${stemR} ${stemY + dy + 12}" fill="#1a1a1a"/>`;
-// Flag for stem DOWN: on right of stem (negative x), below stem tip
-const flagDown = (dy) => `<path d="M${-stemR} ${stemYDown} L${-stemR - 14} ${stemYDown + dy} L${-stemR} ${stemYDown + dy + 12}" fill="#1a1a1a"/>`;
-const NOTE_EIGHTH_PATH = `<circle cx="0" cy="0" r="${stemR}" fill="#1a1a1a"/><line x1="${stemR}" y1="0" x2="${stemR}" y2="${stemY}" stroke="#1a1a1a" stroke-width="2.5"/>${flag(8)}`;
-const NOTE_16TH_PATH = `<circle cx="0" cy="0" r="${stemR}" fill="#1a1a1a"/><line x1="${stemR}" y1="0" x2="${stemR}" y2="${stemY}" stroke="#1a1a1a" stroke-width="2.5"/>${flag(8)}${flag(20)}`;
-const NOTE_16TH_DOWN_PATH = `<circle cx="0" cy="0" r="${stemR}" fill="#1a1a1a"/><line x1="${-stemR}" y1="0" x2="${-stemR}" y2="${stemYDown}" stroke="#1a1a1a" stroke-width="2.5"/>${flagDown(8)}${flagDown(20)}`;
-const NOTE_32ND_PATH = `<circle cx="0" cy="0" r="${stemR}" fill="#1a1a1a"/><line x1="${stemR}" y1="0" x2="${stemR}" y2="${stemY}" stroke="#1a1a1a" stroke-width="2.5"/>${flag(8)}${flag(20)}${flag(32)}`;
-// Rests
-const REST_WHOLE_PATH = '<path fill="#1a1a1a" d="M-48,-18 L48,-18 L48,18 L-48,18 Z"/>';
-const REST_QUARTER_PATH = '<g transform="translate(-17,-42.5) scale(0.85)"><path fill="#1a1a1a" d="M28,5 C35,5 38,12 36,22 L34,45 C30,62 22,72 12,68 C4,64 2,54 8,46 C14,38 26,42 30,50 L28,78 C26,88 20,95 12,92 C4,89 2,82 6,78 L20,52 C26,42 24,32 16,34 C10,36 6,32 8,26 L24,8 C28,4 30,2 28,5 Z"/></g>';
-const REST_HALF_PATH = '<path fill="#1a1a1a" d="M-40,-8 L40,-8 L35,8 L-35,8 Z"/>';
-const REST_EIGHTH_PATH = '<g transform="translate(-12,-45) scale(0.6)"><path fill="#1a1a1a" d="M28,5 C35,5 38,12 36,22 L34,45 C30,62 22,72 12,68 C4,64 2,54 8,46 C14,38 26,42 30,50 L28,78 C26,88 20,95 12,92 C4,89 2,82 6,78 L20,52 C26,42 24,32 16,34 C10,36 6,32 8,26 L24,8 C28,4 30,2 28,5 Z"/></g>';
-const REST_16TH_PATH = '<g transform="translate(-8,-48) scale(0.5)"><path fill="#1a1a1a" d="M28,5 C35,5 38,12 36,22 L34,45 C30,62 22,72 12,68 C4,64 2,54 8,46 C14,38 26,42 30,50 L28,78 C26,88 20,95 12,92 C4,89 2,82 6,78 L20,52 C26,42 24,32 16,34 C10,36 6,32 8,26 L24,8 C28,4 30,2 28,5 Z"/></g>';
-const REST_32ND_PATH = '<g transform="translate(-5,-50) scale(0.4)"><path fill="#1a1a1a" d="M28,5 C35,5 38,12 36,22 L34,45 C30,62 22,72 12,68 C4,64 2,54 8,46 C14,38 26,42 30,50 L28,78 C26,88 20,95 12,92 C4,89 2,82 6,78 L20,52 C26,42 24,32 16,34 C10,36 6,32 8,26 L24,8 C28,4 30,2 28,5 Z"/></g>';
 // Flat sign (simple path for staff)
 const FLAT_PATH = '<path fill="#1a1a1a" d="M0 4 L0 -18 L3 -18 L3 2 Q0 -2 -3 2 L-3 18 L0 18 Z"/>';
 
@@ -79,25 +57,6 @@ async function main() {
   // Clefs (path-based where no Leland script exists)
   toExport.push({ id: 'clef-bass', svg: svgWrap(BASS_CLEF_PATH) });
   // clef-c.png: use scripts/export-clef-c-png.js (Leland U+E05C cClef), not path-based C_CLEF_PATH
-
-  // Notes (path-based)
-  toExport.push({ id: 'note-whole', svg: svgWrap(NOTE_WHOLE_PATH) });
-  toExport.push({ id: 'note-half-up', svg: svgWrap(NOTE_HALF_PATH) });
-  toExport.push({ id: 'note-quarter-up', svg: svgWrap(NOTE_QUARTER_PATH) });
-  toExport.push({ id: 'note-eighth-up', svg: svgWrap(NOTE_EIGHTH_PATH) });
-  toExport.push({ id: 'note-16th-up', svg: svgWrap(NOTE_16TH_PATH) });
-  toExport.push({ id: 'note-16th-down', svg: svgWrap(NOTE_16TH_DOWN_PATH) });
-  toExport.push({ id: 'note-32nd-up', svg: svgWrap(NOTE_32ND_PATH) });
-
-  // Rests (path-based)
-  [
-    { id: 'rest-whole', path: REST_WHOLE_PATH },
-    { id: 'rest-half', path: REST_HALF_PATH },
-    { id: 'rest-quarter', path: REST_QUARTER_PATH },
-    { id: 'rest-eighth', path: REST_EIGHTH_PATH },
-    { id: 'rest-16th', path: REST_16TH_PATH },
-    { id: 'rest-32nd', path: REST_32ND_PATH },
-  ].forEach(({ id, path: pathContent }) => toExport.push({ id, svg: svgWrap(pathContent) }));
 
   // Octave symbols
   const octaveSymbols = [
