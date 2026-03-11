@@ -95,3 +95,11 @@ Token kehtib umbes 1 tundi; pärast aegumist tuleb uuesti **Logi sisse** → **G
 2. **Kui see on preview-URL** (sisaldab juhuslikku osa nagu `c7ms0vldp`): **ära lisa seda**. Ava hoopis **toodangu aadress** – **https://www.noodimeister.ee** või **https://noodi-meister-vol1-la-stravaganza.vercel.app** – ja logi sisse sealt. Need kaks peavad olema Google Console’is lisatud.
 3. Google Cloud Console → **Credentials** → OAuth 2.0 Client ID. Lisa **Authorized JavaScript origins** ja **Authorized redirect URIs** sektsioonidesse: `https://www.noodimeister.ee` ja `https://noodi-meister-vol1-la-stravaganza.vercel.app`.
 4. **Save** → oota mõni minut → proovi uuesti **www.noodimeister.ee** aadressil.
+
+---
+
+## Faili ikoon kasutaja Drive’is (drive.google.com)
+
+Kui kasutaja avab oma Google Drive’i otse (mitte noodimeister.ee kaudu), siis NoodiMeisteri **logo ei ilmu** failide kõrvale automaatselt. Rakendus salvestab failid MIME-tüübiga `application/vnd.noodimeister+json`, et Drive tuvastaks need NoodiMeisteri projektidena („Ava koos“ võib pakkuda meie rakendust).
+
+Et **NoodiMeisteri logo** kuvataks Drive’i failinimekirjas, tuleks rakendus avalikult registreerida (nt Google Workspace Marketplace) ja seadistada Drive’i integreerimine koos rakenduse ikooniga. See on eraldi samm ja nõuab Google’i kinnitust.

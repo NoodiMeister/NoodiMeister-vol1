@@ -41,6 +41,14 @@ html, body, #root {
   font-family: system-ui, -apple-system, sans-serif;
   background: var(--bg-color);
   color: var(--text-color);
+  /* Tahvelarvutid: vähendab puudel viivitust, lubab sõrme-/stylus-kerimist */
+  touch-action: manipulation;
+}
+
+/* Põhikerimisala: sõrme- ja tahvelkerimine iOS/Android-il */
+.main-score-area {
+  -webkit-overflow-scrolling: touch;
+  overflow-scrolling: touch;
 }
 
 .loading-screen {

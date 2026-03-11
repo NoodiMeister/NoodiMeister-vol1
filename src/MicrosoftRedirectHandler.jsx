@@ -143,7 +143,11 @@ export default function MicrosoftRedirectHandler() {
             }
             setStatus('redirect');
             try { sessionStorage.setItem('noodimeister-show-welcome', '1'); } catch (_) {}
-            redirectToTood();
+            // Clear hash/query so refresh doesn't re-run handler; then redirect
+            try {
+              window.history.replaceState(null, '', window.location.pathname || '/');
+            } catch (_) {}
+            setTimeout(() => redirectToTood(), 100);
           });
       })
       .catch((err) => {
@@ -172,7 +176,17 @@ export default function MicrosoftRedirectHandler() {
       }}
     >
       {status === 'processing' && <p>Microsofti sisselogimine… Töötleme.</p>}
-      {status === 'redirect' && <p>Suuname Minu tööde lehele…</p>}
+      {status === 'redirect' && (
+        <div>
+          <p>Suuname Minu tööde lehele…</p>
+          <a
+            href={typeof window !== 'undefined' ? (window.location.origin + ((import.meta.env?.BASE_URL || '').replace(/\/$/, '') || '') + '/tood') : '/tood'}
+            style={{ display: 'inline-block', marginTop: 12, padding: '8px 16px', background: '#b45309', color: '#fff', borderRadius: 8, fontWeight: 600, textDecoration: 'none' }}
+          >
+            Kui suunamine ei toimu, klõpsa siia
+          </a>
+        </div>
+      )}
       {status === 'error' && (
         <div>
           <p>{errorMessage}</p>

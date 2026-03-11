@@ -51,12 +51,16 @@ export async function getOneDriveProfile(token) {
 }
 
 /**
- * Loetleb OneDrive'i juurkaustast mõned failid ja filtreerib NoodiMeisteri failid.
- * NB: ainult lugemine; salvestamise/üleslaadimise loogika tuleb hiljem.
+ * Loetleb OneDrive'i kaustast failid ja filtreerib NoodiMeisteri failid.
+ * @param {string} token
+ * @param {string} [folderId] - kausta ID või undefined/'root' = juurkaust
  */
-export async function listNoodimeisterFilesFromOneDrive(token) {
+export async function listNoodimeisterFilesFromOneDrive(token, folderId) {
   try {
-    const data = await graphGet(token, '/me/drive/root/children?$top=50');
+    const path = folderId
+      ? `/me/drive/items/${encodeURIComponent(folderId)}/children?$top=50`
+      : '/me/drive/root/children?$top=50';
+    const data = await graphGet(token, path);
     const items = Array.isArray(data.value) ? data.value : [];
     const files = items
       .filter((item) => !item.folder && typeof item.name === 'string')
@@ -76,6 +80,70 @@ export async function listNoodimeisterFilesFromOneDrive(token) {
       ok: false,
       error: e?.message || 'OneDrive\'i failide loetlemine ebaõnnestus.',
     };
+  }
+}
+
+/**
+ * Loetleb OneDrive'i kausta alamkaustad (children).
+ * @param {string} token
+ * @param {string} [folderId] - kausta ID või undefined/'root' = juurkaust
+ */
+export async function listFolderChildren(token, folderId) {
+  try {
+    const path = folderId && folderId !== 'root'
+      ? `/me/drive/items/${encodeURIComponent(folderId)}/children?$top=200`
+      : '/me/drive/root/children?$top=200';
+    const data = await graphGet(token, path);
+    const items = Array.isArray(data.value) ? data.value : [];
+    const folders = items
+      .filter((item) => item.folder && typeof item.name === 'string')
+      .map((f) => ({ id: f.id, name: f.name }));
+    return { ok: true, folders };
+  } catch (e) {
+    return { ok: false, folders: [], error: e?.message || 'Kausta sisu lugemine ebaõnnestus.' };
+  }
+}
+
+/**
+ * Loo OneDrive'i kaust etteantud kausta sisse.
+ */
+export async function createFolder(token, parentId, folderName) {
+  try {
+    const path = parentId && parentId !== 'root'
+      ? `/me/drive/items/${encodeURIComponent(parentId)}/children`
+      : '/me/drive/root/children';
+    const res = await fetch(`${GRAPH_ROOT}${path}`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        name: folderName,
+        folder: {},
+        '@microsoft.graph.conflictBehavior': 'rename',
+      }),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const msg = body?.error?.message || body?.message || `HTTP ${res.status}`;
+      return { ok: false, error: msg };
+    }
+    return { ok: true, id: body.id, name: body.name || folderName };
+  } catch (e) {
+    return { ok: false, error: e?.message || 'Kausta loomine ebaõnnestus.' };
+  }
+}
+
+/**
+ * Tagastab kausta/elemendi nime.
+ */
+export async function getItemName(token, itemId) {
+  try {
+    const item = await graphGet(token, `/me/drive/items/${encodeURIComponent(itemId)}?$select=name`);
+    return item?.name || null;
+  } catch {
+    return null;
   }
 }
 
@@ -111,3 +179,50 @@ export async function uploadFileToRoot(token, fileName, content, contentType = '
   return body;
 }
 
+/**
+ * Upload a file to a specific OneDrive folder.
+ * PUT /me/drive/items/{parent-id}:/{fileName}:/content
+ */
+export async function uploadFileToFolder(token, folderId, fileName, content, contentType = 'application/json') {
+  if (!token) throw new Error('Microsofti token puudub (proovi uuesti sisse logida Microsoftiga).');
+  if (!folderId || folderId === 'root') {
+    return uploadFileToRoot(token, fileName, content, contentType);
+  }
+  const path = `/me/drive/items/${encodeURIComponent(folderId)}:/${encodeURIComponent(fileName)}:/content`;
+  const res = await fetch(`${GRAPH_ROOT}${path}`, {
+    method: 'PUT',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': contentType,
+    },
+    body: typeof content === 'string' ? content : JSON.stringify(content),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const msg =
+      body?.error?.message ||
+      body?.message ||
+      (res.status === 403
+        ? 'Õigused OneDrive\'i salvestamiseks puuduvad (võib vajada Files.ReadWrite või uut sisselogimist).'
+        : `HTTP ${res.status}`);
+    const err = new Error(msg);
+    err.status = res.status;
+    err.body = body;
+    throw err;
+  }
+  return body;
+}
+
+/** Loe OneDrive'i faili sisu (tekstina). Kasutada töö avamiseks /app?fileId=...&cloud=onedrive. */
+export async function getFileContent(token, fileId) {
+  if (!token) throw new Error('Microsofti token puudub.');
+  const res = await fetch(`${GRAPH_ROOT}/me/drive/items/${encodeURIComponent(fileId)}/content`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    const msg = body?.error?.message || body?.message || `HTTP ${res.status}`;
+    throw new Error(msg);
+  }
+  return res.text();
+}

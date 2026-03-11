@@ -91,6 +91,7 @@ export function FigurenotesView({
   keySignature = 'C',
   isNoteSelected,
   onNoteClick,
+  onBeatSlotClick,
   showRhythmSyllables = false,
   lyricFontFamily = 'sans-serif',
   isHorizontal = false,
@@ -275,12 +276,34 @@ export function FigurenotesView({
                 );
               };
 
+              const handleBeatSlot = (beatIndex, e) => {
+                if (typeof onBeatSlotClick !== 'function') return;
+                e.stopPropagation();
+                if (e.pointerType === 'touch' || e.pointerType === 'pen') e.preventDefault?.();
+                const beatPosition = measure.startBeat + beatIndex;
+                onBeatSlotClick(beatPosition);
+              };
+
               return (
                 <g key={measureIdx}>
                   {/* Taktikast + löögivõre */}
                   <rect x={measureX} y={sys.yOffset + 4} width={measureWidth} height={timelineHeight - 8} fill="#fafafa" stroke="#c8c8c8" strokeWidth="1.5" />
                   {Array.from({ length: Math.max(0, Math.ceil(beatsInMeasure) - 1) }, (_, b) => (
                     <line key={`beat-${b}`} x1={measureX + (b + 1) * beatWidth} y1={sys.yOffset + 4} x2={measureX + (b + 1) * beatWidth} y2={sys.yOffset + timelineHeight - 4} stroke="#e0e0e0" strokeWidth="1" />
+                  ))}
+                  {/* Tahvel/sõrm: puudeala löögikastidele – noodi lisamine soovitud löögile */}
+                  {onBeatSlotClick && Array.from({ length: Math.ceil(beatsInMeasure) }, (_, beatIndex) => (
+                    <rect
+                      key={`beat-hit-${beatIndex}`}
+                      x={measureX + beatIndex * beatWidth}
+                      y={sys.yOffset + 4}
+                      width={beatWidth}
+                      height={timelineHeight - 8}
+                      fill="transparent"
+                      style={{ cursor: 'pointer' }}
+                      onClick={(e) => handleBeatSlot(beatIndex, e)}
+                      onPointerDown={(e) => { if (e.pointerType !== 'mouse') handleBeatSlot(beatIndex, e); }}
+                    />
                   ))}
                   {measureWidth < (LAYOUT.MEASURE_MIN_WIDTH || 28) && (
                     <rect x={measureX - 1} y={sys.yOffset + 2} width={measureWidth + 2} height={timelineHeight - 4} fill="none" stroke="#dc2626" strokeWidth={2} strokeDasharray="4 2" rx={2} />

@@ -1688,6 +1688,20 @@ function NoodiMeisterCore({ icons }) {
     return { songTitle, author, timeSignature: timeSigOut, parts: parsedParts };
   };
 
+  const stopPedagogicalPlayback = useCallback(() => {
+    if (pedagogicalPlaybackIntervalRef.current) {
+      clearInterval(pedagogicalPlaybackIntervalRef.current);
+      pedagogicalPlaybackIntervalRef.current = null;
+    }
+    if (pedagogicalAudioRef.current) {
+      pedagogicalAudioRef.current.pause();
+      pedagogicalAudioRef.current.currentTime = 0;
+      pedagogicalAudioRef.current = null;
+    }
+    setIsPedagogicalAudioPlaying(false);
+    setPedagogicalAudioCurrentTime(0);
+  }, []);
+
   const handleImportMusicXmlFile = useCallback((e) => {
     const file = e.target?.files?.[0];
     if (!file) return;
@@ -1754,19 +1768,7 @@ function NoodiMeisterCore({ icons }) {
     reader.readAsText(file);
     e.target.value = '';
   }, [notationMode, stopPedagogicalPlayback]);
-  const stopPedagogicalPlayback = useCallback(() => {
-    if (pedagogicalPlaybackIntervalRef.current) {
-      clearInterval(pedagogicalPlaybackIntervalRef.current);
-      pedagogicalPlaybackIntervalRef.current = null;
-    }
-    if (pedagogicalAudioRef.current) {
-      pedagogicalAudioRef.current.pause();
-      pedagogicalAudioRef.current.currentTime = 0;
-      pedagogicalAudioRef.current = null;
-    }
-    setIsPedagogicalAudioPlaying(false);
-    setPedagogicalAudioCurrentTime(0);
-  }, []);
+
   const startPedagogicalPlayback = useCallback(() => {
     if (!pedagogicalAudioUrl) return;
     if (pedagogicalPlaybackIntervalRef.current) return;
@@ -2581,16 +2583,32 @@ function NoodiMeisterCore({ icons }) {
     }
   }, [clearDirty]);
 
-  // Salvesta pilve: ava dialoog (vali kaust või loo uus).
-  const saveToCloud = useCallback(() => {
+  // Salvesta pilve: kui on salvestuskaust seadistatud, salvesta otse sinna; vastasel juhul ava dialoog.
+  const saveToCloud = useCallback(async () => {
     const token = googleDrive.getStoredToken();
     if (!token) {
       setSaveFeedback('Logi sisse Google\'iga (Drive luba)');
       setTimeout(() => setSaveFeedback(''), 3000);
       return;
     }
+    const savedFolderId = authStorage.getGoogleSaveFolderId();
+    if (savedFolderId) {
+      try {
+        setSaveFeedback('Salvestan…');
+        const data = exportScoreToJSON();
+        const json = JSON.stringify(data, null, 2);
+        const fileName = ((data.songTitle || t('common.untitled')).replace(/\s+/g, '-').replace(/[^\w\-.]/g, '') || t('common.untitled')) + '.noodimeister';
+        await googleDrive.createFileInFolder(token, savedFolderId, fileName, json);
+        setSaveFeedback('Salvestatud pilve!');
+        setTimeout(() => setSaveFeedback(''), 2500);
+      } catch (e) {
+        setSaveFeedback(e?.message || 'Pilve salvestamine ebaõnnestus');
+        setTimeout(() => setSaveFeedback(''), 3000);
+      }
+      return;
+    }
     setSaveCloudDialogOpen(true);
-  }, []);
+  }, [exportScoreToJSON]);
 
   // Vali olemasolev kaust (Picker) ja salvesta sinna.
   const saveToCloudPickExisting = useCallback(async () => {
@@ -2644,7 +2662,7 @@ function NoodiMeisterCore({ icons }) {
     }
   }, [exportScoreToJSON, saveCloudNewFolderName]);
 
-  // Salvesta OneDrive'i (Microsoft): üleslaadimine juurkausta.
+  // Salvesta OneDrive'i (Microsoft): kasuta seadistatud salvestuskausta või juurkausta.
   const saveToOneDrive = useCallback(async () => {
     const token = authStorage.getStoredMicrosoftTokenFromAuth();
     if (!token) {
@@ -2657,7 +2675,12 @@ function NoodiMeisterCore({ icons }) {
       const data = exportScoreToJSON();
       const json = JSON.stringify(data, null, 2);
       const fileName = ((data.songTitle || t('common.untitled')).replace(/\s+/g, '-').replace(/[^\w\-.]/g, '') || t('common.untitled')) + '.noodimeister';
-      await oneDrive.uploadFileToRoot(token, fileName, json, 'application/json');
+      const folderId = authStorage.getOneDriveSaveFolderId();
+      if (folderId) {
+        await oneDrive.uploadFileToFolder(token, folderId, fileName, json, 'application/json');
+      } else {
+        await oneDrive.uploadFileToRoot(token, fileName, json, 'application/json');
+      }
       setSaveFeedback(t('feedback.savedToCloud') || 'Salvestatud pilve!');
       setTimeout(() => setSaveFeedback(''), 2500);
     } catch (e) {
@@ -2807,38 +2830,70 @@ function NoodiMeisterCore({ icons }) {
     } catch (_) { /* ignore */ }
   }, []);
 
-  // Load from Google Drive when opening /app?fileId=...
+  // Load from Google Drive or OneDrive when opening /app?fileId=... [&cloud=onedrive]
   const driveFileId = searchParams.get('fileId');
+  const cloudProvider = searchParams.get('cloud');
+  const isOneDrive = cloudProvider === 'onedrive';
   useEffect(() => {
     if (!driveFileId) return;
-    const token = googleDrive.getStoredToken();
-    if (!token) {
-      setSaveFeedback('Logi sisse Google\'iga, et laadida pilvest.');
-      setTimeout(() => setSaveFeedback(''), 4000);
-      return;
-    }
     let cancelled = false;
     setSaveFeedback('Laadin pilvest…');
-    googleDrive.getFileContent(token, driveFileId)
-      .then((content) => {
-        if (cancelled) return;
-        const data = JSON.parse(content);
-        if (importProject(data)) {
-          setSaveFeedback('Laaditud!');
-          setTimeout(() => setSaveFeedback(''), 2500);
-        } else {
-          setSaveFeedback('Vigane projektifail');
-          setTimeout(() => setSaveFeedback(''), 3000);
-        }
-      })
-      .catch((e) => {
-        if (!cancelled) {
-          setSaveFeedback(e?.message || 'Pilvest laadimine ebaõnnestus');
-          setTimeout(() => setSaveFeedback(''), 4000);
-        }
-      });
+    const loadFromOneDrive = () => {
+      const token = authStorage.getStoredMicrosoftTokenFromAuth();
+      if (!token) {
+        setSaveFeedback('Logi sisse Microsoftiga, et laadida OneDrive\'ist.');
+        setTimeout(() => setSaveFeedback(''), 4000);
+        return;
+      }
+      oneDrive.getFileContent(token, driveFileId)
+        .then((content) => {
+          if (cancelled) return;
+          const data = JSON.parse(content);
+          if (importProject(data)) {
+            setSaveFeedback('Laaditud!');
+            setTimeout(() => setSaveFeedback(''), 2500);
+          } else {
+            setSaveFeedback('Vigane projektifail');
+            setTimeout(() => setSaveFeedback(''), 3000);
+          }
+        })
+        .catch((e) => {
+          if (!cancelled) {
+            setSaveFeedback(e?.message || 'OneDrive\'ist laadimine ebaõnnestus');
+            setTimeout(() => setSaveFeedback(''), 4000);
+          }
+        });
+    };
+    const loadFromGoogle = () => {
+      const token = googleDrive.getStoredToken();
+      if (!token) {
+        setSaveFeedback('Logi sisse Google\'iga, et laadida pilvest.');
+        setTimeout(() => setSaveFeedback(''), 4000);
+        return;
+      }
+      googleDrive.getFileContent(token, driveFileId)
+        .then((content) => {
+          if (cancelled) return;
+          const data = JSON.parse(content);
+          if (importProject(data)) {
+            setSaveFeedback('Laaditud!');
+            setTimeout(() => setSaveFeedback(''), 2500);
+          } else {
+            setSaveFeedback('Vigane projektifail');
+            setTimeout(() => setSaveFeedback(''), 3000);
+          }
+        })
+        .catch((e) => {
+          if (!cancelled) {
+            setSaveFeedback(e?.message || 'Pilvest laadimine ebaõnnestus');
+            setTimeout(() => setSaveFeedback(''), 4000);
+          }
+        });
+    };
+    if (isOneDrive) loadFromOneDrive();
+    else loadFromGoogle();
     return () => { cancelled = true; };
-  }, [driveFileId, importProject]);
+  }, [driveFileId, isOneDrive, importProject]);
 
   // Auto-save to localStorage when relevant state changes
   useEffect(() => {
@@ -6254,7 +6309,7 @@ function NoodiMeisterCore({ icons }) {
         {/* Main Score Area – A4 proportsioon (laius 800–1000px) */}
         <main
           ref={mainRef}
-          className={`flex-1 p-8 flex flex-col items-stretch ${pageFlowDirection === 'horizontal' ? 'overflow-x-auto overflow-y-hidden' : 'overflow-auto'}`}
+          className={`main-score-area flex-1 p-8 flex flex-col items-stretch ${pageFlowDirection === 'horizontal' ? 'overflow-x-auto overflow-y-hidden' : 'overflow-auto'}`}
           onScroll={(e) => { setMainScrollTop(e.target.scrollTop); setMainScrollLeft(e.target.scrollLeft); }}
         >
           {/* Pedagoogiline notatsioon: taustheli ja animeerimine (kursor liigub heli järgi) */}
@@ -6607,6 +6662,10 @@ function NoodiMeisterCore({ icons }) {
                   onNotePitchChange={staffIdx === activeStaffIndex ? onNotePitchChange : undefined}
                   ghostPitch={ghostPitch}
                   ghostOctave={ghostOctave}
+                  onFigureBeatClick={notationStyle === 'FIGURENOTES' && staffIdx === activeStaffIndex && noteInputMode ? (beatPosition) => {
+                    setCursorPosition(beatPosition);
+                    addNoteAtCursor(ghostPitch || 'C', ghostOctave ?? 4);
+                  } : undefined}
                   notationStyle={notationStyle}
                   layoutMeasuresPerLine={effectiveLayoutMeasuresPerLine}
                   layoutLineBreakBefore={effectiveLayoutLineBreakBefore}
@@ -6941,7 +7000,7 @@ function getFingeringForNote(pitch, octave, instrumentId) {
 }
 
 // Timeline Component – multi-system layout (VexFlow loogika). (PAGE_BREAK_GAP on defineeritud üleval.)
-function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, pageWidth, cursorPosition, notationMode, staffLines, clefType, keySignature = 'C', relativeNotationShowKeySignature = false, relativeNotationShowTraditionalClef = false, onJoClefPositionChange, joClefFocused = false, onJoClefFocus, instrument = 'piano', instrumentNotationVariant = 'standard', instrumentConfig = {}, showBarNumbers = true, showRhythmSyllables = false, joClefStaffPosition: joClefStaffPositionProp, showAllNoteLabels = false, enableEmojiOverlays = true, onNoteTeacherLabelChange, onNoteLabelClick, chords = [], isDotted, isRest, selectedDuration, noteInputMode, selectedNoteIndex, isNoteSelected, notes: allNotes, onStaffAddNote, onNoteClick, onNotePitchChange, ghostPitch, ghostOctave, notationStyle, layoutMeasuresPerLine = 4, layoutLineBreakBefore = [], layoutPageBreakBefore = [], layoutSystemGap = 120, layoutGlobalSpacingMultiplier = 1, systems: systemsProp, baseYOffset = 0, isActiveStaff = true, staffCount = 1, staffHeight: staffHeightProp, figurenotesSize = 16, figurenotesStems = false, themeColors: themeColorsProp, pedagogicalPlayheadStyle = 'line', pedagogicalPlayheadEmoji = '🎵', pedagogicalPlayheadEmojiSize = 32, pedagogicalPlayheadMovement = 'arch', isPedagogicalAudioPlaying = false, isExportingAnimation = false, exportCursorRef, scoreContainerRef, pageFlowDirection = 'vertical', isFirstInBraceGroup = false, braceGroupSize = 0, lyricFontFamily = 'sans-serif', translateLabel, showLayoutBreakIcons = false, showStaffSpacerHandles = false, onSystemYOffsetChange, onToggleLineBreakAfter }) {
+function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, pageWidth, cursorPosition, notationMode, staffLines, clefType, keySignature = 'C', relativeNotationShowKeySignature = false, relativeNotationShowTraditionalClef = false, onJoClefPositionChange, joClefFocused = false, onJoClefFocus, instrument = 'piano', instrumentNotationVariant = 'standard', instrumentConfig = {}, showBarNumbers = true, showRhythmSyllables = false, joClefStaffPosition: joClefStaffPositionProp, showAllNoteLabels = false, enableEmojiOverlays = true, onNoteTeacherLabelChange, onNoteLabelClick, chords = [], isDotted, isRest, selectedDuration, noteInputMode, selectedNoteIndex, isNoteSelected, notes: allNotes, onStaffAddNote, onNoteClick, onNotePitchChange, ghostPitch, ghostOctave, onFigureBeatClick, notationStyle, layoutMeasuresPerLine = 4, layoutLineBreakBefore = [], layoutPageBreakBefore = [], layoutSystemGap = 120, layoutGlobalSpacingMultiplier = 1, systems: systemsProp, baseYOffset = 0, isActiveStaff = true, staffCount = 1, staffHeight: staffHeightProp, figurenotesSize = 16, figurenotesStems = false, themeColors: themeColorsProp, pedagogicalPlayheadStyle = 'line', pedagogicalPlayheadEmoji = '🎵', pedagogicalPlayheadEmojiSize = 32, pedagogicalPlayheadMovement = 'arch', isPedagogicalAudioPlaying = false, isExportingAnimation = false, exportCursorRef, scoreContainerRef, pageFlowDirection = 'vertical', isFirstInBraceGroup = false, braceGroupSize = 0, lyricFontFamily = 'sans-serif', translateLabel, showLayoutBreakIcons = false, showStaffSpacerHandles = false, onSystemYOffsetChange, onToggleLineBreakAfter }) {
   if (typeof GLOBAL_NOTATION_CONFIG === 'undefined' || !GLOBAL_NOTATION_CONFIG || GLOBAL_NOTATION_CONFIG.EMOJIS === false) return null;
   const themeColors = themeColorsProp || { staffLineColor: '#000', noteFill: '#1a1a1a', textColor: '#1a1a1a', scoreBg: '#fffbf0', isDark: false };
   const safeKey = keySignature ?? 'C';
@@ -7071,7 +7130,9 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
   const handleStaffClick = (e) => {
     if (!noteInputMode || !onStaffAddNote) return;
     const rect = e.currentTarget.getBoundingClientRect();
-    const clickY = e.clientY - rect.top;
+    const clientY = e.clientY ?? (e.changedTouches?.[0]?.clientY) ?? (e.touches?.[0]?.clientY);
+    if (clientY == null) return;
+    const clickY = clientY - rect.top;
     for (const sys of systems) {
       const staffTop = sys.yOffset;
       const staffBottom = sys.yOffset + timelineHeight;
@@ -7081,6 +7142,7 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
         const clickMargin = 15;
         const ledgerMargin = staffLines === 5 ? 10 * 2 : 0;
         if (pitchInfo && localY >= staffLinePositions[0] - clickMargin && localY <= staffLinePositions[staffLinePositions.length - 1] + clickMargin + ledgerMargin) {
+          if (e.pointerType === 'touch' || e.pointerType === 'pen') e.preventDefault?.();
           onStaffAddNote(pitchInfo.pitch, pitchInfo.octave);
         }
         break;
@@ -7430,6 +7492,7 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
       preserveAspectRatio="xMidYMin meet"
       className={`overflow-visible ${noteInputMode ? 'cursor-pointer' : ''}`}
       onClick={handleStaffClick}
+      onPointerDown={(e) => { if (e.pointerType !== 'mouse') handleStaffClick(e); }}
       style={isHorizontal ? { display: 'block', minWidth: svgWidth } : undefined}
     >
       {/* No canvas/SVG background: paper style comes from the score container (CSS) like Docs/MuseScore */}
@@ -7453,6 +7516,7 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
           keySignature={safeKey}
           isNoteSelected={isNoteSelected}
           onNoteClick={onNoteClick}
+          onBeatSlotClick={onFigureBeatClick}
           showRhythmSyllables={showRhythmSyllables}
           lyricFontFamily={lyricFontFamily}
           isHorizontal={isHorizontal}

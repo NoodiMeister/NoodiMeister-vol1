@@ -9,6 +9,8 @@ export const KEY_GOOGLE_TOKEN = 'noodimeister-google-token';
 export const KEY_GOOGLE_EXPIRY = 'noodimeister-google-token-expiry';
 export const KEY_MICROSOFT_TOKEN = 'noodimeister-microsoft-token';
 export const KEY_MICROSOFT_EXPIRY = 'noodimeister-microsoft-token-expiry';
+export const KEY_GOOGLE_SAVE_FOLDER = 'noodimeister-google-save-folder';
+export const KEY_ONEDRIVE_SAVE_FOLDER = 'noodimeister-onedrive-save-folder';
 
 function safeStorage(storage) {
   if (typeof window === 'undefined' || !storage) return null;
@@ -99,6 +101,56 @@ export function getStoredMicrosoftTokenFromAuth() {
   return token;
 }
 
+/** Google Drive salvestuskausta ID (kui kasutaja on valinud). */
+export function getGoogleSaveFolderId() {
+  const storage = getStorageForRead();
+  if (!storage) return null;
+  return storage.getItem(KEY_GOOGLE_SAVE_FOLDER) || null;
+}
+
+export function setGoogleSaveFolderId(folderId) {
+  if (typeof window === 'undefined' || !folderId) return;
+  try {
+    [window.sessionStorage, window.localStorage].forEach((s) => {
+      if (s) s.setItem(KEY_GOOGLE_SAVE_FOLDER, folderId);
+    });
+  } catch (_) {}
+}
+
+export function clearGoogleSaveFolder() {
+  if (typeof window === 'undefined') return;
+  try {
+    [window.sessionStorage, window.localStorage].forEach((s) => {
+      if (s) s.removeItem(KEY_GOOGLE_SAVE_FOLDER);
+    });
+  } catch (_) {}
+}
+
+/** OneDrive salvestuskausta ID (kui kasutaja on valinud). */
+export function getOneDriveSaveFolderId() {
+  const storage = getStorageForRead();
+  if (!storage) return null;
+  return storage.getItem(KEY_ONEDRIVE_SAVE_FOLDER) || null;
+}
+
+export function setOneDriveSaveFolderId(folderId) {
+  if (typeof window === 'undefined' || !folderId) return;
+  try {
+    [window.sessionStorage, window.localStorage].forEach((s) => {
+      if (s) s.setItem(KEY_ONEDRIVE_SAVE_FOLDER, folderId);
+    });
+  } catch (_) {}
+}
+
+export function clearOneDriveSaveFolder() {
+  if (typeof window === 'undefined') return;
+  try {
+    [window.sessionStorage, window.localStorage].forEach((s) => {
+      if (s) s.removeItem(KEY_ONEDRIVE_SAVE_FOLDER);
+    });
+  } catch (_) {}
+}
+
 /** Tühjenda sisselogimine ja token mõlemast salvestusest (väljalogimine). */
 export function clearAuth() {
   if (typeof window === 'undefined') return;
@@ -110,6 +162,8 @@ export function clearAuth() {
         s.removeItem(KEY_GOOGLE_EXPIRY);
         s.removeItem(KEY_MICROSOFT_TOKEN);
         s.removeItem(KEY_MICROSOFT_EXPIRY);
+        s.removeItem(KEY_GOOGLE_SAVE_FOLDER);
+        s.removeItem(KEY_ONEDRIVE_SAVE_FOLDER);
       }
     });
   } catch (_) {}

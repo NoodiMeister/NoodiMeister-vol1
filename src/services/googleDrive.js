@@ -103,12 +103,15 @@ export async function createFolder(accessToken, parentId, folderName) {
  * @param {string} content JSON string
  * @returns {Promise<string>} fileId
  */
+/** MIME-tüüp, et Drive'is tuvastataks fail NoodiMeisteri projektina (võimaldab "Ava koos"-seost). */
+export const NOODIMEISTER_MIME_TYPE = 'application/vnd.noodimeister+json';
+
 export async function createFileInFolder(accessToken, folderId, fileName, content) {
   const boundary = '-------noodimeister-------';
   const meta = JSON.stringify({
     name: fileName,
     parents: [folderId],
-    mimeType: 'application/json'
+    mimeType: NOODIMEISTER_MIME_TYPE
   });
   const body = [
     `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${meta}\r\n`,
@@ -220,12 +223,15 @@ export async function getFileContent(accessToken, fileId) {
 /**
  * Loetleb Google Drive'ist failid, mille nimi sisaldab ".noodimeister".
  * @param {string} accessToken
- * @param {object} [options] - pageSize, orderBy
+ * @param {object} [options] - pageSize, orderBy, folderId (piirdu kaustaga)
  * @returns {Promise<Array<{ id, name, modifiedTime, createdTime }>>}
  */
 export async function listNoodimeisterFiles(accessToken, options = {}) {
-  const { pageSize = 50, orderBy = 'modifiedTime desc' } = options;
-  const q = "trashed = false and name contains '.noodimeister'";
+  const { pageSize = 50, orderBy = 'modifiedTime desc', folderId } = options;
+  let q = "trashed = false and name contains '.noodimeister'";
+  if (folderId) {
+    q += ` and '${folderId}' in parents`;
+  }
   const params = new URLSearchParams({
     q,
     pageSize: String(pageSize),
@@ -241,6 +247,23 @@ export async function listNoodimeisterFiles(accessToken, options = {}) {
   }
   const data = await res.json();
   return data.files || [];
+}
+
+/**
+ * Tagastab kausta nime (metadata).
+ * @param {string} accessToken
+ * @param {string} folderId
+ * @returns {Promise<{ name: string }|null>}
+ */
+export async function getFolderMetadata(accessToken, folderId) {
+  if (!folderId) return null;
+  const params = new URLSearchParams({ fields: 'name' });
+  const res = await fetch(`${DRIVE_API_URL}/${folderId}?${params}`, {
+    headers: { Authorization: `Bearer ${accessToken}` }
+  });
+  if (!res.ok) return null;
+  const data = await res.json();
+  return { name: data.name || '' };
 }
 
 import * as authStorage from './authStorage';

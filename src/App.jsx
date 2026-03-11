@@ -50,10 +50,29 @@ function AccountOrRedirect() {
   return <AccountPage />;
 }
 
+/** Drive "Ava koos" saadab state=JSON; siin teisendame selle fileId-ks ja suuname /app?fileId=... */
+function parseDriveState(stateParam) {
+  if (!stateParam || typeof stateParam !== 'string') return null;
+  try {
+    const decoded = decodeURIComponent(stateParam);
+    const data = JSON.parse(decoded);
+    const ids = data?.ids;
+    if (Array.isArray(ids) && ids.length > 0 && ids[0]) return ids[0];
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 /** Sisselogitud kasutaja suuna /app pealt Minu tööde vaatesse, kui ei avata konkreetset faili, uut tööd ega viimati muudetud tööd (local=1). */
 function AppOrRedirect() {
   const [searchParams] = useSearchParams();
-  const fileId = searchParams.get('fileId');
+  let fileId = searchParams.get('fileId');
+  const stateParam = searchParams.get('state');
+  if (!fileId && stateParam) {
+    const idFromState = parseDriveState(stateParam);
+    if (idFromState) return <Navigate to={`/app?fileId=${encodeURIComponent(idFromState)}`} replace />;
+  }
   const isNew = searchParams.get('new') === '1';
   const openLocal = searchParams.get('local') === '1';
   if (isLoggedIn() && !fileId && !isNew && !openLocal) return <Navigate to="/tood" replace />;
