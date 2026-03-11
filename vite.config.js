@@ -115,7 +115,7 @@ export default defineConfig({
     'import.meta.env.VITE_VERCEL_ENV': JSON.stringify(process.env.VERCEL_ENV ?? ''),
   },
   optimizeDeps: {
-    include: ['lucide-react'],
+    include: ['lucide-react', '@azure/msal-browser'],
   },
   root: '.',
   build: {
