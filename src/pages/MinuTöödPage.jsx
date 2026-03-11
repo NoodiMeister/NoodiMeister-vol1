@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { FilePlus, FolderOpen, Cloud, LogIn, Loader2, Globe, User, Settings, ChevronDown, Trash2 } from 'lucide-react';
+import { FilePlus, FolderOpen, FolderPlus, Cloud, LogIn, Loader2, Globe, User, Settings, ChevronDown, Trash2, X } from 'lucide-react';
 import * as googleDrive from '../services/googleDrive';
 import * as oneDrive from '../services/oneDrive';
 import * as authStorage from '../services/authStorage';
@@ -66,6 +66,10 @@ export default function MinuTöödPage() {
     }
   });
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [createFolderOpen, setCreateFolderOpen] = useState(false);
+  const [createFolderName, setCreateFolderName] = useState('NoodiMeister');
+  const [createFolderLoading, setCreateFolderLoading] = useState(false);
+  const [createFolderError, setCreateFolderError] = useState(null);
   const settingsRef = useRef(null);
   const store = useNoodimeisterOptional();
   const themeMode = store?.theme?.mode ?? 'light';
@@ -175,6 +179,35 @@ export default function MinuTöödPage() {
       setOneDriveError(e?.message || 'Kustutamine ebaõnnestus');
     }
   }, [microsoftToken, loadOneDriveFiles, t]);
+
+  const handleCreateFolder = useCallback(async () => {
+    const name = (createFolderName || 'NoodiMeister').trim();
+    if (!name) return;
+    setCreateFolderError(null);
+    setCreateFolderLoading(true);
+    try {
+      if (provider === 'google' && token) {
+        const folderId = await googleDrive.createFolder(token, 'root', name);
+        authStorage.setGoogleSaveFolderId(folderId);
+        setCreateFolderOpen(false);
+        setCreateFolderName('NoodiMeister');
+      } else if (provider === 'microsoft' && microsoftToken) {
+        const parentId = authStorage.getOneDriveSaveFolderId() || 'root';
+        const result = await oneDrive.createFolder(microsoftToken, parentId, name);
+        if (result.ok && result.id) {
+          authStorage.setOneDriveSaveFolderId(result.id);
+          setCreateFolderOpen(false);
+          setCreateFolderName('NoodiMeister');
+        } else {
+          setCreateFolderError(result?.error || 'Kausta loomine ebaõnnestus');
+        }
+      }
+    } catch (e) {
+      setCreateFolderError(e?.message || 'Kausta loomine ebaõnnestus');
+    } finally {
+      setCreateFolderLoading(false);
+    }
+  }, [provider, token, microsoftToken, createFolderName]);
 
   useEffect(() => {
     if (authReady && !user) navigate('/login', { replace: true });
@@ -315,6 +348,16 @@ export default function MinuTöödPage() {
             >
               <FolderOpen className="w-5 h-5" /> Ava viimati muudetud töö
             </a>
+            {(hasGoogle || hasMicrosoft) && (
+              <button
+                type="button"
+                onClick={() => { setCreateFolderError(null); setCreateFolderOpen(true); }}
+                className="inline-flex items-center gap-2 px-6 py-3 rounded-xl border-2 border-amber-400 bg-white text-amber-800 font-semibold hover:bg-amber-50 transition-colors"
+                title={t['works.createFolderTitle'] || 'Loo uus kaust pilve salvestuskohta'}
+              >
+                <FolderPlus className="w-5 h-5" /> {t['works.createFolder'] || 'Loo kaust'}
+              </button>
+            )}
           </div>
         </div>
 
@@ -404,6 +447,49 @@ export default function MinuTöödPage() {
               </ul>
             )}
           </section>
+        )}
+
+        {createFolderOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => !createFolderLoading && setCreateFolderOpen(false)}>
+            <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-xl border-2 border-amber-200 dark:border-white/20 max-w-sm w-full p-6" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-semibold text-amber-900 dark:text-white">{t['works.createFolder'] || 'Loo kaust'}</h3>
+                <button type="button" onClick={() => !createFolderLoading && setCreateFolderOpen(false)} className="p-1 rounded hover:bg-amber-100 dark:hover:bg-white/10 text-amber-900 dark:text-white" aria-label={t['common.close'] || 'Sulge'}>
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <p className="text-sm text-amber-800 dark:text-white/90 mb-3">{t['works.createFolderTitle'] || 'Loo uus kaust pilve salvestuskohta'}</p>
+              <input
+                type="text"
+                value={createFolderName}
+                onChange={(e) => setCreateFolderName(e.target.value)}
+                placeholder={t['cloud.folderName'] || 'Kausta nimi'}
+                className="w-full px-3 py-2 rounded-lg border border-amber-200 dark:border-white/30 dark:bg-black/50 dark:text-white text-amber-900 mb-3"
+                disabled={createFolderLoading}
+              />
+              {createFolderError && (
+                <p className="text-sm text-red-600 dark:text-red-400 mb-3">{createFolderError}</p>
+              )}
+              <div className="flex gap-2 justify-end">
+                <button
+                  type="button"
+                  onClick={() => !createFolderLoading && setCreateFolderOpen(false)}
+                  className="px-4 py-2 rounded-lg border border-amber-300 dark:border-white/30 text-amber-800 dark:text-white hover:bg-amber-50 dark:hover:bg-white/10"
+                >
+                  {t['common.cancel'] || 'Tühista'}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCreateFolder}
+                  disabled={createFolderLoading}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-amber-600 text-white font-medium hover:bg-amber-500 disabled:opacity-60"
+                >
+                  {createFolderLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <FolderPlus className="w-4 h-4" />}
+                  {createFolderLoading ? (t['feedback.creatingFolder'] || 'Loon kausta…') : (t['works.createFolder'] || 'Loo kaust')}
+                </button>
+              </div>
+            </div>
+          </div>
         )}
       </main>
     </div>

@@ -275,34 +275,34 @@ export default function AccountPage() {
               </button>
               {settingsOpen && (
                 <div className="absolute right-0 top-full mt-1 min-w-[200px] py-2 rounded-xl bg-white dark:bg-zinc-900 border-2 border-amber-200 dark:border-white/20 shadow-xl z-50">
-                  <div className="px-3 py-1.5 text-xs font-semibold text-amber-700 uppercase tracking-wider">{t['app.language']}</div>
+                  <div className="px-3 py-1.5 text-xs font-semibold text-amber-700 dark:text-white/80 uppercase tracking-wider">{t['app.language']}</div>
                   <div className="flex gap-0.5 px-2 pb-2">
                     {LOCALES.map(({ code, name }) => (
                       <button
                         key={code}
                         type="button"
                         onClick={() => { setLocale(code); setSettingsOpen(false); }}
-                        className={`flex-1 px-2.5 py-1.5 text-xs font-medium rounded-lg transition-colors ${locale === code ? 'bg-amber-500 text-white' : 'text-amber-800 hover:bg-amber-100'}`}
+                        className={`flex-1 px-2.5 py-1.5 text-xs font-medium rounded-lg transition-colors ${locale === code ? 'bg-amber-500 text-white' : 'text-amber-800 dark:text-white hover:bg-amber-100 dark:hover:bg-white/10'}`}
                         title={name}
                       >
                         {name}
                       </button>
                     ))}
                   </div>
-                  <div className="border-t border-amber-200 my-1" />
-                  <div className="px-3 py-1.5 text-xs font-semibold text-amber-700 uppercase tracking-wider">{t['app.theme']}</div>
+                  <div className="border-t border-amber-200 dark:border-white/20 my-1" />
+                  <div className="px-3 py-1.5 text-xs font-semibold text-amber-700 dark:text-white/80 uppercase tracking-wider">{t['app.theme']}</div>
                   <div className="flex gap-1 px-2">
                     <button
                       type="button"
                       onClick={() => { setThemeMode('light'); setSettingsOpen(false); }}
-                      className={`flex-1 px-2.5 py-1.5 text-xs font-medium rounded-lg transition-colors ${themeMode === 'light' ? 'bg-amber-500 text-white' : 'text-amber-800 hover:bg-amber-100'}`}
+                      className={`flex-1 px-2.5 py-1.5 text-xs font-medium rounded-lg transition-colors ${themeMode === 'light' ? 'bg-amber-500 text-white' : 'text-amber-800 dark:text-white hover:bg-amber-100 dark:hover:bg-white/10'}`}
                     >
                       {t['theme.light']}
                     </button>
                     <button
                       type="button"
                       onClick={() => { setThemeMode('dark'); setSettingsOpen(false); }}
-                      className={`flex-1 px-2.5 py-1.5 text-xs font-medium rounded-lg transition-colors ${themeMode === 'dark' ? 'bg-amber-500 text-white' : 'text-amber-800 hover:bg-amber-100'}`}
+                      className={`flex-1 px-2.5 py-1.5 text-xs font-medium rounded-lg transition-colors ${themeMode === 'dark' ? 'bg-amber-500 text-white' : 'text-amber-800 dark:text-white hover:bg-amber-100 dark:hover:bg-white/10'}`}
                     >
                       {t['theme.dark']}
                     </button>
@@ -322,7 +322,7 @@ export default function AccountPage() {
 
       <main className="flex-1 flex items-center justify-center px-6 py-12">
         <div className="w-full max-w-2xl bg-white dark:bg-zinc-900 rounded-2xl shadow-xl border-2 border-amber-200 dark:border-white/20 overflow-hidden">
-          <div className="bg-gradient-to-r from-slate-700 to-slate-800 text-white px-8 py-6 flex items-center gap-3">
+          <div className="bg-gradient-to-r from-slate-700 to-slate-800 dark:from-zinc-800 dark:to-zinc-900 text-white px-8 py-6 flex items-center gap-3">
             <User className="w-6 h-6 flex-shrink-0" />
             <div className="min-w-0 flex-1">
               <h1 className="text-2xl font-bold" style={{ fontFamily: 'Georgia, serif' }}>
@@ -339,7 +339,7 @@ export default function AccountPage() {
             </div>
           </div>
 
-          <div className="p-8 space-y-6">
+          <div className="p-8 space-y-6 dark:text-white">
             <div className="flex flex-wrap items-center gap-3">
               <Link
                 to="/tood"
@@ -351,11 +351,11 @@ export default function AccountPage() {
             </div>
 
             <section className="space-y-2">
-              <h2 className="text-lg font-semibold text-amber-900 flex items-center gap-2">
-                <User className="w-5 h-5 text-amber-700" /> {t['account.user']}
+              <h2 className="text-lg font-semibold text-amber-900 dark:text-white flex items-center gap-2">
+                <User className="w-5 h-5 text-amber-700 dark:text-white/80" /> {t['account.user']}
               </h2>
               {user ? (
-                <div className="text-sm text-amber-800 space-y-1">
+                <div className="text-sm text-amber-800 dark:text-white/90 space-y-1">
                   <p>
                     <span className="font-semibold">{t['account.email']}:</span> {user.email}
                   </p>
@@ -367,9 +367,9 @@ export default function AccountPage() {
                   </p>
                 </div>
               ) : (
-                <p className="text-sm text-amber-800 flex items-center gap-2">
+                <p className="text-sm text-amber-800 dark:text-white/90 flex items-center gap-2">
                   <LogIn className="w-4 h-4" /> {t['account.notLoggedIn']}{' '}
-                  <Link to="/login" className="underline font-medium text-amber-800 hover:text-amber-900">
+                  <Link to="/login" className="underline font-medium text-amber-800 dark:text-white hover:text-amber-900 dark:hover:text-white/90">
                     {t['account.logIn']}
                   </Link>
                   .
@@ -378,26 +378,26 @@ export default function AccountPage() {
             </section>
 
             <section className="space-y-2">
-              <h2 className="text-lg font-semibold text-amber-900 flex items-center gap-2">
-                <HardDrive className="w-5 h-5 text-amber-700" /> Kohalik fail
+              <h2 className="text-lg font-semibold text-amber-900 dark:text-white flex items-center gap-2">
+                <HardDrive className="w-5 h-5 text-amber-700 dark:text-white/80" /> Kohalik fail
               </h2>
-              <p className="text-sm text-amber-800">
+              <p className="text-sm text-amber-800 dark:text-white/90">
                 NoodiMeister saab alati salvestada faili sinu arvutisse (ilma kontota). See töötab sõltumata Google'ist või Microsoftist.
               </p>
             </section>
 
             <section className="space-y-3">
-              <h2 className="text-lg font-semibold text-amber-900 flex items-center gap-2">
-                <Cloud className="w-5 h-5 text-sky-600" /> Google Drive
+              <h2 className="text-lg font-semibold text-amber-900 dark:text-white flex items-center gap-2">
+                <Cloud className="w-5 h-5 text-sky-600 dark:text-white/80" /> Google Drive
               </h2>
               {googleToken ? (
                 <>
-                  <p className="text-sm text-amber-800">
+                  <p className="text-sm text-amber-800 dark:text-white/90">
                     Oled andnud loa Google Drive'i jaoks. Minu tööde vaates saad näha ja avada oma Google Drive'i NoodiMeisteri faile.
                   </p>
-                  <div className="border border-amber-200 rounded-xl p-4 bg-amber-50/70 space-y-3">
-                    <p className="text-sm font-semibold text-amber-900">Salvestuskaust</p>
-                    <p className="text-sm text-amber-800">
+                  <div className="border border-amber-200 dark:border-white/20 rounded-xl p-4 bg-amber-50/70 dark:bg-white/10 space-y-3">
+                    <p className="text-sm font-semibold text-amber-900 dark:text-white">Salvestuskaust</p>
+                    <p className="text-sm text-amber-800 dark:text-white/90">
                       {googleSaveFolderId
                         ? `Praegu: ${googleSaveFolderName || googleSaveFolderId}`
                         : 'Salvestuskaust pole valitud – tööriistas valitakse iga kord (või vali siin).'}
@@ -406,7 +406,7 @@ export default function AccountPage() {
                       <button
                         type="button"
                         onClick={handleGooglePickFolder}
-                        className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border-2 border-sky-300 bg-sky-50 text-sky-800 font-medium hover:bg-sky-100 text-sm"
+                        className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border-2 border-sky-300 dark:border-white/30 bg-sky-50 dark:bg-white/10 text-sky-800 dark:text-white font-medium hover:bg-sky-100 dark:hover:bg-white/20 text-sm"
                       >
                         <FolderOpen className="w-4 h-4" /> Vali salvestuskaust
                       </button>
@@ -416,7 +416,7 @@ export default function AccountPage() {
                           value={googleCreateName}
                           onChange={(e) => setGoogleCreateName(e.target.value)}
                           placeholder="Kausta nimi"
-                          className="w-36 px-2 py-1.5 rounded border border-amber-200 text-sm"
+                          className="w-36 px-2 py-1.5 rounded border border-amber-200 dark:border-white/30 dark:bg-black/50 dark:text-white text-sm"
                         />
                         <button
                           type="button"
@@ -436,40 +436,40 @@ export default function AccountPage() {
                             setGoogleSaveFolderIdState(null);
                             setGoogleSaveFolderName('');
                           }}
-                          className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-amber-300 bg-white text-amber-800 font-medium hover:bg-amber-50 text-sm"
+className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-amber-300 dark:border-white/30 bg-white dark:bg-white/10 text-amber-800 dark:text-white font-medium hover:bg-amber-50 dark:hover:bg-white/20 text-sm"
                         >
-                          <X className="w-4 h-4" /> Eemalda salvestuskaust
-                        </button>
+                        <X className="w-4 h-4" /> Eemalda salvestuskaust
+                      </button>
                       )}
                     </div>
                   </div>
                 </>
               ) : (
-                <p className="text-sm text-amber-800">
+                <p className="text-sm text-amber-800 dark:text-white/90">
                   Google Drive'i pole veel ühendatud. Logi sisse Google'i nupuga, et salvestada ja laadida faile Google Drive'i.
                 </p>
               )}
             </section>
 
             <section className="space-y-3">
-              <h2 className="text-lg font-semibold text-amber-900 flex items-center gap-2">
-                <Cloud className="w-5 h-5 text-blue-700" /> OneDrive (Microsoft)
+              <h2 className="text-lg font-semibold text-amber-900 dark:text-white flex items-center gap-2">
+                <Cloud className="w-5 h-5 text-blue-700 dark:text-white/80" /> OneDrive (Microsoft)
               </h2>
               {!microsoftToken && (
-                <p className="text-sm text-amber-800">
+                <p className="text-sm text-amber-800 dark:text-white/90">
                   Microsofti konto pole veel ühendatud. Logi sisse Microsofti nupuga (login/registreeru), et lubada OneDrive'i kasutamine.
                 </p>
               )}
               {microsoftToken && (
-                <div className="space-y-3 text-sm text-amber-800">
+                <div className="space-y-3 text-sm text-amber-800 dark:text-white/90">
                   {oneDriveProfile.state === 'loading' && <p>Laen Microsofti profiili…</p>}
                   {oneDriveProfile.state === 'error' && (
-                    <p className="text-red-700">
+                    <p className="text-red-700 dark:text-red-400">
                       Profiili lugemine ebaõnnestus: {oneDriveProfile.error}
                     </p>
                   )}
                   {oneDriveProfile.state === 'success' && oneDriveProfile.data && (
-                    <div className="border border-amber-200 rounded-lg p-3 bg-amber-50/70">
+                    <div className="border border-amber-200 dark:border-white/20 rounded-lg p-3 bg-amber-50/70 dark:bg-white/10">
                       <p>
                         <span className="font-semibold">OneDrive'i konto:</span>{' '}
                         {oneDriveProfile.data.displayName || oneDriveProfile.data.mail || '—'}
@@ -477,9 +477,9 @@ export default function AccountPage() {
                     </div>
                   )}
 
-                  <div className="border border-amber-200 rounded-xl p-4 bg-amber-50/70 space-y-3">
-                    <p className="text-sm font-semibold text-amber-900">Salvestuskaust</p>
-                    <p className="text-sm text-amber-800">
+                  <div className="border border-amber-200 dark:border-white/20 rounded-xl p-4 bg-amber-50/70 dark:bg-white/10 space-y-3">
+                    <p className="text-sm font-semibold text-amber-900 dark:text-white">Salvestuskaust</p>
+                    <p className="text-sm text-amber-800 dark:text-white/90">
                       {oneDriveSaveFolderId
                         ? `Praegu: ${oneDriveSaveFolderName || oneDriveSaveFolderId}`
                         : 'Salvestuskaust pole valitud – failid salvestatakse OneDrive\'i juurkausta.'}
@@ -491,7 +491,7 @@ export default function AccountPage() {
                           setOneDrivePickerPath([]);
                           setOneDrivePickerOpen(true);
                         }}
-                        className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border-2 border-blue-300 bg-blue-50 text-blue-800 font-medium hover:bg-blue-100 text-sm"
+                        className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border-2 border-blue-300 dark:border-white/30 bg-blue-50 dark:bg-white/10 text-blue-800 dark:text-white font-medium hover:bg-blue-100 dark:hover:bg-white/20 text-sm"
                       >
                         <FolderOpen className="w-4 h-4" /> Vali salvestuskaust
                       </button>
@@ -501,7 +501,7 @@ export default function AccountPage() {
                           value={oneDriveCreateName}
                           onChange={(e) => setOneDriveCreateName(e.target.value)}
                           placeholder="Kausta nimi"
-                          className="w-36 px-2 py-1.5 rounded border border-amber-200 text-sm"
+                          className="w-36 px-2 py-1.5 rounded border border-amber-200 dark:border-white/30 dark:bg-black/50 dark:text-white text-sm"
                         />
                         <button
                           type="button"
@@ -521,9 +521,9 @@ export default function AccountPage() {
                             setOneDriveSaveFolderIdState(null);
                             setOneDriveSaveFolderName('');
                           }}
-                          className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-amber-300 bg-white text-amber-800 font-medium hover:bg-amber-50 text-sm"
+className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-amber-300 dark:border-white/30 bg-white dark:bg-white/10 text-amber-800 dark:text-white font-medium hover:bg-amber-50 dark:hover:bg-white/20 text-sm"
                         >
-                          <X className="w-4 h-4" /> Eemalda salvestuskaust
+                        <X className="w-4 h-4" /> Eemalda salvestuskaust
                         </button>
                       )}
                     </div>
@@ -531,19 +531,19 @@ export default function AccountPage() {
 
                   {oneDriveFiles.state === 'loading' && <p>Laen OneDrive'i NoodiMeisteri faile…</p>}
                   {oneDriveFiles.state === 'error' && (
-                    <p className="text-red-700">
+                    <p className="text-red-700 dark:text-red-400">
                       OneDrive'i failide lugemine ebaõnnestus: {oneDriveFiles.error}
                     </p>
                   )}
                   {oneDriveFiles.state === 'success' && (
                     <>
                       {oneDriveFiles.data.length === 0 ? (
-                        <p className="text-sm text-amber-800">
+                        <p className="text-sm text-amber-800 dark:text-white/90">
                           Valitud kaustas ei leitud veel ühtegi NoodiMeisteri faili. Salvesta tööriistast pilve, et siia failid ilmuda.
                         </p>
                       ) : (
                         <div className="space-y-1">
-                          <p className="font-semibold text-amber-900">NoodiMeisteri failid OneDrive'is:</p>
+                          <p className="font-semibold text-amber-900 dark:text-white">NoodiMeisteri failid OneDrive'is:</p>
                           <ul className="max-h-40 overflow-y-auto text-sm space-y-2">
                             {oneDriveFiles.data.map((f) => (
                               <li key={f.id} className="flex items-center gap-2">
@@ -554,7 +554,7 @@ export default function AccountPage() {
                                     href={f.webUrl}
                                     target="_blank"
                                     rel="noreferrer"
-                                    className="text-sky-700 underline flex-shrink-0"
+                                    className="text-sky-700 dark:text-white underline flex-shrink-0"
                                   >
                                     Ava OneDrive'is
                                   </a>
@@ -562,7 +562,7 @@ export default function AccountPage() {
                                 <button
                                   type="button"
                                   onClick={() => handleDeleteOneDriveFile(f.id, f.name)}
-                                  className="p-1.5 rounded text-red-600 hover:bg-red-50 hover:text-red-700 flex-shrink-0"
+                                  className="p-1.5 rounded text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/20 hover:text-red-700 dark:hover:text-red-300 flex-shrink-0"
                                   title={t['file.delete'] || 'Kustuta fail'}
                                   aria-label={t['file.delete'] || 'Kustuta fail'}
                                 >
@@ -584,28 +584,28 @@ export default function AccountPage() {
 
       {oneDrivePickerOpen && microsoftToken && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setOneDrivePickerOpen(false)}>
-          <div className="bg-white rounded-2xl shadow-xl border-2 border-amber-200 max-w-md w-full max-h-[80vh] flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
-            <div className="px-4 py-3 border-b border-amber-200 flex items-center justify-between">
-              <h3 className="font-semibold text-amber-900">Vali OneDrive'i kaust</h3>
-              <button type="button" onClick={() => setOneDrivePickerOpen(false)} className="p-1 rounded hover:bg-amber-100">
+          <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-xl border-2 border-amber-200 dark:border-white/20 max-w-md w-full max-h-[80vh] flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="px-4 py-3 border-b border-amber-200 dark:border-white/20 flex items-center justify-between">
+              <h3 className="font-semibold text-amber-900 dark:text-white">Vali OneDrive'i kaust</h3>
+              <button type="button" onClick={() => setOneDrivePickerOpen(false)} className="p-1 rounded hover:bg-amber-100 dark:hover:bg-white/10 text-amber-900 dark:text-white">
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <div className="flex items-center gap-1 px-4 py-2 bg-amber-50 border-b border-amber-100 text-sm">
+            <div className="flex items-center gap-1 px-4 py-2 bg-amber-50 dark:bg-white/10 border-b border-amber-100 dark:border-white/20 text-sm">
               <button
                 type="button"
                 onClick={() => setOneDrivePickerPath([])}
-                className="text-amber-700 hover:underline"
+                className="text-amber-700 dark:text-white hover:underline"
               >
                 Juurkaust
               </button>
               {oneDrivePickerPath.map((p, i) => (
                 <React.Fragment key={p.id}>
-                  <ChevronRight className="w-4 h-4 text-amber-500 flex-shrink-0" />
+                  <ChevronRight className="w-4 h-4 text-amber-500 dark:text-white/70 flex-shrink-0" />
                   <button
                     type="button"
                     onClick={() => setOneDrivePickerPath(oneDrivePickerPath.slice(0, i + 1))}
-                    className="text-amber-700 hover:underline truncate max-w-[120px]"
+                    className="text-amber-700 dark:text-white hover:underline truncate max-w-[120px]"
                   >
                     {p.name}
                   </button>
@@ -614,7 +614,7 @@ export default function AccountPage() {
             </div>
             <div className="flex-1 overflow-y-auto p-4">
               {oneDrivePickerLoading ? (
-                <div className="flex items-center gap-2 text-amber-700 py-4">
+                <div className="flex items-center gap-2 text-amber-700 dark:text-white py-4">
                   <Loader2 className="w-5 h-5 animate-spin" /> Laen kaustu…
                 </div>
               ) : (
@@ -624,7 +624,7 @@ export default function AccountPage() {
                       <button
                         type="button"
                         onClick={() => setOneDrivePickerPath((prev) => prev.slice(0, -1))}
-                        className="w-full text-left flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-amber-100 text-amber-900"
+                        className="w-full text-left flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-amber-100 dark:hover:bg-white/10 text-amber-900 dark:text-white"
                       >
                         <span className="font-medium">..</span> Ülemine kaust
                       </button>
@@ -636,7 +636,7 @@ export default function AccountPage() {
                         <button
                           type="button"
                           onClick={() => setOneDrivePickerPath((prev) => [...prev, { id: f.id, name: f.name }])}
-                          className="flex-1 text-left flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-amber-100 text-amber-900"
+                          className="flex-1 text-left flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-amber-100 dark:hover:bg-white/10 text-amber-900 dark:text-white"
                         >
                           <FolderOpen className="w-4 h-4 flex-shrink-0" />
                           <span className="truncate">{f.name}</span>

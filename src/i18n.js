@@ -468,6 +468,8 @@ const translations = {
     'cloud.folderName': 'Kausta nimi',
     'cloud.createFolder': 'Loo kaust ja salvesta',
     'cloud.selectFolder': 'Vali olemasolev kaust',
+    'works.createFolder': 'Loo kaust',
+    'works.createFolderTitle': 'Loo uus kaust pilve salvestuskohta',
   },
   en: {
     'common.untitled': 'Untitled',
@@ -898,6 +900,8 @@ const translations = {
     'cloud.folderName': 'Folder name',
     'cloud.createFolder': 'Create folder and save',
     'cloud.selectFolder': 'Select existing folder',
+    'works.createFolder': 'Create folder',
+    'works.createFolderTitle': 'Create a new folder for cloud save location',
   }
 };
 

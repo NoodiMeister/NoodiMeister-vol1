@@ -7651,8 +7651,8 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
       )}
 
 
-      {/* Cursor + Ghost note: visible in note input mode, or when pedagogical playback/export (so playhead is visible and exportable in MP4). */}
-      {(noteInputMode || isPedagogicalAudioPlaying || isExportingAnimation) && cursorInfo && (cursorSlotCenterXValid || (isFigurenotesMode && isActiveStaff)) && (!isFigurenotesMode || isActiveStaff) && (() => {
+      {/* Cursor + Ghost note: visible in note input mode, or when pedagogical playback/export. Always show when we have cursorInfo; use fallback X if slot X is invalid so the cursor is never missing in N mode. */}
+      {(noteInputMode || isPedagogicalAudioPlaying || isExportingAnimation) && cursorInfo && (!isFigurenotesMode || isActiveStaff) && (() => {
         const cursorX = (cursorSlotCenterX != null && Number.isFinite(cursorSlotCenterX)) ? cursorSlotCenterX : (marginLeft + 40);
         const cursorChar = (pedagogicalPlayheadEmoji || '').trim();
         const showLine = cursorChar === '';
