@@ -1,14 +1,123 @@
 <!doctype html>
-<html lang="en">
+<html lang="et">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Microsoft sign-in</title>
+    <title>Microsoft sisselogimine – NoodiMeister</title>
+    <style>
+      body {
+        margin: 0;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #fefce8;
+        color: #854d0e;
+      }
+      .box {
+        padding: 16px 20px;
+        border-radius: 12px;
+        border: 1px solid #facc15;
+        background: #fffbeb;
+        max-width: 340px;
+        box-shadow: 0 10px 25px rgba(180, 83, 9, 0.08);
+        text-align: center;
+      }
+      .title {
+        font-weight: 600;
+        margin-bottom: 6px;
+        font-size: 15px;
+      }
+      .msg {
+        font-size: 13px;
+      }
+      .error {
+        color: #b91c1c;
+        margin-top: 8px;
+        font-size: 12px;
+        word-break: break-word;
+      }
+      button {
+        margin-top: 10px;
+        padding: 6px 14px;
+        border-radius: 999px;
+        border: none;
+        background: #b45309;
+        color: white;
+        font-weight: 600;
+        cursor: pointer;
+        font-size: 13px;
+      }
+    </style>
+    <!-- MSAL browser UMD bundle from Microsoft CDN (not bundled by Vite/Vercel) -->
+    <script src="https://alcdn.msauth.net/browser/2.38.0/js/msal-browser.min.js" integrity="sha384-l0ZmXFr67bZrn2h6p5sxvRhshEKsYi6+H2lFfqQF8VwQVJGY4hQdVbFVS4AN8ak7" crossorigin="anonymous"></script>
   </head>
   <body>
+    <div class="box">
+      <div class="title">Microsofti sisselogimine…</div>
+      <div class="msg">Sulgeme akna kohe, kui sisselogimine on kinnitatud.</div>
+      <div id="error" class="error" style="display:none"></div>
+      <button type="button" id="close-btn" style="display:none">Sulge aken</button>
+    </div>
     <script>
-      // This page is intentionally blank. It is used as the MSAL popup redirectUri
-      // so the auth code/hash does not land on the main SPA routes (avoids loops).
+      (function () {
+        var errorEl = document.getElementById('error');
+        var closeBtn = document.getElementById('close-btn');
+
+        function showError(message) {
+          if (!errorEl) return;
+          errorEl.textContent = message || 'Tundmatu viga Microsofti sisselogimisel.';
+          errorEl.style.display = 'block';
+          if (closeBtn) closeBtn.style.display = 'inline-flex';
+        }
+
+        if (!window.msal || !window.msal.PublicClientApplication) {
+          showError('MSAL teek ei laadinud. Kontrolli internetiühendust ja proovi uuesti.');
+          return;
+        }
+
+        // NoodiMeister – Microsoft App Registration (sama ID, mida kasutame rakenduses)
+        var clientId = '2a615966-d9fc-4be4-94eb-bbf34fd1cad3';
+        var authority = 'https://login.microsoftonline.com/common';
+        var redirectUri = window.location.origin + '/auth/microsoft-popup.html';
+
+        var msalConfig = {
+          auth: {
+            clientId: clientId,
+            authority: authority,
+            redirectUri: redirectUri
+          },
+          cache: {
+            cacheLocation: 'localStorage',
+            storeAuthStateInCookie: false
+          }
+        };
+
+        var pca = new msal.PublicClientApplication(msalConfig);
+
+        pca.initialize()
+          .then(function () {
+            return pca.handleRedirectPromise();
+          })
+          .then(function () {
+            // Let the opener's loginPopup() resolve, then close the popup.
+            if (window.close) {
+              window.close();
+            }
+          })
+          .catch(function (err) {
+            console.error('[NoodiMeister microsoft-popup]', err);
+            var msg = err && (err.message || err.errorMessage || err.error_description);
+            showError('Viga: ' + (msg || String(err)));
+          });
+
+        if (closeBtn) {
+          closeBtn.addEventListener('click', function () {
+            window.close();
+          });
+        }
+      })();
     </script>
   </body>
 </html>

@@ -27,9 +27,9 @@ function getMicrosoftRedirectUri() {
   try {
     const base = (typeof import.meta !== 'undefined' && import.meta.env?.BASE_URL) || '/';
     const normalizedBase = base.endsWith('/') ? base : base + '/';
-    return window.location.origin + normalizedBase;
+    return window.location.origin + normalizedBase + 'auth/microsoft-popup.html';
   } catch {
-    return window.location.origin + '/';
+    return window.location.origin + '/auth/microsoft-popup.html';
   }
 }
 

@@ -114,14 +114,8 @@ export default defineConfig({
   define: {
     'import.meta.env.VITE_VERCEL_ENV': JSON.stringify(process.env.VERCEL_ENV ?? ''),
   },
-  resolve: {
-    alias: {
-      // Force Rollup to resolve from node_modules (fixes Vercel build "failed to resolve import")
-      '@azure/msal-browser': resolve(process.cwd(), 'node_modules/@azure/msal-browser'),
-    },
-  },
   optimizeDeps: {
-    include: ['lucide-react', '@azure/msal-browser'],
+    include: ['lucide-react'],
   },
   root: '.',
   build: {
