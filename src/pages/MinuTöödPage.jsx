@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { FilePlus, FolderOpen, Cloud, LogIn, Loader2, Globe, User, Settings, ChevronDown } from 'lucide-react';
+import { FilePlus, FolderOpen, Cloud, LogIn, Loader2, Globe, User, Settings, ChevronDown, Trash2 } from 'lucide-react';
 import * as googleDrive from '../services/googleDrive';
 import * as oneDrive from '../services/oneDrive';
 import * as authStorage from '../services/authStorage';
@@ -152,6 +152,30 @@ export default function MinuTöödPage() {
     } catch (_) {}
   };
 
+  const handleDeleteGoogleFile = useCallback(async (fileId, fileName) => {
+    const msg = (t['file.deleteConfirm'] || 'Kas kustutame faili "{name}"? Seda ei saa tagasi võtta.').replace('{name}', fileName || '');
+    if (!window.confirm(msg)) return;
+    if (!token) return;
+    try {
+      await googleDrive.deleteFile(token, fileId);
+      loadFiles();
+    } catch (e) {
+      setError(e?.message || 'Kustutamine ebaõnnestus');
+    }
+  }, [token, loadFiles, t]);
+
+  const handleDeleteOneDriveFile = useCallback(async (fileId, fileName) => {
+    const msg = (t['file.deleteConfirm'] || 'Kas kustutame faili "{name}"? Seda ei saa tagasi võtta.').replace('{name}', fileName || '');
+    if (!window.confirm(msg)) return;
+    if (!microsoftToken) return;
+    try {
+      await oneDrive.deleteFile(microsoftToken, fileId);
+      loadOneDriveFiles();
+    } catch (e) {
+      setOneDriveError(e?.message || 'Kustutamine ebaõnnestus');
+    }
+  }, [microsoftToken, loadOneDriveFiles, t]);
+
   useEffect(() => {
     if (authReady && !user) navigate('/login', { replace: true });
   }, [authReady, user, navigate]);
@@ -168,10 +192,10 @@ export default function MinuTöödPage() {
   return (
     <MinuToodErrorBoundary>
     <div
-      className="min-h-screen flex flex-col bg-gradient-to-br from-amber-50 via-orange-50 to-amber-100"
+      className="min-h-screen flex flex-col bg-gradient-to-br from-amber-50 via-orange-50 to-amber-100 dark:bg-black"
       style={{ position: 'relative', zIndex: 1, pointerEvents: 'auto' }}
     >
-      <header className="flex-shrink-0 border-b border-amber-200/60 bg-white/70 backdrop-blur-sm">
+      <header className="flex-shrink-0 border-b border-amber-200/60 dark:border-white/20 bg-white/70 dark:bg-black/90 backdrop-blur-sm">
         <div className="max-w-4xl mx-auto px-6 py-4 flex items-center justify-between flex-wrap gap-2">
           <Link to="/" className="flex items-center">
             <img src="/logo.png" alt="NoodiMeister" className="h-9 w-auto" />
@@ -182,7 +206,7 @@ export default function MinuTöödPage() {
               <button
                 type="button"
                 onClick={() => setSettingsOpen((v) => !v)}
-                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg font-medium text-sm bg-amber-100/80 text-amber-900 border border-amber-200 hover:bg-amber-200/80 transition-colors"
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg font-medium text-sm bg-amber-100/80 dark:bg-white/10 text-amber-900 dark:text-white border border-amber-200 dark:border-white/20 hover:bg-amber-200/80 dark:hover:bg-white/20 transition-colors"
                 title={t['settings.title'] || 'Seaded'}
                 aria-expanded={settingsOpen}
               >
@@ -190,7 +214,7 @@ export default function MinuTöödPage() {
                 <ChevronDown className={`w-4 h-4 transition-transform ${settingsOpen ? 'rotate-180' : ''}`} />
               </button>
               {settingsOpen && (
-                <div className="absolute right-0 top-full mt-1 min-w-[200px] py-2 rounded-xl bg-white border-2 border-amber-200 shadow-xl z-50">
+                <div className="absolute right-0 top-full mt-1 min-w-[200px] py-2 rounded-xl bg-white dark:bg-zinc-900 border-2 border-amber-200 dark:border-white/20 shadow-xl z-50">
                   <div className="px-3 py-1.5 text-xs font-semibold text-amber-700 uppercase tracking-wider">{t['app.language'] || 'Keel'}</div>
                   <div className="flex gap-0.5 px-2 pb-2">
                     {LOCALES.map(({ code, name }) => (
@@ -226,7 +250,7 @@ export default function MinuTöödPage() {
                 </div>
               )}
             </div>
-            <Link to="/app" className="text-amber-700 hover:text-amber-900 p-1.5 rounded-lg hover:bg-amber-100 transition-colors" aria-label="Tööriist" title="Tööriist">
+            <Link to="/app" className="text-amber-700 dark:text-white hover:text-amber-900 dark:hover:text-white/90 p-1.5 rounded-lg hover:bg-amber-100 dark:hover:bg-white/10 transition-colors" aria-label="Tööriist" title="Tööriist">
               <Globe className="w-5 h-5" />
             </Link>
             <Link to="/konto" className="text-amber-700 hover:text-amber-900 p-1.5 rounded-lg hover:bg-amber-100 transition-colors flex items-center gap-1" title="Minu konto">
@@ -254,7 +278,7 @@ export default function MinuTöödPage() {
           </p>
         )}
         {!hasGoogle && !hasMicrosoft && (
-          <div className="rounded-xl bg-amber-100/80 border border-amber-200/60 p-6 mb-8">
+          <div className="rounded-xl bg-amber-100/80 dark:bg-zinc-900 dark:border-white/20 border border-amber-200/60 p-6 mb-8">
             <div className="flex items-start gap-3">
               <Cloud className="w-6 h-6 text-amber-600 flex-shrink-0 mt-0.5" />
               <div>
@@ -313,15 +337,24 @@ export default function MinuTöödPage() {
             {!loading && files.length > 0 && (
               <ul className="space-y-2">
                 {files.map((f) => (
-                  <li key={f.id}>
+                  <li key={f.id} className="flex items-center gap-2">
                     <a
                       href={`${basePath}/app?fileId=${encodeURIComponent(f.id)}`}
-                      className="w-full text-left flex items-center gap-3 px-4 py-3 rounded-xl bg-white border border-amber-200/60 shadow-sm hover:bg-amber-50 hover:border-amber-300 transition-colors no-underline text-inherit"
+                      className="flex-1 min-w-0 text-left flex items-center gap-3 px-4 py-3 rounded-xl bg-white dark:bg-zinc-900 border border-amber-200/60 dark:border-white/20 shadow-sm hover:bg-amber-50 dark:hover:bg-white/10 hover:border-amber-300 dark:hover:border-white/30 transition-colors no-underline text-inherit text-amber-900 dark:text-white"
                     >
                       <img src="/logo.png" alt="" className="h-8 w-8 flex-shrink-0 object-contain" aria-hidden />
                       <span className="font-medium text-amber-900 truncate flex-1">{f.name}</span>
                       <span className="text-sm text-amber-600 flex-shrink-0">{formatDate(f.modifiedTime)}</span>
                     </a>
+                    <button
+                      type="button"
+                      onClick={(e) => { e.preventDefault(); handleDeleteGoogleFile(f.id, f.name); }}
+                      className="p-2 rounded-lg text-red-600 hover:bg-red-50 hover:text-red-700 border border-transparent hover:border-red-200 transition-colors"
+                      title={t['file.delete'] || 'Kustuta fail'}
+                      aria-label={t['file.delete'] || 'Kustuta fail'}
+                    >
+                      <Trash2 className="w-5 h-5" />
+                    </button>
                   </li>
                 ))}
               </ul>
@@ -348,15 +381,24 @@ export default function MinuTöödPage() {
             {!oneDriveLoading && oneDriveFiles.length > 0 && (
               <ul className="space-y-2">
                 {oneDriveFiles.map((f) => (
-                  <li key={f.id}>
+                  <li key={f.id} className="flex items-center gap-2">
                     <a
                       href={`${basePath}/app?fileId=${encodeURIComponent(f.id)}&cloud=onedrive`}
-                      className="w-full text-left flex items-center gap-3 px-4 py-3 rounded-xl bg-white border border-amber-200/60 shadow-sm hover:bg-amber-50 hover:border-amber-300 transition-colors no-underline text-inherit"
+                      className="flex-1 min-w-0 text-left flex items-center gap-3 px-4 py-3 rounded-xl bg-white dark:bg-zinc-900 border border-amber-200/60 dark:border-white/20 shadow-sm hover:bg-amber-50 dark:hover:bg-white/10 hover:border-amber-300 dark:hover:border-white/30 transition-colors no-underline text-inherit text-amber-900 dark:text-white"
                     >
                       <img src="/logo.png" alt="" className="h-8 w-8 flex-shrink-0 object-contain" aria-hidden />
                       <span className="font-medium text-amber-900 truncate flex-1">{f.name}</span>
                       <span className="text-sm text-amber-600 flex-shrink-0">{formatOneDriveDate(f)}</span>
                     </a>
+                    <button
+                      type="button"
+                      onClick={(e) => { e.preventDefault(); handleDeleteOneDriveFile(f.id, f.name); }}
+                      className="p-2 rounded-lg text-red-600 hover:bg-red-50 hover:text-red-700 border border-transparent hover:border-red-200 transition-colors"
+                      title={t['file.delete'] || 'Kustuta fail'}
+                      aria-label={t['file.delete'] || 'Kustuta fail'}
+                    >
+                      <Trash2 className="w-5 h-5" />
+                    </button>
                   </li>
                 ))}
               </ul>

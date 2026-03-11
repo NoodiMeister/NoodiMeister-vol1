@@ -54,7 +54,7 @@ export function FigurenotesBlockIcon({ duration, className = 'w-8 h-5' }) {
           height={boxH - 4}
           rx={1}
           fill={FIGURE_BLOCK_GRAY}
-          stroke="#6b7280"
+          stroke="#C7BAB7"
           strokeWidth="0.8"
         />
       ))}

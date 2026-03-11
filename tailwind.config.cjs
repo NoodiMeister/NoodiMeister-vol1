@@ -4,6 +4,7 @@ module.exports = {
     './index.html',
     './src/**/*.{js,ts,jsx,tsx}',
   ],
+  darkMode: ['selector', '[data-theme="dark"]'],
   // Dünaamilised klassid (template literalid) – Vercel/production build ei jäta neid välja
   safelist: [
     'bg-emerald-100', 'text-emerald-800', 'bg-red-100', 'text-red-800',

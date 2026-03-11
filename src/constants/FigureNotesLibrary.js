@@ -13,7 +13,7 @@
 export const FIGURE_NOTE_COLORS = {
   C: '#E30613',   // RED
   D: '#89512E',   // BROWN
-  E: '#6b7280',   // GREY
+  E: '#C7BAB7',   // GREY (light gray/beige)
   F: '#2563eb',   // BLUE
   G: '#000000',   // BLACK
   A: '#eab308',   // YELLOW

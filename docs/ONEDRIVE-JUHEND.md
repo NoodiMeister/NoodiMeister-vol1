@@ -41,11 +41,13 @@ Seega **ainult Google’il on „mootor“** – Microsoft ja Apple on placehold
    - `offline_access` (refresh token, valikuline)
 6. **Grant admin consent** (kui on organisatsiooni konto).
 
-**Testija-/administraatori kontod (Microsoft nupp):** kui rakendus on arendusrežiimis, lisa Azure'is need kontod, kes tohib Microsoftiga sisse logida. Näiteks **raido.lill@paikesekool.parnu.ee** (teine testija-administraator). Rakenduses on sama nimekiri keskkonnamuutujas `VITE_MICROSOFT_TESTER_EMAILS` (komaga eraldatud); kui see on täidetud, saavad ainult need e-mailid Microsofti sisselogimise lõpuni teha.
+**Testija-nimekiri (valikuline):** keskkonnamuutuja `VITE_MICROSOFT_TESTER_EMAILS` (komaga eraldatud e-mailid). Kui see on **tühi**, saavad **kõik** Microsofti kontod sisse logida. Kui täidad (nt `raido.lill@paikesekool.parnu.ee`), saavad ainult need e-mailid lõpuni – kasulik enne avalikku avaldamist. **Avaldamiseks igaühele:** jäta `VITE_MICROSOFT_TESTER_EMAILS` tühjaks nii kohalikus `.env` kui Vercel / tootmise keskkonnamuutujates.
 
 **Salavõti (client secret) SPA puhul tavaliselt ei kasutata** – brauseris kasutatakse PKCE flow’d ilma salavõtata. Veendu, et **Authentication** → **Platform configurations** → SPA redirect URI’d on täpselt need, mida rakendus kasutab.
 
 ---
+
+**Kui Microsofti sisselogimine ei vii kuhugi või suunab alati /login lehele:** Azure → App registrations → NoodiMeister → Authentication. **Redirect URI (SPA)** peab olema **rakenduse juur**, mitte /login: lisa mõlemad `https://www.noodimeister.ee/` ja `https://www.noodimeister.ee/login` (ja soovi korral `http://localhost:5173/`, `http://localhost:5173/login`). Kui Azure’s on `.../login`, eemalda see ja lisa ainult juur-URL. Pärast sisselogimist kuvatakse vea korral soovitatav URI – kopeeri see Azure'i.
 
 ## Samm 2: Rakenduse koodis – paketid ja keskkond
 

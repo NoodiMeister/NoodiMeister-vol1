@@ -112,7 +112,7 @@
 .symbol-gallery__png-preview-title {
   font-size: 0.9rem;
   font-weight: 600;
-  color: #6b7280;
+  color: #C7BAB7;
   margin: 0 0 12px 0;
 }
 
@@ -157,7 +157,7 @@
 
 .symbol-gallery__counter {
   font-size: 0.9rem;
-  color: #6b7280;
+  color: #C7BAB7;
   min-width: 4rem;
   text-align: center;
 }
@@ -171,7 +171,7 @@
 .symbol-gallery__index-title {
   font-size: 0.85rem;
   font-weight: 600;
-  color: #6b7280;
+  color: #C7BAB7;
   margin: 0 0 12px 0;
 }
 

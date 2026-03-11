@@ -30,17 +30,17 @@ export default function ToetaPage() {
   const isValid = total !== null;
 
   return (
-    <div className="min-h-screen flex flex-col bg-gradient-to-br from-amber-50 via-orange-50 to-amber-100">
-      <header className="flex-shrink-0 border-b border-amber-200/60 bg-white/70 backdrop-blur-sm sticky top-0 z-10">
+    <div className="min-h-screen flex flex-col bg-gradient-to-br from-amber-50 via-orange-50 to-amber-100 dark:bg-black">
+      <header className="flex-shrink-0 border-b border-amber-200/60 dark:border-white/20 bg-white/70 dark:bg-black/90 backdrop-blur-sm sticky top-0 z-10">
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
           <Link to="/" className="flex items-center">
             <img src="/logo.png" alt="NoodiMeister" className="h-9 w-auto" />
           </Link>
           <nav className="flex items-center gap-3">
-            <Link to="/hinnakiri" className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-amber-800 font-medium hover:bg-amber-100 transition-colors">
+            <Link to="/hinnakiri" className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-amber-800 dark:text-white font-medium hover:bg-amber-100 dark:hover:bg-white/10 transition-colors">
               Hinnakiri
             </Link>
-            <Link to="/login" className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-amber-800 font-medium hover:bg-amber-100 transition-colors">
+            <Link to="/login" className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-amber-800 dark:text-white font-medium hover:bg-amber-100 dark:hover:bg-white/10 transition-colors">
               <LogIn className="w-4 h-4" /> Logi sisse
             </Link>
             <Link to="/registreeru" className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-amber-600 text-white font-semibold hover:bg-amber-500 shadow-md transition-all">
@@ -52,15 +52,15 @@ export default function ToetaPage() {
 
       <main className="flex-1 px-6 py-12 sm:py-16">
         <section className="max-w-lg mx-auto">
-          <h1 className="text-2xl sm:text-3xl font-bold text-amber-900 mb-2 text-center" style={{ fontFamily: 'Georgia, serif' }}>
+          <h1 className="text-2xl sm:text-3xl font-bold text-amber-900 dark:text-white mb-2 text-center" style={{ fontFamily: 'Georgia, serif' }}>
             Vali toetamise periood
           </h1>
-          <p className="text-amber-800/90 text-center mb-8 text-sm">
+          <p className="text-amber-800/90 dark:text-white/80 text-center mb-8 text-sm">
             Sisesta, mitu kuud soovid NoodiMeistrit toetada ja täisfunktsiooni kasutada (1–60 kuud).
           </p>
 
           <div className="mb-6">
-            <label htmlFor="toeta-kuud" className="block text-sm font-semibold text-amber-900 mb-2">
+            <label htmlFor="toeta-kuud" className="block text-sm font-semibold text-amber-900 dark:text-white mb-2">
               Kuude arv
             </label>
             <input
@@ -79,7 +79,7 @@ export default function ToetaPage() {
                 if (Number.isFinite(n)) setMonths(Math.max(1, Math.min(60, n)));
               }}
               onBlur={() => { if (months < 1 || months > 60) setMonths(1); }}
-              className="w-full px-4 py-3 rounded-xl border-2 border-amber-200 bg-white text-amber-900 text-lg font-semibold focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+              className="w-full px-4 py-3 rounded-xl border-2 border-amber-200 dark:border-white/30 bg-white dark:bg-black/50 text-amber-900 dark:text-white text-lg font-semibold focus:ring-2 focus:ring-amber-500 focus:border-amber-500 dark:focus:ring-white/30 dark:focus:border-white/30"
               placeholder="nt 6"
             />
             <p className="mt-1 text-xs text-amber-700/80">
@@ -87,11 +87,11 @@ export default function ToetaPage() {
             </p>
           </div>
 
-          <div className="rounded-xl bg-white border-2 border-amber-200/60 p-4 mb-8">
-            <p className="text-sm text-amber-800/90 mb-1">
+          <div className="rounded-xl bg-white dark:bg-zinc-900 border-2 border-amber-200/60 dark:border-white/20 p-4 mb-8">
+            <p className="text-sm text-amber-800/90 dark:text-white/80 mb-1">
               {isValid ? `Täisfunktsioon ${months} kuud` : 'Sisesta kuude arv 1–60'}
             </p>
-            <p className="text-lg font-bold text-amber-900">
+            <p className="text-lg font-bold text-amber-900 dark:text-white">
               Kokku: {isValid ? `${total} €` : '—'}
             </p>
             {months === 12 && isValid && (

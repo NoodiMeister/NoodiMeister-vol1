@@ -62,9 +62,9 @@ async function main() {
   const octaveSymbols = [
     { id: 'octave-1-empty', content: `<g transform="translate(-50,-50)"><rect x="10" y="10" width="80" height="80" fill="none" stroke="#9ca3af" stroke-width="4" stroke-dasharray="8 6"/></g>` },
     { id: 'octave-2-cross', content: `<g transform="translate(-50,-50)"><path d="M10 10 L30 10 L90 70 L90 90 L70 90 L10 30 Z" fill="#1a1a1a"/><path d="M90 10 L70 10 L10 70 L10 90 L30 90 L90 30 Z" fill="#1a1a1a"/></g>` },
-    { id: 'octave-3-square', content: `<g transform="translate(-50,-50)"><rect x="15" y="15" width="70" height="70" fill="#6b7280" stroke="#1a1a1a" stroke-width="3"/></g>` },
-    { id: 'octave-4-circle', content: `<g transform="translate(-50,-50)"><circle cx="50" cy="50" r="35" fill="#6b7280" stroke="#1a1a1a" stroke-width="3"/></g>` },
-    { id: 'octave-5-triangle', content: `<g transform="translate(-50,-50)"><path d="M50 18 L88 82 L12 82 Z" fill="#6b7280" stroke="#1a1a1a" stroke-width="3"/></g>` },
+    { id: 'octave-3-square', content: `<g transform="translate(-50,-50)"><rect x="15" y="15" width="70" height="70" fill="#C7BAB7" stroke="#1a1a1a" stroke-width="3"/></g>` },
+    { id: 'octave-4-circle', content: `<g transform="translate(-50,-50)"><circle cx="50" cy="50" r="35" fill="#C7BAB7" stroke="#1a1a1a" stroke-width="3"/></g>` },
+    { id: 'octave-5-triangle', content: `<g transform="translate(-50,-50)"><path d="M50 18 L88 82 L12 82 Z" fill="#C7BAB7" stroke="#1a1a1a" stroke-width="3"/></g>` },
   ];
   octaveSymbols.forEach(({ id, content }) => toExport.push({ id, svg: svgWrap(content, 100, 100) }));
 
@@ -162,7 +162,7 @@ async function main() {
     .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 16px; }
     .cell { background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px; text-align: center; }
     .cell img { max-width: 100%; height: 100px; object-fit: contain; display: block; margin: 0 auto; }
-    .cell span { font-size: 0.7rem; color: #6b7280; margin-top: 8px; display: block; }
+    .cell span { font-size: 0.7rem; color: #C7BAB7; margin-top: 8px; display: block; }
   </style>
 </head>
 <body>

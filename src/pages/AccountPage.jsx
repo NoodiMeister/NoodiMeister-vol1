@@ -1,6 +1,8 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { User, Cloud, HardDrive, LogIn, FolderOpen, FolderPlus, Loader2, X, ChevronRight } from 'lucide-react';
+import { User, Cloud, HardDrive, LogIn, FolderOpen, FolderPlus, Loader2, X, ChevronRight, Settings, ChevronDown, Trash2 } from 'lucide-react';
+import { LOCALE_STORAGE_KEY, DEFAULT_LOCALE, LOCALES, getTranslations } from '../i18n';
+import { useNoodimeisterOptional } from '../store/NoodimeisterContext';
 import {
   getLoggedInUser,
   getStoredTokenFromAuth,
@@ -19,10 +21,32 @@ import {
   listFolderChildren,
   createFolder as oneDriveCreateFolder,
   getItemName as oneDriveGetItemName,
+  deleteFile as oneDriveDeleteFile,
 } from '../services/oneDrive';
 
 export default function AccountPage() {
   const [user, setUser] = useState(null);
+  const [locale, setLocaleState] = useState(() => {
+    try {
+      return localStorage.getItem(LOCALE_STORAGE_KEY) || DEFAULT_LOCALE;
+    } catch {
+      return DEFAULT_LOCALE;
+    }
+  });
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const settingsRef = useRef(null);
+  const store = useNoodimeisterOptional();
+  const themeMode = store?.theme?.mode ?? 'light';
+  const setThemeMode = (mode) => { if (store?.setTheme) store.setTheme(mode); };
+  const t = getTranslations(locale);
+
+  const setLocale = (code) => {
+    try {
+      localStorage.setItem(LOCALE_STORAGE_KEY, code);
+      setLocaleState(code);
+    } catch (_) {}
+  };
+
   const [googleToken, setGoogleToken] = useState(null);
   const [microsoftToken, setMicrosoftToken] = useState(null);
   const [oneDriveProfile, setOneDriveProfile] = useState({ state: 'idle', data: null, error: null });
@@ -41,6 +65,16 @@ export default function AccountPage() {
   const [oneDriveCreateLoading, setOneDriveCreateLoading] = useState(false);
   const [googleCreateName, setGoogleCreateName] = useState('NoodiMeister');
   const [googleCreateLoading, setGoogleCreateLoading] = useState(false);
+
+  useEffect(() => {
+    const close = (e) => {
+      if (settingsRef.current && !settingsRef.current.contains(e.target)) setSettingsOpen(false);
+    };
+    if (settingsOpen) {
+      document.addEventListener('click', close);
+      return () => document.removeEventListener('click', close);
+    }
+  }, [settingsOpen]);
 
   useEffect(() => {
     try {
@@ -127,6 +161,30 @@ export default function AccountPage() {
     else setOneDrivePickerFolders([]);
   }, [microsoftToken]);
 
+  const loadOneDriveFiles = useCallback(async () => {
+    if (!microsoftToken) return;
+    const folderId = getOneDriveSaveFolderId();
+    setOneDriveFiles((prev) => ({ ...prev, state: 'loading', data: [], error: null }));
+    const result = await listNoodimeisterFilesFromOneDrive(microsoftToken, folderId || undefined);
+    if (result.ok) {
+      setOneDriveFiles({ state: 'success', data: result.files || [], error: null });
+    } else {
+      setOneDriveFiles({ state: 'error', data: [], error: result.error || null });
+    }
+  }, [microsoftToken]);
+
+  const handleDeleteOneDriveFile = useCallback(async (fileId, fileName) => {
+    const msg = (t['file.deleteConfirm'] || 'Kas kustutame faili "{name}"? Seda ei saa tagasi võtta.').replace('{name}', fileName || '');
+    if (!window.confirm(msg)) return;
+    if (!microsoftToken) return;
+    try {
+      await oneDriveDeleteFile(microsoftToken, fileId);
+      await loadOneDriveFiles();
+    } catch (e) {
+      setOneDriveFiles((prev) => ({ ...prev, state: 'error', error: e?.message || 'Kustutamine ebaõnnestus' }));
+    }
+  }, [microsoftToken, loadOneDriveFiles, t]);
+
   useEffect(() => {
     if (oneDrivePickerOpen && microsoftToken) {
       const currentId = oneDrivePickerPath.length ? oneDrivePickerPath[oneDrivePickerPath.length - 1].id : null;
@@ -197,59 +255,122 @@ export default function AccountPage() {
       : 'E-mail / muu';
 
   return (
-    <div className="min-h-screen flex flex-col bg-gradient-to-br from-amber-50 via-orange-50 to-amber-100">
-      <header className="flex-shrink-0 border-b border-amber-200/60 bg-white/70 backdrop-blur-sm">
+    <div className="min-h-screen flex flex-col bg-gradient-to-br from-amber-50 via-orange-50 to-amber-100 dark:bg-black">
+      <header className="flex-shrink-0 border-b border-amber-200/60 dark:border-white/20 bg-white/70 dark:bg-black/90 backdrop-blur-sm">
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
           <Link to="/" className="flex items-center">
             <img src="/logo.png" alt="NoodiMeister" className="h-9 w-auto" />
           </Link>
-          <div className="flex items-center gap-4 text-sm">
-            <Link to="/tood" className="text-amber-700 hover:text-amber-900 font-medium">
-              Minu tööd
+          <nav className="flex items-center gap-3 flex-wrap" ref={settingsRef}>
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setSettingsOpen((v) => !v)}
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg font-medium text-sm bg-amber-100/80 dark:bg-white/10 text-amber-900 dark:text-white border border-amber-200 dark:border-white/20 hover:bg-amber-200/80 dark:hover:bg-white/20 transition-colors"
+                title={t['settings.title']}
+                aria-expanded={settingsOpen}
+              >
+                <Settings className="w-4 h-4" />
+                <ChevronDown className={`w-4 h-4 transition-transform ${settingsOpen ? 'rotate-180' : ''}`} />
+              </button>
+              {settingsOpen && (
+                <div className="absolute right-0 top-full mt-1 min-w-[200px] py-2 rounded-xl bg-white dark:bg-zinc-900 border-2 border-amber-200 dark:border-white/20 shadow-xl z-50">
+                  <div className="px-3 py-1.5 text-xs font-semibold text-amber-700 uppercase tracking-wider">{t['app.language']}</div>
+                  <div className="flex gap-0.5 px-2 pb-2">
+                    {LOCALES.map(({ code, name }) => (
+                      <button
+                        key={code}
+                        type="button"
+                        onClick={() => { setLocale(code); setSettingsOpen(false); }}
+                        className={`flex-1 px-2.5 py-1.5 text-xs font-medium rounded-lg transition-colors ${locale === code ? 'bg-amber-500 text-white' : 'text-amber-800 hover:bg-amber-100'}`}
+                        title={name}
+                      >
+                        {name}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="border-t border-amber-200 my-1" />
+                  <div className="px-3 py-1.5 text-xs font-semibold text-amber-700 uppercase tracking-wider">{t['app.theme']}</div>
+                  <div className="flex gap-1 px-2">
+                    <button
+                      type="button"
+                      onClick={() => { setThemeMode('light'); setSettingsOpen(false); }}
+                      className={`flex-1 px-2.5 py-1.5 text-xs font-medium rounded-lg transition-colors ${themeMode === 'light' ? 'bg-amber-500 text-white' : 'text-amber-800 hover:bg-amber-100'}`}
+                    >
+                      {t['theme.light']}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setThemeMode('dark'); setSettingsOpen(false); }}
+                      className={`flex-1 px-2.5 py-1.5 text-xs font-medium rounded-lg transition-colors ${themeMode === 'dark' ? 'bg-amber-500 text-white' : 'text-amber-800 hover:bg-amber-100'}`}
+                    >
+                      {t['theme.dark']}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+            <Link to="/tood" className="text-amber-700 dark:text-white hover:text-amber-900 dark:hover:text-white/90 font-medium">
+              {t['account.myWork']}
             </Link>
-            <Link to="/" className="text-amber-700 hover:text-amber-900 font-medium">
-              Esileht
+            <Link to="/" className="text-amber-700 dark:text-white hover:text-amber-900 dark:hover:text-white/90 font-medium">
+              {t['account.home']}
             </Link>
-          </div>
+          </nav>
         </div>
       </header>
 
       <main className="flex-1 flex items-center justify-center px-6 py-12">
-        <div className="w-full max-w-2xl bg-white rounded-2xl shadow-xl border-2 border-amber-200 overflow-hidden">
+        <div className="w-full max-w-2xl bg-white dark:bg-zinc-900 rounded-2xl shadow-xl border-2 border-amber-200 dark:border-white/20 overflow-hidden">
           <div className="bg-gradient-to-r from-slate-700 to-slate-800 text-white px-8 py-6 flex items-center gap-3">
-            <User className="w-6 h-6" />
-            <div>
+            <User className="w-6 h-6 flex-shrink-0" />
+            <div className="min-w-0 flex-1">
               <h1 className="text-2xl font-bold" style={{ fontFamily: 'Georgia, serif' }}>
-                Minu konto
+                {t['user.myAccount']}
               </h1>
+              {user ? (
+                <p className="text-slate-200 text-lg mt-1 font-medium truncate" title={user.email}>
+                  {user.name || user.email || '—'}
+                </p>
+              ) : null}
               <p className="text-slate-200 text-sm mt-1">
-                Vaata, kuhu NoodiMeister saab sinu faile salvestada ja kust neid lugeda (kohalik fail, Google Drive, OneDrive).
+                {t['account.subtitle']}
               </p>
             </div>
           </div>
 
           <div className="p-8 space-y-6">
+            <div className="flex flex-wrap items-center gap-3">
+              <Link
+                to="/tood"
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-amber-500 text-white font-semibold hover:bg-amber-600 transition-colors shadow-sm"
+              >
+                <FolderOpen className="w-5 h-5" />
+                {t['account.myWork']}
+              </Link>
+            </div>
+
             <section className="space-y-2">
               <h2 className="text-lg font-semibold text-amber-900 flex items-center gap-2">
-                <User className="w-5 h-5 text-amber-700" /> Kasutaja
+                <User className="w-5 h-5 text-amber-700" /> {t['account.user']}
               </h2>
               {user ? (
                 <div className="text-sm text-amber-800 space-y-1">
                   <p>
-                    <span className="font-semibold">E-mail:</span> {user.email}
+                    <span className="font-semibold">{t['account.email']}:</span> {user.email}
                   </p>
                   <p>
-                    <span className="font-semibold">Nimi:</span> {user.name || '—'}
+                    <span className="font-semibold">{t['account.name']}:</span> {user.name || '—'}
                   </p>
                   <p>
-                    <span className="font-semibold">Sisselogimise viis:</span> {providerLabel}
+                    <span className="font-semibold">{t['account.loginMethod']}:</span> {providerLabel}
                   </p>
                 </div>
               ) : (
                 <p className="text-sm text-amber-800 flex items-center gap-2">
-                  <LogIn className="w-4 h-4" /> Pole sisse logitud.{' '}
+                  <LogIn className="w-4 h-4" /> {t['account.notLoggedIn']}{' '}
                   <Link to="/login" className="underline font-medium text-amber-800 hover:text-amber-900">
-                    Logi sisse
+                    {t['account.logIn']}
                   </Link>
                   .
                 </p>
@@ -438,6 +559,15 @@ export default function AccountPage() {
                                     Ava OneDrive'is
                                   </a>
                                 )}
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteOneDriveFile(f.id, f.name)}
+                                  className="p-1.5 rounded text-red-600 hover:bg-red-50 hover:text-red-700 flex-shrink-0"
+                                  title={t['file.delete'] || 'Kustuta fail'}
+                                  aria-label={t['file.delete'] || 'Kustuta fail'}
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
                               </li>
                             ))}
                           </ul>

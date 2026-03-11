@@ -17,14 +17,14 @@
 [data-primary-color="blue"]  { --primary-color: #007BFF; }
 [data-primary-color="green"] { --primary-color: #28A745; }
 
-/* Tume režiim: tume taust, valge tekst ja joonestik */
+/* Tume režiim: must taust, valge tekst ja sümbolid */
 [data-theme="dark"] {
-  --bg-color: #1e1e1e;
-  --text-color: #f0f0f0;
+  --bg-color: #000000;
+  --text-color: #ffffff;
   --staff-line-color: #ffffff;
   --note-fill: #ffffff;
   --jo-clef-inverted: #000000; /* opposite of note-fill in dark theme */
-  --score-bg: #2d2d2d;
+  --score-bg: #0a0a0a;
 }
 
 /* Hele režiimi laadimise ekraan (tagasiühilduvus) */
@@ -33,7 +33,7 @@
   background: linear-gradient(to bottom right, #fffbeb, #fef3c7);
 }
 [data-theme="dark"] .loading-screen {
-  color: #f0f0f0;
+  color: #ffffff;
   background: var(--bg-color);
 }
 

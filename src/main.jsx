@@ -10,13 +10,15 @@ import './index.css';
 (function applyStoredTheme() {
   try {
     const raw = localStorage.getItem('noodimeister-theme');
+    let mode = 'light';
+    let primaryColor = 'orange';
     if (raw) {
       const o = JSON.parse(raw);
-      const mode = o.mode === 'dark' ? 'dark' : 'light';
-      const primaryColor = ['orange', 'blue', 'green'].includes(o.primaryColor) ? o.primaryColor : 'orange';
-      document.documentElement.setAttribute('data-theme', mode);
-      document.documentElement.setAttribute('data-primary-color', primaryColor);
+      mode = o.mode === 'dark' ? 'dark' : 'light';
+      primaryColor = ['orange', 'blue', 'green'].includes(o.primaryColor) ? o.primaryColor : 'orange';
     }
+    document.documentElement.setAttribute('data-theme', mode);
+    document.documentElement.setAttribute('data-primary-color', primaryColor);
   } catch (_) { /* ignore */ }
 })();
 
@@ -51,11 +53,13 @@ try {
   if (!rootEl) throw new Error('Element #root ei leitud. Kontrolli index.html.');
   const root = ReactDOM.createRoot(rootEl);
 
+  const hash = typeof window !== 'undefined' ? (window.location.hash || '') : '';
+  const search = typeof window !== 'undefined' ? (window.location.search || '') : '';
   const hasMicrosoftCode =
     typeof window !== 'undefined' &&
-    /[#?]/.test(window.location.href) &&
-    (/[#&]code=/.test(window.location.hash || '') || /[?&]code=/.test(window.location.search || ''));
-  if (hasMicrosoftCode) {
+    (/[#&]code=/.test(hash) || /[?&]code=/.test(search));
+  const hasMicrosoftError = /[#&?]error=/.test(hash + search);
+  if (hasMicrosoftCode || hasMicrosoftError) {
     root.render(<MicrosoftRedirectHandler />);
   } else {
     const app = <App />;

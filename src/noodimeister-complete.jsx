@@ -964,10 +964,9 @@ function NoodiMeisterCore({ icons }) {
     { id: 2, pitch: 'D', octave: 4, duration: 1, durationLabel: '1/4', isDotted: false, isRest: false },
     { id: 3, pitch: 'E', octave: 4, duration: 1, durationLabel: '1/4', isDotted: false, isRest: false }
   ];
-  const defaultPianoBraceId = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `piano-${Date.now()}`;
+  // Default: single staff in treble clef (not piano grand staff). Figuurnotatsioon and other notation use treble clef mode.
   const [staves, setStaves] = useState(() => [
-    { id: '1', instrumentId: 'piano', clefType: 'treble', notes: initialStaffNotes, braceGroupId: defaultPianoBraceId, notationMode: 'traditional' },
-    { id: '2', instrumentId: 'piano', clefType: 'bass', notes: [], braceGroupId: defaultPianoBraceId, notationMode: 'traditional' }
+    { id: '1', instrumentId: 'single-staff-treble', clefType: 'treble', notes: initialStaffNotes, braceGroupId: undefined, notationMode: 'traditional' }
   ]);
   const [activeStaffIndex, setActiveStaffIndex] = useState(0);
   /** Iga noodirida võib olla vertikaalselt nihutatud (px). Klõps real aktiveerib rea; ↑↓ liigutavad aktiivset rida 1px. */
@@ -1019,7 +1018,7 @@ function NoodiMeisterCore({ icons }) {
     setNotes((prev) => prev.map((n) => ({ ...n, teacherLabel: '' })));
     dirtyRef.current = true;
   }, [notes]);
-  const instrument = activeStaff?.instrumentId ?? 'piano';
+  const instrument = activeStaff?.instrumentId ?? 'single-staff-treble';
   const setInstrument = useCallback((instId) => {
     setStaves((prev) => {
       if (typeof GLOBAL_NOTATION_CONFIG === 'undefined' || !GLOBAL_NOTATION_CONFIG || typeof INSTRUMENT_CONFIG_BASE === 'undefined' || !INSTRUMENT_CONFIG_BASE) return prev;
@@ -1099,8 +1098,16 @@ function NoodiMeisterCore({ icons }) {
   const [tuningReferenceOctave, setTuningReferenceOctave] = useState(3);
   const [tuningReferenceHz, setTuningReferenceHz] = useState(440);
   const [playNoteOnInsert, setPlayNoteOnInsert] = useState(true);
-  const [figurenotesSize, setFigurenotesSize] = useState(75); // Noodigraafika suurus (figuurid ja noodid), 12–96 px (vaikimisi 75)
+  const [figurenotesSize, setFigurenotesSize] = useState(75); // Noodigraafika suurus (figuurid ja noodid), 12–500 px (vaikimisi 75)
   const [figurenotesStems, setFigurenotesStems] = useState(false); // Figuurnotatsioonis rütmi näitamine noodivartega (vaikimisi välja)
+
+  // Hoia rütmiboksi (pixelsPerBeat) laius kooskõlas noodigraafika suurusega – magneetiline seos
+  useEffect(() => {
+    setPixelsPerBeat((prev) => {
+      const target = Math.max(40, Math.min(500, figurenotesSize));
+      return target;
+    });
+  }, [figurenotesSize]);
   const [showBarNumbers, setShowBarNumbers] = useState(true); // Taktide numbrid iga rea alguses noodivõtme kohal
   const [showRhythmSyllables, setShowRhythmSyllables] = useState(DEFAULT_SHOW_RHYTHM_SYLLABLES);
   const [showAllNoteLabels, setShowAllNoteLabels] = useState(DEFAULT_SHOW_ALL_NOTE_LABELS);
@@ -1156,8 +1163,8 @@ function NoodiMeisterCore({ icons }) {
     return {
       staffLineColor: isDark ? '#ffffff' : '#000000',
       noteFill: isDark ? '#ffffff' : '#1a1a1a',
-      textColor: isDark ? '#f0f0f0' : '#1a1a1a',
-      scoreBg: isDark ? '#2d2d2d' : '#fffbf0',
+      textColor: isDark ? '#ffffff' : '#1a1a1a',
+      scoreBg: isDark ? '#0a0a0a' : '#fffbf0',
       isDark,
     };
   }, [themeMode]);
@@ -1252,7 +1259,7 @@ function NoodiMeisterCore({ icons }) {
   const [wizardTimeSignature, setWizardTimeSignature] = useState([4, 4]);
   const [wizardSongTitle, setWizardSongTitle] = useState('');
   const [wizardAuthor, setWizardAuthor] = useState('');
-  const [wizardInstrument, setWizardInstrument] = useState('piano');
+  const [wizardInstrument, setWizardInstrument] = useState('single-staff-treble');
   const [wizardPickupEnabled, setWizardPickupEnabled] = useState(false);
   const [wizardPickupQuantity, setWizardPickupQuantity] = useState(1);
   const [wizardPickupDuration, setWizardPickupDuration] = useState('1/4');
@@ -2288,7 +2295,7 @@ function NoodiMeisterCore({ icons }) {
       } else {
         const scoreData = data.scoreData ?? data.notes;
         const notesArr = Array.isArray(scoreData) ? scoreData : [];
-        const instId = data.instrument || 'piano';
+        const instId = data.instrument || 'single-staff-treble';
         const cfg = INSTRUMENT_CONFIG_BASE[instId];
         if (instId === 'piano' || cfg?.type === 'grandStaff') {
           const braceGroupId = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `piano-${Date.now()}`;
@@ -2310,7 +2317,7 @@ function NoodiMeisterCore({ icons }) {
       if (data.notationStyle) setNotationStyle(data.notationStyle);
       if (data.notationMode) setNotationMode(data.notationMode);
       if (data.pixelsPerBeat != null) setPixelsPerBeat(data.pixelsPerBeat);
-      if (data.figurenotesSize != null) setFigurenotesSize(Math.max(12, Math.min(96, data.figurenotesSize)));
+      if (data.figurenotesSize != null) setFigurenotesSize(Math.max(12, Math.min(500, data.figurenotesSize)));
       if (data.figurenotesStems != null) setFigurenotesStems(!!data.figurenotesStems);
       if (data.timeSignatureSize != null) setTimeSignatureSize(Math.max(12, Math.min(48, data.timeSignatureSize)));
       if (data.isPedagogicalProject != null) setIsPedagogicalProject(!!data.isPedagogicalProject);
@@ -2497,7 +2504,7 @@ function NoodiMeisterCore({ icons }) {
           if (Array.isArray(data.measureStretchFactors)) setMeasureStretchFactors(data.measureStretchFactors);
           if (Array.isArray(data.systemYOffsets)) setSystemYOffsets(data.systemYOffsets);
         } else {
-          const instId = data.instrument || 'piano';
+          const instId = data.instrument || 'single-staff-treble';
           const cfg = INSTRUMENT_CONFIG_BASE[instId];
           if (instId === 'piano' || cfg?.type === 'grandStaff') {
             const braceGroupId = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `piano-${Date.now()}`;
@@ -2520,7 +2527,7 @@ function NoodiMeisterCore({ icons }) {
         if (data.notationStyle) setNotationStyle(data.notationStyle);
         else if (data.gridOnlyMode != null) setNotationStyle(data.gridOnlyMode ? 'FIGURENOTES' : 'TRADITIONAL');
         if (data.pixelsPerBeat != null) setPixelsPerBeat(data.pixelsPerBeat);
-        if (data.figurenotesSize != null) setFigurenotesSize(Math.max(12, Math.min(96, data.figurenotesSize)));
+        if (data.figurenotesSize != null) setFigurenotesSize(Math.max(12, Math.min(500, data.figurenotesSize)));
         if (data.figurenotesStems != null) setFigurenotesStems(!!data.figurenotesStems);
         if (data.timeSignatureSize != null) setTimeSignatureSize(Math.max(12, Math.min(48, data.timeSignatureSize)));
         if (data.notationMode) setNotationMode(data.notationMode);
@@ -2782,7 +2789,7 @@ function NoodiMeisterCore({ icons }) {
           if (data.notationStyle) setNotationStyle(data.notationStyle);
           else if (data.gridOnlyMode != null) setNotationStyle(data.gridOnlyMode ? 'FIGURENOTES' : 'TRADITIONAL');
           if (data.pixelsPerBeat != null) setPixelsPerBeat(data.pixelsPerBeat);
-          if (data.figurenotesSize != null) setFigurenotesSize(Math.max(12, Math.min(96, data.figurenotesSize)));
+          if (data.figurenotesSize != null) setFigurenotesSize(Math.max(12, Math.min(500, data.figurenotesSize)));
           if (data.timeSignatureSize != null) setTimeSignatureSize(Math.max(12, Math.min(48, data.timeSignatureSize)));
           if (data.notationMode) setNotationMode(data.notationMode);
           if (data.instrument) setInstrument(data.instrument);
@@ -4523,40 +4530,40 @@ function NoodiMeisterCore({ icons }) {
   const { Music2, Clock, Hash, Type, Piano, Palette, Layout, Check, Save, FolderOpen, Plus, Settings, Key, Repeat, Cloud, LogOut, User, CloudUpload, CloudDownload, FolderPlus, ChevronDown, Eye, ArrowDown, ArrowRight } = icons || {};
 
   return (
-    <div className="min-h-screen flex flex-col relative" style={{ background: 'linear-gradient(135deg, #fef3c7 0%, #fed7aa 50%, #fdba74 100%)' }}>
+    <div className="min-h-screen flex flex-col relative bg-[var(--bg-color)]">
       {/* New Project Setup Wizard – overlay until mode selected */}
       {!setupCompleted && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-amber-950/80 backdrop-blur-sm p-6">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full overflow-hidden border-2 border-amber-200">
-            <div className="bg-gradient-to-r from-amber-700 to-amber-600 text-white px-8 py-6">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-amber-950/80 dark:bg-black/70 backdrop-blur-sm p-6">
+          <div className="bg-white dark:bg-black rounded-2xl shadow-2xl max-w-2xl w-full overflow-hidden border-2 border-amber-200 dark:border-white/20">
+            <div className="bg-gradient-to-r from-amber-700 to-amber-600 dark:from-amber-800 dark:to-amber-900 text-white px-8 py-6">
               <h1 className="text-2xl font-bold" style={{ fontFamily: 'Georgia, serif' }}>Uus projekt</h1>
               <p className="text-amber-100 text-sm mt-1">Vali notatsiooni stiil ja täida väljad</p>
             </div>
-            <div className="p-8 space-y-6">
+            <div className="p-8 space-y-6 dark:text-white">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-semibold text-amber-900 mb-2">Loo pealkiri</label>
+                  <label className="block text-sm font-semibold text-amber-900 dark:text-white mb-2">Loo pealkiri</label>
                   <input
                     type="text"
                     value={songTitle}
                     onChange={(e) => { dirtyRef.current = true; setSongTitle(e.target.value); }}
                     placeholder="Nimetu"
-                    className="w-full px-4 py-2 rounded-lg border-2 border-amber-200 bg-amber-50 text-amber-900 font-medium focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+                    className="w-full px-4 py-2 rounded-lg border-2 border-amber-200 dark:border-white/30 bg-amber-50 dark:bg-zinc-900 text-amber-900 dark:text-white font-medium focus:ring-2 focus:ring-amber-500 focus:border-amber-500 dark:focus:ring-amber-500 dark:focus:border-amber-500"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-semibold text-amber-900 mb-2">Autor / helilooja</label>
+                  <label className="block text-sm font-semibold text-amber-900 dark:text-white mb-2">Autor / helilooja</label>
                   <input
                     type="text"
                     value={author}
                     onChange={(e) => { dirtyRef.current = true; setAuthor(e.target.value); }}
                     placeholder="Helilooja nimi"
-                    className="w-full px-4 py-2 rounded-lg border-2 border-amber-200 bg-amber-50 text-amber-900 font-medium focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+                    className="w-full px-4 py-2 rounded-lg border-2 border-amber-200 dark:border-white/30 bg-amber-50 dark:bg-zinc-900 text-amber-900 dark:text-white font-medium focus:ring-2 focus:ring-amber-500 focus:border-amber-500 dark:focus:ring-amber-500 dark:focus:border-amber-500"
                   />
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-semibold text-amber-900 mb-2">Taktimõõt</label>
+                <label className="block text-sm font-semibold text-amber-900 dark:text-white mb-2">Taktimõõt</label>
                 <div className="flex flex-wrap gap-2 mb-2">
                   {TIME_SIGNATURE_PRESETS.map(({ label, value }) => (
                     <button
@@ -4570,7 +4577,7 @@ function NoodiMeisterCore({ icons }) {
                   ))}
                 </div>
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-sm text-amber-800">Kohandatud:</span>
+                  <span className="text-sm text-amber-800 dark:text-white">Kohandatud:</span>
                   <input
                     type="number"
                     min={1}
@@ -4580,13 +4587,13 @@ function NoodiMeisterCore({ icons }) {
                       const v = Math.max(1, Math.min(MAX_NUMERATOR, parseInt(e.target.value, 10) || 1));
                       setTimeSignature(prev => ({ ...prev, beats: v }));
                     }}
-                    className="w-16 px-2 py-1.5 rounded-lg border-2 border-amber-200 bg-amber-50 text-amber-900 text-center font-medium"
+                    className="w-16 px-2 py-1.5 rounded-lg border-2 border-amber-200 dark:border-white/30 bg-amber-50 dark:bg-zinc-900 text-amber-900 dark:text-white text-center font-medium"
                   />
-                  <span className="text-amber-800">/</span>
+                  <span className="text-amber-800 dark:text-white">/</span>
                   <select
                     value={VALID_DENOMINATORS.includes(timeSignature.beatUnit) ? timeSignature.beatUnit : 4}
                     onChange={(e) => setTimeSignature(prev => ({ ...prev, beatUnit: Number(e.target.value) }))}
-                    className="px-3 py-1.5 rounded-lg border-2 border-amber-200 bg-amber-50 text-amber-900 font-medium"
+                    className="px-3 py-1.5 rounded-lg border-2 border-amber-200 dark:border-white/30 bg-amber-50 dark:bg-zinc-900 text-amber-900 dark:text-white font-medium"
                   >
                     {VALID_DENOMINATORS.map((d) => (
                       <option key={d} value={d}>{d}</option>
@@ -4595,8 +4602,8 @@ function NoodiMeisterCore({ icons }) {
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-semibold text-amber-900 mb-2">Taktide paigutus</label>
-                <p className="text-sm text-amber-700 mb-2">Mitu takti soovite vaikimisi ühe rea kohta? (Saate hiljem muuta tööriistakastis Paigutus.)</p>
+                <label className="block text-sm font-semibold text-amber-900 dark:text-white mb-2">Taktide paigutus</label>
+                <p className="text-sm text-amber-700 dark:text-white/80 mb-2">Mitu takti soovite vaikimisi ühe rea kohta? (Saate hiljem muuta tööriistakastis Paigutus.)</p>
                 <div className="flex flex-wrap items-center gap-3">
                   {[2, 3, 4, 6, 8].map((n) => (
                     <button
@@ -4678,13 +4685,13 @@ function NoodiMeisterCore({ icons }) {
       {/* Uue töö seadistuse dialoog – notatsioon, taktimõõt, loo nimi, autor jne */}
       {newWorkSetupOpen && (
         <div
-          className="fixed inset-0 z-[110] flex items-center justify-center bg-amber-950/70 backdrop-blur-sm p-6"
+          className="fixed inset-0 z-[110] flex items-center justify-center bg-amber-950/70 dark:bg-black/70 backdrop-blur-sm p-6"
           role="dialog"
           aria-modal="true"
           aria-labelledby="new-work-dialog-title"
           onClick={() => { setNewWorkSetupOpen(false); setSearchParams((prev) => { const next = new URLSearchParams(prev); next.delete('new'); return next; }); }}
         >
-          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-hidden border-2 border-amber-200 flex flex-col" onClick={e => e.stopPropagation()}>
+          <div className="bg-white dark:bg-black rounded-2xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-hidden border-2 border-amber-200 dark:border-white/20 flex flex-col" onClick={e => e.stopPropagation()}>
             <div className="bg-gradient-to-r from-amber-600 to-amber-700 text-white px-6 py-4 flex items-center justify-between shrink-0">
               <h2 id="new-work-dialog-title" className="text-lg font-bold flex items-center gap-2"><Plus className="w-5 h-5" /> Uue töö seadistus</h2>
             </div>
@@ -4865,19 +4872,19 @@ function NoodiMeisterCore({ icons }) {
 
       {/* Settings modal – Title, Author, Pickup (post-setup editing) */}
       {settingsOpen && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-amber-950/60 backdrop-blur-sm p-6" onClick={() => setSettingsOpen(false)}>
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden border-2 border-amber-200" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-amber-950/60 dark:bg-black/70 backdrop-blur-sm p-6" onClick={() => setSettingsOpen(false)}>
+          <div className="bg-white dark:bg-black rounded-2xl shadow-2xl max-w-md w-full overflow-hidden border-2 border-amber-200 dark:border-white/20" onClick={e => e.stopPropagation()}>
             <div className="bg-gradient-to-r from-slate-600 to-slate-700 text-white px-6 py-4 flex items-center justify-between">
               <h2 className="text-lg font-bold flex items-center gap-2"><Settings className="w-5 h-5" /> Seaded</h2>
               <button onClick={() => setSettingsOpen(false)} className="text-white/90 hover:text-white text-2xl leading-none">&times;</button>
             </div>
-            <div className="p-6 space-y-4">
+            <div className="p-6 space-y-4 dark:text-white">
               {/* Teema: põhivärv ja režiim (hele/tume) */}
-              <div className="border-b border-amber-200 pb-4">
-                <h3 className="text-sm font-bold text-amber-900 mb-2">{t('theme.title')}</h3>
+              <div className="border-b border-amber-200 dark:border-white/20 pb-4">
+                <h3 className="text-sm font-bold text-amber-900 dark:text-white mb-2">{t('theme.title')}</h3>
                 <div className="space-y-3">
                   <div>
-                    <label className="block text-sm font-semibold text-amber-900 mb-1">{t('theme.primaryColor')}</label>
+                    <label className="block text-sm font-semibold text-amber-900 dark:text-white mb-1">{t('theme.primaryColor')}</label>
                     <div className="flex flex-wrap gap-2">
                       {[
                         { value: 'orange', label: t('theme.orange') },
@@ -4904,19 +4911,19 @@ function NoodiMeisterCore({ icons }) {
                     </div>
                   </div>
                   <div>
-                    <label className="block text-sm font-semibold text-amber-900 mb-1">{t('theme.mode')}</label>
+                    <label className="block text-sm font-semibold text-amber-900 dark:text-white mb-1">{t('theme.mode')}</label>
                     <div className="flex flex-wrap gap-2">
                       <button
                         type="button"
                         onClick={() => { dirtyRef.current = true; setThemeMode('light'); }}
-                        className={`px-3 py-2 rounded-lg text-sm font-medium border-2 transition-colors ${themeMode === 'light' ? 'bg-amber-600 border-amber-700 text-white' : 'border-amber-200 text-amber-900 bg-amber-50 hover:bg-amber-100'}`}
+                        className={`px-3 py-2 rounded-lg text-sm font-medium border-2 transition-colors ${themeMode === 'light' ? 'bg-amber-600 border-amber-700 text-white' : 'border-amber-200 dark:border-white/30 text-amber-900 dark:text-white bg-amber-50 dark:bg-zinc-900 hover:bg-amber-100 dark:hover:bg-zinc-800'}`}
                       >
                         {t('theme.light')}
                       </button>
                       <button
                         type="button"
                         onClick={() => { dirtyRef.current = true; setThemeMode('dark'); }}
-                        className={`px-3 py-2 rounded-lg text-sm font-medium border-2 transition-colors ${themeMode === 'dark' ? 'bg-amber-600 border-amber-700 text-white' : 'border-amber-200 text-amber-900 bg-amber-50 hover:bg-amber-100'}`}
+                        className={`px-3 py-2 rounded-lg text-sm font-medium border-2 transition-colors ${themeMode === 'dark' ? 'bg-amber-600 border-amber-700 text-white' : 'border-amber-200 dark:border-white/30 text-amber-900 dark:text-white bg-amber-50 dark:bg-zinc-900 hover:bg-amber-100 dark:hover:bg-zinc-800'}`}
                       >
                         {t('theme.dark')}
                       </button>
@@ -5111,12 +5118,12 @@ function NoodiMeisterCore({ icons }) {
                     id="figurenotes-size"
                     type="number"
                     min={12}
-                    max={96}
+                    max={500}
                     step={1}
                     value={figurenotesSize}
                     onChange={(e) => {
                       const v = parseInt(e.target.value, 10);
-                      if (!isNaN(v)) { dirtyRef.current = true; setFigurenotesSize(Math.max(12, Math.min(96, v))); }
+                      if (!isNaN(v)) { dirtyRef.current = true; setFigurenotesSize(Math.max(12, Math.min(500, v))); }
                     }}
                     className="w-16 px-2 py-1.5 rounded border-2 border-amber-200 bg-amber-50 text-amber-900"
                   />
@@ -5236,8 +5243,8 @@ function NoodiMeisterCore({ icons }) {
 
       {/* Pilve salvestamise dialoog: vali kaust või loo uus */}
       {saveCloudDialogOpen && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-amber-950/60 backdrop-blur-sm p-6" onClick={() => setSaveCloudDialogOpen(false)}>
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden border-2 border-sky-200" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-amber-950/60 dark:bg-black/70 backdrop-blur-sm p-6" onClick={() => setSaveCloudDialogOpen(false)}>
+          <div className="bg-white dark:bg-black rounded-2xl shadow-2xl max-w-md w-full overflow-hidden border-2 border-sky-200 dark:border-white/20" onClick={e => e.stopPropagation()}>
             <div className="bg-gradient-to-r from-sky-600 to-sky-700 text-white px-6 py-4 flex items-center justify-between">
               <h2 className="text-lg font-bold flex items-center gap-2"><CloudUpload className="w-5 h-5" /> Salvesta Google Drivesse</h2>
               <button onClick={() => setSaveCloudDialogOpen(false)} className="text-white/90 hover:text-white text-2xl leading-none">&times;</button>
@@ -6176,12 +6183,12 @@ function NoodiMeisterCore({ icons }) {
                           <input
                             type="number"
                             min={12}
-                            max={96}
+                          max={500}
                             step={1}
                             value={figurenotesSize}
                             onChange={(e) => {
                               const v = parseInt(e.target.value, 10);
-                              if (!isNaN(v)) { dirtyRef.current = true; setFigurenotesSize(Math.max(12, Math.min(96, v))); }
+                            if (!isNaN(v)) { dirtyRef.current = true; setFigurenotesSize(Math.max(12, Math.min(500, v))); }
                             }}
                             className="w-20 px-2 py-1.5 rounded border-2 border-amber-200 bg-amber-50 text-amber-900"
                           />
@@ -6195,12 +6202,12 @@ function NoodiMeisterCore({ icons }) {
                           <input
                             type="number"
                             min={40}
-                            max={200}
+                          max={500}
                             step={1}
                             value={pixelsPerBeat}
                             onChange={(e) => {
                               const v = parseInt(e.target.value, 10);
-                              if (!isNaN(v)) { dirtyRef.current = true; setPixelsPerBeat(Math.max(40, Math.min(200, v))); }
+                            if (!isNaN(v)) { dirtyRef.current = true; setPixelsPerBeat(Math.max(40, Math.min(500, v))); }
                             }}
                             className="w-20 px-2 py-1.5 rounded border-2 border-amber-200 bg-amber-50 text-amber-900"
                           />
@@ -6253,7 +6260,7 @@ function NoodiMeisterCore({ icons }) {
       <div className={`flex flex-1 ${pianoStripVisible ? 'pb-36' : ''}`}>
         {/* Left Sidebar - Main Control Center (saab peita X-ga või Vaade → Tööriistakast) */}
         {toolboxPaletteVisible && (
-        <aside className="flex-shrink-0 w-72 bg-white border-r-2 border-amber-200 shadow-xl p-6 overflow-auto">
+        <aside className="flex-shrink-0 w-72 bg-white dark:bg-black border-r-2 border-amber-200 dark:border-white/20 shadow-xl p-6 overflow-auto">
           <div className="space-y-4">
             <div className="flex items-center justify-between gap-2 mb-3">
               <h3 className="text-sm font-bold text-amber-900 uppercase tracking-wider flex items-center gap-2">
@@ -6508,7 +6515,7 @@ function NoodiMeisterCore({ icons }) {
           >
           <div
             ref={scoreContainerRef}
-            className={`relative mx-auto p-8 flex-1 transition-colors ${isHorizontalFlow ? '' : 'rounded-lg shadow-lg border-2 border-amber-200'}`}
+            className={`relative mx-auto p-8 flex-1 transition-colors ${isHorizontalFlow ? '' : 'rounded-lg shadow-lg border-2 border-amber-200 dark:border-white/20'}`}
             style={{
               backgroundColor: themeColors.scoreBg,
               minWidth: LAYOUT.PAGE_WIDTH_MIN,
@@ -6553,12 +6560,12 @@ function NoodiMeisterCore({ icons }) {
                   value={songTitle}
                   onChange={(e) => { dirtyRef.current = true; setSongTitle(e.target.value); }}
                   placeholder="Nimetu"
-                  className="w-full text-2xl sm:text-3xl font-bold text-center text-amber-900 bg-transparent border-0 border-b-2 border-transparent hover:border-amber-300 focus:border-amber-500 focus:outline-none focus:ring-0 py-0"
+                  className="w-full text-2xl sm:text-3xl font-bold text-center text-amber-900 dark:text-white bg-transparent border-0 border-b-2 border-transparent hover:border-amber-300 dark:hover:border-white/30 focus:border-amber-500 dark:focus:border-amber-500 focus:outline-none focus:ring-0 py-0"
                   style={{ fontFamily: documentFontFamily }}
                   title="Pealkiri: muuda siin. Salvestamisel kasutatakse seda faili nimena (nagu Google Docs)."
                 />
                 {author && (
-                  <p className="text-sm text-amber-700 text-right mt-1" style={{ fontFamily: documentFontFamily }}>{author}</p>
+                  <p className="text-sm text-amber-700 dark:text-white/80 text-right mt-1" style={{ fontFamily: documentFontFamily }}>{author}</p>
                 )}
               </div>
               {/* Õpetaja režiimi tööriistariba (pedagoogiline notatsioon) */}
@@ -6903,7 +6910,7 @@ function NoodiMeisterCore({ icons }) {
             else mainRef.current.scrollTo({ top: (p - 1) * a4PageHeight, behavior: 'smooth' });
           };
           return (
-            <div className="fixed right-4 top-1/2 -translate-y-1/2 z-30 flex flex-col gap-1 py-2 px-2 bg-white/95 backdrop-blur rounded-xl border-2 border-amber-200 shadow-lg">
+            <div className="fixed right-4 top-1/2 -translate-y-1/2 z-30 flex flex-col gap-1 py-2 px-2 bg-white/95 dark:bg-black/95 backdrop-blur rounded-xl border-2 border-amber-200 dark:border-white/20 shadow-lg">
               <span className="text-xs font-semibold text-amber-800 px-1 mb-1">{t('layout.pageNavigatorTitle')}</span>
               {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
                 <button
@@ -7071,7 +7078,7 @@ function getFingeringForNote(pitch, octave, instrumentId) {
 }
 
 // Timeline Component – multi-system layout (VexFlow loogika). (PAGE_BREAK_GAP on defineeritud üleval.)
-function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, pageWidth, cursorPosition, notationMode, staffLines, clefType, keySignature = 'C', relativeNotationShowKeySignature = false, relativeNotationShowTraditionalClef = false, onJoClefPositionChange, joClefFocused = false, onJoClefFocus, instrument = 'piano', instrumentNotationVariant = 'standard', instrumentConfig = {}, showBarNumbers = true, showRhythmSyllables = false, joClefStaffPosition: joClefStaffPositionProp, showAllNoteLabels = false, enableEmojiOverlays = true, onNoteTeacherLabelChange, onNoteLabelClick, chords = [], isDotted, isRest, selectedDuration, noteInputMode, selectedNoteIndex, isNoteSelected, notes: allNotes, onStaffAddNote, onNoteClick, onNotePitchChange, ghostPitch, ghostOctave, onFigureBeatClick, notationStyle, layoutMeasuresPerLine = 4, layoutLineBreakBefore = [], layoutPageBreakBefore = [], layoutSystemGap = 120, layoutGlobalSpacingMultiplier = 1, systems: systemsProp, baseYOffset = 0, isActiveStaff = true, staffCount = 1, staffHeight: staffHeightProp, figurenotesSize = 16, figurenotesStems = false, timeSignatureSize = 16, themeColors: themeColorsProp, pedagogicalPlayheadStyle = 'line', pedagogicalPlayheadEmoji = '🎵', pedagogicalPlayheadEmojiSize = 32, pedagogicalPlayheadMovement = 'arch', isPedagogicalAudioPlaying = false, isExportingAnimation = false, exportCursorRef, scoreContainerRef, pageFlowDirection = 'vertical', isFirstInBraceGroup = false, braceGroupSize = 0, lyricFontFamily = 'sans-serif', translateLabel, showLayoutBreakIcons = false, showStaffSpacerHandles = false, onSystemYOffsetChange, onToggleLineBreakAfter }) {
+function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, pageWidth, cursorPosition, notationMode, staffLines, clefType, keySignature = 'C', relativeNotationShowKeySignature = false, relativeNotationShowTraditionalClef = false, onJoClefPositionChange, joClefFocused = false, onJoClefFocus, instrument = 'single-staff-treble', instrumentNotationVariant = 'standard', instrumentConfig = {}, showBarNumbers = true, showRhythmSyllables = false, joClefStaffPosition: joClefStaffPositionProp, showAllNoteLabels = false, enableEmojiOverlays = true, onNoteTeacherLabelChange, onNoteLabelClick, chords = [], isDotted, isRest, selectedDuration, noteInputMode, selectedNoteIndex, isNoteSelected, notes: allNotes, onStaffAddNote, onNoteClick, onNotePitchChange, ghostPitch, ghostOctave, onFigureBeatClick, notationStyle, layoutMeasuresPerLine = 4, layoutLineBreakBefore = [], layoutPageBreakBefore = [], layoutSystemGap = 120, layoutGlobalSpacingMultiplier = 1, systems: systemsProp, baseYOffset = 0, isActiveStaff = true, staffCount = 1, staffHeight: staffHeightProp, figurenotesSize = 16, figurenotesStems = false, timeSignatureSize = 16, themeColors: themeColorsProp, pedagogicalPlayheadStyle = 'line', pedagogicalPlayheadEmoji = '🎵', pedagogicalPlayheadEmojiSize = 32, pedagogicalPlayheadMovement = 'arch', isPedagogicalAudioPlaying = false, isExportingAnimation = false, exportCursorRef, scoreContainerRef, pageFlowDirection = 'vertical', isFirstInBraceGroup = false, braceGroupSize = 0, lyricFontFamily = 'sans-serif', translateLabel, showLayoutBreakIcons = false, showStaffSpacerHandles = false, onSystemYOffsetChange, onToggleLineBreakAfter }) {
   if (typeof GLOBAL_NOTATION_CONFIG === 'undefined' || !GLOBAL_NOTATION_CONFIG || GLOBAL_NOTATION_CONFIG.EMOJIS === false) return null;
   const themeColors = themeColorsProp || { staffLineColor: '#000', noteFill: '#1a1a1a', textColor: '#1a1a1a', scoreBg: '#fffbf0', isDark: false };
   const safeKey = keySignature ?? 'C';

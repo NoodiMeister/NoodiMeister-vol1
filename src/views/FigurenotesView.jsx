@@ -114,9 +114,9 @@ export function FigurenotesView({
               <line x1={0} y1={sys.yOffset - PAGE_BREAK_GAP / 2} x2={pageWidth || 800} y2={sys.yOffset - PAGE_BREAK_GAP / 2} stroke="#c4b896" strokeWidth={1} strokeDasharray="4 4" />
             )}
 
-            {/* Taktide number – JO-võtit ei ole; skaleeritud figurenotesSize-ga */}
+            {/* Taktide number – JO-võtit ei ole; skaleeritud figurenotesSize-ga, max 12px */}
             {showBarNumbers && sys.measureIndices.length > 0 && (
-              <text x={20} y={sys.yOffset + 12} fontSize={Math.round(14 * (figurenotesSize / 16))} fontWeight="bold" fill="#555" textAnchor="middle" fontFamily="sans-serif">
+              <text x={20} y={sys.yOffset + 12} fontSize={Math.min(12, Math.round(10 * (figurenotesSize / 16)))} fontWeight="bold" fill="#555" textAnchor="middle" fontFamily="sans-serif">
                 {sys.measureIndices[0] + 1}
               </text>
             )}
@@ -196,8 +196,14 @@ export function FigurenotesView({
                       : dur === '1/8' ? 'eighth'
                         : dur === '1/16' || dur === '1/32' ? 'sixteenth'
                           : 'quarter';
+                /* Rhythm tail: half (1/2) = 1 square, whole (1/1) = 2 squares, each square half the figure size; length measured by the bar. */
+                const hasTail = dur === '1/2' || dur === '1/1';
+                const tailSize = hasTail ? size / 2 : 0;
+                const numTailSquares = dur === '1/1' ? 2 : dur === '1/2' ? 1 : 0;
+                const totalTailWidth = numTailSquares * tailSize;
+                const figureCenterX = hasTail ? x - totalTailWidth / 2 : x;
                 const stemLength = 26;
-                const stemX = x + size / 2 + 1;
+                const stemX = figureCenterX + size / 2 + 1;
                 const stemY1 = y;
                 const stemY2 = y - stemLength;
                 const textColor = getFigurenoteTextColor(note.pitch);
@@ -205,14 +211,14 @@ export function FigurenotesView({
                 const strokeShape = isSelected ? '#2563eb' : '#000';
                 const strokeWShape = isSelected ? 3 : 2;
 
-                const fill = style.fill ?? '#6b7280';
+                const fill = style.fill ?? '#C7BAB7';
                 const effectiveStroke = style.stroke ?? 'none';
                 const effectiveStrokeWidth = style.strokeWidth ?? 0;
 
                 /* Quarter (1/4) and all durations: use a square SVG and preserve aspect ratio so shapes
                    are never stretched — perfect circle, square, X, or triangle (not oval/rectangular). */
                 const shapeSize = size;
-                const svgX = x - shapeSize / 2;
+                const svgX = figureCenterX - shapeSize / 2;
                 const svgY = y - shapeSize / 2;
 
                 const shapeEl = (
@@ -237,12 +243,34 @@ export function FigurenotesView({
                     ))}
                   </svg>
                 );
-                const tailLen = (dur === '1/1') ? Math.max(20, size * 1.4) : (dur === '1/2') ? Math.max(12, size * 0.85) : 0;
+
+                const tailSquaresEl = hasTail && numTailSquares > 0 && (
+                  <g>
+                    {Array.from({ length: numTailSquares }, (_, i) => {
+                      const tailX = figureCenterX + size / 2 + i * tailSize;
+                      const tailY = y - tailSize / 2;
+                      return (
+                        <rect
+                          key={i}
+                          x={tailX}
+                          y={tailY}
+                          width={tailSize}
+                          height={tailSize}
+                          fill={fill}
+                          stroke={effectiveStroke}
+                          strokeWidth={effectiveStrokeWidth}
+                          vectorEffect="non-scaling-stroke"
+                        />
+                      );
+                    })}
+                  </g>
+                );
+
                 return (
                   <g>
                     {/* Pedagoogiline aluskiht: SMuFL notehead (Leland) */}
                     <SmuflGlyph
-                      x={x}
+                      x={figureCenterX}
                       y={y}
                       glyph={smuflNoteheadForType(smuflType)}
                       fontSize={size * 1.35}
@@ -250,7 +278,8 @@ export function FigurenotesView({
                       style={{ opacity: 0.18 }}
                     />
                     {shapeEl}
-                    <text x={x} y={y} textAnchor="middle" dominantBaseline="central" fill={textColor} fontSize={Math.max(8, size * 0.5)} fontWeight="bold">
+                    {tailSquaresEl}
+                    <text x={figureCenterX} y={y} textAnchor="middle" dominantBaseline="central" fill={textColor} fontSize={Math.max(8, size * 0.5)} fontWeight="bold">
                       {String(note.pitch || '').toUpperCase().replace('H', 'B')}
                     </text>
                     {figurenotesStems && dur !== '1/1' && (
@@ -268,11 +297,11 @@ export function FigurenotesView({
                       const strokeW2 = Math.max(1.5, size * 0.1);
                       const stroke = '#1a1a1a';
                       if (note.accidental === 1) {
-                        return (<g stroke={stroke} fill="none" strokeWidth={strokeW2} strokeLinecap="round" strokeLinejoin="round"><line x1={x - arrowLen / 2} y1={arrowY + arrowLen / 2} x2={x + arrowLen / 2} y2={arrowY - arrowLen / 2} /><path d={`M ${x + arrowLen / 2} ${arrowY - arrowLen / 2} L ${x + arrowLen / 2 - head} ${arrowY - arrowLen / 2 + head * 0.6} M ${x + arrowLen / 2} ${arrowY - arrowLen / 2} L ${x + arrowLen / 2 - head * 0.6} ${arrowY - arrowLen / 2 + head}`} /></g>);
+                        return (<g stroke={stroke} fill="none" strokeWidth={strokeW2} strokeLinecap="round" strokeLinejoin="round"><line x1={figureCenterX - arrowLen / 2} y1={arrowY + arrowLen / 2} x2={figureCenterX + arrowLen / 2} y2={arrowY - arrowLen / 2} /><path d={`M ${figureCenterX + arrowLen / 2} ${arrowY - arrowLen / 2} L ${figureCenterX + arrowLen / 2 - head} ${arrowY - arrowLen / 2 + head * 0.6} M ${figureCenterX + arrowLen / 2} ${arrowY - arrowLen / 2} L ${figureCenterX + arrowLen / 2 - head * 0.6} ${arrowY - arrowLen / 2 + head}`} /></g>);
                       }
-                      return (<g stroke={stroke} fill="none" strokeWidth={strokeW2} strokeLinecap="round" strokeLinejoin="round"><line x1={x + arrowLen / 2} y1={arrowY + arrowLen / 2} x2={x - arrowLen / 2} y2={arrowY - arrowLen / 2} /><path d={`M ${x - arrowLen / 2} ${arrowY - arrowLen / 2} L ${x - arrowLen / 2 + head} ${arrowY - arrowLen / 2 + head * 0.6} M ${x - arrowLen / 2} ${arrowY - arrowLen / 2} L ${x - arrowLen / 2 + head * 0.6} ${arrowY - arrowLen / 2 + head}`} /></g>);
+                      return (<g stroke={stroke} fill="none" strokeWidth={strokeW2} strokeLinecap="round" strokeLinejoin="round"><line x1={figureCenterX + arrowLen / 2} y1={arrowY + arrowLen / 2} x2={figureCenterX - arrowLen / 2} y2={arrowY - arrowLen / 2} /><path d={`M ${figureCenterX - arrowLen / 2} ${arrowY - arrowLen / 2} L ${figureCenterX - arrowLen / 2 + head} ${arrowY - arrowLen / 2 + head * 0.6} M ${figureCenterX - arrowLen / 2} ${arrowY - arrowLen / 2} L ${figureCenterX - arrowLen / 2 + head * 0.6} ${arrowY - arrowLen / 2 + head}`} /></g>);
                     })()}
-                    {isSelected && <circle cx={x} cy={y} r={size / 2 + 4} fill="none" stroke="#2563eb" strokeWidth="2" opacity="0.5" />}
+                    {isSelected && <circle cx={figureCenterX} cy={y} r={size / 2 + 4} fill="none" stroke="#2563eb" strokeWidth="2" opacity="0.5" />}
                   </g>
                 );
               };
@@ -288,7 +317,7 @@ export function FigurenotesView({
               return (
                 <g key={measureIdx}>
                   {/* Taktikast + löögivõre */}
-                  <rect x={measureX} y={sys.yOffset + 4} width={measureWidth} height={timelineHeight - 8} fill="#fafafa" stroke="#c8c8c8" strokeWidth="1.5" />
+                  <rect x={measureX} y={sys.yOffset + 4} width={measureWidth} height={timelineHeight - 8} fill="transparent" stroke="#c8c8c8" strokeWidth="1.5" />
                   {Array.from({ length: Math.max(0, Math.ceil(beatsInMeasure) - 1) }, (_, b) => (
                     <line key={`beat-${b}`} x1={measureX + (b + 1) * beatWidth} y1={sys.yOffset + 4} x2={measureX + (b + 1) * beatWidth} y2={sys.yOffset + timelineHeight - 4} stroke="#e0e0e0" strokeWidth="1" />
                   ))}
@@ -354,8 +383,7 @@ export function FigurenotesView({
                       const accidentalNudge = (note.accidental === 1 || note.accidental === -1) ? (note.accidental === 1 ? 1 : -1) * Math.max(2, figureSize * 0.2) : 0;
                       const figureX = figureCenterX + accidentalNudge;
                       const labelFontSize = Math.max(8, Math.round(figureSize * 0.625));
-                      const tailLen = (dur === '1/1') ? Math.max(20, figureSize * 1.4) : (dur === '1/2') ? Math.max(12, figureSize * 0.85) : 0;
-                      const labelY = noteY + figureSize * 0.5 + labelFontSize + tailLen;
+                      const labelY = noteY + figureSize * 0.5 + labelFontSize;
                       const bandLeft = figureCenterX - noteWidth / 2;
                       const bandY = sys.yOffset + 6;
                       const bandH = timelineHeight - 12;

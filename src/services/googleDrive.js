@@ -250,6 +250,23 @@ export async function listNoodimeisterFiles(accessToken, options = {}) {
 }
 
 /**
+ * Kustuta fail Google Drive'ist.
+ * @param {string} accessToken
+ * @param {string} fileId
+ * @returns {Promise<void>}
+ */
+export async function deleteFile(accessToken, fileId) {
+  const res = await fetch(`${DRIVE_API_URL}/${fileId}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${accessToken}` }
+  });
+  if (!res.ok) {
+    if (res.status === 401) throw new Error('Token aegunud. Logi uuesti sisse.');
+    throw new Error('Faili kustutamine ebaõnnestus');
+  }
+}
+
+/**
  * Tagastab kausta nime (metadata).
  * @param {string} accessToken
  * @param {string} folderId

@@ -213,6 +213,25 @@ export async function uploadFileToFolder(token, folderId, fileName, content, con
   return body;
 }
 
+/**
+ * Kustuta fail OneDrive'ist.
+ * @param {string} token
+ * @param {string} fileId
+ * @returns {Promise<void>}
+ */
+export async function deleteFile(token, fileId) {
+  if (!token) throw new Error('Microsofti token puudub.');
+  const res = await fetch(`${GRAPH_ROOT}/me/drive/items/${encodeURIComponent(fileId)}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    const msg = body?.error?.message || body?.message || `HTTP ${res.status}`;
+    throw new Error(msg);
+  }
+}
+
 /** Loe OneDrive'i faili sisu (tekstina). Kasutada töö avamiseks /app?fileId=...&cloud=onedrive. */
 export async function getFileContent(token, fileId) {
   if (!token) throw new Error('Microsofti token puudub.');

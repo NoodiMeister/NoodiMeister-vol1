@@ -15,18 +15,18 @@ export default function HinnakiriPage() {
   const total = calcTotal(months);
   const isValid = total !== null;
   return (
-    <div className="min-h-screen flex flex-col bg-gradient-to-br from-amber-50 via-orange-50 to-amber-100">
+    <div className="min-h-screen flex flex-col bg-gradient-to-br from-amber-50 via-orange-50 to-amber-100 dark:bg-black">
       {/* Header */}
-      <header className="flex-shrink-0 border-b border-amber-200/60 bg-white/70 backdrop-blur-sm sticky top-0 z-10">
+      <header className="flex-shrink-0 border-b border-amber-200/60 dark:border-white/20 bg-white/70 dark:bg-black/90 backdrop-blur-sm sticky top-0 z-10">
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
           <Link to="/" className="flex items-center">
             <img src="/logo.png" alt="NoodiMeister" className="h-9 w-auto" />
           </Link>
           <nav className="flex items-center gap-3">
-            <Link to="/" className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-amber-800 font-medium hover:bg-amber-100 transition-colors">
+            <Link to="/" className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-amber-800 dark:text-white font-medium hover:bg-amber-100 dark:hover:bg-white/10 transition-colors">
               Avaleht
             </Link>
-            <Link to="/login" className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-amber-800 font-medium hover:bg-amber-100 transition-colors">
+            <Link to="/login" className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-amber-800 dark:text-white font-medium hover:bg-amber-100 dark:hover:bg-white/10 transition-colors">
               <LogIn className="w-4 h-4" /> Logi sisse
             </Link>
             <Link to="/registreeru" className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-amber-600 text-white font-semibold hover:bg-amber-500 shadow-md transition-all">
@@ -39,24 +39,24 @@ export default function HinnakiriPage() {
       <main className="flex-1 px-6 py-12 sm:py-16">
         <section className="max-w-5xl mx-auto">
           <div className="text-center mb-12">
-            <h1 className="text-3xl sm:text-4xl font-bold text-amber-900 mb-3" style={{ fontFamily: 'Georgia, serif' }}>
+            <h1 className="text-3xl sm:text-4xl font-bold text-amber-900 dark:text-white mb-3" style={{ fontFamily: 'Georgia, serif' }}>
               Hinnakiri ja toetamine
             </h1>
-            <p className="text-lg text-amber-800/90 max-w-2xl mx-auto">
+            <p className="text-lg text-amber-800/90 dark:text-white/90 max-w-2xl mx-auto">
               Igal kasutajal on võimalik NoodiMeistri arendamist toetada vastavalt sellele, mitu kuud soovid rakendust proovida ja katsetada. Toetuse ajal on sul täisfunktsioon; loodud tööd jäävad alles ka pärast toetuse lõppu.
             </p>
           </div>
 
           {/* Vali toetamise kuude arv */}
-          <div className="rounded-2xl border-2 border-amber-500 bg-white shadow-lg shadow-amber-200/40 p-6 sm:p-8 mb-12 max-w-xl mx-auto">
-            <h2 className="text-xl font-bold text-amber-900 mb-2 text-center" style={{ fontFamily: 'Georgia, serif' }}>
+          <div className="rounded-2xl border-2 border-amber-500 dark:border-white/30 bg-white dark:bg-zinc-900 shadow-lg shadow-amber-200/40 dark:shadow-none p-6 sm:p-8 mb-12 max-w-xl mx-auto">
+            <h2 className="text-xl font-bold text-amber-900 dark:text-white mb-2 text-center" style={{ fontFamily: 'Georgia, serif' }}>
               Vali toetamise periood
             </h2>
-            <p className="text-sm text-amber-700/90 text-center mb-6">
+            <p className="text-sm text-amber-700/90 dark:text-white/80 text-center mb-6">
               Sisesta, mitu kuud soovid ühekordselt toetada (1–60 kuud). Täisfunktsioon kogu valitud perioodi vältel.
             </p>
             <div className="mb-4">
-              <label htmlFor="hinnakiri-kuud" className="block text-sm font-semibold text-amber-900 mb-2">
+              <label htmlFor="hinnakiri-kuud" className="block text-sm font-semibold text-amber-900 dark:text-white mb-2">
                 Kuude arv
               </label>
               <input
@@ -71,13 +71,13 @@ export default function HinnakiriPage() {
                   if (v === '' || !Number.isFinite(n)) return;
                   setMonths(Math.max(1, Math.min(60, n)));
                 }}
-                className="w-full px-4 py-3 rounded-xl border-2 border-amber-200 bg-white text-amber-900 text-lg font-semibold focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+                className="w-full px-4 py-3 rounded-xl border-2 border-amber-200 dark:border-white/30 bg-white dark:bg-black/50 text-amber-900 dark:text-white text-lg font-semibold focus:ring-2 focus:ring-amber-500 focus:border-amber-500 dark:focus:ring-white/30 dark:focus:border-white/30"
               />
               <p className="mt-1 text-xs text-amber-700/80">
                 {PRICE_PER_MONTH} € kuus. 12 kuud soodushinnaga {DISCOUNT_12_MONTHS} € kokku.
               </p>
             </div>
-            <ul className="space-y-2 mb-6 text-sm text-amber-800">
+            <ul className="space-y-2 mb-6 text-sm text-amber-800 dark:text-white">
               <li className="flex items-start gap-2">
                 <Check className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
                 <span>Piiramatu arv ridu ja takte</span>
@@ -91,11 +91,11 @@ export default function HinnakiriPage() {
                 <span>Toetad NoodiMeistri arendamist</span>
               </li>
             </ul>
-            <div className="rounded-xl bg-amber-50/80 border border-amber-200/60 p-4 mb-6">
-              <p className="text-sm text-amber-800/90">
+            <div className="rounded-xl bg-amber-50/80 dark:bg-white/10 border border-amber-200/60 dark:border-white/20 p-4 mb-6">
+              <p className="text-sm text-amber-800/90 dark:text-white">
                 {months} {months === 1 ? 'kuu' : 'kuud'} täisfunktsiooni
               </p>
-              <p className="text-2xl font-bold text-amber-900">
+              <p className="text-2xl font-bold text-amber-900 dark:text-white">
                 Kokku: {isValid ? `${total} €` : '—'}
               </p>
               {months === 12 && isValid && (
