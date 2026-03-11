@@ -79,3 +79,35 @@ export async function listNoodimeisterFilesFromOneDrive(token) {
   }
 }
 
+/**
+ * Upload a file to OneDrive root (small files, up to ~250 MB).
+ * Requires scope Files.ReadWrite (or Files.ReadWrite.AppFolder).
+ * PUT /me/drive/root:/fileName:/content
+ */
+export async function uploadFileToRoot(token, fileName, content, contentType = 'application/json') {
+  if (!token) throw new Error('Microsofti token puudub (proovi uuesti sisse logida Microsoftiga).');
+  const path = `/me/drive/root:/${encodeURIComponent(fileName)}:/content`;
+  const res = await fetch(`${GRAPH_ROOT}${path}`, {
+    method: 'PUT',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': contentType,
+    },
+    body: typeof content === 'string' ? content : JSON.stringify(content),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const msg =
+      body?.error?.message ||
+      body?.message ||
+      (res.status === 403
+        ? 'Õigused OneDrive\'i salvestamiseks puuduvad (võib vajada Files.ReadWrite või uut sisselogimist).'
+        : `HTTP ${res.status}`);
+    const err = new Error(msg);
+    err.status = res.status;
+    err.body = body;
+    throw err;
+  }
+  return body;
+}
+

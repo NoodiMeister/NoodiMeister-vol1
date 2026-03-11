@@ -32,24 +32,67 @@ function getMicrosoftRedirectUri() {
   }
 }
 
-/** Wait for MSAL CDN script to set window.msal (poll up to 10s). */
+const MSAL_CDN_URLS = [
+  'https://alcdn.msauth.net/browser/2.38.0/js/msal-browser.min.js',
+  'https://cdn.jsdelivr.net/npm/@azure/msal-browser@2.38.0/dist/msal-browser.min.js',
+];
+
+/** Load one MSAL script; on failure try next URL. */
+function loadMsalScript(urls, index = 0) {
+  if (index >= urls.length) return Promise.reject(new Error('MSAL script failed to load'));
+  const url = urls[index];
+  if (document.querySelector(`script[src="${url}"]`)) return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = url;
+    script.crossOrigin = 'anonymous';
+    script.onload = () => resolve();
+    script.onerror = () => {
+      loadMsalScript(urls, index + 1).then(resolve).catch(reject);
+    };
+    document.head.appendChild(script);
+  });
+}
+
+/** Ensure MSAL script is in the page; if not, add it dynamically (helps when index.html script is blocked). */
+function ensureMsalScriptLoaded() {
+  if (window.msal?.PublicClientApplication) return Promise.resolve();
+  return loadMsalScript(MSAL_CDN_URLS);
+}
+
+/** Wait for window.msal (poll up to 12s). Tries dynamic script load once if still missing after 10s. */
 function waitForMsal() {
   if (typeof window === 'undefined') return Promise.resolve(false);
   if (window.msal?.PublicClientApplication) return Promise.resolve(true);
   return new Promise((resolve) => {
     let attempts = 0;
     const maxAttempts = 50;
-    const t = setInterval(() => {
+    const interval = setInterval(() => {
       attempts++;
       if (window.msal?.PublicClientApplication) {
-        clearInterval(t);
+        clearInterval(interval);
         resolve(true);
         return;
       }
       if (attempts >= maxAttempts) {
-        clearInterval(t);
-        console.error('[CloudLogin] MSAL CDN script ei laadinud aja jooksul.');
-        resolve(false);
+        clearInterval(interval);
+        ensureMsalScriptLoaded()
+          .then(() => {
+            const again = setInterval(() => {
+              if (window.msal?.PublicClientApplication) {
+                clearInterval(again);
+                resolve(true);
+              }
+            }, 200);
+            setTimeout(() => {
+              clearInterval(again);
+              resolve(!!window.msal?.PublicClientApplication);
+            }, 4000);
+          })
+          .catch(() => {
+            console.error('[CloudLogin] MSAL CDN script ei laadinud.');
+            resolve(false);
+          });
       }
     }, 200);
   });
@@ -292,7 +335,7 @@ function useCloudLoginWithProvider(mode = 'login', stayLoggedIn = false, onError
       // Only User.Read for sign-in so users can consent without org admin. Request Files.ReadWrite later when using OneDrive.
       const loginScopes = ['User.Read'];
       const msal = await ensureMsalReady();
-      if (!msal) throw new Error('Microsofti sisselogimise teek ei laadinud. Lülita reklaamide blokeerija välja sellel lehel või proovi teist brauserit.');
+      if (!msal) throw new Error('Microsofti sisselogimise teek ei laadinud. Lülita reklaamide või skriptide blokeerija välja sellel lehel või proovi teist brauserit või privaatakent.');
 
       await msal.loginRedirect({
         scopes: loginScopes,
@@ -306,8 +349,7 @@ function useCloudLoginWithProvider(mode = 'login', stayLoggedIn = false, onError
         const msg = isInteractionInProgress
           ? 'Sisselogimise aken on juba avatud või eelmine proovimine ei lõppenud. Sulge kõik Microsofti aknad, oota mõni sekund ja proovi uuesti.'
           : (err?.message || err?.errorMessage || err?.error_description || (err && typeof err === 'object' ? JSON.stringify(err) : String(err)));
-        const popupHint = ' Kui brauser avas Google otsingu või tühja lehe: luba selle saidi hüpikaknad (pop-up) ja proovi uuesti.';
-        alert('Sisselogimise viga: ' + msg + popupHint);
+        alert('Sisselogimise viga: ' + msg);
         console.error('[CloudLogin] Microsoft OAuth viga:', err);
         const payload = formatAuthError('Microsoft OAuth', err && typeof err === 'object' ? err : new Error(String(err)));
         if (onError) onError(payload);
