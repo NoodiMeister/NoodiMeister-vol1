@@ -63,7 +63,10 @@ export function AuthErrorBlock({ message, errorDetail = null, isSuccess = false 
           <span>Viga on vastuvõetud, töödeldud, parandatud ja testitud. Proovi uuesti sisselogimist.</span>
         </div>
       )}
-      <div className="break-words">{message}</div>
+      <div className={`flex items-start gap-2 break-words ${isSuccess ? 'font-medium' : ''}`}>
+        {isSuccess && <CheckCircle2 className="w-5 h-5 flex-shrink-0 mt-0.5 text-emerald-600" aria-hidden />}
+        <span>{message}</span>
+      </div>
       {showCopy && (
         <div className="mt-2 pt-2 border-t border-red-200/60">
           {copied && (

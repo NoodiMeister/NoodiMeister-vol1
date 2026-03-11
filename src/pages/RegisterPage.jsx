@@ -64,9 +64,9 @@ export default function RegisterPage() {
       }
       users.push({ name: form.name, email: form.email, password: form.password });
       localStorage.setItem('noodimeister-users', JSON.stringify(users));
-      setMessage('Konto loodud. Saad nüüd sisse logida.');
+      setMessage('Registreerumine õnnestus! Konto on loodud. Suuname sisselogimise lehele…');
       setErrorDetail(null);
-      setTimeout(() => navigate('/login'), 1500);
+      setTimeout(() => navigate('/login'), 2200);
     } catch (err) {
       const payload = formatAuthError('registreerimine', err);
       setError(payload.fullMessage, payload);
@@ -107,7 +107,7 @@ export default function RegisterPage() {
               <AuthErrorBlock
                 message={message}
                 errorDetail={errorDetail}
-                isSuccess={message.startsWith('Konto loodud')}
+                isSuccess={message.startsWith('Registreerumine õnnestus') || message.startsWith('Konto loodud')}
               />
             )}
             <div>

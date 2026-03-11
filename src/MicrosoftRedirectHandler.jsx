@@ -142,6 +142,7 @@ export default function MicrosoftRedirectHandler() {
               return;
             }
             setStatus('redirect');
+            try { sessionStorage.setItem('noodimeister-show-welcome', '1'); } catch (_) {}
             redirectToTood();
           });
       })

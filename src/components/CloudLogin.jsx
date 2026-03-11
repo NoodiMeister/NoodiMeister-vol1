@@ -263,6 +263,7 @@ function useCloudLoginWithProvider(mode = 'login', stayLoggedIn = false, onError
               return;
             }
             console.log('[CloudLogin] Auth kinnitatud, suuname /tood poole (Minu tööd)');
+            try { sessionStorage.setItem('noodimeister-show-welcome', '1'); } catch (_) {}
             requestAnimationFrame(() => {
               setTimeout(redirectToTood, 50);
             });
@@ -337,6 +338,8 @@ function useCloudLoginWithProvider(mode = 'login', stayLoggedIn = false, onError
       const msal = await ensureMsalReady();
       if (!msal) throw new Error('Microsofti sisselogimise teek ei laadinud. Lülita reklaamide või skriptide blokeerija välja sellel lehel või proovi teist brauserit või privaatakent.');
 
+      // Clear any leftover redirect state so interaction_in_progress does not block the next attempt
+      await msal.handleRedirectPromise().catch(() => null);
       await msal.loginRedirect({
         scopes: loginScopes,
         prompt: 'select_account',
