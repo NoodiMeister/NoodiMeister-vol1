@@ -3,7 +3,6 @@ import { useGoogleLogin } from '@react-oauth/google';
 import { useNavigate } from 'react-router-dom';
 import { getStorageForLogin, getStorageForRead, getLoggedInUser, isLoggedIn } from '../services/authStorage';
 import { formatAuthError } from '../utils/authError';
-import { PublicClientApplication } from '@azure/msal-browser';
 
 const googleClientId = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_GOOGLE_CLIENT_ID) || '';
 
@@ -33,15 +32,19 @@ function getMicrosoftRedirectUri() {
   }
 }
 
-/** Promise that resolves to an already-initialized MSAL instance. Keyed by origin so 127.0.0.1 vs localhost get correct redirect URI. */
+/** Promise that resolves to an already-initialized MSAL instance (global msal from CDN). */
 let msalPromiseByOrigin = {};
 function getOrCreateMsalPromise() {
   if (typeof window === 'undefined' || !microsoftClientId) return null;
+  if (!window.msal || !window.msal.PublicClientApplication) {
+    console.error('[CloudLogin] MSAL CDN script (window.msal) puudub.');
+    return null;
+  }
   const origin = window.location.origin;
   if (msalPromiseByOrigin[origin]) return msalPromiseByOrigin[origin];
   const redirectUri = getMicrosoftRedirectUri();
   const authority = `https://login.microsoftonline.com/${encodeURIComponent(microsoftTenantId || 'common')}`;
-  const instance = new PublicClientApplication({
+  const instance = new window.msal.PublicClientApplication({
     auth: {
       clientId: microsoftClientId,
       authority,
@@ -52,7 +55,6 @@ function getOrCreateMsalPromise() {
       storeAuthStateInCookie: false,
     },
   });
-  // MSAL v3+: must await initialize() before any other API (e.g. loginPopup).
   const promise = instance.initialize().then(() => instance).catch((e) => {
     delete msalPromiseByOrigin[origin];
     throw e;
