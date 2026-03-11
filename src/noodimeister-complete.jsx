@@ -319,10 +319,24 @@ function LoggedInUser({ icons, t }) {
   return (
     <div className="flex items-center gap-2 ml-2 pl-4 border-l border-amber-600/50">
       {UserIcon && <UserIcon className="w-4 h-4 text-amber-200" />}
-      <span className="text-sm font-medium text-amber-100 max-w-[120px] truncate" title={user.email}>
-        {user.name || user.email}
-      </span>
       <button
+        type="button"
+        onClick={() => navigate('/konto')}
+        className="text-sm font-medium text-amber-100 max-w-[120px] truncate hover:underline text-left"
+        title={user.email}
+      >
+        {user.name || user.email}
+      </button>
+      <button
+        type="button"
+        onClick={() => navigate('/konto')}
+        className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium bg-amber-800/60 text-amber-100 hover:bg-amber-700 hover:text-white transition-colors"
+        title={t('user.myAccount')}
+      >
+        {t('user.myAccount')}
+      </button>
+      <button
+        type="button"
         onClick={handleLogout}
         className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-amber-800/80 text-amber-100 hover:bg-amber-700 hover:text-white transition-colors"
         title={t('user.logoutTitle')}
@@ -894,6 +908,7 @@ function NoodiMeisterCore({ icons }) {
   // Stage V: Time signature display mode
   const [timeSignatureMode, setTimeSignatureMode] = useState('pedagogical'); // 'classic' or 'pedagogical'
   const [timeSignatureEditField, setTimeSignatureEditField] = useState('numerator'); // 'numerator' or 'denominator'
+  const [timeSignatureSize, setTimeSignatureSize] = useState(16); // Time signature font size in figurenotation (12–48), one value per project
 
   // Stage V: Selection and editing state
   const [selectedNoteIndex, setSelectedNoteIndex] = useState(-1);
@@ -2115,6 +2130,7 @@ function NoodiMeisterCore({ icons }) {
     playNoteOnInsert,
     figurenotesSize,
     figurenotesStems,
+    timeSignatureSize,
     showBarNumbers,
     showRhythmSyllables,
     showAllNoteLabels,
@@ -2140,7 +2156,7 @@ function NoodiMeisterCore({ icons }) {
     pageDesignLayer,
     visibleStaves: visibleStaves.length === staves.length ? visibleStaves : staves.map(() => true),
     intermissionLabels
-  }), [staves, activeStaffIndex, staffYOffsets, measureStretchFactors, systemYOffsets, visibleStaves, intermissionLabels, timeSignature, timeSignatureMode, keySignature, staffLines, notationStyle, pixelsPerBeat, notationMode, instrumentNotationVariant, cursorPosition, addedMeasures, setupCompleted, songTitle, author, pickupEnabled, pickupQuantity, pickupDuration, pageOrientation, layoutMeasuresPerLine, layoutLineBreakBefore, layoutPageBreakBefore, layoutSystemGap, layoutGlobalSpacingMultiplier, viewMode, partLayoutMeasuresPerLine, partLayoutLineBreakBefore, partLayoutPageBreakBefore, showPageNavigator, pageFlowDirection, visibleToolIds, tuningReferenceNote, tuningReferenceOctave, tuningReferenceHz, playNoteOnInsert, figurenotesSize, figurenotesStems, showBarNumbers, showRhythmSyllables, showAllNoteLabels, enableEmojiOverlays, joClefStaffPosition, relativeNotationShowKeySignature, relativeNotationShowTraditionalClef, isPedagogicalProject, pedagogicalAudioBpm, pedagogicalAudioPlaybackRate, pedagogicalPlayheadStyle, pedagogicalPlayheadEmoji, pedagogicalPlayheadEmojiSize, pedagogicalPlayheadMovement, chords, textBoxes, documentFontFamily, lyricFontFamily, pageDesignDataUrl, pageDesignOpacity, pageDesignFit, pageDesignLayer]);
+  }), [staves, activeStaffIndex, staffYOffsets, measureStretchFactors, systemYOffsets, visibleStaves, intermissionLabels, timeSignature, timeSignatureMode, keySignature, staffLines, notationStyle, pixelsPerBeat, notationMode, instrumentNotationVariant, cursorPosition, addedMeasures, setupCompleted, songTitle, author, pickupEnabled, pickupQuantity, pickupDuration, pageOrientation, layoutMeasuresPerLine, layoutLineBreakBefore, layoutPageBreakBefore, layoutSystemGap, layoutGlobalSpacingMultiplier, viewMode, partLayoutMeasuresPerLine, partLayoutLineBreakBefore, partLayoutPageBreakBefore, showPageNavigator, pageFlowDirection, visibleToolIds, tuningReferenceNote, tuningReferenceOctave, tuningReferenceHz, playNoteOnInsert, figurenotesSize, figurenotesStems, timeSignatureSize, showBarNumbers, showRhythmSyllables, showAllNoteLabels, enableEmojiOverlays, joClefStaffPosition, relativeNotationShowKeySignature, relativeNotationShowTraditionalClef, isPedagogicalProject, pedagogicalAudioBpm, pedagogicalAudioPlaybackRate, pedagogicalPlayheadStyle, pedagogicalPlayheadEmoji, pedagogicalPlayheadEmojiSize, pedagogicalPlayheadMovement, chords, textBoxes, documentFontFamily, lyricFontFamily, pageDesignDataUrl, pageDesignOpacity, pageDesignFit, pageDesignLayer]);
 
   const saveToStorageSync = useCallback(() => {
     try {
@@ -2207,6 +2223,7 @@ function NoodiMeisterCore({ icons }) {
     playNoteOnInsert,
     figurenotesSize,
     figurenotesStems,
+    timeSignatureSize,
     showBarNumbers,
     showRhythmSyllables,
     showAllNoteLabels,
@@ -2235,7 +2252,7 @@ function NoodiMeisterCore({ icons }) {
     pageDesignLayer,
     visibleStaves: visibleStaves.length === staves.length ? visibleStaves : staves.map(() => true),
     intermissionLabels
-  }), [songTitle, author, notationStyle, notationMode, isPedagogicalProject, timeSignature, timeSignatureMode, keySignature, staffLines, pixelsPerBeat, instrumentNotationVariant, pickupEnabled, pickupQuantity, pickupDuration, setupCompleted, cursorPosition, addedMeasures, pageOrientation, layoutMeasuresPerLine, layoutLineBreakBefore, layoutPageBreakBefore, layoutSystemGap, layoutGlobalSpacingMultiplier, viewMode, partLayoutMeasuresPerLine, partLayoutLineBreakBefore, partLayoutPageBreakBefore, showPageNavigator, pageFlowDirection, visibleToolIds, tuningReferenceNote, tuningReferenceOctave, tuningReferenceHz, playNoteOnInsert, figurenotesSize, figurenotesStems, showBarNumbers, showRhythmSyllables, showAllNoteLabels, enableEmojiOverlays, joClefStaffPosition, relativeNotationShowKeySignature, relativeNotationShowTraditionalClef, pedagogicalAudioBpm, pedagogicalAudioPlaybackRate, pedagogicalPlayheadStyle, pedagogicalPlayheadEmoji, pedagogicalPlayheadEmojiSize, pedagogicalPlayheadMovement, staves, activeStaffIndex, staffYOffsets, measureStretchFactors, systemYOffsets, visibleStaves, intermissionLabels, chords, textBoxes, pageDesignDataUrl, pageDesignOpacity, pageDesignFit, pageDesignLayer]);
+  }), [songTitle, author, notationStyle, notationMode, isPedagogicalProject, timeSignature, timeSignatureMode, keySignature, staffLines, pixelsPerBeat, instrumentNotationVariant, pickupEnabled, pickupQuantity, pickupDuration, setupCompleted, cursorPosition, addedMeasures, pageOrientation, layoutMeasuresPerLine, layoutLineBreakBefore, layoutPageBreakBefore, layoutSystemGap, layoutGlobalSpacingMultiplier, viewMode, partLayoutMeasuresPerLine, partLayoutLineBreakBefore, partLayoutPageBreakBefore, showPageNavigator, pageFlowDirection, visibleToolIds, tuningReferenceNote, tuningReferenceOctave, tuningReferenceHz, playNoteOnInsert, figurenotesSize, figurenotesStems, timeSignatureSize, showBarNumbers, showRhythmSyllables, showAllNoteLabels, enableEmojiOverlays, joClefStaffPosition, relativeNotationShowKeySignature, relativeNotationShowTraditionalClef, pedagogicalAudioBpm, pedagogicalAudioPlaybackRate, pedagogicalPlayheadStyle, pedagogicalPlayheadEmoji, pedagogicalPlayheadEmojiSize, pedagogicalPlayheadMovement, staves, activeStaffIndex, staffYOffsets, measureStretchFactors, systemYOffsets, visibleStaves, intermissionLabels, chords, textBoxes, pageDesignDataUrl, pageDesignOpacity, pageDesignFit, pageDesignLayer]);
 
   // Download project file (future: replace with upload to Google Drive / OneDrive)
   const downloadProject = useCallback(() => {
@@ -2295,6 +2312,7 @@ function NoodiMeisterCore({ icons }) {
       if (data.pixelsPerBeat != null) setPixelsPerBeat(data.pixelsPerBeat);
       if (data.figurenotesSize != null) setFigurenotesSize(Math.max(12, Math.min(96, data.figurenotesSize)));
       if (data.figurenotesStems != null) setFigurenotesStems(!!data.figurenotesStems);
+      if (data.timeSignatureSize != null) setTimeSignatureSize(Math.max(12, Math.min(48, data.timeSignatureSize)));
       if (data.isPedagogicalProject != null) setIsPedagogicalProject(!!data.isPedagogicalProject);
       if (data.pedagogicalAudioBpm != null) setPedagogicalAudioBpm(Math.max(20, Math.min(300, data.pedagogicalAudioBpm)));
       if (data.pedagogicalAudioPlaybackRate != null) setPedagogicalAudioPlaybackRate(clampNumber(Number(data.pedagogicalAudioPlaybackRate) || 1, 0.5, 2));
@@ -2504,6 +2522,7 @@ function NoodiMeisterCore({ icons }) {
         if (data.pixelsPerBeat != null) setPixelsPerBeat(data.pixelsPerBeat);
         if (data.figurenotesSize != null) setFigurenotesSize(Math.max(12, Math.min(96, data.figurenotesSize)));
         if (data.figurenotesStems != null) setFigurenotesStems(!!data.figurenotesStems);
+        if (data.timeSignatureSize != null) setTimeSignatureSize(Math.max(12, Math.min(48, data.timeSignatureSize)));
         if (data.notationMode) setNotationMode(data.notationMode);
         if (data.instrumentNotationVariant) setInstrumentNotationVariant(data.instrumentNotationVariant);
         if (data.isPedagogicalProject != null) setIsPedagogicalProject(!!data.isPedagogicalProject);
@@ -2764,6 +2783,7 @@ function NoodiMeisterCore({ icons }) {
           else if (data.gridOnlyMode != null) setNotationStyle(data.gridOnlyMode ? 'FIGURENOTES' : 'TRADITIONAL');
           if (data.pixelsPerBeat != null) setPixelsPerBeat(data.pixelsPerBeat);
           if (data.figurenotesSize != null) setFigurenotesSize(Math.max(12, Math.min(96, data.figurenotesSize)));
+          if (data.timeSignatureSize != null) setTimeSignatureSize(Math.max(12, Math.min(48, data.timeSignatureSize)));
           if (data.notationMode) setNotationMode(data.notationMode);
           if (data.instrument) setInstrument(data.instrument);
           if (data.instrumentNotationVariant) setInstrumentNotationVariant(data.instrumentNotationVariant);
@@ -2907,7 +2927,7 @@ function NoodiMeisterCore({ icons }) {
     return () => {
       if (autoSaveTimeoutRef.current) clearTimeout(autoSaveTimeoutRef.current);
     };
-  }, [staves, activeStaffIndex, timeSignature, timeSignatureMode, keySignature, staffLines, notationStyle, pixelsPerBeat, notationMode, cursorPosition, addedMeasures, setupCompleted, songTitle, author, pickupEnabled, pickupQuantity, pickupDuration, layoutSystemGap, tuningReferenceNote, tuningReferenceOctave, tuningReferenceHz, playNoteOnInsert, figurenotesSize, figurenotesStems, showBarNumbers, joClefStaffPosition, chords, textBoxes, getPersistedState]);
+  }, [staves, activeStaffIndex, timeSignature, timeSignatureMode, keySignature, staffLines, notationStyle, pixelsPerBeat, notationMode, cursorPosition, addedMeasures, setupCompleted, songTitle, author, pickupEnabled, pickupQuantity, pickupDuration, layoutSystemGap, tuningReferenceNote, tuningReferenceOctave, tuningReferenceHz, playNoteOnInsert, figurenotesSize, figurenotesStems, timeSignatureSize, showBarNumbers, joClefStaffPosition, chords, textBoxes, getPersistedState]);
 
   // Hoiatus ja salvestamine enne sulgemist (tab/akna sulg, värskendus, navigeerimine)
   useEffect(() => {
@@ -5613,19 +5633,53 @@ function NoodiMeisterCore({ icons }) {
                 )}
               </div>
 
-              {/* Keelevalik */}
-              <div className="flex items-center gap-0.5 rounded-lg overflow-hidden border border-amber-600/50 bg-amber-900/40">
-                {LOCALES.map(({ code, name }) => (
-                  <button
-                    key={code}
-                    type="button"
-                    onClick={() => setLocale(code)}
-                    className={`px-2.5 py-1 text-xs font-medium transition-colors ${locale === code ? 'bg-amber-600 text-white' : 'text-amber-200 hover:bg-amber-800/60'}`}
-                    title={name}
-                  >
-                    {code.toUpperCase()}
-                  </button>
-                ))}
+              {/* Seaded – keel ja värvirežiim (hele/tume) */}
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => { setHeaderMenuOpen(prev => prev === 'settings' ? null : 'settings'); setFileSubmenuOpen(null); setViewSubmenuOpen(null); }}
+                  className="inline-flex items-center gap-2 px-3 py-2 rounded-lg font-semibold text-sm bg-slate-600 text-white shadow-md hover:bg-slate-500 border border-slate-700/50"
+                  title={t('file.settings')}
+                >
+                  <Settings className="w-4 h-4" />
+                  <ChevronDown className="w-4 h-4" />
+                </button>
+                {headerMenuOpen === 'settings' && (
+                  <div className="absolute left-0 top-full mt-1 min-w-[200px] py-2 rounded-lg bg-slate-700 border border-slate-600 shadow-xl z-50">
+                    <div className="px-3 py-1.5 text-xs font-semibold text-amber-200 uppercase tracking-wider">{t('app.language')}</div>
+                    <div className="flex gap-0.5 px-2 pb-2">
+                      {LOCALES.map(({ code, name }) => (
+                        <button
+                          key={code}
+                          type="button"
+                          onClick={() => { setLocale(code); setHeaderMenuOpen(null); }}
+                          className={`flex-1 px-2.5 py-1.5 text-xs font-medium rounded transition-colors ${locale === code ? 'bg-amber-600 text-white' : 'text-amber-50 hover:bg-slate-600'}`}
+                          title={name}
+                        >
+                          {code.toUpperCase()}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="border-t border-slate-600 my-1" />
+                    <div className="px-3 py-1.5 text-xs font-semibold text-amber-200 uppercase tracking-wider">{t('app.theme')}</div>
+                    <div className="flex gap-1 px-2">
+                      <button
+                        type="button"
+                        onClick={() => { dirtyRef.current = true; setThemeMode('light'); setHeaderMenuOpen(null); }}
+                        className={`flex-1 px-2.5 py-1.5 text-xs font-medium rounded transition-colors ${themeMode === 'light' ? 'bg-amber-600 text-white' : 'text-amber-50 hover:bg-slate-600'}`}
+                      >
+                        {t('theme.light')}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { dirtyRef.current = true; setThemeMode('dark'); setHeaderMenuOpen(null); }}
+                        className={`flex-1 px-2.5 py-1.5 text-xs font-medium rounded transition-colors ${themeMode === 'dark' ? 'bg-amber-600 text-white' : 'text-amber-50 hover:bg-slate-600'}`}
+                      >
+                        {t('theme.dark')}
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
               <LoggedInUser icons={icons} t={t} />
             {!isLoggedIn() && (
@@ -5849,6 +5903,22 @@ function NoodiMeisterCore({ icons }) {
                       </div>
                     </div>
                     <div className="text-xs text-center text-amber-600 mt-2">{t('timesig.tabHint')}</div>
+                    {notationStyle === 'FIGURENOTES' && (
+                      <div className="flex items-center gap-2 mt-3 pt-3 border-t border-amber-200">
+                        <label htmlFor="timesig-size" className="text-xs font-semibold text-amber-900 shrink-0">{t('timesig.size')}</label>
+                        <input
+                          id="timesig-size"
+                          type="range"
+                          min={12}
+                          max={48}
+                          step={1}
+                          value={timeSignatureSize}
+                          onChange={(e) => { const v = parseInt(e.target.value, 10); if (!isNaN(v)) { dirtyRef.current = true; setTimeSignatureSize(Math.max(12, Math.min(48, v))); } }}
+                          className="flex-1 h-2 rounded-lg appearance-none bg-amber-100 accent-amber-600"
+                        />
+                        <span className="text-xs text-amber-800 w-8">{timeSignatureSize}</span>
+                      </div>
+                    )}
                   </div>
                 )}
                 {(activeToolbox === 'pianoKeyboard' || (pianoStripVisible && !activeToolbox)) && <p className="text-xs text-amber-700">{t('layout.keyboardHint')}</p>}
@@ -6707,6 +6777,7 @@ function NoodiMeisterCore({ icons }) {
                   chords={chords}
                   figurenotesSize={figurenotesSize}
                   figurenotesStems={figurenotesStems}
+                  timeSignatureSize={timeSignatureSize}
                   themeColors={themeColors}
                   pedagogicalPlayheadStyle={pedagogicalPlayheadStyle}
                   pedagogicalPlayheadEmoji={pedagogicalPlayheadEmoji}
@@ -7000,7 +7071,7 @@ function getFingeringForNote(pitch, octave, instrumentId) {
 }
 
 // Timeline Component – multi-system layout (VexFlow loogika). (PAGE_BREAK_GAP on defineeritud üleval.)
-function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, pageWidth, cursorPosition, notationMode, staffLines, clefType, keySignature = 'C', relativeNotationShowKeySignature = false, relativeNotationShowTraditionalClef = false, onJoClefPositionChange, joClefFocused = false, onJoClefFocus, instrument = 'piano', instrumentNotationVariant = 'standard', instrumentConfig = {}, showBarNumbers = true, showRhythmSyllables = false, joClefStaffPosition: joClefStaffPositionProp, showAllNoteLabels = false, enableEmojiOverlays = true, onNoteTeacherLabelChange, onNoteLabelClick, chords = [], isDotted, isRest, selectedDuration, noteInputMode, selectedNoteIndex, isNoteSelected, notes: allNotes, onStaffAddNote, onNoteClick, onNotePitchChange, ghostPitch, ghostOctave, onFigureBeatClick, notationStyle, layoutMeasuresPerLine = 4, layoutLineBreakBefore = [], layoutPageBreakBefore = [], layoutSystemGap = 120, layoutGlobalSpacingMultiplier = 1, systems: systemsProp, baseYOffset = 0, isActiveStaff = true, staffCount = 1, staffHeight: staffHeightProp, figurenotesSize = 16, figurenotesStems = false, themeColors: themeColorsProp, pedagogicalPlayheadStyle = 'line', pedagogicalPlayheadEmoji = '🎵', pedagogicalPlayheadEmojiSize = 32, pedagogicalPlayheadMovement = 'arch', isPedagogicalAudioPlaying = false, isExportingAnimation = false, exportCursorRef, scoreContainerRef, pageFlowDirection = 'vertical', isFirstInBraceGroup = false, braceGroupSize = 0, lyricFontFamily = 'sans-serif', translateLabel, showLayoutBreakIcons = false, showStaffSpacerHandles = false, onSystemYOffsetChange, onToggleLineBreakAfter }) {
+function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, pageWidth, cursorPosition, notationMode, staffLines, clefType, keySignature = 'C', relativeNotationShowKeySignature = false, relativeNotationShowTraditionalClef = false, onJoClefPositionChange, joClefFocused = false, onJoClefFocus, instrument = 'piano', instrumentNotationVariant = 'standard', instrumentConfig = {}, showBarNumbers = true, showRhythmSyllables = false, joClefStaffPosition: joClefStaffPositionProp, showAllNoteLabels = false, enableEmojiOverlays = true, onNoteTeacherLabelChange, onNoteLabelClick, chords = [], isDotted, isRest, selectedDuration, noteInputMode, selectedNoteIndex, isNoteSelected, notes: allNotes, onStaffAddNote, onNoteClick, onNotePitchChange, ghostPitch, ghostOctave, onFigureBeatClick, notationStyle, layoutMeasuresPerLine = 4, layoutLineBreakBefore = [], layoutPageBreakBefore = [], layoutSystemGap = 120, layoutGlobalSpacingMultiplier = 1, systems: systemsProp, baseYOffset = 0, isActiveStaff = true, staffCount = 1, staffHeight: staffHeightProp, figurenotesSize = 16, figurenotesStems = false, timeSignatureSize = 16, themeColors: themeColorsProp, pedagogicalPlayheadStyle = 'line', pedagogicalPlayheadEmoji = '🎵', pedagogicalPlayheadEmojiSize = 32, pedagogicalPlayheadMovement = 'arch', isPedagogicalAudioPlaying = false, isExportingAnimation = false, exportCursorRef, scoreContainerRef, pageFlowDirection = 'vertical', isFirstInBraceGroup = false, braceGroupSize = 0, lyricFontFamily = 'sans-serif', translateLabel, showLayoutBreakIcons = false, showStaffSpacerHandles = false, onSystemYOffsetChange, onToggleLineBreakAfter }) {
   if (typeof GLOBAL_NOTATION_CONFIG === 'undefined' || !GLOBAL_NOTATION_CONFIG || GLOBAL_NOTATION_CONFIG.EMOJIS === false) return null;
   const themeColors = themeColorsProp || { staffLineColor: '#000', noteFill: '#1a1a1a', textColor: '#1a1a1a', scoreBg: '#fffbf0', isDark: false };
   const safeKey = keySignature ?? 'C';
@@ -7513,6 +7584,7 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
           chords={chords}
           figurenotesSize={figurenotesSize}
           figurenotesStems={figurenotesStems}
+          timeSignatureSize={timeSignatureSize}
           keySignature={safeKey}
           isNoteSelected={isNoteSelected}
           onNoteClick={onNoteClick}

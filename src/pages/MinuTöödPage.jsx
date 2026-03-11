@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { FilePlus, FolderOpen, Cloud, LogIn, Loader2, Globe, User, Settings } from 'lucide-react';
+import { FilePlus, FolderOpen, Cloud, LogIn, Loader2, Globe, User, Settings, ChevronDown } from 'lucide-react';
 import * as googleDrive from '../services/googleDrive';
 import * as oneDrive from '../services/oneDrive';
 import * as authStorage from '../services/authStorage';
-import { LOCALE_STORAGE_KEY, DEFAULT_LOCALE, LOCALES } from '../i18n';
+import { LOCALE_STORAGE_KEY, DEFAULT_LOCALE, LOCALES, getTranslations } from '../i18n';
+import { useNoodimeisterOptional } from '../store/NoodimeisterContext';
 
 /** Error Boundary: sisselogimise järgne vaade – punane kast veateatega */
 class MinuToodErrorBoundary extends React.Component {
@@ -64,6 +65,22 @@ export default function MinuTöödPage() {
       return DEFAULT_LOCALE;
     }
   });
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const settingsRef = useRef(null);
+  const store = useNoodimeisterOptional();
+  const themeMode = store?.theme?.mode ?? 'light';
+  const setThemeMode = (mode) => { if (store?.setTheme) store.setTheme(mode); };
+  const t = getTranslations(locale);
+
+  useEffect(() => {
+    const close = (e) => {
+      if (settingsRef.current && !settingsRef.current.contains(e.target)) setSettingsOpen(false);
+    };
+    if (settingsOpen) {
+      document.addEventListener('click', close);
+      return () => document.removeEventListener('click', close);
+    }
+  }, [settingsOpen]);
 
   useEffect(() => {
     try {
@@ -159,19 +176,56 @@ export default function MinuTöödPage() {
           <Link to="/" className="flex items-center">
             <img src="/logo.png" alt="NoodiMeister" className="h-9 w-auto" />
           </Link>
-          <nav className="flex items-center gap-3 flex-wrap">
-            <span className="flex items-center gap-1 text-amber-700">
-              {LOCALES.map(({ code, name }) => (
-                <button
-                  key={code}
-                  type="button"
-                  onClick={() => setLocale(code)}
-                  className={`px-2 py-1 rounded text-sm font-medium ${locale === code ? 'bg-amber-200 text-amber-900' : 'hover:bg-amber-100 text-amber-800'}`}
-                >
-                  {name}
-                </button>
-              ))}
-            </span>
+          <nav className="flex items-center gap-3 flex-wrap" ref={settingsRef}>
+            {/* Seaded – keel ja värvirežiim */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setSettingsOpen((v) => !v)}
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg font-medium text-sm bg-amber-100/80 text-amber-900 border border-amber-200 hover:bg-amber-200/80 transition-colors"
+                title={t['settings.title'] || 'Seaded'}
+                aria-expanded={settingsOpen}
+              >
+                <Settings className="w-4 h-4" />
+                <ChevronDown className={`w-4 h-4 transition-transform ${settingsOpen ? 'rotate-180' : ''}`} />
+              </button>
+              {settingsOpen && (
+                <div className="absolute right-0 top-full mt-1 min-w-[200px] py-2 rounded-xl bg-white border-2 border-amber-200 shadow-xl z-50">
+                  <div className="px-3 py-1.5 text-xs font-semibold text-amber-700 uppercase tracking-wider">{t['app.language'] || 'Keel'}</div>
+                  <div className="flex gap-0.5 px-2 pb-2">
+                    {LOCALES.map(({ code, name }) => (
+                      <button
+                        key={code}
+                        type="button"
+                        onClick={() => { setLocale(code); setSettingsOpen(false); }}
+                        className={`flex-1 px-2.5 py-1.5 text-xs font-medium rounded-lg transition-colors ${locale === code ? 'bg-amber-500 text-white' : 'text-amber-800 hover:bg-amber-100'}`}
+                        title={name}
+                      >
+                        {name}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="border-t border-amber-200 my-1" />
+                  <div className="px-3 py-1.5 text-xs font-semibold text-amber-700 uppercase tracking-wider">{t['app.theme'] || 'Värvirežiim'}</div>
+                  <div className="flex gap-1 px-2">
+                    <button
+                      type="button"
+                      onClick={() => { setThemeMode('light'); setSettingsOpen(false); }}
+                      className={`flex-1 px-2.5 py-1.5 text-xs font-medium rounded-lg transition-colors ${themeMode === 'light' ? 'bg-amber-500 text-white' : 'text-amber-800 hover:bg-amber-100'}`}
+                    >
+                      {t['theme.light'] || 'Hele'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setThemeMode('dark'); setSettingsOpen(false); }}
+                      className={`flex-1 px-2.5 py-1.5 text-xs font-medium rounded-lg transition-colors ${themeMode === 'dark' ? 'bg-amber-500 text-white' : 'text-amber-800 hover:bg-amber-100'}`}
+                    >
+                      {t['theme.dark'] || 'Tume'}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
             <Link to="/app" className="text-amber-700 hover:text-amber-900 p-1.5 rounded-lg hover:bg-amber-100 transition-colors" aria-label="Tööriist" title="Tööriist">
               <Globe className="w-5 h-5" />
             </Link>

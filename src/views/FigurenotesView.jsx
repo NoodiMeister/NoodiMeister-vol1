@@ -88,6 +88,7 @@ export function FigurenotesView({
   chords = [],
   figurenotesSize = 16,
   figurenotesStems = false,
+  timeSignatureSize,
   keySignature = 'C',
   isNoteSelected,
   onNoteClick,
@@ -121,7 +122,7 @@ export function FigurenotesView({
             )}
 
             {sys.systemIndex === 0 && (
-              <g transform={`translate(0, ${sys.yOffset})`}>{renderTimeSignature(timeSignature, timeSignatureMode, centerY, figurenotesSize)}</g>
+              <g transform={`translate(0, ${sys.yOffset})`}>{renderTimeSignature(timeSignature, timeSignatureMode, centerY, timeSignatureSize ?? 16)}</g>
             )}
 
             {sys.measureIndices.map((measureIdx, j) => {

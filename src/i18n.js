@@ -21,6 +21,7 @@ const translations = {
     // Logi välja / kasutaja
     'user.logout': 'Logi välja',
     'user.logoutTitle': 'Logi välja (ilma salvestamiseta)',
+    'user.myAccount': 'Minu konto',
     // Laadimine
     'loading.tools': 'Laen tööriista…',
     // Tööriistariba
@@ -50,6 +51,7 @@ const translations = {
     'timesig.beats': 'Löögid',
     'timesig.unit': 'Ühik',
     'timesig.tabHint': 'Tab/←→ vahetab välja • ↑↓ muudab väärtust',
+    'timesig.size': 'Taktimõõdu suurus',
     // Tööriistakastid – nimed
     'toolbox.rhythm': 'Rütm',
     'toolbox.timeSignature': 'Taktimõõt',
@@ -351,6 +353,8 @@ const translations = {
     'theme.mode': 'Režiim',
     'theme.light': 'Hele',
     'theme.dark': 'Tume',
+    'app.language': 'Keel',
+    'app.theme': 'Värvirežiim',
     'teacher.rhythmSyllables': 'Rütminimetused (Kodály: TA, TI-TI jne)',
     'teacher.rhythmSyllablesHint': 'Õpetaja režiim: kuvab noodi või rütmigrupi all rütmisilbid (TA, TI TI, TI RI TI RI jne). Vaikimisi peidetud.',
     'teacher.showAllLabels': 'Näita nimesid',
@@ -462,6 +466,7 @@ const translations = {
     'common.unsavedLeave': 'Do you want to close the page without saving? Unsaved work will be lost.',
     'user.logout': 'Log out',
     'user.logoutTitle': 'Log out (without saving)',
+    'user.myAccount': 'My account',
     'loading.tools': 'Loading tools…',
     'toolbar.rhythm': 'Rhythm',
     'toolbar.selected': 'Selected',
@@ -488,6 +493,7 @@ const translations = {
     'timesig.beats': 'Beats',
     'timesig.unit': 'Unit',
     'timesig.tabHint': 'Tab/←→ switch field • ↑↓ change value',
+    'timesig.size': 'Time signature size',
     'toolbox.rhythm': 'Rhythm',
     'toolbox.timeSignature': 'Time signature',
     'toolbox.clefs': 'Clefs',
@@ -774,6 +780,8 @@ const translations = {
     'theme.mode': 'Mode',
     'theme.light': 'Light',
     'theme.dark': 'Dark',
+    'app.language': 'Language',
+    'app.theme': 'Theme',
     'teacher.rhythmSyllables': 'Rhythm syllables (Kodály: TA, TI-TI, etc.)',
     'teacher.rhythmSyllablesHint': 'Teacher mode: show rhythm syllable names below each note or beamed group. Hidden by default.',
     'teacher.showAllLabels': 'Show names',
