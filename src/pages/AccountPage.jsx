@@ -8,11 +8,15 @@ import {
   getStoredTokenFromAuth,
   getStoredMicrosoftTokenFromAuth,
   getGoogleSaveFolderId,
+  getGoogleSaveFolders,
   setGoogleSaveFolderId,
+  setGoogleSaveFoldersForCurrentUser,
   clearGoogleSaveFolder,
   updateGoogleSaveFolderName,
   getOneDriveSaveFolderId,
+  getOneDriveSaveFolders,
   setOneDriveSaveFolderId,
+  setOneDriveSaveFoldersForCurrentUser,
   clearOneDriveSaveFolder,
   updateOneDriveSaveFolderName,
   clearAuth,
@@ -26,6 +30,8 @@ import {
   getItemName as oneDriveGetItemName,
   deleteFile as oneDriveDeleteFile,
   renameItem as oneDriveRenameItem,
+  getSaveFoldersConfig as oneDriveGetSaveFoldersConfig,
+  setSaveFoldersConfig as oneDriveSetSaveFoldersConfig,
 } from '../services/oneDrive';
 import { AppLogo } from '../components/AppLogo';
 
@@ -120,6 +126,32 @@ export default function AccountPage() {
     setGoogleSaveFolderIdState(getGoogleSaveFolderId());
     setOneDriveSaveFolderIdState(getOneDriveSaveFolderId());
   }, []);
+
+  useEffect(() => {
+    if (!googleToken && !microsoftToken) return;
+    let cancelled = false;
+    (async () => {
+      if (googleToken) {
+        try {
+          const cloud = await googleDrive.getSaveFoldersConfig(googleToken);
+          if (!cancelled && cloud.length > 0) {
+            setGoogleSaveFoldersForCurrentUser(cloud);
+            setGoogleSaveFolderIdState(getGoogleSaveFolderId());
+          }
+        } catch (_) {}
+      }
+      if (microsoftToken) {
+        try {
+          const cloud = await oneDriveGetSaveFoldersConfig(microsoftToken);
+          if (!cancelled && cloud.length > 0) {
+            setOneDriveSaveFoldersForCurrentUser(cloud);
+            setOneDriveSaveFolderIdState(getOneDriveSaveFolderId());
+          }
+        } catch (_) {}
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [googleToken, microsoftToken]);
 
   useEffect(() => {
     if (!googleToken || !googleSaveFolderId) {
@@ -242,6 +274,7 @@ export default function AccountPage() {
       setGoogleSaveFolderId(folderId, name);
       setGoogleSaveFolderIdState(folderId);
       setGoogleSaveFolderName(name);
+      try { await googleDrive.setSaveFoldersConfig(googleToken, getGoogleSaveFolders()); } catch (_) {}
     }
   };
 
@@ -255,6 +288,7 @@ export default function AccountPage() {
       setGoogleSaveFolderId(folderId, name);
       setGoogleSaveFolderIdState(folderId);
       setGoogleSaveFolderName(name);
+      try { await googleDrive.setSaveFoldersConfig(googleToken, getGoogleSaveFolders()); } catch (_) {}
     } catch (e) {
       console.error(e);
     } finally {
@@ -267,6 +301,7 @@ export default function AccountPage() {
       setOneDriveSaveFolderId(folderId, name || '');
       setOneDriveSaveFolderIdState(folderId);
       setOneDriveSaveFolderName(name || '');
+      oneDriveSetSaveFoldersConfig(microsoftToken, getOneDriveSaveFolders()).catch(() => {});
     });
     setOneDrivePickerOpen(false);
     setOneDrivePickerPath([]);
@@ -283,6 +318,7 @@ export default function AccountPage() {
         setOneDriveSaveFolderId(result.id, result.name || name);
         setOneDriveSaveFolderIdState(result.id);
         setOneDriveSaveFolderName(result.name || name);
+        try { await oneDriveSetSaveFoldersConfig(microsoftToken, getOneDriveSaveFolders()); } catch (_) {}
       }
     } catch (e) {
       console.error(e);

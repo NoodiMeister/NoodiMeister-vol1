@@ -1054,8 +1054,6 @@ function NoodiMeisterCore({ icons }) {
   const [viewFitPage, setViewFitPage] = useState(true);
   /** When true (and viewFitPage on), scale to fit only the notated area instead of full A4 page. */
   const [viewSmartPage, setViewSmartPage] = useState(false);
-  /** When true, show notation at full A4 size (210×297 mm on screen, 100% / actual print size). */
-  const [viewFullSizeA4, setViewFullSizeA4] = useState(false);
   /** Zoom for notation area only (1 = 100%); wheel with Ctrl/Cmd, pinch, Cmd/Ctrl+/- */
   const [scoreZoomLevel, setScoreZoomLevel] = useState(1);
   const scoreZoomPinchRef = useRef(null); // { initialDistance, initialZoom } for touch pinch
@@ -1608,6 +1606,27 @@ function NoodiMeisterCore({ icons }) {
       const dataUrl = typeof reader.result === 'string' ? reader.result : null;
       if (dataUrl) {
         setPageDesignDataUrl(dataUrl);
+        // Imporditud lehe disain: lülita kohe sisse A4 täislehe vaade,
+        // suuna lehekülg vastavalt pildi proportsioonile ja kasuta A4 paberit vertikaalse vooluga.
+        try {
+          const img = new Image();
+          img.onload = () => {
+            const w = img.naturalWidth || img.width;
+            const h = img.naturalHeight || img.height;
+            if (w > 0 && h > 0) {
+              if (w > h) {
+                setPageOrientation('landscape');
+              } else {
+                setPageOrientation('portrait');
+              }
+              setPaperSize('a4');
+              setPageFlowDirection('vertical');
+            }
+          };
+          img.src = dataUrl;
+        } catch (_) {
+          // kui brauser ei toeta mingit haruldast kombinatsiooni, jätame suuna muutmata
+        }
         setViewSmartPage(false);
         setViewFitPage(true); // A4 täislehe vaade, et kasutaja näeks lehe suurust ja disaini sobivust
         dirtyRef.current = true;
@@ -2121,7 +2140,7 @@ function NoodiMeisterCore({ icons }) {
         windowHeight: container.scrollHeight,
       });
       const scale = 2;
-      const { pageFlowDirection: flowDir, pageWidth: pw } = pdfExportOptionsRef.current;
+      const { pageFlowDirection: flowDir, pageWidth: pw, pageOrientation: pdfPageOrientation } = pdfExportOptionsRef.current;
       const isHorizontalFlow = flowDir === 'horizontal';
       const pdfOrientation = isHorizontalFlow ? 'landscape' : pageOrientation;
       const pdf = new jsPDF({
@@ -2134,7 +2153,7 @@ function NoodiMeisterCore({ icons }) {
 
       if (isHorizontalFlow) {
         const pageWidthPx = pw || LAYOUT.PAGE_WIDTH_MIN;
-        const a4PageHeightPx = pageWidthPx * LAYOUT.A4_HEIGHT_RATIO;
+        const a4PageHeightPx = pageWidthPx * LAYOUT.A4_HEIGHT_RATIO_LANDSCAPE;
         const totalPages = Math.max(1, Math.round(container.scrollWidth / pageWidthPx));
         for (let p = 0; p < totalPages; p++) {
           const srcX = p * pageWidthPx * scale;
@@ -2864,7 +2883,7 @@ function NoodiMeisterCore({ icons }) {
     setSaveCloudDialogOpen(true);
   }, [exportScoreToJSON]);
 
-  // Vali olemasolev kaust (Picker) ja salvesta sinna.
+  // Vali olemasolev kaust (Picker) ja salvesta sinna. Lisa kaust nimekirja, et järgmine salvestamine kasutaks sama kausta.
   const saveToCloudPickExisting = useCallback(async () => {
     setSaveCloudDialogOpen(false);
     const token = googleDrive.getStoredToken();
@@ -2881,6 +2900,8 @@ function NoodiMeisterCore({ icons }) {
       const json = JSON.stringify(data, null, 2);
       const fileName = ((data.songTitle || t('common.untitled')).replace(/\s+/g, '-').replace(/[^\w\-.]/g, '') || t('common.untitled')) + '.noodimeister';
       await googleDrive.createFileInFolder(token, folderId, fileName, json);
+      authStorage.addGoogleSaveFolder(folderId, '');
+      try { await googleDrive.setSaveFoldersConfig(token, authStorage.getGoogleSaveFolders()); } catch (_) {}
       setSaveFeedback('Salvestatud pilve!');
       setTimeout(() => setSaveFeedback(''), 2500);
     } catch (e) {
@@ -2889,7 +2910,7 @@ function NoodiMeisterCore({ icons }) {
     }
   }, [exportScoreToJSON]);
 
-  // Loo uus kaust juurkaustas ja salvesta sinna.
+  // Loo uus kaust juurkaustas ja salvesta sinna. Lisa kaust nimekirja, et järgmine salvestamine kasutaks sama kausta (vältib topeltkaustu).
   const saveToCloudCreateFolder = useCallback(async () => {
     const token = googleDrive.getStoredToken();
     if (!token) return;
@@ -2907,6 +2928,8 @@ function NoodiMeisterCore({ icons }) {
       const json = JSON.stringify(data, null, 2);
       const fileName = ((data.songTitle || t('common.untitled')).replace(/\s+/g, '-').replace(/[^\w\-.]/g, '') || t('common.untitled')) + '.noodimeister';
       await googleDrive.createFileInFolder(token, folderId, fileName, json);
+      authStorage.addGoogleSaveFolder(folderId, name);
+      try { await googleDrive.setSaveFoldersConfig(token, authStorage.getGoogleSaveFolders()); } catch (_) {}
       setSaveCloudDialogOpen(false);
       setSaveFeedback('Salvestatud pilve!');
       setTimeout(() => setSaveFeedback(''), 2500);
@@ -4796,13 +4819,16 @@ function NoodiMeisterCore({ icons }) {
   const systemsForScoreRef = useRef([]);
   const exportCursorRef = useRef(null); // { x, y, emoji, size } container-relative, for MP4 fillText
   const [pageWidth, setPageWidth] = useState(LAYOUT.PAGE_WIDTH_MIN);
-  /** Terve leht vaates: A4 lehe laius tuletatud vaateaknast. Algväärtus akna põhjal, et täisleht on kohe aktiivne. */
-  const getFullPageWidthFromViewport = () => {
+  /** Terve leht: A4 laius vaateaknast. Portrait = püstine (210×297), landscape = risti (297×210). */
+  const getFullPageWidthFromViewport = (orientation) => {
     if (typeof window === 'undefined') return 0;
-    const w = Math.min(window.innerWidth, Math.round(window.innerHeight * 210 / 297));
+    const isLandscape = orientation === 'landscape';
+    const w = isLandscape
+      ? Math.min(window.innerWidth, Math.round(window.innerHeight * 297 / 210))
+      : Math.min(window.innerWidth, Math.round(window.innerHeight * 210 / 297));
     return Math.max(LAYOUT.PAGE_WIDTH_MIN, Math.min(w, 2400));
   };
-  const [fitPageDisplayWidth, setFitPageDisplayWidth] = useState(() => getFullPageWidthFromViewport());
+  const [fitPageDisplayWidth, setFitPageDisplayWidth] = useState(() => getFullPageWidthFromViewport('portrait'));
   const effectivePageWidthMax = pageOrientation === 'landscape' ? LAYOUT.PAGE_WIDTH_MAX_LANDSCAPE : LAYOUT.PAGE_WIDTH_MAX;
   useEffect(() => {
     const el = scoreContainerRef.current;
@@ -4816,15 +4842,14 @@ function NoodiMeisterCore({ icons }) {
     return () => ro.disconnect();
   }, [pageOrientation, effectivePageWidthMax]);
   useEffect(() => {
-    pdfExportOptionsRef.current = { pageFlowDirection, pageWidth };
-  }, [pageFlowDirection, pageWidth]);
+    pdfExportOptionsRef.current = { pageFlowDirection, pageWidth, pageOrientation };
+  }, [pageFlowDirection, pageWidth, pageOrientation]);
   const basePageWidth = pageWidth || LAYOUT.PAGE_WIDTH_MIN;
-  const effectiveLayoutPageWidth = viewFullSizeA4
-    ? LAYOUT.A4_WIDTH_PX_AT_96DPI
-    : (viewFitPage && !viewSmartPage)
-      ? Math.max(LAYOUT.PAGE_WIDTH_MIN, fitPageDisplayWidth > 0 ? fitPageDisplayWidth : (getFullPageWidthFromViewport() || basePageWidth))
-      : basePageWidth;
-  const a4PageHeightPx = Math.max(LAYOUT.PAGE_WIDTH_MIN * LAYOUT.A4_HEIGHT_RATIO, effectiveLayoutPageWidth * LAYOUT.A4_HEIGHT_RATIO);
+  const effectiveLayoutPageWidth = (viewFitPage && !viewSmartPage)
+    ? Math.max(LAYOUT.PAGE_WIDTH_MIN, fitPageDisplayWidth > 0 ? fitPageDisplayWidth : (getFullPageWidthFromViewport(pageOrientation) || basePageWidth))
+    : basePageWidth;
+  const a4HeightRatio = pageOrientation === 'landscape' ? LAYOUT.A4_HEIGHT_RATIO_LANDSCAPE : LAYOUT.A4_HEIGHT_RATIO;
+  const a4PageHeightPx = Math.max(LAYOUT.PAGE_WIDTH_MIN * a4HeightRatio, effectiveLayoutPageWidth * a4HeightRatio);
   /** Figurenotes row height (beat-box / line) scales with Noodigraafika suurus so barlines and box match note size. */
   const figurenotesRowHeight = Math.max(FIGURE_ROW_HEIGHT, Math.round(FIGURE_ROW_HEIGHT * figurenotesSize / 75));
   /** Chord line in figurenotes: only when user has enabled it in chord toolbox; half height of beat-box, below melody row; gap 0–20 px. */
@@ -4897,11 +4922,11 @@ function NoodiMeisterCore({ icons }) {
   }, [measures, layoutMeasuresPerLine, partLayoutMeasuresPerLine, layoutSystemGap, viewMode, pageOrientation, notes, addedMeasures]);
 
   // Terve leht: A4 laius + pikkus (suhe 210:297). Pikkus = laius × 297/210, et üks leht mahuks ekraanile.
-  const a4PageHeightVal = Math.max(LAYOUT.PAGE_WIDTH_MIN * LAYOUT.A4_HEIGHT_RATIO, effectiveLayoutPageWidth * LAYOUT.A4_HEIGHT_RATIO);
+  const a4PageHeightVal = Math.max(LAYOUT.PAGE_WIDTH_MIN * a4HeightRatio, effectiveLayoutPageWidth * a4HeightRatio);
   const [fitPageScale, setFitPageScale] = useState(1);
-  const viewFitOrSmart = (viewFitPage || viewSmartPage) && !viewFullSizeA4;
+  const viewFitOrSmart = viewFitPage || viewSmartPage;
   useEffect(() => {
-    if (!viewFitOrSmart || viewFullSizeA4) {
+    if (!viewFitOrSmart) {
       setFitPageScale(1);
       setFitPageDisplayWidth(0);
       return;
@@ -4922,8 +4947,11 @@ function NoodiMeisterCore({ icons }) {
         if (availW <= 0 || availH <= 0) return;
       }
       if (viewFitPage && !viewSmartPage) {
-        // Terve leht: üks A4 täidab vaateakna (A4 suhe 210:297)
-        const w = Math.min(availW, Math.round(availH * 210 / 297));
+        // Terve leht: portrait = püstine (210×297), landscape = risti (297×210)
+        const isLandscape = pageOrientation === 'landscape';
+        const w = isLandscape
+          ? Math.min(availW, Math.round(availH * 297 / 210))
+          : Math.min(availW, Math.round(availH * 210 / 297));
         setFitPageDisplayWidth(Math.max(LAYOUT.PAGE_WIDTH_MIN, Math.min(w, 2400)));
         setFitPageScale(1);
       } else {
@@ -4971,7 +4999,7 @@ function NoodiMeisterCore({ icons }) {
         window.removeEventListener('resize', scheduleUpdate);
       }
     };
-  }, [viewFitPage, viewSmartPage, viewFitOrSmart, viewFullSizeA4, basePageWidth, logicalContentHeight, cloudLoadComplete]);
+  }, [viewFitPage, viewSmartPage, viewFitOrSmart, basePageWidth, logicalContentHeight, cloudLoadComplete, pageOrientation]);
 
   // Zoom noodiala: hiireratas (Ctrl/Cmd), touchpad pinch, iPad pinch, Cmd/Ctrl+/- (handler on klaviatuuril). Only when notation frame has focus (user clicked on score).
   const handleScoreZoomWheel = useCallback((e) => {
@@ -6525,15 +6553,6 @@ function NoodiMeisterCore({ icons }) {
                     </button>
                     <button
                       type="button"
-                      onClick={() => { dirtyRef.current = true; setViewFitPage(false); setViewSmartPage(false); setViewFullSizeA4((prev) => !prev); }}
-                      className="w-full flex items-center justify-between gap-2 px-3 py-2 text-left text-sm text-amber-50 hover:bg-slate-600"
-                      title={t('view.fullSizeA4Hint')}
-                    >
-                      <span>{t('view.fullSizeA4')}</span>
-                      {viewFullSizeA4 && <Check className="w-4 h-4 text-amber-400" />}
-                    </button>
-                    <button
-                      type="button"
                       onClick={() => { dirtyRef.current = true; setViewFitPage(false); setViewFullSizeA4(false); setViewSmartPage((prev) => !prev); }}
                       className="w-full flex items-center justify-between gap-2 px-3 py-2 text-left text-sm text-amber-50 hover:bg-slate-600"
                       title={t('view.smartPageHint')}
@@ -7692,10 +7711,9 @@ function NoodiMeisterCore({ icons }) {
             style={{
               backgroundColor: themeColors.scoreBg,
               minWidth: LAYOUT.PAGE_WIDTH_MIN,
-              ...(viewFullSizeA4 ? { width: pageOrientation === 'landscape' ? '297mm' : '210mm', minHeight: pageOrientation === 'landscape' ? '210mm' : '297mm', boxSizing: 'border-box' } : {}),
-              ...(!viewFullSizeA4 && viewFitPage && !viewSmartPage ? {} : !viewFullSizeA4 ? { maxWidth: pageOrientation === 'landscape' ? LAYOUT.PAGE_WIDTH_MAX_LANDSCAPE : LAYOUT.PAGE_WIDTH_MAX } : {}),
-              minHeight: viewFullSizeA4 ? undefined : Math.max(500, getStaffHeight() + LAYOUT.SYSTEM_GAP + getStaffHeight() + 120),
-              ...(viewFitPage && !viewSmartPage && !viewFullSizeA4 ? { width: pw, boxSizing: 'border-box' } : {}),
+              ...(viewFitPage && !viewSmartPage ? {} : { maxWidth: pageOrientation === 'landscape' ? LAYOUT.PAGE_WIDTH_MAX_LANDSCAPE : LAYOUT.PAGE_WIDTH_MAX }),
+              minHeight: Math.max(500, getStaffHeight() + LAYOUT.SYSTEM_GAP + getStaffHeight() + 120),
+              ...(viewFitPage && !viewSmartPage ? { width: pw, boxSizing: 'border-box' } : {}),
               ...(isHorizontalFlow ? { width: totalPagesVal * pw, height: a4PageHeightVal } : {})
             }}
             onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; e.currentTarget.classList.add('ring-2', 'ring-amber-400', 'ring-offset-2'); }}
@@ -7918,6 +7936,7 @@ function NoodiMeisterCore({ icons }) {
                   key={staff.id}
                   measures={measuresWithMarks}
                   pageWidth={effectiveLayoutPageWidth}
+                  pageOrientation={pageOrientation}
                   timeSignature={timeSignature}
                   timeSignatureMode={timeSignatureMode}
                   pixelsPerBeat={pixelsPerBeat}
@@ -8339,7 +8358,7 @@ function getFingeringForNote(pitch, octave, instrumentId) {
 }
 
 // Timeline Component – multi-system layout (VexFlow loogika). (PAGE_BREAK_GAP on defineeritud üleval.)
-function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, pageWidth, cursorPosition, notationMode, staffLines, clefType, keySignature = 'C', relativeNotationShowKeySignature = false, relativeNotationShowTraditionalClef = false, onJoClefPositionChange, joClefFocused = false, onJoClefFocus, instrument = 'single-staff-treble', instrumentNotationVariant = 'standard', instrumentConfig = {}, showBarNumbers = true, barNumberSize = 11, showRhythmSyllables = false, joClefStaffPosition: joClefStaffPositionProp, showAllNoteLabels = false, enableEmojiOverlays = true, noteheadShape = 'oval', noteheadEmoji = '♪', onNoteTeacherLabelChange, onNoteLabelClick, chords = [], isDotted, isRest, selectedDuration, noteInputMode, selectedNoteIndex, isNoteSelected, notes: allNotes, onStaffAddNote, onNoteClick, onNoteMouseDown, onNoteMouseEnter, onNotePitchChange, onNoteBeatChange, canHandDragNotes = false, ghostPitch, ghostOctave, onFigureBeatClick, onChordLineMouseMove, notationStyle, layoutMeasuresPerLine = 4, layoutLineBreakBefore = [], layoutPageBreakBefore = [], layoutSystemGap = 120, layoutPartsGap, layoutConnectedBarlines = false, staffIndexInScore = 0, systemTotalHeight, layoutGlobalSpacingMultiplier = 1, systems: systemsProp, baseYOffset = 0, isActiveStaff = true, staffCount = 1, staffHeight: staffHeightProp, figurenotesSize = 16, figurenotesStems = false, figurenotesChordLineGap = 6, figurenotesChordBlocks = false, figurenotesRowHeight: figurenotesRowHeightProp, figurenotesChordLineHeight: figurenotesChordLineHeightProp, timeSignatureSize = 16, themeColors: themeColorsProp, pedagogicalPlayheadStyle = 'line', pedagogicalPlayheadEmoji = '🎵', pedagogicalPlayheadEmojiSize = 32, cursorSizePx, cursorLineStrokeWidth = 4, pedagogicalPlayheadMovement = 'arch', isPedagogicalAudioPlaying = false, isExportingAnimation = false, exportCursorRef, scoreContainerRef, pageFlowDirection = 'vertical', isFirstInBraceGroup = false, braceGroupSize = 0, lyricFontFamily = 'sans-serif', lyricLineYOffset = 0, translateLabel, showLayoutBreakIcons = false, showStaffSpacerHandles = false, onSystemYOffsetChange, onToggleLineBreakAfter }) {
+function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, pageWidth, cursorPosition, notationMode, staffLines, clefType, keySignature = 'C', relativeNotationShowKeySignature = false, relativeNotationShowTraditionalClef = false, onJoClefPositionChange, joClefFocused = false, onJoClefFocus, instrument = 'single-staff-treble', instrumentNotationVariant = 'standard', instrumentConfig = {}, showBarNumbers = true, barNumberSize = 11, showRhythmSyllables = false, joClefStaffPosition: joClefStaffPositionProp, showAllNoteLabels = false, enableEmojiOverlays = true, noteheadShape = 'oval', noteheadEmoji = '♪', onNoteTeacherLabelChange, onNoteLabelClick, chords = [], isDotted, isRest, selectedDuration, noteInputMode, selectedNoteIndex, isNoteSelected, notes: allNotes, onStaffAddNote, onNoteClick, onNoteMouseDown, onNoteMouseEnter, onNotePitchChange, onNoteBeatChange, canHandDragNotes = false, ghostPitch, ghostOctave, onFigureBeatClick, onChordLineMouseMove, notationStyle, layoutMeasuresPerLine = 4, layoutLineBreakBefore = [], layoutPageBreakBefore = [], layoutSystemGap = 120, layoutPartsGap, layoutConnectedBarlines = false, staffIndexInScore = 0, systemTotalHeight, layoutGlobalSpacingMultiplier = 1, systems: systemsProp, baseYOffset = 0, isActiveStaff = true, staffCount = 1, staffHeight: staffHeightProp, figurenotesSize = 16, figurenotesStems = false, figurenotesChordLineGap = 6, figurenotesChordBlocks = false, figurenotesRowHeight: figurenotesRowHeightProp, figurenotesChordLineHeight: figurenotesChordLineHeightProp, timeSignatureSize = 16, themeColors: themeColorsProp, pedagogicalPlayheadStyle = 'line', pedagogicalPlayheadEmoji = '🎵', pedagogicalPlayheadEmojiSize = 32, cursorSizePx, cursorLineStrokeWidth = 4, pedagogicalPlayheadMovement = 'arch', isPedagogicalAudioPlaying = false, isExportingAnimation = false, exportCursorRef, scoreContainerRef, pageFlowDirection = 'vertical', pageOrientation = 'portrait', isFirstInBraceGroup = false, braceGroupSize = 0, lyricFontFamily = 'sans-serif', lyricLineYOffset = 0, translateLabel, showLayoutBreakIcons = false, showStaffSpacerHandles = false, onSystemYOffsetChange, onToggleLineBreakAfter }) {
   if (typeof GLOBAL_NOTATION_CONFIG === 'undefined' || !GLOBAL_NOTATION_CONFIG || GLOBAL_NOTATION_CONFIG.EMOJIS === false) return null;
   const themeColors = themeColorsProp || { staffLineColor: '#000', noteFill: '#1a1a1a', textColor: '#1a1a1a', scoreBg: '#fffbf0', isDark: false };
   const safeKey = keySignature ?? 'C';
@@ -8398,7 +8417,8 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
     ? systemsComputed[systemsComputed.length - 1].yOffset + (staffCount || 1) * timelineHeight + 40
     : (staffCount || 1) * timelineHeight + 40;
   const isHorizontal = pageFlowDirection === 'horizontal';
-  const a4PageHeight = (pageWidth || LAYOUT.PAGE_WIDTH_MIN) * LAYOUT.A4_HEIGHT_RATIO;
+  const a4Ratio = pageOrientation === 'landscape' ? LAYOUT.A4_HEIGHT_RATIO_LANDSCAPE : LAYOUT.A4_HEIGHT_RATIO;
+  const a4PageHeight = (pageWidth || LAYOUT.PAGE_WIDTH_MIN) * a4Ratio;
   const totalPages = Math.max(1, Math.ceil(totalHeight / a4PageHeight));
   const centerY = timelineHeight / 2;
   const marginLeft = LAYOUT.MARGIN_LEFT;

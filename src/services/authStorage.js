@@ -166,6 +166,14 @@ function setGoogleSaveFoldersForUser(email, list) {
   if (key) window.localStorage?.setItem(key, JSON.stringify(list));
 }
 
+/** Määra praeguse kasutaja Google Drive kaustade nimekiri (nt pilvest sünkroonimisel). */
+export function setGoogleSaveFoldersForCurrentUser(list) {
+  const email = getCurrentUserEmail();
+  if (!email) return;
+  const arr = Array.isArray(list) ? list : [];
+  setGoogleSaveFoldersForUser(email, arr);
+}
+
 /** Google Drive vaikimisi salvestuskausta ID (esimene nimekirjas). */
 export function getGoogleSaveFolderId() {
   const folders = getGoogleSaveFolders();
@@ -310,6 +318,14 @@ function setOneDriveSaveFoldersForUser(email, list) {
   if (!email || !Array.isArray(list) || typeof window === 'undefined') return;
   const key = getOneDriveSaveFoldersStorageKey(email);
   if (key) window.localStorage?.setItem(key, JSON.stringify(list));
+}
+
+/** Määra praeguse kasutaja OneDrive kaustade nimekiri (nt pilvest sünkroonimisel). */
+export function setOneDriveSaveFoldersForCurrentUser(list) {
+  const email = getCurrentUserEmail();
+  if (!email) return;
+  const arr = Array.isArray(list) ? list : [];
+  setOneDriveSaveFoldersForUser(email, arr);
 }
 
 /** OneDrive vaikimisi salvestuskausta ID (esimene nimekirjas). */

@@ -11,6 +11,9 @@
 
 const GRAPH_ROOT = 'https://graph.microsoft.com/v1.0';
 
+/** Salvestuskaustade nimekirja konfiguratsioonifail OneDrive'i juurkaustas (sünkroonimiseks seadmete vahel). */
+const SAVE_FOLDERS_CONFIG_FILENAME = 'NoodiMeister-save-folders.json';
+
 async function graphGet(token, path) {
   if (!token) throw new Error('Microsofti token puudub (proovi uuesti sisse logida Microsoftiga).');
   const res = await fetch(`${GRAPH_ROOT}${path}`, {
@@ -357,4 +360,57 @@ export async function getFileContent(token, fileId) {
     throw new Error(msg);
   }
   return res.text();
+}
+
+/**
+ * Loe salvestuskaustade nimekiri OneDrive'ist (sünkroonimiseks teise seadmega). Fail juurkaustas.
+ * @param {string} token
+ * @returns {Promise<Array<{ id: string, name: string }>>}
+ */
+export async function getSaveFoldersConfig(token) {
+  try {
+    const data = await graphGet(token, '/me/drive/root/children?$top=100');
+    const items = Array.isArray(data.value) ? data.value : [];
+    const file = items.find((item) => !item.folder && item.name === SAVE_FOLDERS_CONFIG_FILENAME);
+    if (!file?.id) return [];
+    const raw = await getFileContent(token, file.id);
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed.folders) ? parsed.folders : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Salvesta salvestuskaustade nimekiri OneDrive'i (sünkroonimiseks teise seadmega).
+ * @param {string} token
+ * @param {Array<{ id: string, name: string }>} folders
+ */
+export async function setSaveFoldersConfig(token, folders) {
+  if (!token) throw new Error('Microsofti token puudub.');
+  const list = Array.isArray(folders) ? folders : [];
+  const content = JSON.stringify({ folders: list });
+  try {
+    const data = await graphGet(token, '/me/drive/root/children?$top=100');
+    const items = Array.isArray(data.value) ? data.value : [];
+    const existing = items.find((item) => !item.folder && item.name === SAVE_FOLDERS_CONFIG_FILENAME);
+    if (existing?.id) {
+      const res = await fetch(`${GRAPH_ROOT}/me/drive/items/${encodeURIComponent(existing.id)}/content`, {
+        method: 'PUT',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: content,
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body?.error?.message || body?.message || 'Konfiguratsiooni uuendamine ebaõnnestus');
+      }
+    } else {
+      await uploadFileToRoot(token, SAVE_FOLDERS_CONFIG_FILENAME, content, 'application/json');
+    }
+  } catch (e) {
+    throw e instanceof Error ? e : new Error(String(e));
+  }
 }

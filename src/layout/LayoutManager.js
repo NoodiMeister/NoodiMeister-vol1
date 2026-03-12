@@ -7,7 +7,9 @@ export const LAYOUT = {
   PAGE_WIDTH_MIN: 800,
   PAGE_WIDTH_MAX: 1000,
   PAGE_WIDTH_MAX_LANDSCAPE: 1400,
+  /** Portrait: kõrgus/laius = 297/210. Landscape: kõrgus/laius = 210/297. */
   A4_HEIGHT_RATIO: 297 / 210,
+  A4_HEIGHT_RATIO_LANDSCAPE: 210 / 297,
   /** A4 width in px at 96dpi (210mm) for full-size / 100% view. */
   A4_WIDTH_PX_AT_96DPI: Math.round((210 * 96) / 25.4),
   A4_HEIGHT_PX_AT_96DPI: Math.round((297 * 96) / 25.4),

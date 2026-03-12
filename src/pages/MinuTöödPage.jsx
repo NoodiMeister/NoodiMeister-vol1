@@ -144,6 +144,47 @@ export default function MinuTöödPage() {
     } catch (_) {}
   }, []);
 
+  /** Laadi kaustade nimekiri pilvest ja uuenda lokaalset (et teises arvutis sama nimekiri nähtav oleks). */
+  const syncFoldersFromCloud = useCallback(async () => {
+    if (token) {
+      try {
+        const cloudFolders = await googleDrive.getSaveFoldersConfig(token);
+        if (cloudFolders.length > 0) {
+          authStorage.setGoogleSaveFoldersForCurrentUser(cloudFolders);
+        } else {
+          const local = authStorage.getGoogleSaveFolders();
+          if (local.length > 0) await googleDrive.setSaveFoldersConfig(token, local);
+        }
+      } catch (_) { /* jäta lokaal nimekiri alles */ }
+    }
+    if (microsoftToken) {
+      try {
+        const cloudFolders = await oneDrive.getSaveFoldersConfig(microsoftToken);
+        if (cloudFolders.length > 0) {
+          authStorage.setOneDriveSaveFoldersForCurrentUser(cloudFolders);
+        } else {
+          const local = authStorage.getOneDriveSaveFolders();
+          if (local.length > 0) await oneDrive.setSaveFoldersConfig(microsoftToken, local);
+        }
+      } catch (_) { /* jäta lokaal nimekiri alles */ }
+    }
+    refreshFolders();
+  }, [token, microsoftToken, refreshFolders]);
+
+  /** Salvesta praegune kaustade nimekiri pilve (sünkroonimiseks teise seadmega). */
+  const syncFoldersToCloud = useCallback(async () => {
+    if (token) {
+      try {
+        await googleDrive.setSaveFoldersConfig(token, authStorage.getGoogleSaveFolders());
+      } catch (_) {}
+    }
+    if (microsoftToken) {
+      try {
+        await oneDrive.setSaveFoldersConfig(microsoftToken, authStorage.getOneDriveSaveFolders());
+      } catch (_) {}
+    }
+  }, [token, microsoftToken]);
+
   const loadFiles = useCallback(async () => {
     if (!token) {
       setFilesByGoogleFolderId({});
@@ -246,6 +287,11 @@ export default function MinuTöödPage() {
   useEffect(() => {
     refreshFolders();
   }, [refreshFolders]);
+
+  useEffect(() => {
+    if (hasGoogle || hasMicrosoft) syncFoldersFromCloud();
+  }, [hasGoogle, hasMicrosoft, syncFoldersFromCloud]);
+
   useEffect(() => {
     loadFiles();
   }, [loadFiles, googleFolders.length]);
@@ -344,6 +390,7 @@ export default function MinuTöödPage() {
         await googleDrive.renameFolder(token, folderId, renameName.trim());
         authStorage.updateGoogleSaveFolderName(folderId, renameName.trim());
         refreshFolders();
+        syncFoldersToCloud();
         setRenameOpen(null);
         setRenameName('');
       } else if (provider === 'onedrive' && microsoftToken) {
@@ -351,6 +398,7 @@ export default function MinuTöödPage() {
         if (result.ok) {
           authStorage.updateOneDriveSaveFolderName(folderId, result.name || renameName.trim());
           refreshFolders();
+          syncFoldersToCloud();
           setRenameOpen(null);
           setRenameName('');
         } else {
@@ -362,7 +410,7 @@ export default function MinuTöödPage() {
     } finally {
       setRenameLoading(false);
     }
-  }, [renameOpen, renameName, token, microsoftToken, t, refreshFolders]);
+  }, [renameOpen, renameName, token, microsoftToken, t, refreshFolders, syncFoldersToCloud]);
 
   const handleRemoveFolderFromList = useCallback((folderId, provider) => {
     const msg = t['mywork.removeFolderFromList'] || 'Eemalda kaust nimekirjast? Failid jäävad pilve.';
@@ -370,13 +418,15 @@ export default function MinuTöödPage() {
     if (provider === 'google') {
       authStorage.removeGoogleSaveFolder(folderId);
       refreshFolders();
+      syncFoldersToCloud();
       loadFiles();
     } else {
       authStorage.removeOneDriveSaveFolder(folderId);
       refreshFolders();
+      syncFoldersToCloud();
       loadOneDriveFiles();
     }
-  }, [t, refreshFolders, loadFiles, loadOneDriveFiles]);
+  }, [t, refreshFolders, syncFoldersToCloud, loadFiles, loadOneDriveFiles]);
 
   const loadMoveGoogleFolders = useCallback(async (parentId) => {
     if (!token) return;
@@ -421,6 +471,7 @@ export default function MinuTöödPage() {
     try {
       await googleDrive.moveFolder(token, moveOpen.folderId, targetParentId);
       refreshFolders();
+      syncFoldersToCloud();
       loadFiles();
       setMoveOpen(null);
       setMoveGooglePath([]);
@@ -429,7 +480,7 @@ export default function MinuTöödPage() {
     } finally {
       setMoveLoading(false);
     }
-  }, [moveOpen, token, t, refreshFolders, loadFiles]);
+  }, [moveOpen, token, t, refreshFolders, syncFoldersToCloud, loadFiles]);
 
   const handleMoveFolderOneDriveTo = useCallback(async (targetParentId) => {
     if (!moveOpen || moveOpen.provider !== 'onedrive' || !microsoftToken) return;
@@ -439,6 +490,7 @@ export default function MinuTöödPage() {
       const result = await oneDrive.moveItem(microsoftToken, moveOpen.folderId, targetParentId);
       if (result.ok) {
         refreshFolders();
+        syncFoldersToCloud();
         loadOneDriveFiles();
         setMoveOpen(null);
         setMoveOneDrivePath([]);
@@ -450,7 +502,7 @@ export default function MinuTöödPage() {
     } finally {
       setMoveLoading(false);
     }
-  }, [moveOpen, microsoftToken, t, refreshFolders, loadOneDriveFiles]);
+  }, [moveOpen, microsoftToken, t, refreshFolders, syncFoldersToCloud, loadOneDriveFiles]);
 
   const handleCreateFolder = useCallback(async () => {
     const name = (createFolderName || 'NoodiMeister').trim();
@@ -462,6 +514,7 @@ export default function MinuTöödPage() {
         const folderId = await googleDrive.createFolder(token, 'root', name);
         authStorage.addGoogleSaveFolder(folderId, name);
         refreshFolders();
+        syncFoldersToCloud();
         setCreateFolderOpen(false);
         setCreateFolderName('NoodiMeister');
         await loadFiles();
@@ -476,6 +529,7 @@ export default function MinuTöödPage() {
         if (result.ok && result.id) {
           authStorage.addOneDriveSaveFolder(result.id, result.name || name);
           refreshFolders();
+          syncFoldersToCloud();
           setCreateFolderOpen(false);
           setCreateFolderName('NoodiMeister');
           await loadOneDriveFiles();
@@ -488,7 +542,7 @@ export default function MinuTöödPage() {
     } finally {
       setCreateFolderLoading(false);
     }
-  }, [provider, token, microsoftToken, createFolderName, t, loadFiles, loadOneDriveFiles, refreshFolders]);
+  }, [provider, token, microsoftToken, createFolderName, t, loadFiles, loadOneDriveFiles, refreshFolders, syncFoldersToCloud]);
 
   useEffect(() => {
     if (authReady && !user) navigate('/login', { replace: true });

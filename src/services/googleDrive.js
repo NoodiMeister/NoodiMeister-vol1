@@ -405,6 +405,77 @@ export async function renameFolder(accessToken, folderId, newName) {
   return { name: data.name || newName.trim() };
 }
 
+/** Salvestuskaustade nimekirja konfiguratsioonifail Drive'i juurkaustas (sünkroonimiseks seadmete vahel). */
+const SAVE_FOLDERS_CONFIG_FILENAME = 'NoodiMeister-save-folders.json';
+
+/**
+ * Uuenda olemasoleva faili sisu (media).
+ * @param {string} accessToken
+ * @param {string} fileId
+ * @param {string} content
+ */
+async function updateFileContent(accessToken, fileId, content) {
+  const res = await fetch(`${DRIVE_UPLOAD_URL}/${fileId}?uploadType=media`, {
+    method: 'PATCH',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json'
+    },
+    body: content
+  });
+  if (!res.ok) {
+    if (res.status === 401) throw new Error('Token aegunud. Logi uuesti sisse.');
+    throw new Error('Konfiguratsiooni uuendamine ebaõnnestus');
+  }
+}
+
+/**
+ * Loe salvestuskaustade nimekiri Drive'ist (sünkroonimiseks teise seadmega). Fail juurkaustas.
+ * @param {string} accessToken
+ * @returns {Promise<Array<{ id: string, name: string }>>}
+ */
+export async function getSaveFoldersConfig(accessToken) {
+  const q = "trashed = false and name = '" + SAVE_FOLDERS_CONFIG_FILENAME.replace(/'/g, "\\'") + "' and 'root' in parents";
+  const params = new URLSearchParams({ q, pageSize: '1', fields: 'files(id)' });
+  const res = await fetch(`${DRIVE_API_URL}?${params}`, {
+    headers: { Authorization: `Bearer ${accessToken}` }
+  });
+  if (!res.ok) return [];
+  const data = await res.json();
+  const fileId = data.files?.[0]?.id;
+  if (!fileId) return [];
+  try {
+    const raw = await getFileContent(accessToken, fileId);
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed.folders) ? parsed.folders : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Salvesta salvestuskaustade nimekiri Drive'i (sünkroonimiseks teise seadmega).
+ * @param {string} accessToken
+ * @param {Array<{ id: string, name: string }>} folders
+ */
+export async function setSaveFoldersConfig(accessToken, folders) {
+  const list = Array.isArray(folders) ? folders : [];
+  const content = JSON.stringify({ folders: list });
+  const q = "trashed = false and name = '" + SAVE_FOLDERS_CONFIG_FILENAME.replace(/'/g, "\\'") + "' and 'root' in parents";
+  const params = new URLSearchParams({ q, pageSize: '1', fields: 'files(id)' });
+  const res = await fetch(`${DRIVE_API_URL}?${params}`, {
+    headers: { Authorization: `Bearer ${accessToken}` }
+  });
+  if (!res.ok) throw new Error('Konfiguratsiooni lugemine ebaõnnestus');
+  const data = await res.json();
+  const fileId = data.files?.[0]?.id;
+  if (fileId) {
+    await updateFileContent(accessToken, fileId, content);
+  } else {
+    await createFileInFolder(accessToken, 'root', SAVE_FOLDERS_CONFIG_FILENAME, content);
+  }
+}
+
 import * as authStorage from './authStorage';
 
 export function getStoredToken() {
