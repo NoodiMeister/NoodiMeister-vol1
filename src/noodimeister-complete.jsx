@@ -3064,12 +3064,8 @@ function NoodiMeisterCore({ icons }) {
           if (importProject(data)) {
             setSaveFeedback('Laaditud!');
             setTimeout(() => setSaveFeedback(''), 2500);
-            // Täislehe režiim: laius nii, et üks A4 (laius × pikkus 210:297) mahuks ekraanile.
-            if (typeof window !== 'undefined') {
-              const fitMin = 400;
-              const w = Math.min(window.innerWidth, Math.round(window.innerHeight * 210 / 297));
-              setFitPageDisplayWidth(Math.max(fitMin, Math.min(w, 2400)));
-            }
+            // Täislehe režiim: MuseScore-style fixed page width (effect will set scale to fit)
+            setFitPageDisplayWidth((data.pageOrientation === 'landscape' ? LAYOUT.PAGE_WIDTH_MAX_LANDSCAPE : LAYOUT.PAGE_WIDTH_MAX));
           } else {
             setSaveFeedback('Vigane projektifail');
             setTimeout(() => setSaveFeedback(''), 3000);
@@ -3099,12 +3095,8 @@ function NoodiMeisterCore({ icons }) {
           if (importProject(data)) {
             setSaveFeedback('Laaditud!');
             setTimeout(() => setSaveFeedback(''), 2500);
-            // Täislehe režiim: laius nii, et üks A4 (laius × pikkus 210:297) mahuks ekraanile.
-            if (typeof window !== 'undefined') {
-              const fitMin = 400;
-              const w = Math.min(window.innerWidth, Math.round(window.innerHeight * 210 / 297));
-              setFitPageDisplayWidth(Math.max(fitMin, Math.min(w, 2400)));
-            }
+            // Täislehe režiim: MuseScore-style fixed page width (effect will set scale to fit)
+            setFitPageDisplayWidth((data.pageOrientation === 'landscape' ? LAYOUT.PAGE_WIDTH_MAX_LANDSCAPE : LAYOUT.PAGE_WIDTH_MAX));
           } else {
             setSaveFeedback('Vigane projektifail');
             setTimeout(() => setSaveFeedback(''), 3000);
@@ -4821,22 +4813,10 @@ function NoodiMeisterCore({ icons }) {
   const systemsForScoreRef = useRef([]);
   const exportCursorRef = useRef(null); // { x, y, emoji, size } container-relative, for MP4 fillText
   const [pageWidth, setPageWidth] = useState(LAYOUT.PAGE_WIDTH_MIN);
-  /** Min width when fitting one A4 to viewport; lower than PAGE_WIDTH_MIN so portrait can be narrow. */
-  const PAGE_FIT_MIN = 400;
-  /** Terve leht: A4 laius vaateaknast. Portrait = püstine (210×297), landscape = risti (297×210). */
-  const getFullPageWidthFromViewport = (orientation) => {
-    if (typeof window === 'undefined') return 0;
-    const isLandscape = orientation === 'landscape';
-    const w = isLandscape
-      ? Math.min(window.innerWidth, Math.round(window.innerHeight * 297 / 210))
-      : Math.min(window.innerWidth, Math.round(window.innerHeight * 210 / 297));
-    return Math.max(PAGE_FIT_MIN, Math.min(w, 2400));
-  };
-  const [fitPageDisplayWidth, setFitPageDisplayWidth] = useState(() => getFullPageWidthFromViewport('portrait'));
-  // Reset cached fit width when orientation changes so portrait/landscape use correct dimensions immediately
-  useEffect(() => {
-    setFitPageDisplayWidth(0);
-  }, [pageOrientation]);
+  /** Terve leht (MuseScore-style): fixed A4 layout size per orientation; scale to fit viewport so one full page is visible and nothing clips. */
+  const getFullPageLayoutWidth = (orientation) => (orientation === 'landscape' ? LAYOUT.PAGE_WIDTH_MAX_LANDSCAPE : LAYOUT.PAGE_WIDTH_MAX);
+  const [fitPageDisplayWidth, setFitPageDisplayWidth] = useState(() => getFullPageLayoutWidth('portrait'));
+  useEffect(() => { setFitPageDisplayWidth(0); }, [pageOrientation]);
   const effectivePageWidthMax = pageOrientation === 'landscape' ? LAYOUT.PAGE_WIDTH_MAX_LANDSCAPE : LAYOUT.PAGE_WIDTH_MAX;
   useEffect(() => {
     const el = scoreContainerRef.current;
@@ -4854,7 +4834,7 @@ function NoodiMeisterCore({ icons }) {
   }, [pageFlowDirection, pageWidth, pageOrientation]);
   const basePageWidth = pageWidth || LAYOUT.PAGE_WIDTH_MIN;
   const effectiveLayoutPageWidth = (viewFitPage && !viewSmartPage)
-    ? Math.max(PAGE_FIT_MIN, fitPageDisplayWidth > 0 ? fitPageDisplayWidth : (getFullPageWidthFromViewport(pageOrientation) || basePageWidth))
+    ? (fitPageDisplayWidth > 0 ? fitPageDisplayWidth : getFullPageLayoutWidth(pageOrientation))
     : basePageWidth;
   const a4HeightRatio = pageOrientation === 'landscape' ? LAYOUT.A4_HEIGHT_RATIO_LANDSCAPE : LAYOUT.A4_HEIGHT_RATIO;
   const a4PageHeightPx = Math.max(LAYOUT.PAGE_WIDTH_MIN * a4HeightRatio, effectiveLayoutPageWidth * a4HeightRatio);
@@ -4955,13 +4935,12 @@ function NoodiMeisterCore({ icons }) {
         if (availW <= 0 || availH <= 0) return;
       }
       if (viewFitPage && !viewSmartPage) {
-        // Terve leht: portrait = püstine (210×297), landscape = risti (297×210)
-        const isLandscape = pageOrientation === 'landscape';
-        const w = isLandscape
-          ? Math.min(availW, Math.round(availH * 297 / 210))
-          : Math.min(availW, Math.round(availH * 210 / 297));
-        setFitPageDisplayWidth(Math.max(PAGE_FIT_MIN, Math.min(w, 2400)));
-        setFitPageScale(1);
+        // MuseScore-style: fixed page size (portrait = tall, landscape = wide), scale so one full page fits in viewport
+        const pw = getFullPageLayoutWidth(pageOrientation);
+        const ratio = pageOrientation === 'landscape' ? LAYOUT.A4_HEIGHT_RATIO_LANDSCAPE : LAYOUT.A4_HEIGHT_RATIO;
+        const pageHeight = pw * ratio;
+        setFitPageDisplayWidth(pw);
+        setFitPageScale(Math.min(1, availW / pw, availH / pageHeight));
       } else {
         // Tark lehe vaade: ainult noteeritud ala mahub ekraanile
         setFitPageDisplayWidth(0);
@@ -7718,7 +7697,7 @@ function NoodiMeisterCore({ icons }) {
             className={`noodimeister-print-area print-page-${paperSize}-${pageFlowDirection === 'horizontal' ? 'landscape' : pageOrientation} relative p-8 flex-1 transition-colors ${viewFitPage && !viewSmartPage ? 'ml-0' : 'mx-auto'} ${isHorizontalFlow ? '' : 'rounded-lg shadow-lg border-2 border-amber-200 dark:border-white/20'}`}
             style={{
               backgroundColor: themeColors.scoreBg,
-              ...(viewFitPage && !viewSmartPage ? { minWidth: PAGE_FIT_MIN } : { minWidth: LAYOUT.PAGE_WIDTH_MIN }),
+              minWidth: LAYOUT.PAGE_WIDTH_MIN,
               ...(viewFitPage && !viewSmartPage ? {} : { maxWidth: pageOrientation === 'landscape' ? LAYOUT.PAGE_WIDTH_MAX_LANDSCAPE : LAYOUT.PAGE_WIDTH_MAX }),
               minHeight: Math.max(500, getStaffHeight() + LAYOUT.SYSTEM_GAP + getStaffHeight() + 120),
               ...(viewFitPage && !viewSmartPage ? { width: pw, boxSizing: 'border-box' } : {}),
