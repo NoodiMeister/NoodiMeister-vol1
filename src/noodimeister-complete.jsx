@@ -7773,6 +7773,7 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
   const tabStrings = isTabMode && instCfg?.strings ? instCfg.strings : 0;
   const tabTuning = isTabMode && instCfg?.tuning ? instCfg.tuning : [];
 
+  const timelineHeight = staffHeightProp ?? getStaffHeight();
   const barLineWidth = isFigurenotesMode ? Math.max(2, Math.round(5 * figurenotesSize / 75)) : 2;
   /** Cursor/playhead line inset so it aligns with beat-box (scaled with Noodigraafika suurus in figurenotes). */
   // Keep cursor line strictly between staff/beat-box lines (no overlap on top or bottom). In figurenotes use melody row only (not chord line).
@@ -7805,7 +7806,6 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
   };
   const effectiveMeasures = React.useMemo(() => (measures || []).map((m, i) => ({ ...m, notes: notesByMeasure[i] || [] })), [measures, notesByMeasure]);
   const timelineSvgRef = useRef(null);
-  const timelineHeight = staffHeightProp ?? getStaffHeight();
   const [staffSpacerDrag, setStaffSpacerDrag] = React.useState({ systemIndex: null, startClientY: 0, cumulativeDelta: 0 });
   const totalHeight = systemsComputed.length > 0
     ? systemsComputed[systemsComputed.length - 1].yOffset + (staffCount || 1) * timelineHeight + 40

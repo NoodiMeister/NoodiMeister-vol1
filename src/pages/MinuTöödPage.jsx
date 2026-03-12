@@ -220,6 +220,23 @@ export default function MinuTöödPage() {
     loadOneDriveFiles();
   }, [loadOneDriveFiles, oneDriveFolders.length]);
 
+  // Auto-sync file lists when user returns to the tab (no refresh needed) and every 60s while tab is visible
+  useEffect(() => {
+    const sync = () => {
+      if (document.visibilityState !== 'visible') return;
+      if (token) loadFiles();
+      if (microsoftToken) loadOneDriveFiles();
+    };
+    document.addEventListener('visibilitychange', sync);
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') sync();
+    }, 60_000);
+    return () => {
+      document.removeEventListener('visibilitychange', sync);
+      clearInterval(interval);
+    };
+  }, [token, microsoftToken, loadFiles, loadOneDriveFiles]);
+
   // Populate folder names from API when missing (e.g. legacy single folder)
   useEffect(() => {
     if (!token) return;

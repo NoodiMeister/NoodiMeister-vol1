@@ -182,8 +182,11 @@ function AppRoutes() {
   const needBannerSpace = import.meta.env.VITE_VERCEL_ENV === 'preview' ||
     (typeof window !== 'undefined' && /^localhost$|^127\.0\.0\.1$/.test(window.location?.hostname || ''));
 
+  // Don't use key={pathname}: it forces the whole tree to remount on every route change,
+  // so when the user presses the browser back button, the previous page remounts from scratch
+  // and loses layout/setup (scroll, panels, view options). Routes still unmount/mount per route.
   return (
-    <div key={pathname} style={{ minHeight: '100vh', isolation: 'isolate', paddingTop: needBannerSpace ? 40 : 0 }}>
+    <div style={{ minHeight: '100vh', isolation: 'isolate', paddingTop: needBannerSpace ? 40 : 0 }}>
       <EnvBanner />
       <Suspense fallback={<div style={{ padding: 24, textAlign: 'center' }}>Laen…</div>}>
         <Routes>
