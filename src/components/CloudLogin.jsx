@@ -166,17 +166,17 @@ function canUseStorageForLogin(stayLoggedIn) {
 /** Synchronous lock so a second Microsoft click cannot run before the first finishes (avoids interaction_in_progress). */
 let microsoftInteractionLock = false;
 
-/** Suuna Minu tööde vaatesse (/tood) Vercelil korrektselt (arvestab BASE_URL). */
-function redirectToTood() {
+/** Suuna Minu kontole (/konto) Vercelil korrektselt (arvestab BASE_URL). */
+function redirectToKonto() {
   if (typeof window === 'undefined') return;
   try {
     const base = (typeof import.meta !== 'undefined' && import.meta.env?.BASE_URL) || '';
-    const path = (base.replace(/\/$/, '') || '') + '/tood';
+    const path = (base.replace(/\/$/, '') || '') + '/konto';
     const url = window.location.origin + path;
     window.location.assign(url);
   } catch (e) {
-    console.warn('[CloudLogin] redirectToTood viga:', e);
-    window.location.assign('/tood');
+    console.warn('[CloudLogin] redirectToKonto viga:', e);
+    window.location.assign('/konto');
   }
 }
 
@@ -281,10 +281,10 @@ function useCloudLoginWithProvider(mode = 'login', stayLoggedIn = false, onError
               if (onError) onError(payload);
               return;
             }
-            console.log('[CloudLogin] Auth kinnitatud, suuname /tood poole (Minu tööd)');
+            console.log('[CloudLogin] Auth kinnitatud, suuname /konto poole (Minu konto)');
             try { sessionStorage.setItem('noodimeister-show-welcome', '1'); } catch (_) {}
             requestAnimationFrame(() => {
-              setTimeout(redirectToTood, 50);
+              setTimeout(redirectToKonto, 50);
             });
           } catch (e) {
             const t = getT();

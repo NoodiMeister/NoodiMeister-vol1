@@ -27,6 +27,22 @@
   --score-bg: #0a0a0a;
 }
 
+/* Dark mode: ensure root and body are solid black; no light bleed */
+[data-theme="dark"] html,
+[data-theme="dark"] body,
+[data-theme="dark"] #root {
+  background: #000 !important;
+  color: #fff !important;
+}
+
+/* Dark mode: catch-all for common light Tailwind backgrounds that might lack dark: variant */
+[data-theme="dark"] [class*="bg-white"][class*="rounded"],
+[data-theme="dark"] [class*="bg-amber-50"],
+[data-theme="dark"] [class*="bg-amber-100"]:not([class*="dark:bg-"]),
+[data-theme="dark"] [class*="bg-zinc-50"] {
+  background: rgba(255, 255, 255, 0.06) !important;
+}
+
 /* Hele režiimi laadimise ekraan (tagasiühilduvus) */
 :root .loading-screen {
   color: #92400e;

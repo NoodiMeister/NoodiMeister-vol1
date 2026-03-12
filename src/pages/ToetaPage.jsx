@@ -3,12 +3,14 @@ import { Link } from 'react-router-dom';
 import { Heart, LogIn, UserPlus } from 'lucide-react';
 import { AppLogo } from '../components/AppLogo';
 import { useNoodimeisterOptional } from '../store/NoodimeisterContext';
+import { useForceLightTheme } from '../hooks/useForceLightTheme';
 
 /**
  * Toeta leht – infoleht toetamise kohta.
  * Makselahendus (Stripe jms) viiakse sisse alles pärast esitlust.
  */
 export default function ToetaPage() {
+  useForceLightTheme();
   const ctx = useNoodimeisterOptional();
   const user = ctx?.user;
   const isLoggedIn = !!user?.email;

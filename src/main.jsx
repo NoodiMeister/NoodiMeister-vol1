@@ -6,19 +6,11 @@ import App from './App';
 import MicrosoftRedirectHandler from './MicrosoftRedirectHandler';
 import './index.css';
 
-// Teema enne esimest joonistust (vältib vilkumist). Vaikimisi hele režiim; kasutaja peab ise tume režiimi valima.
+// Kõik leheküljed vaikimisi hele režiimis. Salvestatud teema rakendub pärast rakenduse laadimist.
 (function applyStoredTheme() {
   try {
-    const raw = localStorage.getItem('noodimeister-theme');
-    let mode = 'light'; /* default: light; user must change to dark themselves */
-    let primaryColor = 'orange';
-    if (raw) {
-      const o = JSON.parse(raw);
-      mode = o.mode === 'dark' ? 'dark' : 'light';
-      primaryColor = ['orange', 'blue', 'green'].includes(o.primaryColor) ? o.primaryColor : 'orange';
-    }
-    document.documentElement.setAttribute('data-theme', mode);
-    document.documentElement.setAttribute('data-primary-color', primaryColor);
+    document.documentElement.setAttribute('data-theme', 'light');
+    document.documentElement.setAttribute('data-primary-color', 'orange');
   } catch (_) { /* ignore */ }
 })();
 

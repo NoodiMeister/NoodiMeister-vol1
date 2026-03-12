@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Check, FileMusic, Cloud, UserPlus, LogIn, Heart } from 'lucide-react';
 import { AppLogo } from '../components/AppLogo';
+import { useForceLightTheme } from '../hooks/useForceLightTheme';
 
 const PRICE_PER_MONTH = 5;
 const DISCOUNT_12_MONTHS = 55;
@@ -12,6 +13,7 @@ function calcTotal(kuud) {
 }
 
 export default function HinnakiriPage() {
+  useForceLightTheme();
   const [months, setMonths] = useState(1);
   const total = calcTotal(months);
   const isValid = total !== null;

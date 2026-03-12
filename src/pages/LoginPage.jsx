@@ -6,12 +6,14 @@ import { AuthErrorBlock } from '../components/AuthErrorBlock';
 import { AppLogo } from '../components/AppLogo';
 import { getStorageForLogin, getLoggedInUser, isLoggedIn } from '../services/authStorage';
 import { formatAuthError } from '../utils/authError';
+import { useForceLightTheme } from '../hooks/useForceLightTheme';
 
 export default function LoginPage() {
+  useForceLightTheme();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const redirectTo = searchParams.get('redirect');
-  const safeRedirect = redirectTo && redirectTo.startsWith('/') && !redirectTo.startsWith('//') ? redirectTo : '/tood';
+  const safeRedirect = redirectTo && redirectTo.startsWith('/') && !redirectTo.startsWith('//') ? redirectTo : '/konto';
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [message, setMessage] = useState('');

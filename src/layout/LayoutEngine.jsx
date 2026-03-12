@@ -146,13 +146,24 @@ function calculateFigureGrid(data, availableWidth, availablePageHeight = 0) {
   let lastYOffset = -staffSpacing;
   let currentRow = [];
 
+  const pixelsPerBeatInput = typeof data?.pixelsPerBeat === 'number' && data.pixelsPerBeat > 0 ? data.pixelsPerBeat : null;
+
   const flushRow = (rowIndices) => {
     if (rowIndices.length === 0) return;
     const sIndex = systems.length;
-    const boxWidth = effectiveWidth / rowIndices.length;
-    const measureWidths = rowIndices.map(() => boxWidth);
-    const totalBeats = rowIndices.reduce((sum, i) => sum + (measures[i].beatCount ?? beatsPerMeasure), 0);
-    const pixelsPerBeatForRow = totalBeats > 0 ? (boxWidth * rowIndices.length) / totalBeats : PIXELS_PER_BEAT_DEFAULT;
+    let measureWidths;
+    let pixelsPerBeatForRow;
+    if (pixelsPerBeatInput != null) {
+      measureWidths = rowIndices.map((i) => (measures[i].beatCount ?? beatsPerMeasure) * pixelsPerBeatInput);
+      const totalBeats = rowIndices.reduce((sum, i) => sum + (measures[i].beatCount ?? beatsPerMeasure), 0);
+      pixelsPerBeatForRow = totalBeats > 0 ? pixelsPerBeatInput : PIXELS_PER_BEAT_DEFAULT;
+    } else {
+      const boxWidth = effectiveWidth / rowIndices.length;
+      measureWidths = rowIndices.map(() => boxWidth);
+      const totalBeats = rowIndices.reduce((sum, i) => sum + (measures[i].beatCount ?? beatsPerMeasure), 0);
+      pixelsPerBeatForRow = totalBeats > 0 ? (boxWidth * rowIndices.length) / totalBeats : PIXELS_PER_BEAT_DEFAULT;
+    }
+    const boxWidth = measureWidths[0] ?? effectiveWidth / rowIndices.length;
 
     let systemY = lastYOffset + staffSpacing;
     const userPageBreak = rowIndices.some((m) => pageBreakBefore.has(m + 1));
@@ -178,11 +189,19 @@ function calculateFigureGrid(data, availableWidth, availablePageHeight = 0) {
     });
   };
 
+  const minMeasureWidth = Math.max(
+    LAYOUT.MEASURE_MIN_WIDTH ?? 28,
+    beatsPerMeasure * FIGURE_BASE_WIDTH
+  );
+
   for (let i = 0; i < measures.length; i++) {
     const breakBeforeThis = lineBreakBefore.has(i + 1) || pageBreakBefore.has(i + 1);
     const fullRow = currentRow.length >= boxesPerRow;
+    const wouldBeCount = currentRow.length + 1;
+    const widthPerMeasure = effectiveWidth / wouldBeCount;
+    const overflowBreak = currentRow.length > 0 && widthPerMeasure < minMeasureWidth; // force new line when row would overflow
 
-    if ((breakBeforeThis || fullRow) && currentRow.length > 0) {
+    if ((breakBeforeThis || fullRow || overflowBreak) && currentRow.length > 0) {
       flushRow(currentRow);
       currentRow = [];
     }

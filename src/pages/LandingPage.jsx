@@ -3,8 +3,10 @@ import { Link } from 'react-router-dom';
 import { FileMusic, Cloud, UserPlus, LogIn, PenTool, Save, Share2 } from 'lucide-react';
 import { AppLogo } from '../components/AppLogo';
 import { LOCALE_STORAGE_KEY, DEFAULT_LOCALE, getTranslations } from '../i18n';
+import { useForceLightTheme } from '../hooks/useForceLightTheme';
 
 export default function LandingPage() {
+  useForceLightTheme();
   const [locale] = useState(() => {
     try {
       return localStorage.getItem(LOCALE_STORAGE_KEY) || DEFAULT_LOCALE;

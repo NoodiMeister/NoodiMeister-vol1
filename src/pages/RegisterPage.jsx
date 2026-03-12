@@ -5,8 +5,10 @@ import { CloudLoginButtons } from '../components/CloudLogin';
 import { AuthErrorBlock } from '../components/AuthErrorBlock';
 import { AppLogo } from '../components/AppLogo';
 import { formatAuthError } from '../utils/authError';
+import { useForceLightTheme } from '../hooks/useForceLightTheme';
 
 export default function RegisterPage() {
+  useForceLightTheme();
   const navigate = useNavigate();
   const [form, setForm] = useState({
     name: '',

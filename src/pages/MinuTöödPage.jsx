@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { FilePlus, Folder, FolderOpen, FolderPlus, Cloud, LogIn, Loader2, PenTool, User, Settings, ChevronDown, Trash2, X, Pencil, FolderMinus, FolderInput, ChevronRight } from 'lucide-react';
+import { FilePlus, Folder, FolderOpen, FolderPlus, Cloud, LogIn, Loader2, User, Settings, ChevronDown, Trash2, X, Pencil, FolderMinus, FolderInput, ChevronRight } from 'lucide-react';
 import * as googleDrive from '../services/googleDrive';
 import * as oneDrive from '../services/oneDrive';
 import * as authStorage from '../services/authStorage';
@@ -509,10 +509,6 @@ export default function MinuTöödPage() {
                 </div>
               )}
             </div>
-            <Link to="/app?local=1" className="inline-flex items-center gap-1.5 text-amber-700 dark:text-white hover:text-amber-900 dark:hover:text-white/90 p-1.5 rounded-lg hover:bg-amber-100 dark:hover:bg-white/10 transition-colors" aria-label={t['nav.openNotationTool'] || 'Ava nooditööriist'} title={t['nav.openNotationTool'] || 'Ava nooditööriist'}>
-              <PenTool className="w-5 h-5" />
-              <span className="text-sm font-medium">{t['nav.openNotationTool'] || 'Tööriist'}</span>
-            </Link>
             <Link to="/konto" className="text-amber-700 dark:text-white hover:text-amber-900 dark:hover:text-white/90 p-1.5 rounded-lg hover:bg-amber-100 dark:hover:bg-white/10 transition-colors flex items-center gap-1" title={t['user.myAccount']}>
               <User className="w-5 h-5" /> {t['user.myAccount']}
             </Link>
@@ -605,7 +601,7 @@ export default function MinuTöödPage() {
               <p className="text-amber-700/90 dark:text-white/80 py-6">{t["mywork.noGoogleFilesHint"]}</p>
             )}
             {!loading && !error && googleFolders.map((folder) => {
-              const expanded = googleExpandedIds[folder.id] !== false;
+              const expanded = googleExpandedIds[folder.id] === true;
               const files = filesByGoogleFolderId[folder.id] || [];
               const displayName = folder.name || (t['mywork.saveFolderLabel'] || 'Salvestuskaust');
               return (
@@ -717,7 +713,7 @@ export default function MinuTöödPage() {
               <p className="text-amber-700/90 dark:text-white/80 py-6">{t["mywork.noOneDriveFilesHint"]}</p>
             )}
             {!oneDriveLoading && !oneDriveError && oneDriveFolders.map((folder) => {
-              const expanded = oneDriveExpandedIds[folder.id] !== false;
+              const expanded = oneDriveExpandedIds[folder.id] === true;
               const files = filesByOneDriveFolderId[folder.id] || [];
               const displayName = folder.name || (t['mywork.saveFolderLabel'] || 'Salvestuskaust');
               return (

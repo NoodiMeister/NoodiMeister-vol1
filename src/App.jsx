@@ -23,20 +23,20 @@ function isLoggedIn() {
   return authStorage.isLoggedIn();
 }
 
-/** Esilehe asemel suuna sisselogitud kasutaja otse Minu tööde lehele. */
+/** Esilehe asemel suuna sisselogitud kasutaja otse Minu kontole. */
 function LandingOrRedirect() {
-  if (isLoggedIn()) return <Navigate to="/tood" replace />;
+  if (isLoggedIn()) return <Navigate to="/konto" replace />;
   return <LandingPage />;
 }
 
-/** Login/Registreeru lehel suuna juba sisselogitud kasutaja Minu tööde lehele. */
+/** Login/Registreeru lehel suuna juba sisselogitud kasutaja Minu kontole. */
 function LoginOrRedirect() {
-  if (isLoggedIn()) return <Navigate to="/tood" replace />;
+  if (isLoggedIn()) return <Navigate to="/konto" replace />;
   return <LoginPage />;
 }
 
 function RegisterOrRedirect() {
-  if (isLoggedIn()) return <Navigate to="/tood" replace />;
+  if (isLoggedIn()) return <Navigate to="/konto" replace />;
   return <RegisterPage />;
 }
 
@@ -77,7 +77,7 @@ function AppOrRedirect() {
   }
   const isNew = searchParams.get('new') === '1';
   const openLocal = searchParams.get('local') === '1';
-  if (isLoggedIn() && !fileId && !isNew && !openLocal) return <Navigate to="/tood" replace />;
+  if (isLoggedIn() && !fileId && !isNew && !openLocal) return <Navigate to="/konto" replace />;
   return <NoodiMeister />;
 }
 

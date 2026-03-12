@@ -137,6 +137,7 @@ export function FigurenotesView({
   canHandDragNotes = false,
   timelineSvgRef,
   onBeatSlotClick,
+  onChordLineMouseMove,
   showRhythmSyllables = false,
   lyricFontFamily = 'sans-serif',
   lyricLineYOffset = 0,
@@ -480,22 +481,53 @@ export function FigurenotesView({
                       <path d={`M ${measureX + measureWidth / 2 - 4} ${sys.yOffset - 10} L ${measureX + measureWidth / 2} ${sys.yOffset - 14} L ${measureX + measureWidth / 2 + 4} ${sys.yOffset - 10}`} fill="none" stroke="#92400e" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
                     </g>
                   )}
-                  {j !== 0 && <line x1={measureX} y1={sys.yOffset + barLineInset} x2={measureX} y2={sys.yOffset + melodyRowHeight - barLineInset} stroke="#1a1a1a" strokeWidth={barLineWidth} />}
-                  {measureIdx === sys.measureIndices[sys.measureIndices.length - 1] && (
-                    <line x1={measureX + measureWidth} y1={sys.yOffset + barLineInset} x2={measureX + measureWidth} y2={sys.yOffset + melodyRowHeight - barLineInset} stroke="#1a1a1a" strokeWidth={barLineWidth} />
-                  )}
-                  {/* Chord line: half-height row below melody; chords drawn in that row */}
+                  {(() => {
+                    const barLineBottomY = chordLineHeight > 0
+                      ? sys.yOffset + melodyRowHeight + chordLineGap + chordLineHeight - barLineInset
+                      : sys.yOffset + melodyRowHeight - barLineInset;
+                    return (
+                      <>
+                        {j !== 0 && <line x1={measureX} y1={sys.yOffset + barLineInset} x2={measureX} y2={barLineBottomY} stroke="#1a1a1a" strokeWidth={barLineWidth} />}
+                        {measureIdx === sys.measureIndices[sys.measureIndices.length - 1] && (
+                          <line x1={measureX + measureWidth} y1={sys.yOffset + barLineInset} x2={measureX + measureWidth} y2={barLineBottomY} stroke="#1a1a1a" strokeWidth={barLineWidth} />
+                        )}
+                      </>
+                    );
+                  })()}
+                  {/* Chord line: half-height row below melody; chords drawn in that row. Invisible overlay for cursor-follow on hover. */}
                   {chordLineHeight > 0 && j === 0 && (
-                    <rect
-                      x={marginLeft}
-                      y={sys.yOffset + melodyRowHeight + chordLineGap}
-                      width={measureWidths.reduce((a, b) => a + b, 0)}
-                      height={chordLineHeight}
-                      fill="rgba(0,0,0,0.03)"
-                      stroke="#e8e8e8"
-                      strokeWidth={1}
-                      rx={2}
-                    />
+                    <>
+                      <rect
+                        x={marginLeft}
+                        y={sys.yOffset + melodyRowHeight + chordLineGap}
+                        width={measureWidths.reduce((a, b) => a + b, 0)}
+                        height={chordLineHeight}
+                        fill="rgba(0,0,0,0.03)"
+                        stroke="#e8e8e8"
+                        strokeWidth={1}
+                        rx={2}
+                      />
+                      {typeof onChordLineMouseMove === 'function' && timelineSvgRef?.current && (
+                        <rect
+                          x={marginLeft}
+                          y={sys.yOffset + melodyRowHeight + chordLineGap}
+                          width={measureWidths.reduce((a, b) => a + b, 0)}
+                          height={chordLineHeight}
+                          fill="transparent"
+                          style={{ cursor: 'pointer' }}
+                          onMouseMove={(e) => {
+                            const svg = timelineSvgRef.current;
+                            if (!svg) return;
+                            const pt = svg.createSVGPoint();
+                            pt.x = e.clientX;
+                            pt.y = 0;
+                            const local = pt.matrixTransform(svg.getScreenCTM().inverse());
+                            const beat = getBeatFromX(local.x);
+                            onChordLineMouseMove(beat);
+                          }}
+                        />
+                      )}
+                    </>
                   )}
                   {chords
                     .filter((c) => c.beatPosition >= measure.startBeat && c.beatPosition < measure.endBeat)

@@ -28,19 +28,19 @@ function getMicrosoftTesterEmails() {
   return raw.split(',').map((e) => e.trim().toLowerCase()).filter(Boolean);
 }
 
-function redirectToTood() {
+function redirectToKonto() {
   try {
     const base = (import.meta.env?.BASE_URL || '').replace(/\/$/, '') || '';
-    const path = base ? `${base}/tood` : '/tood';
+    const path = base ? `${base}/konto` : '/konto';
     window.location.assign(window.location.origin + path);
   } catch {
-    window.location.assign('/tood');
+    window.location.assign('/konto');
   }
 }
 
 /**
  * Shown when the app loads with ?code= or #code= (Microsoft redirect flow).
- * Uses window.msal from CDN, runs handleRedirectPromise(), then saves user and redirects to /tood.
+ * Uses window.msal from CDN, runs handleRedirectPromise(), then saves user and redirects to /konto (Minu konto).
  */
 export default function MicrosoftRedirectHandler() {
   const [status, setStatus] = useState('processing');
@@ -179,7 +179,7 @@ export default function MicrosoftRedirectHandler() {
             try {
               window.history.replaceState(null, '', window.location.pathname || '/');
             } catch (_) {}
-            setTimeout(() => redirectToTood(), 100);
+            setTimeout(() => redirectToKonto(), 100);
           });
       })
       .catch((err) => {
@@ -212,7 +212,7 @@ export default function MicrosoftRedirectHandler() {
         <div>
           <p>{t['auth.redirectingToMyWork']}</p>
           <a
-            href={typeof window !== 'undefined' ? (window.location.origin + ((import.meta.env?.BASE_URL || '').replace(/\/$/, '') || '') + '/tood') : '/tood'}
+            href={typeof window !== 'undefined' ? (window.location.origin + ((import.meta.env?.BASE_URL || '').replace(/\/$/, '') || '') + '/konto') : '/konto'}
             style={{ display: 'inline-block', marginTop: 12, padding: '8px 16px', background: '#b45309', color: '#fff', borderRadius: 8, fontWeight: 600, textDecoration: 'none' }}
           >
             {t['auth.clickIfNotRedirecting']}
