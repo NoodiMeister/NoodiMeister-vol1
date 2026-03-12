@@ -893,7 +893,7 @@ function NoodiMeisterCore({ icons }) {
       if (typeof window !== 'undefined') window.NOODIMEISTER_APP_READY = true;
     }, 50);
     return () => clearTimeout(t);
-  }, []);
+  }, [notationStyle]);
 
   const t = useMemo(() => createT(locale), [locale]);
   const instrumentConfig = useMemo(() => getInstrumentConfig(t), [t]);
@@ -3952,8 +3952,9 @@ function NoodiMeisterCore({ icons }) {
         return;
       }
 
-      // Stage V: Copy (Ctrl+C)
-      if (modKey && e.code === 'KeyC' && !noteInputMode) {
+      // Stage V: Copy (Ctrl+C) – always allowed in selection mode; in Figurenotes view
+      // also allow copying while N-mode is ON so users can select & duplicate patterns.
+      if (modKey && e.code === 'KeyC' && (!noteInputMode || notationStyle === 'FIGURENOTES')) {
         e.preventDefault();
         const selectedNotes = getSelectedNotes();
         if (selectedNotes.length > 0) {
@@ -3982,17 +3983,32 @@ function NoodiMeisterCore({ icons }) {
       // Stage V: Paste (Ctrl+V)
       if (modKey && e.code === 'KeyV' && !e.shiftKey && clipboard.length > 0) {
         e.preventDefault();
-        const newNotes = [...notes];
         const insertIndex = noteInputMode ? notes.length : selectedNoteIndex + 1;
         const pastedNotes = clipboard.map(note => ({
           ...note,
           id: Date.now() + Math.random()
         }));
+        const clipboardDuration = pastedNotes.reduce((sum, note) => sum + (Number(note.duration) || 1), 0);
+        const insertBeat = notes.slice(0, insertIndex).reduce((s, n) => s + (Number(n.duration) || 1), 0);
+        const beatsPerMeasure = timeSignature.beats;
+        const beatUnit = timeSignature.beatUnit;
+        let firstMeasureBeats = beatsPerMeasure;
+        if (pickupEnabled && pickupQuantity > 0 && pickupDuration) {
+          const oneUnitBeats = durationToBeats(pickupDuration, beatUnit);
+          firstMeasureBeats = Math.max(0.25, Math.min(pickupQuantity * oneUnitBeats, beatsPerMeasure - 0.25));
+        }
+        const totalMeasures = Math.max(1, 1 + (addedMeasures || 0));
+        const endBeat = firstMeasureBeats + (totalMeasures - 1) * beatsPerMeasure;
+        const availableBeats = Math.max(0, endBeat - insertBeat);
+        const needExtraBeats = Math.max(0, clipboardDuration - availableBeats);
+        const measuresToAdd = hasFullAccess && needExtraBeats > 0
+          ? Math.ceil(needExtraBeats / beatsPerMeasure)
+          : 0;
+        if (measuresToAdd > 0) setAddedMeasures((prev) => prev + measuresToAdd);
+        const newNotes = [...notes];
         newNotes.splice(insertIndex, 0, ...pastedNotes);
         saveToHistory(notes);
         setNotes(newNotes);
-        
-        // Update cursor if in input mode
         if (noteInputMode) {
           const totalDuration = pastedNotes.reduce((sum, note) => sum + note.duration, 0);
           setCursorPosition(prev => prev + totalDuration);
@@ -4290,8 +4306,9 @@ function NoodiMeisterCore({ icons }) {
         return;
       }
 
-      // Noodi sisestusrežiim: nooltedega kursor, tähtedega noot (ka tööriistakast avatud)
-      if (noteInputMode) {
+      // Noodi sisestusrežiim: nooltedega kursor, tähtedega noot (ka tööriistakast avatud).
+      // In Figurenotes view, arrow keys in N-mode are reserved for selection (so skip this block).
+      if (noteInputMode && notationStyle !== 'FIGURENOTES') {
         const cursorStep = e.shiftKey ? 0.25 : 1;
         if (e.code === 'ArrowLeft') {
           e.preventDefault();
@@ -4471,8 +4488,9 @@ function NoodiMeisterCore({ icons }) {
         }
       }
 
-      // Stage V: Selection mode (when N is OFF)
-      if (!activeToolbox && !noteInputMode) {
+      // Stage V: Selection mode (when N is OFF). In Figurenotes view we ALSO enable
+      // Shift+Arrow selection while N-mode is ON, because note entry is grid-based.
+      if (!activeToolbox && (!noteInputMode || notationStyle === 'FIGURENOTES')) {
         // If nothing is selected yet, initialize selection to the first/last note so Shift+Arrow can't create invalid (-1) ranges.
         const ensureSelectedIndex = (fallback) => {
           if (notes.length <= 0) return -1;
@@ -4781,7 +4799,7 @@ function NoodiMeisterCore({ icons }) {
     shiftPitchClassSameOctave, shiftOctave, addMeasure, ghostPitch, ghostOctave, ghostAccidental, playNoteOnInsert, playPianoNote,
     cursorPosition, joClefFocused, joClefStaffPosition, keySignature, setNotes, setKeySignature, notationMode, addNoteOnTopOfCursor,
     handleSaveShortcut, handlePrint, addedMeasures, timeSignature, setAddedMeasures, setCursorPosition, measureRepeatMarks, setMeasureRepeatMarks,
-    maxCursor, setScoreZoomLevel
+    maxCursor, setScoreZoomLevel, durationToBeats, hasFullAccess, pickupEnabled, pickupQuantity, pickupDuration
   ]);
 
   // JO-võti: klõps väljaspool võtit lõpetab valiku
@@ -4837,7 +4855,8 @@ function NoodiMeisterCore({ icons }) {
     ? (fitPageDisplayWidth > 0 ? fitPageDisplayWidth : getFullPageLayoutWidth(pageOrientation))
     : basePageWidth;
   const a4HeightRatio = pageOrientation === 'landscape' ? LAYOUT.A4_HEIGHT_RATIO_LANDSCAPE : LAYOUT.A4_HEIGHT_RATIO;
-  const a4PageHeightPx = Math.max(LAYOUT.PAGE_WIDTH_MIN * a4HeightRatio, effectiveLayoutPageWidth * a4HeightRatio);
+  // A4 page height for layout (no PAGE_WIDTH_MIN fallback so portrait/landscape proportions are exact).
+  const a4PageHeightPx = effectiveLayoutPageWidth * a4HeightRatio;
   /** Figurenotes row height (beat-box / line) scales with Noodigraafika suurus so barlines and box match note size. */
   const figurenotesRowHeight = Math.max(FIGURE_ROW_HEIGHT, Math.round(FIGURE_ROW_HEIGHT * figurenotesSize / 75));
   /** Chord line in figurenotes: only when user has enabled it in chord toolbox; half height of beat-box, below melody row; gap 0–20 px. */
@@ -4909,8 +4928,8 @@ function NoodiMeisterCore({ icons }) {
     return () => cancelAnimationFrame(t);
   }, [measures, layoutMeasuresPerLine, partLayoutMeasuresPerLine, layoutSystemGap, viewMode, pageOrientation, notes, addedMeasures]);
 
-  // Terve leht: A4 laius + pikkus (suhe 210:297). Pikkus = laius × 297/210, et üks leht mahuks ekraanile.
-  const a4PageHeightVal = Math.max(LAYOUT.PAGE_WIDTH_MIN * a4HeightRatio, effectiveLayoutPageWidth * a4HeightRatio);
+  // Terve leht: A4 laius + pikkus (210:297 või 297:210). Pikkus = laius × suhe, et üks leht mahuks ekraanile.
+  const a4PageHeightVal = effectiveLayoutPageWidth * a4HeightRatio;
   const [fitPageScale, setFitPageScale] = useState(1);
   const viewFitOrSmart = viewFitPage || viewSmartPage;
   useEffect(() => {
@@ -5081,13 +5100,17 @@ function NoodiMeisterCore({ icons }) {
   }, []);
 
   const beginSelectionDrag = useCallback((noteIndex, e) => {
-    if (noteInputModeRef.current) return;
+    // Allow Shift+drag selection even when N-mode is ON in Figurenotes view,
+    // because note input there happens via beat-box clicks rather than arrow keys.
+    if (noteInputModeRef.current && notationStyle !== 'FIGURENOTES') return;
     if (!e?.shiftKey) return;
     if (e.button !== 0) return;
     e.preventDefault();
     e.stopPropagation();
     selectionDragRef.current = { startIndex: noteIndex, pointerDown: true, shift: true };
-    setNoteInputMode(false);
+    if (notationStyle !== 'FIGURENOTES') {
+      setNoteInputMode(false);
+    }
     setSelectedNoteIndex(noteIndex);
     setSelectionStart(noteIndex);
     setSelectionEnd(noteIndex);
@@ -7755,6 +7778,23 @@ function NoodiMeisterCore({ icons }) {
                   const insertBase = selectedNoteIndex >= 0 ? selectedNoteIndex : -1;
                   const insertIndex = Math.max(0, Math.min(notes.length, insertBase + 1));
                   const pastedNotes = clipboard.map(note => ({ ...note, id: Date.now() + Math.random() }));
+                  const clipboardDuration = pastedNotes.reduce((sum, note) => sum + (Number(note.duration) || 1), 0);
+                  const insertBeat = notes.slice(0, insertIndex).reduce((s, n) => s + (Number(n.duration) || 1), 0);
+                  const beatsPerMeasure = timeSignature.beats;
+                  const beatUnit = timeSignature.beatUnit;
+                  let firstMeasureBeats = beatsPerMeasure;
+                  if (pickupEnabled && pickupQuantity > 0 && pickupDuration) {
+                    const oneUnitBeats = durationToBeats(pickupDuration, beatUnit);
+                    firstMeasureBeats = Math.max(0.25, Math.min(pickupQuantity * oneUnitBeats, beatsPerMeasure - 0.25));
+                  }
+                  const totalMeasures = Math.max(1, 1 + (addedMeasures || 0));
+                  const endBeat = firstMeasureBeats + (totalMeasures - 1) * beatsPerMeasure;
+                  const availableBeats = Math.max(0, endBeat - insertBeat);
+                  const needExtraBeats = Math.max(0, clipboardDuration - availableBeats);
+                  const measuresToAdd = hasFullAccess && needExtraBeats > 0
+                    ? Math.ceil(needExtraBeats / beatsPerMeasure)
+                    : 0;
+                  if (measuresToAdd > 0) setAddedMeasures((prev) => prev + measuresToAdd);
                   const newNotes = [...notes];
                   newNotes.splice(insertIndex, 0, ...pastedNotes);
                   saveToHistory(notes);

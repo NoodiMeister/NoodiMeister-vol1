@@ -493,20 +493,18 @@ export function FigurenotesView({
                     return (
                       <>
                         {j !== 0 && <line x1={measureX} y1={barLineTopY} x2={measureX} y2={barLineBottomY} stroke="#1a1a1a" strokeWidth={barLineWidth} />}
-                        {isRightBarlineOfSystem && (
-                          isLastMeasureOfScore ? (
-                            <SmuflGlyph
-                              glyph={SMUFL_GLYPH.barlineFinal}
-                              x={measureX + measureWidth}
-                              y={barLineCenterY}
-                              fontSize={Math.max(12, barLineHeight * 1.2)}
-                              fill="#1a1a1a"
-                              textAnchor="start"
-                            />
-                          ) : (
-                            <line x1={measureX + measureWidth} y1={barLineTopY} x2={measureX + measureWidth} y2={barLineBottomY} stroke="#1a1a1a" strokeWidth={barLineWidth} />
-                          )
-                        )}
+                        {isLastMeasureOfScore ? (
+                          <SmuflGlyph
+                            glyph={SMUFL_GLYPH.barlineFinal}
+                            x={measureX + measureWidth}
+                            y={barLineCenterY}
+                            fontSize={Math.max(12, barLineHeight * 1.2)}
+                            fill="#1a1a1a"
+                            textAnchor="start"
+                          />
+                        ) : isRightBarlineOfSystem ? (
+                          <line x1={measureX + measureWidth} y1={barLineTopY} x2={measureX + measureWidth} y2={barLineBottomY} stroke="#1a1a1a" strokeWidth={barLineWidth} />
+                        ) : null}
                       </>
                     );
                   })()}
@@ -715,6 +713,12 @@ export function FigurenotesView({
                         style: { cursor: (onNoteClick || onNoteMouseDown || canDragBeat) ? 'pointer' : undefined }
                       };
                       if (note.isRest) {
+                        // Ära kuva automaatselt tekitatud "tühja koha" pause (MusicXML jms puhul).
+                        // Need tulevad normalizeNotesToGlobalTimeline → fillGapWithRests kaudu
+                        // ning nende id algab prefiksiga "rest-". Figuurnotatsioonis soovime,
+                        // et pausid tekiks ainult uue takti lisamisel või kasutaja enda valikul.
+                        const isAutoGapRest = typeof note.id === 'string' && note.id.startsWith('rest-');
+                        if (isAutoGapRest) return null;
                         const restLabelY = sys.yOffset + centerY + 20;
                         const restSyllable = showRhythmSyllables ? getRhythmSyllableForNote(note) : '';
                         if (!figurenotesStems) {

@@ -32,6 +32,94 @@ const KEY_MICROSOFT_EXPIRY = 'noodimeister-microsoft-token-expiry';
 const microsoftClientId = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_MICROSOFT_CLIENT_ID) || '';
 const microsoftTenantId = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_MICROSOFT_TENANT_ID) || 'common';
 
+/** Heuristics to detect mobile / tablet (especially iPadOS where popups are fragile). */
+function isMobileOrTablet() {
+  if (typeof navigator === 'undefined') return false;
+  try {
+    const ua = (navigator.userAgent || navigator.vendor || '').toLowerCase();
+    const hasTouch = typeof navigator.maxTouchPoints === 'number' && navigator.maxTouchPoints > 1;
+    const isIOS = /iphone|ipad|ipod/.test(ua);
+    const isAndroid = /android/.test(ua);
+    const isMobile = /mobile/.test(ua);
+    // iPadOS 13+ reports as Mac, so combine touch + Mac check
+    const isIPadLikeMac = hasTouch && /macintosh|mac os x/.test(ua);
+    return isIOS || isAndroid || isMobile || isIPadLikeMac;
+  } catch {
+    return false;
+  }
+}
+
+/** Google OAuth redirect URI: current page (so we can return to the same view). */
+function getGoogleRedirectUri() {
+  try {
+    const origin = window.location.origin;
+    const path = window.location.pathname || '/';
+    const search = window.location.search || '';
+    return origin + path + search;
+  } catch {
+    return (typeof window !== 'undefined' ? window.location.origin : '') + '/';
+  }
+}
+
+/** Save and restore return URL across Google redirect. */
+const KEY_GOOGLE_RETURN_URL = 'noodimeister-google-return-url';
+
+function rememberGoogleReturnUrl() {
+  if (typeof window === 'undefined') return;
+  try {
+    const href = window.location.href;
+    window.sessionStorage?.setItem(KEY_GOOGLE_RETURN_URL, href);
+  } catch {
+    // ignore
+  }
+}
+
+function consumeGoogleReturnUrl() {
+  if (typeof window === 'undefined') return null;
+  try {
+    const href = window.sessionStorage?.getItem(KEY_GOOGLE_RETURN_URL);
+    if (href) window.sessionStorage?.removeItem(KEY_GOOGLE_RETURN_URL);
+    return href || null;
+  } catch {
+    return null;
+  }
+}
+
+/** Parse Google OAuth implicit-flow hash fragment (access_token, error, state). */
+function parseGoogleHashResponse() {
+  if (typeof window === 'undefined') return null;
+  const hash = window.location.hash || '';
+  if (!hash || hash.length < 2 || !hash.startsWith('#')) return null;
+  try {
+    const params = new URLSearchParams(hash.slice(1));
+    const accessToken = params.get('access_token');
+    const error = params.get('error');
+    const errorDescription = params.get('error_description');
+    const expiresIn = params.get('expires_in');
+    if (!accessToken && !error) return null;
+    return {
+      access_token: accessToken || null,
+      error: error || null,
+      error_description: errorDescription || null,
+      expires_in: expiresIn ? Number(expiresIn) : null,
+      rawParams: params,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function clearLocationHash() {
+  if (typeof window === 'undefined') return;
+  try {
+    const url = new URL(window.location.href);
+    url.hash = '';
+    window.history.replaceState(null, '', url.toString());
+  } catch {
+    // ignore
+  }
+}
+
 function getMicrosoftRedirectUri() {
   try {
     const base = (typeof import.meta !== 'undefined' && import.meta.env?.BASE_URL) || '/';
@@ -184,134 +272,172 @@ function useCloudLoginWithProvider(mode = 'login', stayLoggedIn = false, onError
   const navigate = useNavigate();
   const [microsoftInProgress, setMicrosoftInProgress] = useState(false);
 
-  const googleLogin = useGoogleLogin({
-    onSuccess: (tokenResponse) => {
-      try {
-        if (typeof tokenResponse === 'undefined') {
-          console.error('[CloudLogin] Sisselogimise hetkel: tokenResponse on undefined');
-          return;
-        }
-        if (!tokenResponse?.access_token) {
-          console.error('[CloudLogin] Puudub access_token:', { hasTokenResponse: !!tokenResponse, keys: tokenResponse && typeof tokenResponse === 'object' ? Object.keys(tokenResponse) : [] });
-          return;
-        }
-      } catch (e) {
-        const t = getT();
-        alert((t['auth.loginError'] || 'Sisselogimise viga') + ': ' + (e?.message ?? String(e)));
-        console.error(e);
-        if (onError) onError(formatAuthError('Google OAuth', e));
+  const handleGoogleToken = (tokenResponse) => {
+    try {
+      if (typeof tokenResponse === 'undefined') {
+        console.error('[CloudLogin] Sisselogimise hetkel: tokenResponse on undefined');
         return;
       }
-      fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-        headers: { Authorization: `Bearer ${tokenResponse.access_token}` }
+      if (!tokenResponse?.access_token) {
+        console.error('[CloudLogin] Puudub access_token:', { hasTokenResponse: !!tokenResponse, keys: tokenResponse && typeof tokenResponse === 'object' ? Object.keys(tokenResponse) : [] });
+        return;
+      }
+    } catch (e) {
+      const t = getT();
+      alert((t['auth.loginError'] || 'Sisselogimise viga') + ': ' + (e?.message ?? String(e)));
+      console.error(e);
+      if (onError) onError(formatAuthError('Google OAuth', e));
+      return;
+    }
+    fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+      headers: { Authorization: `Bearer ${tokenResponse.access_token}` }
+    })
+      .then(async (r) => {
+        const body = await r.json().catch(() => ({}));
+        if (!r.ok) {
+          const errDetail = body.error?.message ?? body.error_description ?? body.message ?? (r.status === 401 ? 'Token kehtetu või aegunud' : `HTTP ${r.status}`);
+          const err = { status: r.status, code: body.error?.code ?? body.error, message: errDetail, ...body };
+          console.error('[CloudLogin] Google userinfo API viga:', err);
+          throw err;
+        }
+        return body;
       })
-        .then(async (r) => {
-          const body = await r.json().catch(() => ({}));
-          if (!r.ok) {
-            const errDetail = body.error?.message ?? body.error_description ?? body.message ?? (r.status === 401 ? 'Token kehtetu või aegunud' : `HTTP ${r.status}`);
-            const err = { status: r.status, code: body.error?.code ?? body.error, message: errDetail, ...body };
-            console.error('[CloudLogin] Google userinfo API viga:', err);
-            throw err;
+      .then(profile => {
+        try {
+          if (typeof profile === 'undefined') {
+            console.error('[CloudLogin] Sisselogimise hetkel: profile on undefined');
+            throw new Error('Profiili andmeid ei saadud');
           }
-          return body;
-        })
-        .then(profile => {
-          try {
-            if (typeof profile === 'undefined') {
-              console.error('[CloudLogin] Sisselogimise hetkel: profile on undefined');
-              throw new Error('Profiili andmeid ei saadud');
-            }
-            if (!profile || profile.error) {
-              const errObj = profile && (typeof profile.error === 'string' ? { error: profile.error, error_description: profile.error_description } : profile);
-              const payload = formatAuthError('Google userinfo', errObj);
-              const t = getT();
-              alert((t['auth.loginError'] || 'Sisselogimise viga') + ': ' + (payload.fullMessage || payload.description || 'Profiili viga'));
-              if (onError) onError(payload);
-              return;
-            }
-            if (!profile.email) {
-              const msg = 'e-mail puudub (konto võib olla piiratud)';
-              const t = getT();
-              alert((t['auth.loginError'] || 'Sisselogimise viga') + ': ' + msg);
-              const payload = formatAuthError('Google userinfo', { message: msg });
-              if (onError) onError(payload);
-              return;
-            }
-            const user = { email: profile.email, name: profile.name || profile.given_name || profile.email?.split('@')[0], provider: 'google' };
-            if (!canUseStorageForLogin(stayLoggedIn)) {
-              const msg = 'brauser ei luba andmeid salvestada (nt privaatne režiim). Proovi teist brauserit.';
-              const t = getT();
-              alert((t['auth.loginError'] || 'Sisselogimise viga') + ': ' + msg);
-              if (onError) onError(formatAuthError('brauser', { message: msg }));
-              return;
-            }
-            const storage = getStorageForLogin(stayLoggedIn);
-            if (!storage) {
-              const msg = 'brauser ei luba andmeid salvestada (nt privaatne režiim). Proovi teist brauserit.';
-              const t = getT();
-              alert((t['auth.loginError'] || 'Sisselogimise viga') + ': ' + msg);
-              const payload = formatAuthError('brauser', { message: msg });
-              if (onError) onError(payload);
-              return;
-            }
-            storage.setItem(KEY_LOGGED_IN, JSON.stringify(user));
-            if (tokenResponse.access_token) {
-              storage.setItem(KEY_GOOGLE_TOKEN, tokenResponse.access_token);
-              const expiresAt = tokenResponse.expires_in ? Date.now() + tokenResponse.expires_in * 1000 : 0;
-              storage.setItem(KEY_GOOGLE_EXPIRY, String(expiresAt));
-            }
-            // Always ensure user is in noodimeister-users so the account is "fully registered" (login or register).
-            try {
-              const users = JSON.parse(localStorage.getItem('noodimeister-users') || '[]');
-              if (!users.some(u => u && u.email === profile.email)) {
-                users.push({ ...user });
-                localStorage.setItem('noodimeister-users', JSON.stringify(users));
-              }
-            } catch (_) {}
-            // Vercel fix: suuna alles siis, kui auth andmed on kinnitatud (loe tagasi), et /app ei laadi enne kui isLoggedIn() töötab.
-            // COOP: ära kasuta window.close() – sisselogimine suunab /app poole; close() põhjustaks Cross-Origin-Opener-Policy vigu.
-            const readStorage = getStorageForRead();
-            const confirmedUser = getLoggedInUser();
-            const loggedIn = isLoggedIn();
-            if (!readStorage || !confirmedUser?.email || !loggedIn) {
-              const msg = 'Sisselogimine salvestati, kuid kinnitamine ebaõnnestus. Proovi uuesti või teist brauserit.';
-              const t = getT();
-              alert((t['auth.loginError'] || 'Sisselogimise viga') + ': ' + msg);
-              const payload = formatAuthError('brauser', { message: msg });
-              if (onError) onError(payload);
-              return;
-            }
-            console.log('[CloudLogin] Auth kinnitatud, suuname /konto poole (Minu konto)');
-            try { sessionStorage.setItem('noodimeister-show-welcome', '1'); } catch (_) {}
-            requestAnimationFrame(() => {
-              setTimeout(redirectToKonto, 50);
-            });
-          } catch (e) {
+          if (!profile || profile.error) {
+            const errObj = profile && (typeof profile.error === 'string' ? { error: profile.error, error_description: profile.error_description } : profile);
+            const payload = formatAuthError('Google userinfo', errObj);
             const t = getT();
-            alert((t['auth.loginError'] || 'Sisselogimise viga') + ': ' + (e?.message ?? String(e)));
-            console.error(e);
-            const payload = formatAuthError('Google userinfo', e && typeof e === 'object' ? e : new Error(String(e)));
+            alert((t['auth.loginError'] || 'Sisselogimise viga') + ': ' + (payload.fullMessage || payload.description || 'Profiili viga'));
             if (onError) onError(payload);
+            return;
           }
-        })
-        .catch((err) => {
-          const msg = err?.message ?? err?.error_description ?? (err && typeof err === 'object' ? (err.fullMessage || JSON.stringify(err)) : String(err));
+          if (!profile.email) {
+            const msg = 'e-mail puudub (konto võib olla piiratud)';
+            const t = getT();
+            alert((t['auth.loginError'] || 'Sisselogimise viga') + ': ' + msg);
+            const payload = formatAuthError('Google userinfo', { message: msg });
+            if (onError) onError(payload);
+            return;
+          }
+          const user = { email: profile.email, name: profile.name || profile.given_name || profile.email?.split('@')[0], provider: 'google' };
+          if (!canUseStorageForLogin(stayLoggedIn)) {
+            const msg = 'brauser ei luba andmeid salvestada (nt privaatne režiim). Proovi teist brauserit.';
+            const t = getT();
+            alert((t['auth.loginError'] || 'Sisselogimise viga') + ': ' + msg);
+            if (onError) onError(formatAuthError('brauser', { message: msg }));
+            return;
+          }
+          const storage = getStorageForLogin(stayLoggedIn);
+          if (!storage) {
+            const msg = 'brauser ei luba andmeid salvestada (nt privaatne režiim). Proovi teist brauserit.';
+            const t = getT();
+            alert((t['auth.loginError'] || 'Sisselogimise viga') + ': ' + msg);
+            const payload = formatAuthError('brauser', { message: msg });
+            if (onError) onError(payload);
+            return;
+          }
+          storage.setItem(KEY_LOGGED_IN, JSON.stringify(user));
+          if (tokenResponse.access_token) {
+            storage.setItem(KEY_GOOGLE_TOKEN, tokenResponse.access_token);
+            const expiresAt = tokenResponse.expires_in ? Date.now() + tokenResponse.expires_in * 1000 : 0;
+            storage.setItem(KEY_GOOGLE_EXPIRY, String(expiresAt));
+          }
+          // Always ensure user is in noodimeister-users so the account is "fully registered" (login or register).
+          try {
+            const users = JSON.parse(localStorage.getItem('noodimeister-users') || '[]');
+            if (!users.some(u => u && u.email === profile.email)) {
+              users.push({ ...user });
+              localStorage.setItem('noodimeister-users', JSON.stringify(users));
+            }
+          } catch (_) {}
+          // Vercel fix: suuna alles siis, kui auth andmed on kinnitatud (loe tagasi), et /app ei laadi enne kui isLoggedIn() töötab.
+          // COOP: ära kasuta window.close() – sisselogimine suunab /app poole; close() põhjustaks Cross-Origin-Opener-Policy vigu.
+          const readStorage = getStorageForRead();
+          const confirmedUser = getLoggedInUser();
+          const loggedIn = isLoggedIn();
+          if (!readStorage || !confirmedUser?.email || !loggedIn) {
+            const msg = 'Sisselogimine salvestati, kuid kinnitamine ebaõnnestus. Proovi uuesti või teist brauserit.';
+            const t = getT();
+            alert((t['auth.loginError'] || 'Sisselogimise viga') + ': ' + msg);
+            const payload = formatAuthError('brauser', { message: msg });
+            if (onError) onError(payload);
+            return;
+          }
+
+          // After redirect login, try to return the user to the page they were on before starting Google OAuth.
+          const returnUrl = consumeGoogleReturnUrl();
+          console.log('[CloudLogin] Auth kinnitatud, returnUrl =', returnUrl);
+          try { sessionStorage.setItem('noodimeister-show-welcome', '1'); } catch (_) {}
+          requestAnimationFrame(() => {
+            setTimeout(() => {
+              if (returnUrl && returnUrl !== window.location.href) {
+                window.location.replace(returnUrl);
+              } else {
+                redirectToKonto();
+              }
+            }, 50);
+          });
+        } catch (e) {
           const t = getT();
-          alert((t['auth.loginError'] || 'Sisselogimise viga') + ': ' + msg);
-          console.error(err);
-          const payload = formatAuthError('Google userinfo', err && typeof err === 'object' ? err : new Error(String(err)));
+          alert((t['auth.loginError'] || 'Sisselogimise viga') + ': ' + (e?.message ?? String(e)));
+          console.error(e);
+          const payload = formatAuthError('Google userinfo', e && typeof e === 'object' ? e : new Error(String(e)));
           if (onError) onError(payload);
-        });
+        }
+      })
+      .catch((err) => {
+        const msg = err?.message ?? err?.error_description ?? (err && typeof err === 'object' ? (err.fullMessage || JSON.stringify(err)) : String(err));
+        const t = getT();
+        alert((t['auth.loginError'] || 'Sisselogimise viga') + ': ' + msg);
+        console.error(err);
+        const payload = formatAuthError('Google userinfo', err && typeof err === 'object' ? err : new Error(String(err)));
+        if (onError) onError(payload);
+      });
+  };
+
+  const startGoogleRedirect = () => {
+    if (!googleClientId || typeof window === 'undefined') return;
+    rememberGoogleReturnUrl();
+    const redirectUri = getGoogleRedirectUri();
+    const scope = encodeURIComponent('email profile https://www.googleapis.com/auth/drive');
+    const state = encodeURIComponent(JSON.stringify({ ts: Date.now(), mode }));
+    const url =
+      'https://accounts.google.com/o/oauth2/v2/auth' +
+      `?client_id=${encodeURIComponent(googleClientId)}` +
+      `&redirect_uri=${encodeURIComponent(redirectUri)}` +
+      '&response_type=token' +
+      `&scope=${scope}` +
+      '&include_granted_scopes=true' +
+      '&prompt=select_account' +
+      `&state=${state}`;
+    console.log('[CloudLogin] Google redirect flow:', { redirectUri, url });
+    window.location.assign(url);
+  };
+
+  const googleLogin = useGoogleLogin({
+    onSuccess: (tokenResponse) => {
+      handleGoogleToken(tokenResponse);
     },
     onError: (err) => {
       console.error('[CloudLogin] Google OAuth onError:', err, { errorType: typeof err, keys: err && typeof err === 'object' ? Object.keys(err) : [] });
       const isPopupClosed = err?.error === 'popup_closed_by_user' || err?.type === 'popup_closed' || err?.type === 'popup_closed_by_user';
+      const msg = err?.message ?? err?.error_description ?? err?.error ?? (err && typeof err === 'object' ? JSON.stringify(err) : String(err));
+      const isCrossOriginIssue = typeof msg === 'string' && /cross-origin|cross origin|coop|opener|blocked/i.test(msg);
       if (!isPopupClosed) {
-        const msg = err?.message ?? err?.error_description ?? err?.error ?? (err && typeof err === 'object' ? JSON.stringify(err) : String(err));
         const t = getT();
         alert((t['auth.loginError'] || 'Sisselogimise viga') + ': ' + msg);
         const payload = formatAuthError('Google OAuth', err && typeof err === 'object' ? err : new Error(String(err)));
         if (onError) onError(payload);
+      }
+      // On iPadOS / mobile or cross-origin popup issues, switch to redirect-based login.
+      if (isMobileOrTablet() || isCrossOriginIssue) {
+        console.warn('[CloudLogin] Google popup failed or cross-origin issue detected – falling back to redirect flow.');
+        startGoogleRedirect();
       }
     },
     flow: 'implicit',
@@ -330,6 +456,11 @@ function useCloudLoginWithProvider(mode = 'login', stayLoggedIn = false, onError
       const msg = 'Brauser ei luba andmeid salvestada (nt privaatne režiim või kolmandate küpsiste blokeerimine). Proovi teist brauserit või lülita privaatne režiim välja.';
       alert('Sisselogimise viga: ' + msg);
       if (onError) onError(formatAuthError('brauser', { message: msg }));
+      return;
+    }
+    // On mobile/tablet (especially iPadOS), prefer a full-page redirect flow instead of popup.
+    if (isMobileOrTablet()) {
+      startGoogleRedirect();
       return;
     }
     googleLogin();
@@ -387,6 +518,27 @@ function useCloudLoginWithProvider(mode = 'login', stayLoggedIn = false, onError
       setMicrosoftInProgress(false);
     });
   };
+
+  // Handle Google redirect callback (implicit flow with access_token in hash) on any page where this hook is used.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const parsed = parseGoogleHashResponse();
+    if (!parsed) return;
+    clearLocationHash();
+    if (parsed.error) {
+      const payload = formatAuthError('Google OAuth redirect', { error: parsed.error, error_description: parsed.error_description });
+      const t = getT();
+      alert((t['auth.loginError'] || 'Sisselogimise viga') + ': ' + (payload.fullMessage || payload.description || parsed.error));
+      if (onError) onError(payload);
+      return;
+    }
+    if (parsed.access_token) {
+      handleGoogleToken({
+        access_token: parsed.access_token,
+        expires_in: parsed.expires_in,
+      });
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return { handleGoogleClick, handleMicrosoftClick, microsoftInProgress };
 }
