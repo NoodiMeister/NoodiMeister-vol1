@@ -1933,74 +1933,6 @@ function NoodiMeisterCore({ icons }) {
     e.target.value = '';
   }, [notationMode, stopPedagogicalPlayback]);
 
-  const startPedagogicalPlayback = useCallback(() => {
-    if (!pedagogicalAudioUrl) return;
-    if (pedagogicalPlaybackIntervalRef.current) return;
-    const audio = new Audio(pedagogicalAudioUrl);
-    audio.playbackRate = clampNumber(Number(pedagogicalAudioPlaybackRate) || 1, 0.5, 2);
-    pedagogicalAudioRef.current = audio;
-    const bpm = Math.max(20, Math.min(300, pedagogicalAudioBpm));
-    pedagogicalLastSnappedBeatRef.current = 0;
-    audio.play().then(() => {
-      setIsPedagogicalAudioPlaying(true);
-      pedagogicalPlaybackIntervalRef.current = setInterval(() => {
-        let run = 0;
-        const withBeats = (notes || []).map((n) => {
-          const beat = typeof n.beat === 'number' ? n.beat : run;
-          run = beat + (n.duration ?? 1);
-          return { ...n, beat };
-        }).sort((a, b) => a.beat - b.beat);
-        const totalBeats = run;
-        const beat = (audio.currentTime * bpm) / 60;
-        let snapped = 0;
-        for (const n of withBeats) {
-          if (n.beat <= beat) snapped = n.beat;
-        }
-        const lastSnapped = pedagogicalLastSnappedBeatRef.current;
-        for (const n of withBeats) {
-          if (n.beat > lastSnapped && n.beat <= beat && !n.isRest) {
-            playPianoNote(n.pitch, n.octave ?? 4, n.accidental ?? 0);
-          }
-        }
-        pedagogicalLastSnappedBeatRef.current = snapped;
-        setPedagogicalAudioCurrentTime(audio.currentTime || 0);
-        setCursorPosition(Math.max(0, Math.min(totalBeats, snapped)));
-        if (audio.ended || audio.currentTime >= audio.duration) {
-          clearInterval(pedagogicalPlaybackIntervalRef.current);
-          pedagogicalPlaybackIntervalRef.current = null;
-          setIsPedagogicalAudioPlaying(false);
-          setCursorPosition(0);
-          setPedagogicalAudioCurrentTime(0);
-        }
-      }, 50);
-    }).catch(() => setIsPedagogicalAudioPlaying(false));
-    audio.onended = () => {
-      stopPedagogicalPlayback();
-      setCursorPosition(0);
-    };
-  }, [pedagogicalAudioUrl, pedagogicalAudioBpm, notes, stopPedagogicalPlayback, pedagogicalAudioPlaybackRate, playPianoNote]);
-
-  const seekPedagogicalAudio = useCallback((deltaSeconds) => {
-    if (!pedagogicalAudioUrl) return;
-    const audio = pedagogicalAudioRef.current || new Audio(pedagogicalAudioUrl);
-    audio.playbackRate = clampNumber(Number(pedagogicalAudioPlaybackRate) || 1, 0.5, 2);
-    pedagogicalAudioRef.current = audio;
-    const dur = Number.isFinite(audio.duration) && audio.duration > 0 ? audio.duration : (pedagogicalAudioDuration || 0);
-    const nextTime = clampNumber((audio.currentTime || 0) + (Number(deltaSeconds) || 0), 0, dur > 0 ? dur : 1e9);
-    audio.currentTime = nextTime;
-    setPedagogicalAudioCurrentTime(nextTime);
-  }, [pedagogicalAudioUrl, pedagogicalAudioDuration, pedagogicalAudioPlaybackRate]);
-  useEffect(() => {
-    return () => {
-      if (pedagogicalPlaybackIntervalRef.current) clearInterval(pedagogicalPlaybackIntervalRef.current);
-      if (pedagogicalAudioRef.current) {
-        pedagogicalAudioRef.current.pause();
-        pedagogicalAudioRef.current = null;
-      }
-      if (pedagogicalAudioUrlRef.current) URL.revokeObjectURL(pedagogicalAudioUrlRef.current);
-    };
-  }, []);
-
   // Animatsiooni eksport video failina (MP4 või WebM) – alla laadimine või Google Drive
   const exportAnimationAsVideo = useCallback(async ({ download = false, saveToDrive = false } = {}) => {
     if (!isPedagogicalProject || !scoreContainerRef.current) {
@@ -3385,6 +3317,74 @@ function NoodiMeisterCore({ icons }) {
         .catch(() => {});
     }
   }, [tuningReferenceNote, tuningReferenceOctave, tuningReferenceHz, instrument]);
+
+  const startPedagogicalPlayback = useCallback(() => {
+    if (!pedagogicalAudioUrl) return;
+    if (pedagogicalPlaybackIntervalRef.current) return;
+    const audio = new Audio(pedagogicalAudioUrl);
+    audio.playbackRate = clampNumber(Number(pedagogicalAudioPlaybackRate) || 1, 0.5, 2);
+    pedagogicalAudioRef.current = audio;
+    const bpm = Math.max(20, Math.min(300, pedagogicalAudioBpm));
+    pedagogicalLastSnappedBeatRef.current = 0;
+    audio.play().then(() => {
+      setIsPedagogicalAudioPlaying(true);
+      pedagogicalPlaybackIntervalRef.current = setInterval(() => {
+        let run = 0;
+        const withBeats = (notes || []).map((n) => {
+          const beat = typeof n.beat === 'number' ? n.beat : run;
+          run = beat + (n.duration ?? 1);
+          return { ...n, beat };
+        }).sort((a, b) => a.beat - b.beat);
+        const totalBeats = run;
+        const beat = (audio.currentTime * bpm) / 60;
+        let snapped = 0;
+        for (const n of withBeats) {
+          if (n.beat <= beat) snapped = n.beat;
+        }
+        const lastSnapped = pedagogicalLastSnappedBeatRef.current;
+        for (const n of withBeats) {
+          if (n.beat > lastSnapped && n.beat <= beat && !n.isRest) {
+            playPianoNote(n.pitch, n.octave ?? 4, n.accidental ?? 0);
+          }
+        }
+        pedagogicalLastSnappedBeatRef.current = snapped;
+        setPedagogicalAudioCurrentTime(audio.currentTime || 0);
+        setCursorPosition(Math.max(0, Math.min(totalBeats, snapped)));
+        if (audio.ended || audio.currentTime >= audio.duration) {
+          clearInterval(pedagogicalPlaybackIntervalRef.current);
+          pedagogicalPlaybackIntervalRef.current = null;
+          setIsPedagogicalAudioPlaying(false);
+          setCursorPosition(0);
+          setPedagogicalAudioCurrentTime(0);
+        }
+      }, 50);
+    }).catch(() => setIsPedagogicalAudioPlaying(false));
+    audio.onended = () => {
+      stopPedagogicalPlayback();
+      setCursorPosition(0);
+    };
+  }, [pedagogicalAudioUrl, pedagogicalAudioBpm, notes, stopPedagogicalPlayback, pedagogicalAudioPlaybackRate, playPianoNote]);
+
+  const seekPedagogicalAudio = useCallback((deltaSeconds) => {
+    if (!pedagogicalAudioUrl) return;
+    const audio = pedagogicalAudioRef.current || new Audio(pedagogicalAudioUrl);
+    audio.playbackRate = clampNumber(Number(pedagogicalAudioPlaybackRate) || 1, 0.5, 2);
+    pedagogicalAudioRef.current = audio;
+    const dur = Number.isFinite(audio.duration) && audio.duration > 0 ? audio.duration : (pedagogicalAudioDuration || 0);
+    const nextTime = clampNumber((audio.currentTime || 0) + (Number(deltaSeconds) || 0), 0, dur > 0 ? dur : 1e9);
+    audio.currentTime = nextTime;
+    setPedagogicalAudioCurrentTime(nextTime);
+  }, [pedagogicalAudioUrl, pedagogicalAudioDuration, pedagogicalAudioPlaybackRate]);
+  useEffect(() => {
+    return () => {
+      if (pedagogicalPlaybackIntervalRef.current) clearInterval(pedagogicalPlaybackIntervalRef.current);
+      if (pedagogicalAudioRef.current) {
+        pedagogicalAudioRef.current.pause();
+        pedagogicalAudioRef.current = null;
+      }
+      if (pedagogicalAudioUrlRef.current) URL.revokeObjectURL(pedagogicalAudioUrlRef.current);
+    };
+  }, []);
 
   // Lisa uus noodirida valitud instrumendiga (noodivõti instrumendi konfiguratsioonist). Igal real oma notationMode (T/F/P).
   const addStaff = useCallback((instId) => {
