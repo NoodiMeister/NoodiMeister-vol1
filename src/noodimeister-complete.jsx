@@ -4727,7 +4727,6 @@ function NoodiMeisterCore({ icons }) {
 
         // Backspace in N mode is handled earlier (before convert-selection-to-rest) so delete-at-cursor always works
       }
-    }
     };
 
     // Globaalne window keydown: JO-võti nooltega ↑↓ muudab võtme asukohta ja transponeerib kõik noodid reaalajas (mõlemal joonestikul)
