@@ -4712,6 +4712,7 @@ function NoodiMeisterCore({ icons }) {
           }
         }
       }
+    }
     };
 
     // Globaalne window keydown: JO-võti nooltega ↑↓ muudab võtme asukohta ja transponeerib kõik noodid reaalajas (mõlemal joonestikul)

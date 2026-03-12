@@ -89,6 +89,10 @@ export default function MinuTöödPage() {
   const [moveOneDrivePath, setMoveOneDrivePath] = useState([]);
   const [moveOneDriveFolders, setMoveOneDriveFolders] = useState([]);
   const [moveOneDriveLoading, setMoveOneDriveLoading] = useState(false);
+  const [sharedGoogleFiles, setSharedGoogleFiles] = useState([]);
+  const [sharedOneDriveFiles, setSharedOneDriveFiles] = useState([]);
+  const [sharedGoogleLoading, setSharedGoogleLoading] = useState(false);
+  const [sharedOneDriveLoading, setSharedOneDriveLoading] = useState(false);
   const settingsRef = useRef(null);
   const store = useNoodimeisterOptional();
   const themeMode = store?.theme?.mode ?? 'light';
@@ -226,6 +230,7 @@ export default function MinuTöödPage() {
       if (document.visibilityState !== 'visible') return;
       if (token) loadFiles();
       if (microsoftToken) loadOneDriveFiles();
+      if (hasGoogle || hasMicrosoft) loadSharedFiles();
     };
     document.addEventListener('visibilitychange', sync);
     const interval = setInterval(() => {
@@ -235,7 +240,40 @@ export default function MinuTöödPage() {
       document.removeEventListener('visibilitychange', sync);
       clearInterval(interval);
     };
-  }, [token, microsoftToken, loadFiles, loadOneDriveFiles]);
+  }, [token, microsoftToken, hasGoogle, hasMicrosoft, loadFiles, loadOneDriveFiles, loadSharedFiles]);
+
+  const loadSharedFiles = useCallback(async () => {
+    if (token) {
+      setSharedGoogleLoading(true);
+      try {
+        const list = await googleDrive.listNoodimeisterFilesSharedWithMe(token);
+        setSharedGoogleFiles(list);
+      } catch {
+        setSharedGoogleFiles([]);
+      } finally {
+        setSharedGoogleLoading(false);
+      }
+    } else {
+      setSharedGoogleFiles([]);
+    }
+    if (microsoftToken) {
+      setSharedOneDriveLoading(true);
+      try {
+        const result = await oneDrive.listNoodimeisterFilesSharedWithMe(microsoftToken);
+        setSharedOneDriveFiles(result.ok ? (result.files || []) : []);
+      } catch {
+        setSharedOneDriveFiles([]);
+      } finally {
+        setSharedOneDriveLoading(false);
+      }
+    } else {
+      setSharedOneDriveFiles([]);
+    }
+  }, [token, microsoftToken]);
+
+  useEffect(() => {
+    if (hasGoogle || hasMicrosoft) loadSharedFiles();
+  }, [hasGoogle, hasMicrosoft, loadSharedFiles]);
 
   // Populate folder names from API when missing (e.g. legacy single folder)
   useEffect(() => {
@@ -822,6 +860,69 @@ export default function MinuTöödPage() {
                 </div>
               );
             })}
+          </section>
+        )}
+
+        {(hasGoogle || hasMicrosoft) && (
+          <section className="mt-10">
+            <h2 className="text-lg font-semibold text-amber-900 dark:text-white mb-2">{t['mywork.sharedWithMe'] || 'Jagatud minuga'}</h2>
+            <p className="text-sm text-amber-800/90 dark:text-white/90 mb-4">
+              {t['mywork.sharedWithMeHint'] || 'Teise kasutaja jagatud NoodiMeisteri failid. Ava fail, et seda vaadata või juurde ehitada; salvestades läheb koopia sinu salvestuskausta.'}
+            </p>
+            {hasGoogle && (
+              <div className="mb-4">
+                <h3 className="text-sm font-medium text-amber-800 dark:text-white/90 mb-2">{t['mywork.sharedWithMeGoogle'] || 'Google Drive'}</h3>
+                {sharedGoogleLoading ? (
+                  <div className="flex items-center gap-2 text-amber-700 dark:text-white/80 py-4">
+                    <Loader2 className="w-5 h-5 animate-spin" /> {t['mywork.loadingWorks']}
+                  </div>
+                ) : sharedGoogleFiles.length === 0 ? (
+                  <p className="text-sm text-amber-700/90 dark:text-white/80 py-2">{t['mywork.sharedWithMeEmpty'] || 'Jagatud faile ei leitud.'}</p>
+                ) : (
+                  <ul className="space-y-2" role="list">
+                    {sharedGoogleFiles.map((f) => (
+                      <li key={f.id}>
+                        <a
+                          href={`${basePath}/app?fileId=${encodeURIComponent(f.id)}`}
+                          className="flex items-center gap-3 px-4 py-3 rounded-xl bg-white dark:bg-zinc-900 border border-amber-200/60 dark:border-white/20 shadow-sm hover:bg-amber-50 dark:hover:bg-white/10 hover:border-amber-300 dark:hover:border-white/30 transition-colors no-underline text-inherit text-amber-900 dark:text-white"
+                        >
+                          <AppLogo variant="iconMd" alt="" />
+                          <span className="font-medium truncate flex-1">{f.name}</span>
+                          <span className="text-sm text-amber-600 dark:text-white/70 flex-shrink-0">{formatDate(f.modifiedTime, locale)}</span>
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+            {hasMicrosoft && (
+              <div>
+                <h3 className="text-sm font-medium text-amber-800 dark:text-white/90 mb-2">{t['mywork.sharedWithMeOneDrive'] || 'OneDrive'}</h3>
+                {sharedOneDriveLoading ? (
+                  <div className="flex items-center gap-2 text-amber-700 dark:text-white/80 py-4">
+                    <Loader2 className="w-5 h-5 animate-spin" /> {t['mywork.loadingWorks']}
+                  </div>
+                ) : sharedOneDriveFiles.length === 0 ? (
+                  <p className="text-sm text-amber-700/90 dark:text-white/80 py-2">{t['mywork.sharedWithMeEmpty'] || 'Jagatud faile ei leitud.'}</p>
+                ) : (
+                  <ul className="space-y-2" role="list">
+                    {sharedOneDriveFiles.map((f) => (
+                      <li key={f.id}>
+                        <a
+                          href={`${basePath}/app?fileId=${encodeURIComponent(f.id)}&cloud=onedrive`}
+                          className="flex items-center gap-3 px-4 py-3 rounded-xl bg-white dark:bg-zinc-900 border border-amber-200/60 dark:border-white/20 shadow-sm hover:bg-amber-50 dark:hover:bg-white/10 hover:border-amber-300 dark:hover:border-white/30 transition-colors no-underline text-inherit text-amber-900 dark:text-white"
+                        >
+                          <AppLogo variant="iconMd" alt="" />
+                          <span className="font-medium truncate flex-1">{f.name}</span>
+                          <span className="text-sm text-amber-600 dark:text-white/70 flex-shrink-0">{formatOneDriveDate(f, locale)}</span>
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
           </section>
         )}
 

@@ -14,6 +14,22 @@ export const KEY_GOOGLE_SAVE_FOLDERS = 'noodimeister-google-save-folders';
 export const KEY_ONEDRIVE_SAVE_FOLDER = 'noodimeister-onedrive-save-folder';
 export const KEY_ONEDRIVE_SAVE_FOLDERS = 'noodimeister-onedrive-save-folders';
 
+/** Kasutaja e-posti põhine võti (iga kasutaja oma kaustade nimekiri – turvalisus). */
+function getGoogleSaveFoldersStorageKey(email) {
+  if (!email || typeof email !== 'string') return null;
+  return `noodimeister-google-save-folders-${encodeURIComponent(email)}`;
+}
+function getOneDriveSaveFoldersStorageKey(email) {
+  if (!email || typeof email !== 'string') return null;
+  return `noodimeister-onedrive-save-folders-${encodeURIComponent(email)}`;
+}
+
+/** Praegu sisselogitud kasutaja e-post (või null). */
+export function getCurrentUserEmail() {
+  const user = getLoggedInUser();
+  return user?.email ?? null;
+}
+
 function safeStorage(storage) {
   if (typeof window === 'undefined' || !storage) return null;
   try {
@@ -115,24 +131,39 @@ function getLegacyGoogleFolderIdFromAnyStorage() {
   return null;
 }
 
-/** Google Drive salvestuskaustade nimekiri (id + name). Tagastab vähemalt ühe kausta, kui on legacy key. Loeb mõlemast salvestusest, et kaust ei kaoks. */
+/** Google Drive salvestuskaustade nimekiri (id + name) praeguse kasutaja jaoks. Igale kasutajale oma nimekiri (turvalisus). */
 export function getGoogleSaveFolders() {
-  const storage = getStorageForRead();
+  const email = getCurrentUserEmail();
   if (typeof window === 'undefined') return [];
+  if (!email) return [];
   try {
-    const raw = storage?.getItem(KEY_GOOGLE_SAVE_FOLDERS);
+    const userKey = getGoogleSaveFoldersStorageKey(email);
+    const raw = window.localStorage?.getItem(userKey);
     if (raw) {
       const list = JSON.parse(raw);
       if (Array.isArray(list) && list.length > 0) return list;
     }
-    let legacyId = storage?.getItem(KEY_GOOGLE_SAVE_FOLDER) || null;
-    if (!legacyId) legacyId = getLegacyGoogleFolderIdFromAnyStorage();
+    const legacyRaw = window.localStorage?.getItem(KEY_GOOGLE_SAVE_FOLDERS) || window.sessionStorage?.getItem(KEY_GOOGLE_SAVE_FOLDERS);
+    if (legacyRaw) {
+      const list = JSON.parse(legacyRaw);
+      if (Array.isArray(list) && list.length > 0) {
+        setGoogleSaveFoldersForUser(email, list);
+        return list;
+      }
+    }
+    const legacyId = window.localStorage?.getItem(KEY_GOOGLE_SAVE_FOLDER) || getLegacyGoogleFolderIdFromAnyStorage();
     if (legacyId) {
       setGoogleSaveFolderId(legacyId, '');
       return [{ id: legacyId, name: '' }];
     }
   } catch (_) {}
   return [];
+}
+
+function setGoogleSaveFoldersForUser(email, list) {
+  if (!email || !Array.isArray(list) || typeof window === 'undefined') return;
+  const key = getGoogleSaveFoldersStorageKey(email);
+  if (key) window.localStorage?.setItem(key, JSON.stringify(list));
 }
 
 /** Google Drive vaikimisi salvestuskausta ID (esimene nimekirjas). */
@@ -143,8 +174,13 @@ export function getGoogleSaveFolderId() {
 
 export function setGoogleSaveFolderId(folderId, name = '') {
   if (typeof window === 'undefined' || !folderId) return;
+  const email = getCurrentUserEmail();
   const list = [{ id: folderId, name: name || '' }];
   try {
+    if (email) {
+      const key = getGoogleSaveFoldersStorageKey(email);
+      if (key) window.localStorage?.setItem(key, JSON.stringify(list));
+    }
     [window.sessionStorage, window.localStorage].forEach((s) => {
       if (s) {
         s.setItem(KEY_GOOGLE_SAVE_FOLDER, folderId);
@@ -154,14 +190,18 @@ export function setGoogleSaveFolderId(folderId, name = '') {
   } catch (_) {}
 }
 
-/** Lisa Google Drive salvestuskaust nimekirja (uued failid salvestatakse esimesse). */
+/** Lisa Google Drive salvestuskaust nimekirja (uued failid salvestatakse esimesse). Kasutajati. */
 export function addGoogleSaveFolder(folderId, name = '') {
   if (typeof window === 'undefined' || !folderId) return;
-  const storage = getStorageForRead();
-  const existing = storage ? getGoogleSaveFolders() : [];
+  const email = getCurrentUserEmail();
+  const existing = getGoogleSaveFolders();
   const filtered = existing.filter((f) => f.id !== folderId);
   const list = [{ id: folderId, name: name || '' }, ...filtered];
   try {
+    if (email) {
+      const key = getGoogleSaveFoldersStorageKey(email);
+      if (key) window.localStorage?.setItem(key, JSON.stringify(list));
+    }
     [window.sessionStorage, window.localStorage].forEach((s) => {
       if (s) {
         s.setItem(KEY_GOOGLE_SAVE_FOLDER, list[0].id);
@@ -174,10 +214,15 @@ export function addGoogleSaveFolder(folderId, name = '') {
 /** Uuenda Google Drive kausta nime nimekirjas. */
 export function updateGoogleSaveFolderName(folderId, newName) {
   if (typeof window === 'undefined' || !folderId) return;
+  const email = getCurrentUserEmail();
   const list = getGoogleSaveFolders().map((f) =>
     f.id === folderId ? { ...f, name: newName || f.name } : f
   );
   try {
+    if (email) {
+      const key = getGoogleSaveFoldersStorageKey(email);
+      if (key) window.localStorage?.setItem(key, JSON.stringify(list));
+    }
     [window.sessionStorage, window.localStorage].forEach((s) => {
       if (s) s.setItem(KEY_GOOGLE_SAVE_FOLDERS, JSON.stringify(list));
     });
@@ -187,8 +232,13 @@ export function updateGoogleSaveFolderName(folderId, newName) {
 /** Eemalda Google Drive kaust nimekirjast (ei kustuta pilvest). */
 export function removeGoogleSaveFolder(folderId) {
   if (typeof window === 'undefined') return;
+  const email = getCurrentUserEmail();
   const list = getGoogleSaveFolders().filter((f) => f.id !== folderId);
   try {
+    if (email) {
+      const key = getGoogleSaveFoldersStorageKey(email);
+      if (key) window.localStorage?.setItem(key, JSON.stringify(list));
+    }
     [window.sessionStorage, window.localStorage].forEach((s) => {
       if (s) {
         s.setItem(KEY_GOOGLE_SAVE_FOLDERS, JSON.stringify(list));
@@ -201,7 +251,12 @@ export function removeGoogleSaveFolder(folderId) {
 
 export function clearGoogleSaveFolder() {
   if (typeof window === 'undefined') return;
+  const email = getCurrentUserEmail();
   try {
+    if (email) {
+      const key = getGoogleSaveFoldersStorageKey(email);
+      if (key) window.localStorage?.removeItem(key);
+    }
     [window.sessionStorage, window.localStorage].forEach((s) => {
       if (s) {
         s.removeItem(KEY_GOOGLE_SAVE_FOLDER);
@@ -222,24 +277,39 @@ function getLegacyOneDriveFolderIdFromAnyStorage() {
   return null;
 }
 
-/** OneDrive salvestuskaustade nimekiri (id + name). Loeb mõlemast salvestusest; kui leitakse teisest, kirjutatakse ka peamisse. */
+/** OneDrive salvestuskaustade nimekiri (id + name) praeguse kasutaja jaoks. Igale kasutajale oma nimekiri (turvalisus). */
 export function getOneDriveSaveFolders() {
-  const storage = getStorageForRead();
+  const email = getCurrentUserEmail();
   if (typeof window === 'undefined') return [];
+  if (!email) return [];
   try {
-    const raw = storage?.getItem(KEY_ONEDRIVE_SAVE_FOLDERS);
+    const userKey = getOneDriveSaveFoldersStorageKey(email);
+    const raw = window.localStorage?.getItem(userKey);
     if (raw) {
       const list = JSON.parse(raw);
       if (Array.isArray(list) && list.length > 0) return list;
     }
-    let legacyId = storage?.getItem(KEY_ONEDRIVE_SAVE_FOLDER) || null;
-    if (!legacyId) legacyId = getLegacyOneDriveFolderIdFromAnyStorage();
+    const legacyRaw = window.localStorage?.getItem(KEY_ONEDRIVE_SAVE_FOLDERS) || window.sessionStorage?.getItem(KEY_ONEDRIVE_SAVE_FOLDERS);
+    if (legacyRaw) {
+      const list = JSON.parse(legacyRaw);
+      if (Array.isArray(list) && list.length > 0) {
+        setOneDriveSaveFoldersForUser(email, list);
+        return list;
+      }
+    }
+    const legacyId = window.localStorage?.getItem(KEY_ONEDRIVE_SAVE_FOLDER) || getLegacyOneDriveFolderIdFromAnyStorage();
     if (legacyId) {
       setOneDriveSaveFolderId(legacyId, '');
       return [{ id: legacyId, name: '' }];
     }
   } catch (_) {}
   return [];
+}
+
+function setOneDriveSaveFoldersForUser(email, list) {
+  if (!email || !Array.isArray(list) || typeof window === 'undefined') return;
+  const key = getOneDriveSaveFoldersStorageKey(email);
+  if (key) window.localStorage?.setItem(key, JSON.stringify(list));
 }
 
 /** OneDrive vaikimisi salvestuskausta ID (esimene nimekirjas). */
@@ -250,8 +320,13 @@ export function getOneDriveSaveFolderId() {
 
 export function setOneDriveSaveFolderId(folderId, name = '') {
   if (typeof window === 'undefined' || !folderId) return;
+  const email = getCurrentUserEmail();
   const list = [{ id: folderId, name: name || '' }];
   try {
+    if (email) {
+      const key = getOneDriveSaveFoldersStorageKey(email);
+      if (key) window.localStorage?.setItem(key, JSON.stringify(list));
+    }
     [window.sessionStorage, window.localStorage].forEach((s) => {
       if (s) {
         s.setItem(KEY_ONEDRIVE_SAVE_FOLDER, folderId);
@@ -261,13 +336,18 @@ export function setOneDriveSaveFolderId(folderId, name = '') {
   } catch (_) {}
 }
 
-/** Lisa OneDrive salvestuskaust nimekirja. */
+/** Lisa OneDrive salvestuskaust nimekirja. Kasutajati. */
 export function addOneDriveSaveFolder(folderId, name = '') {
   if (typeof window === 'undefined' || !folderId) return;
+  const email = getCurrentUserEmail();
   const existing = getOneDriveSaveFolders();
   const filtered = existing.filter((f) => f.id !== folderId);
   const list = [{ id: folderId, name: name || '' }, ...filtered];
   try {
+    if (email) {
+      const key = getOneDriveSaveFoldersStorageKey(email);
+      if (key) window.localStorage?.setItem(key, JSON.stringify(list));
+    }
     [window.sessionStorage, window.localStorage].forEach((s) => {
       if (s) {
         s.setItem(KEY_ONEDRIVE_SAVE_FOLDER, list[0].id);
@@ -280,10 +360,15 @@ export function addOneDriveSaveFolder(folderId, name = '') {
 /** Uuenda OneDrive kausta nime nimekirjas. */
 export function updateOneDriveSaveFolderName(folderId, newName) {
   if (typeof window === 'undefined' || !folderId) return;
+  const email = getCurrentUserEmail();
   const list = getOneDriveSaveFolders().map((f) =>
     f.id === folderId ? { ...f, name: newName || f.name } : f
   );
   try {
+    if (email) {
+      const key = getOneDriveSaveFoldersStorageKey(email);
+      if (key) window.localStorage?.setItem(key, JSON.stringify(list));
+    }
     [window.sessionStorage, window.localStorage].forEach((s) => {
       if (s) s.setItem(KEY_ONEDRIVE_SAVE_FOLDERS, JSON.stringify(list));
     });
@@ -293,8 +378,13 @@ export function updateOneDriveSaveFolderName(folderId, newName) {
 /** Eemalda OneDrive kaust nimekirjast. */
 export function removeOneDriveSaveFolder(folderId) {
   if (typeof window === 'undefined') return;
+  const email = getCurrentUserEmail();
   const list = getOneDriveSaveFolders().filter((f) => f.id !== folderId);
   try {
+    if (email) {
+      const key = getOneDriveSaveFoldersStorageKey(email);
+      if (key) window.localStorage?.setItem(key, JSON.stringify(list));
+    }
     [window.sessionStorage, window.localStorage].forEach((s) => {
       if (s) {
         s.setItem(KEY_ONEDRIVE_SAVE_FOLDERS, JSON.stringify(list));
@@ -307,7 +397,12 @@ export function removeOneDriveSaveFolder(folderId) {
 
 export function clearOneDriveSaveFolder() {
   if (typeof window === 'undefined') return;
+  const email = getCurrentUserEmail();
   try {
+    if (email) {
+      const key = getOneDriveSaveFoldersStorageKey(email);
+      if (key) window.localStorage?.removeItem(key);
+    }
     [window.sessionStorage, window.localStorage].forEach((s) => {
       if (s) {
         s.removeItem(KEY_ONEDRIVE_SAVE_FOLDER);
@@ -330,7 +425,7 @@ function clearMsalCache() {
   } catch (_) {}
 }
 
-/** Tühjenda sisselogimine ja token mõlemast salvestusest (väljalogimine). */
+/** Tühjenda sisselogimine ja token (väljalogimine). Kaustade nimekirjad on kasutajati (e-posti järgi); teise kasutaja sisselogimisel kuvatakse ainult tema kaustad. */
 export function clearAuth() {
   if (typeof window === 'undefined') return;
   try {
@@ -341,10 +436,6 @@ export function clearAuth() {
         s.removeItem(KEY_GOOGLE_EXPIRY);
         s.removeItem(KEY_MICROSOFT_TOKEN);
         s.removeItem(KEY_MICROSOFT_EXPIRY);
-        s.removeItem(KEY_GOOGLE_SAVE_FOLDER);
-        s.removeItem(KEY_GOOGLE_SAVE_FOLDERS);
-        s.removeItem(KEY_ONEDRIVE_SAVE_FOLDER);
-        s.removeItem(KEY_ONEDRIVE_SAVE_FOLDERS);
       }
     });
     clearMsalCache();

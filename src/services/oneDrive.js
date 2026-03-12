@@ -84,6 +84,35 @@ export async function listNoodimeisterFilesFromOneDrive(token, folderId) {
 }
 
 /**
+ * Loetleb OneDrive'ist failid, mis on kasutajaga jagatud (shared with me), mille nimi sisaldab ".noodimeister".
+ * @param {string} token
+ * @returns {Promise<{ ok: boolean, files?: Array<{ id, name, lastModifiedDateTime, size, webUrl }>, error?: string }>}
+ */
+export async function listNoodimeisterFilesSharedWithMe(token) {
+  try {
+    const data = await graphGet(token, '/me/drive/sharedWithMe?$top=100');
+    const items = Array.isArray(data.value) ? data.value : [];
+    const files = items
+      .filter((item) => !item.folder && typeof item.name === 'string')
+      .filter((item) => item.name.toLowerCase().includes('.noodimeister'))
+      .map((f) => ({
+        id: f.id,
+        name: f.name,
+        lastModifiedDateTime: f.lastModifiedDateTime,
+        size: f.size,
+        webUrl: f.webUrl,
+      }));
+    return { ok: true, files };
+  } catch (e) {
+    return {
+      ok: false,
+      files: [],
+      error: e?.message || 'Jagatud failide nimekirja laadimine ebaõnnestus.',
+    };
+  }
+}
+
+/**
  * Loetleb OneDrive'i kausta alamkaustad (children).
  * @param {string} token
  * @param {string} [folderId] - kausta ID või undefined/'root' = juurkaust

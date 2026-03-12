@@ -250,6 +250,30 @@ export async function listNoodimeisterFiles(accessToken, options = {}) {
 }
 
 /**
+ * Loetleb Google Drive'ist failid, mis on kasutajaga jagatud (shared with me) ja mille nimi sisaldab ".noodimeister".
+ * @param {string} accessToken
+ * @returns {Promise<Array<{ id, name, modifiedTime, createdTime }>>}
+ */
+export async function listNoodimeisterFilesSharedWithMe(accessToken) {
+  const q = "sharedWithMe = true and trashed = false and name contains '.noodimeister'";
+  const params = new URLSearchParams({
+    q,
+    pageSize: '50',
+    orderBy: 'modifiedTime desc',
+    fields: 'files(id, name, modifiedTime, createdTime)'
+  });
+  const res = await fetch(`${DRIVE_API_URL}?${params}`, {
+    headers: { Authorization: `Bearer ${accessToken}` }
+  });
+  if (!res.ok) {
+    if (res.status === 401) throw new Error('Token aegunud. Logi uuesti sisse.');
+    throw new Error('Jagatud failide nimekirja laadimine ebaõnnestus');
+  }
+  const data = await res.json();
+  return data.files || [];
+}
+
+/**
  * Kustuta fail Google Drive'ist.
  * @param {string} accessToken
  * @param {string} fileId
