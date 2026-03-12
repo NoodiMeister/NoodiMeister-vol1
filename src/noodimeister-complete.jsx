@@ -898,7 +898,8 @@ function NoodiMeisterCore({ icons }) {
   const toolboxes = useMemo(() => getToolboxes(t, instrumentConfig), [t, instrumentConfig]);
 
   const store = useNoodimeisterOptional();
-  const hasFullAccess = store?.hasFullAccess ?? authStorage.isLoggedIn();
+  const searchParamsForAccess = useSearchParams();
+  const hasFullAccess = (store?.hasFullAccess ?? authStorage.isLoggedIn()) || !!searchParamsForAccess.get('fileId');
 
   // JO-võti ja noodigraafika state (GLOBAL_NOTATION_CONFIG on faili alguses)
   const [joClefFocused, setJoClefFocused] = useState(false);
@@ -1210,6 +1211,7 @@ function NoodiMeisterCore({ icons }) {
   }, [notationMode, activeStaff?.clefType, setClefType]);
 
   const [saveFeedback, setSaveFeedback] = useState('');
+  const [cloudLoadComplete, setCloudLoadComplete] = useState(() => !(typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('fileId')));
   const [addedMeasures, setAddedMeasures] = useState(0);
   const [songTitle, setSongTitle] = useState('');
   const [author, setAuthor] = useState('');
@@ -1595,7 +1597,8 @@ function NoodiMeisterCore({ icons }) {
       const dataUrl = typeof reader.result === 'string' ? reader.result : null;
       if (dataUrl) {
         setPageDesignDataUrl(dataUrl);
-        setViewFitPage(true); // Täislehe vaade, et kasutaja näeks lehe suurust ja disaini sobivust
+        setViewSmartPage(false);
+        setViewFitPage(true); // A4 täislehe vaade, et kasutaja näeks lehe suurust ja disaini sobivust
         dirtyRef.current = true;
       }
     };
@@ -2945,6 +2948,7 @@ function NoodiMeisterCore({ icons }) {
   }, [importProject]);
 
   // Load from localStorage on mount (skip when opening as new work /app?new=1 or /app?fileId=...)
+  // Use importProject so both staves and legacy notes format load in full (taktid, lehekülje disain jms).
   useEffect(() => {
     if (searchParams.get('new') === '1') return;
     if (searchParams.get('fileId')) return; // laaditakse Drive'ist eraldi effect'iga
@@ -2952,107 +2956,14 @@ function NoodiMeisterCore({ icons }) {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) {
         const data = JSON.parse(raw);
-        if (data.notes && Array.isArray(data.notes) && data.notes.length > 0) {
-          setNotes(data.notes);
-          if (data.timeSignature) setTimeSignature(data.timeSignature);
-          if (data.timeSignatureMode) setTimeSignatureMode(data.timeSignatureMode);
-          if (data.clefType) setClefType(data.clefType);
-          if (data.keySignature) setKeySignature(data.keySignature);
-          if (data.staffLines != null) setStaffLines(data.staffLines);
-          if (data.notationStyle) setNotationStyle(data.notationStyle);
-          else if (data.gridOnlyMode != null) setNotationStyle(data.gridOnlyMode ? 'FIGURENOTES' : 'TRADITIONAL');
-          if (data.pixelsPerBeat != null) setPixelsPerBeat(data.pixelsPerBeat);
-          if (data.figurenotesSize != null) setFigurenotesSize(Math.max(12, Math.min(500, data.figurenotesSize)));
-          if (data.figurenotesStems != null) setFigurenotesStems(!!data.figurenotesStems);
-          if (data.figurenotesChordLineGap != null) setFigurenotesChordLineGap(Math.max(0, Math.min(20, Number(data.figurenotesChordLineGap))));
-          if (data.figurenotesChordBlocks != null) setFigurenotesChordBlocks(!!data.figurenotesChordBlocks);
-          if (data.timeSignatureSize != null) setTimeSignatureSize(Math.max(12, Math.min(48, data.timeSignatureSize)));
-          if (data.notationMode) setNotationMode(data.notationMode);
-          if (data.noteheadShape) setNoteheadShape(data.noteheadShape);
-          if (data.noteheadEmoji != null) setNoteheadEmoji(data.noteheadEmoji);
-          if (data.instrument) setInstrument(data.instrument);
-          if (data.instrumentNotationVariant) setInstrumentNotationVariant(data.instrumentNotationVariant);
-          if (data.cursorPosition != null) setCursorPosition(data.cursorPosition);
-          if (data.addedMeasures != null) setAddedMeasures(data.addedMeasures);
-          if (data.measureRepeatMarks != null && typeof data.measureRepeatMarks === 'object') setMeasureRepeatMarks(data.measureRepeatMarks);
-          if (data.setupCompleted != null) setSetupCompleted(data.setupCompleted);
-          if (data.songTitle != null) setSongTitle(data.songTitle);
-          if (data.author != null) setAuthor(data.author);
-          if (data.pickupEnabled != null) setPickupEnabled(data.pickupEnabled);
-          if (data.pickupQuantity != null) setPickupQuantity(data.pickupQuantity);
-          if (data.pickupDuration != null) setPickupDuration(data.pickupDuration);
-          else if (data.pickupBeats != null) { setPickupQuantity(data.pickupBeats); setPickupDuration('1/4'); }
-          if (data.pageOrientation === 'portrait' || data.pageOrientation === 'landscape') setPageOrientation(data.pageOrientation);
-          if (data.paperSize === 'a3' || data.paperSize === 'a4' || data.paperSize === 'a5') setPaperSize(data.paperSize);
-          if (data.layoutMeasuresPerLine != null) setLayoutMeasuresPerLine(data.layoutMeasuresPerLine);
-          if (Array.isArray(data.layoutLineBreakBefore)) setLayoutLineBreakBefore(data.layoutLineBreakBefore);
-          if (Array.isArray(data.layoutPageBreakBefore)) setLayoutPageBreakBefore(data.layoutPageBreakBefore);
-          if (data.layoutSystemGap != null) setLayoutSystemGap(Math.max(5, Math.min(250, Number(data.layoutSystemGap))));
-          if (data.layoutPartsGap != null) setLayoutPartsGap(Math.max(2, Math.min(80, Number(data.layoutPartsGap))));
-          if (data.layoutConnectedBarlines != null) setLayoutConnectedBarlines(!!data.layoutConnectedBarlines);
-          if (data.viewMode === 'score' || data.viewMode === 'part') setViewMode(data.viewMode);
-          if (data.partLayoutMeasuresPerLine != null) setPartLayoutMeasuresPerLine(data.partLayoutMeasuresPerLine);
-          if (Array.isArray(data.partLayoutLineBreakBefore)) setPartLayoutLineBreakBefore(data.partLayoutLineBreakBefore);
-          if (Array.isArray(data.partLayoutPageBreakBefore)) setPartLayoutPageBreakBefore(data.partLayoutPageBreakBefore);
-          if (data.showPageNavigator != null) setShowPageNavigator(!!data.showPageNavigator);
-          if (data.pageFlowDirection === 'vertical' || data.pageFlowDirection === 'horizontal') setPageFlowDirection(data.pageFlowDirection);
-          if (data.viewSmartPage != null) setViewSmartPage(!!data.viewSmartPage);
-          if (Array.isArray(data.visibleToolIds) && data.visibleToolIds.length > 0) setVisibleToolIds(data.visibleToolIds);
-          if (data.tuningReferenceNote) setTuningReferenceNote(data.tuningReferenceNote);
-          if (data.tuningReferenceOctave != null) setTuningReferenceOctave(data.tuningReferenceOctave);
-          if (data.tuningReferenceHz != null) setTuningReferenceHz(data.tuningReferenceHz);
-          if (data.playNoteOnInsert != null) setPlayNoteOnInsert(data.playNoteOnInsert);
-          if (data.showBarNumbers != null) setShowBarNumbers(data.showBarNumbers);
-      if (data.barNumberSize != null) setBarNumberSize(Math.max(8, Math.min(24, Number(data.barNumberSize))));
-      if (data.showRhythmSyllables != null) setShowRhythmSyllables(data.showRhythmSyllables);
-      if (data.showAllNoteLabels != null) setShowAllNoteLabels(data.showAllNoteLabels);
-      if (data.enableEmojiOverlays != null) setEnableEmojiOverlays(data.enableEmojiOverlays);
-      if (data.joClefStaffPosition != null && typeof data.joClefStaffPosition === 'number') setJoClefStaffPosition(Math.max(JO_CLEF_POSITION_MIN, Math.min(JO_CLEF_POSITION_MAX, data.joClefStaffPosition)));
-      else if (data.keySignature) setJoClefStaffPosition(getTonicStaffPosition(data.keySignature));
-          if (data.relativeNotationShowKeySignature != null) setRelativeNotationShowKeySignature(data.relativeNotationShowKeySignature);
-          if (data.relativeNotationShowTraditionalClef != null) setRelativeNotationShowTraditionalClef(data.relativeNotationShowTraditionalClef);
-          if (data.isPedagogicalProject != null) setIsPedagogicalProject(!!data.isPedagogicalProject);
-          if (data.pedagogicalAudioBpm != null) setPedagogicalAudioBpm(Math.max(20, Math.min(300, data.pedagogicalAudioBpm)));
-          if (data.pedagogicalPlayheadStyle) setPedagogicalPlayheadStyle(data.pedagogicalPlayheadStyle);
-          if (data.pedagogicalPlayheadEmoji != null) setPedagogicalPlayheadEmoji(data.pedagogicalPlayheadEmoji);
-          if (data.pedagogicalPlayheadEmojiSize != null) setPedagogicalPlayheadEmojiSize(Math.max(20, Math.min(60, data.pedagogicalPlayheadEmojiSize)));
-          if (data.cursorSizePx != null) setCursorSizePx(Math.max(1, Math.min(500, data.cursorSizePx)));
-          else if (data.pedagogicalPlayheadEmojiSize != null) setCursorSizePx(Math.max(1, Math.min(500, data.pedagogicalPlayheadEmojiSize)));
-          if (data.pedagogicalPlayheadMovement === 'arch' || data.pedagogicalPlayheadMovement === 'horizontal') setPedagogicalPlayheadMovement(data.pedagogicalPlayheadMovement);
-          if (data.cursorLineStrokeWidth != null) setCursorLineStrokeWidth(Math.max(1, Math.min(8, data.cursorLineStrokeWidth)));
-          if (data.pedagogicalAudioData) {
-            try {
-              const binary = atob(data.pedagogicalAudioData);
-              const bytes = new Uint8Array(binary.length);
-              for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-              const blob = new Blob([bytes], { type: 'audio/mpeg' });
-              const url = URL.createObjectURL(blob);
-              if (pedagogicalAudioUrlRef.current) URL.revokeObjectURL(pedagogicalAudioUrlRef.current);
-              pedagogicalAudioUrlRef.current = url;
-              pedagogicalAudioDataRef.current = data.pedagogicalAudioData;
-              setPedagogicalAudioUrl(url);
-              const audio = new Audio(url);
-              audio.onloadedmetadata = () => setPedagogicalAudioDuration(audio.duration);
-              audio.onerror = () => {};
-            } catch (_) { /* ignore */ }
-          }
-        if (Array.isArray(data.textBoxes)) setTextBoxes(data.textBoxes);
-        if (data.documentFontFamily) setDocumentFontFamily(data.documentFontFamily);
-        if (data.lyricFontFamily) setLyricFontFamily(data.lyricFontFamily);
-        if (typeof data.titleFontSize === 'number' && data.titleFontSize >= 10 && data.titleFontSize <= 72) setTitleFontSize(data.titleFontSize);
-        if (typeof data.authorFontSize === 'number' && data.authorFontSize >= 8 && data.authorFontSize <= 48) setAuthorFontSize(data.authorFontSize);
-        if (data.titleFontFamily != null) setTitleFontFamily(data.titleFontFamily || '');
-        if (data.authorFontFamily != null) setAuthorFontFamily(data.authorFontFamily || '');
-        if (typeof data.titleBold === 'boolean') setTitleBold(data.titleBold);
-        if (typeof data.titleItalic === 'boolean') setTitleItalic(data.titleItalic);
-        if (typeof data.authorBold === 'boolean') setAuthorBold(data.authorBold);
-        if (typeof data.authorItalic === 'boolean') setAuthorItalic(data.authorItalic);
-          if (data.lyricLineIndex === 0 || data.lyricLineIndex === 1) setLyricLineIndex(data.lyricLineIndex);
-          if (typeof data.lyricLineYOffset === 'number') setLyricLineYOffset(Math.max(-40, Math.min(40, data.lyricLineYOffset)));
+        const hasStaves = Array.isArray(data.staves) && data.staves.length > 0;
+        const hasNotes = data.notes && Array.isArray(data.notes);
+        if (hasStaves || hasNotes) {
+          importProject(data);
         }
       }
     } catch (_) { /* ignore */ }
-  }, []);
+  }, [importProject]);
 
   // Load from Google Drive or OneDrive when opening /app?fileId=... [&cloud=onedrive]
   const driveFileId = searchParams.get('fileId');
@@ -3062,11 +2973,13 @@ function NoodiMeisterCore({ icons }) {
     if (!driveFileId) return;
     let cancelled = false;
     setSaveFeedback('Laadin pilvest…');
+    const done = () => { if (!cancelled) setCloudLoadComplete(true); };
     const loadFromOneDrive = () => {
       const token = authStorage.getStoredMicrosoftTokenFromAuth();
       if (!token) {
         setSaveFeedback('Logi sisse Microsoftiga, et laadida OneDrive\'ist.');
         setTimeout(() => setSaveFeedback(''), 4000);
+        done();
         return;
       }
       oneDrive.getFileContent(token, driveFileId)
@@ -3080,12 +2993,14 @@ function NoodiMeisterCore({ icons }) {
             setSaveFeedback('Vigane projektifail');
             setTimeout(() => setSaveFeedback(''), 3000);
           }
+          done();
         })
         .catch((e) => {
           if (!cancelled) {
             setSaveFeedback(e?.message || 'OneDrive\'ist laadimine ebaõnnestus');
             setTimeout(() => setSaveFeedback(''), 4000);
           }
+          done();
         });
     };
     const loadFromGoogle = () => {
@@ -3093,6 +3008,7 @@ function NoodiMeisterCore({ icons }) {
       if (!token) {
         setSaveFeedback('Logi sisse Google\'iga, et laadida pilvest.');
         setTimeout(() => setSaveFeedback(''), 4000);
+        done();
         return;
       }
       googleDrive.getFileContent(token, driveFileId)
@@ -3106,12 +3022,14 @@ function NoodiMeisterCore({ icons }) {
             setSaveFeedback('Vigane projektifail');
             setTimeout(() => setSaveFeedback(''), 3000);
           }
+          done();
         })
         .catch((e) => {
           if (!cancelled) {
             setSaveFeedback(e?.message || 'Pilvest laadimine ebaõnnestus');
             setTimeout(() => setSaveFeedback(''), 4000);
           }
+          done();
         });
     };
     if (isOneDrive) loadFromOneDrive();
@@ -4777,6 +4695,8 @@ function NoodiMeisterCore({ icons }) {
   const systemsForScoreRef = useRef([]);
   const exportCursorRef = useRef(null); // { x, y, emoji, size } container-relative, for MP4 fillText
   const [pageWidth, setPageWidth] = useState(LAYOUT.PAGE_WIDTH_MIN);
+  /** Terve leht vaates: A4 lehe laius tuletatud vaateaknast, et üks A4 täidaks ekraani. */
+  const [fitPageDisplayWidth, setFitPageDisplayWidth] = useState(0);
   const effectivePageWidthMax = pageOrientation === 'landscape' ? LAYOUT.PAGE_WIDTH_MAX_LANDSCAPE : LAYOUT.PAGE_WIDTH_MAX;
   useEffect(() => {
     const el = scoreContainerRef.current;
@@ -4792,7 +4712,9 @@ function NoodiMeisterCore({ icons }) {
   useEffect(() => {
     pdfExportOptionsRef.current = { pageFlowDirection, pageWidth };
   }, [pageFlowDirection, pageWidth]);
-  const a4PageHeightPx = (pageWidth || LAYOUT.PAGE_WIDTH_MIN) * LAYOUT.A4_HEIGHT_RATIO;
+  const basePageWidth = pageWidth || LAYOUT.PAGE_WIDTH_MIN;
+  const effectiveLayoutPageWidth = (viewFitPage && !viewSmartPage && fitPageDisplayWidth > 0) ? fitPageDisplayWidth : basePageWidth;
+  const a4PageHeightPx = effectiveLayoutPageWidth * LAYOUT.A4_HEIGHT_RATIO;
   /** Figurenotes row height (beat-box / line) scales with Noodigraafika suurus so barlines and box match note size. */
   const figurenotesRowHeight = Math.max(FIGURE_ROW_HEIGHT, Math.round(FIGURE_ROW_HEIGHT * figurenotesSize / 75));
   /** Chord line in figurenotes: only when user has enabled it in chord toolbox; half height of beat-box, below melody row; gap 0–20 px. */
@@ -4802,27 +4724,27 @@ function NoodiMeisterCore({ icons }) {
     : figurenotesRowHeight;
   const logicalContentHeight = useMemo(() => {
     if (notationStyle === 'FIGURENOTES') {
-      const data = { measures, timeSignature, pixelsPerBeat, staffSpacing: figurenotesTotalRowHeight + layoutSystemGap, globalSpacingMultiplier: layoutGlobalSpacingMultiplier, boxesPerRow: effectiveLayoutMeasuresPerLine || 4, pageWidth: pageWidth || LAYOUT.PAGE_WIDTH_MIN, pageHeight: a4PageHeightPx, lineBreakBefore: effectiveLayoutLineBreakBefore, pageBreakBefore: effectiveLayoutPageBreakBefore };
+      const data = { measures, timeSignature, pixelsPerBeat, staffSpacing: figurenotesTotalRowHeight + layoutSystemGap, globalSpacingMultiplier: layoutGlobalSpacingMultiplier, boxesPerRow: effectiveLayoutMeasuresPerLine || 4, pageWidth: effectiveLayoutPageWidth, pageHeight: a4PageHeightPx, lineBreakBefore: effectiveLayoutLineBreakBefore, pageBreakBefore: effectiveLayoutPageBreakBefore };
       const sys = calculateLayout('figure', pageOrientation === 'landscape' ? 'landscape' : 'portrait', data);
       const lastY = sys.length > 0 ? sys[sys.length - 1].yOffset + (systemYOffsets[sys.length - 1] ?? 0) : 0;
       return sys.length > 0 ? lastY + figurenotesTotalRowHeight + 40 : figurenotesTotalRowHeight + 40;
     }
     const opts = { measuresPerLine: effectiveLayoutMeasuresPerLine, lineBreakBefore: effectiveLayoutLineBreakBefore, pageBreakBefore: effectiveLayoutPageBreakBefore, systemGap: layoutSystemGap, staffCount: staves.length, measureStretchFactors, globalSpacingMultiplier: layoutGlobalSpacingMultiplier, pageHeight: a4PageHeightPx };
-    const sys = computeLayout(measures, timeSignature, pixelsPerBeat, pageWidth || LAYOUT.PAGE_WIDTH_MIN, opts);
+    const sys = computeLayout(measures, timeSignature, pixelsPerBeat, effectiveLayoutPageWidth, opts);
     const n = staves.length || 1;
     const lastY = sys.length > 0 ? sys[sys.length - 1].yOffset + (systemYOffsets[sys.length - 1] ?? 0) : 0;
     return sys.length > 0 ? lastY + n * getStaffHeight() + 40 : n * getStaffHeight() + 40;
-  }, [notationStyle, measures, timeSignature, pixelsPerBeat, pageWidth, pageOrientation, effectiveLayoutMeasuresPerLine, effectiveLayoutLineBreakBefore, effectiveLayoutPageBreakBefore, layoutSystemGap, layoutGlobalSpacingMultiplier, staves.length, measureStretchFactors, systemYOffsets, a4PageHeightPx, figurenotesRowHeight, figurenotesTotalRowHeight, figurenotesSize, figurenotesChordBlocks, figurenotesChordLineGap, figurenotesChordLineHeight]);
+  }, [notationStyle, measures, timeSignature, pixelsPerBeat, effectiveLayoutPageWidth, pageOrientation, effectiveLayoutMeasuresPerLine, effectiveLayoutLineBreakBefore, effectiveLayoutPageBreakBefore, layoutSystemGap, layoutGlobalSpacingMultiplier, staves.length, measureStretchFactors, systemYOffsets, a4PageHeightPx, figurenotesRowHeight, figurenotesTotalRowHeight, figurenotesSize, figurenotesChordBlocks, figurenotesChordLineGap, figurenotesChordLineHeight]);
   const systemsForScore = useMemo(() => {
     if (notationStyle === 'FIGURENOTES') {
-      const data = { measures, timeSignature, pixelsPerBeat, staffSpacing: figurenotesTotalRowHeight + layoutSystemGap, globalSpacingMultiplier: layoutGlobalSpacingMultiplier, boxesPerRow: effectiveLayoutMeasuresPerLine || 4, pageWidth: pageWidth || LAYOUT.PAGE_WIDTH_MIN, pageHeight: a4PageHeightPx, lineBreakBefore: effectiveLayoutLineBreakBefore, pageBreakBefore: effectiveLayoutPageBreakBefore };
+      const data = { measures, timeSignature, pixelsPerBeat, staffSpacing: figurenotesTotalRowHeight + layoutSystemGap, globalSpacingMultiplier: layoutGlobalSpacingMultiplier, boxesPerRow: effectiveLayoutMeasuresPerLine || 4, pageWidth: effectiveLayoutPageWidth, pageHeight: a4PageHeightPx, lineBreakBefore: effectiveLayoutLineBreakBefore, pageBreakBefore: effectiveLayoutPageBreakBefore };
       const raw = calculateLayout('figure', pageOrientation === 'landscape' ? 'landscape' : 'portrait', data);
       return raw.map((s, i) => ({ ...s, yOffset: s.yOffset + (systemYOffsets[i] ?? 0) }));
     }
     const opts = { measuresPerLine: effectiveLayoutMeasuresPerLine, lineBreakBefore: effectiveLayoutLineBreakBefore, pageBreakBefore: effectiveLayoutPageBreakBefore, systemGap: layoutSystemGap, staffCount: staves.length, measureStretchFactors, globalSpacingMultiplier: layoutGlobalSpacingMultiplier, pageHeight: a4PageHeightPx };
-    const raw = computeLayout(measures, timeSignature, pixelsPerBeat, pageWidth || LAYOUT.PAGE_WIDTH_MIN, opts);
+    const raw = computeLayout(measures, timeSignature, pixelsPerBeat, effectiveLayoutPageWidth, opts);
     return raw.map((s, i) => ({ ...s, yOffset: s.yOffset + (systemYOffsets[i] ?? 0) }));
-  }, [notationStyle, measures, timeSignature, pixelsPerBeat, pageWidth, pageOrientation, effectiveLayoutMeasuresPerLine, effectiveLayoutLineBreakBefore, effectiveLayoutPageBreakBefore, layoutSystemGap, layoutGlobalSpacingMultiplier, staves.length, measureStretchFactors, systemYOffsets, a4PageHeightPx, figurenotesTotalRowHeight, figurenotesChordBlocks]);
+  }, [notationStyle, measures, timeSignature, pixelsPerBeat, effectiveLayoutPageWidth, pageOrientation, effectiveLayoutMeasuresPerLine, effectiveLayoutLineBreakBefore, effectiveLayoutPageBreakBefore, layoutSystemGap, layoutGlobalSpacingMultiplier, staves.length, measureStretchFactors, systemYOffsets, a4PageHeightPx, figurenotesTotalRowHeight, figurenotesChordBlocks]);
   useEffect(() => { systemsForScoreRef.current = systemsForScore; }, [systemsForScore]);
   // Nutikas fookus: ainult valitud read; vähem ridu = suurem rea kõrgus (HEV/solfedž)
   const visibleStaffList = useMemo(() => {
@@ -4864,26 +4786,36 @@ function NoodiMeisterCore({ icons }) {
     return () => cancelAnimationFrame(t);
   }, [measures, layoutMeasuresPerLine, partLayoutMeasuresPerLine, layoutSystemGap, viewMode, pageOrientation, notes, addedMeasures]);
 
-  // Fit-page scale: so one A4 page (or only notated area when viewSmartPage) fits in the visible main area (do not scale above 1)
-  const a4PageHeightVal = (pageWidth || LAYOUT.PAGE_WIDTH_MIN) * LAYOUT.A4_HEIGHT_RATIO;
+  // Terve leht: A4 täidab vaateakna (viewport-põhine laius). Tark lehe vaade: skaleeritakse ainult noteeritud ala.
+  const a4PageHeightVal = effectiveLayoutPageWidth * LAYOUT.A4_HEIGHT_RATIO;
   const [fitPageScale, setFitPageScale] = useState(1);
+  const viewFitOrSmart = viewFitPage || viewSmartPage;
   useEffect(() => {
-    if (!viewFitPage) {
+    if (!viewFitOrSmart) {
       setFitPageScale(1);
+      setFitPageDisplayWidth(0);
       return;
     }
     let ro = null;
     const updateScale = () => {
       const target = mainRef.current;
       if (!target) return;
-      const pw = pageWidth || LAYOUT.PAGE_WIDTH_MIN;
-      const a4H = pw * LAYOUT.A4_HEIGHT_RATIO;
-      const contentH = viewSmartPage ? (logicalContentHeight || 800) : a4H;
       const availW = target.clientWidth;
       const availH = target.clientHeight;
       if (availW <= 0 || availH <= 0) return;
-      const scale = Math.min(1, availW / pw, availH / contentH);
-      setFitPageScale(scale);
+      if (viewFitPage && !viewSmartPage) {
+        // Terve leht: üks A4 täidab vaateakna (A4 suhe 210:297)
+        const w = Math.min(availW, Math.round(availH * 210 / 297));
+        setFitPageDisplayWidth(w);
+        setFitPageScale(1);
+      } else {
+        // Tark lehe vaade: ainult noteeritud ala mahub ekraanile
+        setFitPageDisplayWidth(0);
+        const pw = basePageWidth;
+        const contentH = logicalContentHeight || 800;
+        const scale = Math.min(1, availW / pw, availH / contentH);
+        setFitPageScale(scale);
+      }
     };
     const raf = requestAnimationFrame(() => {
       updateScale();
@@ -4897,7 +4829,7 @@ function NoodiMeisterCore({ icons }) {
       cancelAnimationFrame(raf);
       if (ro) ro.disconnect();
     };
-  }, [viewFitPage, viewSmartPage, pageWidth, logicalContentHeight]);
+  }, [viewFitPage, viewSmartPage, viewFitOrSmart, basePageWidth, logicalContentHeight]);
 
   // Selection drag (Shift + mouse down and drag across notes) – document-level mouseup ends the drag.
   useEffect(() => {
@@ -5121,7 +5053,9 @@ function NoodiMeisterCore({ icons }) {
     { label: '5/4', value: [5, 4] }
   ];
 
+  const waitingForCloud = driveFileId && !cloudLoadComplete;
   if (!isReady) return <div className="loading-screen min-h-screen flex items-center justify-center bg-amber-950 text-amber-100"><span className="animate-pulse">Laen süsteemi...</span></div>;
+  if (waitingForCloud) return <div className="loading-screen min-h-screen flex items-center justify-center bg-amber-950 text-amber-100"><span className="animate-pulse">{saveFeedback || 'Laadin pilvest…'}</span></div>;
   if (!icons) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-amber-900/95 text-amber-100">
@@ -6374,20 +6308,19 @@ function NoodiMeisterCore({ icons }) {
                         </div>
                       )}
                     </div>
-                    {/* Terve lehekülg ekraanile (paigutus) */}
+                    {/* Terve leht: üks A4 täidab ekraani (vertikaal = kõrgus, horisontaal = laius). Tark lehe vaade: ainult noteeritud read. Üks režiim korraga. */}
                     <button
                       type="button"
-                      onClick={() => { setViewFitPage((prev) => !prev); }}
+                      onClick={() => { dirtyRef.current = true; setViewSmartPage(false); setViewFitPage((prev) => !prev); }}
                       className="w-full flex items-center justify-between gap-2 px-3 py-2 text-left text-sm text-amber-50 hover:bg-slate-600"
                       title={t('view.fitPageHint')}
                     >
                       <span>{t('view.fitPage')}</span>
                       {viewFitPage && <Check className="w-4 h-4 text-amber-400" />}
                     </button>
-                    {/* Tark lehe vaade – ainult noteeritud ala */}
                     <button
                       type="button"
-                      onClick={() => { dirtyRef.current = true; setViewSmartPage((prev) => !prev); }}
+                      onClick={() => { dirtyRef.current = true; setViewFitPage(false); setViewSmartPage((prev) => !prev); }}
                       className="w-full flex items-center justify-between gap-2 px-3 py-2 text-left text-sm text-amber-50 hover:bg-slate-600"
                       title={t('view.smartPageHint')}
                     >
@@ -7507,25 +7440,24 @@ function NoodiMeisterCore({ icons }) {
             </div>
           )}
           {(() => {
-            const a4PageHeightVal = (pageWidth || LAYOUT.PAGE_WIDTH_MIN) * LAYOUT.A4_HEIGHT_RATIO;
             const contentHeightForPages = pageFlowDirection === 'horizontal' ? (lastVerticalContentHeightRef.current || logicalContentHeight) : mainContentHeight;
             const totalPagesVal = Math.max(1, Math.ceil((contentHeightForPages || logicalContentHeight) / a4PageHeightVal));
             const isHorizontalFlow = pageFlowDirection === 'horizontal';
-            // When viewFitPage, use logical height so wrapper size is stable (mainContentHeight becomes scaled after first paint)
-            const contentH = viewFitPage ? (logicalContentHeight || 800) : (mainContentHeight || logicalContentHeight || 800);
-            const pw = pageWidth || LAYOUT.PAGE_WIDTH_MIN;
+            const pw = effectiveLayoutPageWidth;
+            // Terve leht või tark: kas loogiline kõrgus või tegelik scroll kõrgus
+            const contentH = viewFitOrSmart ? (logicalContentHeight || 800) : (mainContentHeight || logicalContentHeight || 800);
             return (
           <div
             className={isHorizontalFlow ? 'flex-shrink-0' : ''}
             style={isHorizontalFlow ? { width: totalPagesVal * pw, height: a4PageHeightVal } : undefined}
           >
-          {/* When viewFitPage: scale so one A4 page fits in viewport; wrapper sets scroll size, inner applies scale */}
+          {/* Terve leht: A4 täidab vaateakna (scale=1). Tark lehe vaade: skaleerib noteeritud ala. */}
           <div
-            ref={viewFitPage ? mainAreaRef : undefined}
-            style={viewFitPage ? { position: 'relative', width: pw * fitPageScale, minHeight: contentH * fitPageScale } : undefined}
+            ref={viewFitOrSmart ? mainAreaRef : undefined}
+            style={viewFitOrSmart ? { position: 'relative', width: pw * fitPageScale, minHeight: contentH * fitPageScale } : undefined}
           >
             <div
-              style={viewFitPage ? { position: 'absolute', left: 0, top: 0, width: pw, height: contentH, transform: `scale(${fitPageScale})`, transformOrigin: 'top left' } : undefined}
+              style={viewFitOrSmart ? { position: 'absolute', left: 0, top: 0, width: pw, height: contentH, transform: `scale(${fitPageScale})`, transformOrigin: 'top left' } : undefined}
             >
           <div
             ref={scoreContainerRef}
@@ -7533,9 +7465,10 @@ function NoodiMeisterCore({ icons }) {
             style={{
               backgroundColor: themeColors.scoreBg,
               minWidth: LAYOUT.PAGE_WIDTH_MIN,
-              maxWidth: pageOrientation === 'landscape' ? LAYOUT.PAGE_WIDTH_MAX_LANDSCAPE : LAYOUT.PAGE_WIDTH_MAX,
+              ...(viewFitPage && !viewSmartPage && fitPageDisplayWidth > 0 ? {} : { maxWidth: pageOrientation === 'landscape' ? LAYOUT.PAGE_WIDTH_MAX_LANDSCAPE : LAYOUT.PAGE_WIDTH_MAX }),
               minHeight: Math.max(500, getStaffHeight() + LAYOUT.SYSTEM_GAP + getStaffHeight() + 120),
-              ...(isHorizontalFlow ? { width: totalPagesVal * (pageWidth || LAYOUT.PAGE_WIDTH_MIN), height: a4PageHeightVal } : {})
+              ...(viewFitPage && !viewSmartPage && fitPageDisplayWidth > 0 ? { width: pw, boxSizing: 'border-box' } : {}),
+              ...(isHorizontalFlow ? { width: totalPagesVal * pw, height: a4PageHeightVal } : {})
             }}
             onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; e.currentTarget.classList.add('ring-2', 'ring-amber-400', 'ring-offset-2'); }}
             onDragLeave={(e) => { e.currentTarget.classList.remove('ring-2', 'ring-amber-400', 'ring-offset-2'); }}
@@ -7599,7 +7532,7 @@ function NoodiMeisterCore({ icons }) {
               {/* Pealkiri muudetav otse lehel (nagu Google Docs); horizontal: constrained to first page width so title is centered on first page */}
               <div
                 className="mb-4"
-                style={isHorizontalFlow ? { width: pageWidth || LAYOUT.PAGE_WIDTH_MIN, flexShrink: 0 } : undefined}
+                style={isHorizontalFlow ? { width: effectiveLayoutPageWidth, flexShrink: 0 } : undefined}
               >
                 <input
                   ref={titleInputRef}
@@ -7758,7 +7691,7 @@ function NoodiMeisterCore({ icons }) {
                 <Timeline
                   key={staff.id}
                   measures={measuresWithMarks}
-                  pageWidth={pageWidth}
+                  pageWidth={effectiveLayoutPageWidth}
                   timeSignature={timeSignature}
                   timeSignatureMode={timeSignatureMode}
                   pixelsPerBeat={pixelsPerBeat}
@@ -7993,14 +7926,14 @@ function NoodiMeisterCore({ icons }) {
 
         {/* Lehekülgede / ekraani vaate navigaator – kui dokument on pikem kui üks A4 leht */}
         {showPageNavigator && (mainContentHeight > 0 || lastVerticalContentHeightRef.current > 0 || logicalContentHeight > 0) && (() => {
-          const a4PageHeight = (pageWidth || LAYOUT.PAGE_WIDTH_MIN) * LAYOUT.A4_HEIGHT_RATIO;
-          const a4PageWidth = pageWidth || LAYOUT.PAGE_WIDTH_MIN;
+          const a4PageHeight = a4PageHeightVal;
+          const a4PageWidth = effectiveLayoutPageWidth;
           const contentH = pageFlowDirection === 'horizontal' ? (lastVerticalContentHeightRef.current || logicalContentHeight) : mainContentHeight;
           const totalPages = Math.max(1, Math.ceil((contentH || logicalContentHeight) / a4PageHeight));
           if (totalPages <= 1) return null;
           const isHorizontalFlow = pageFlowDirection === 'horizontal';
-          const pageStepV = viewFitPage ? a4PageHeight * fitPageScale : a4PageHeight;
-          const pageStepH = viewFitPage ? a4PageWidth * fitPageScale : a4PageWidth;
+          const pageStepV = viewFitOrSmart ? a4PageHeight * fitPageScale : a4PageHeight;
+          const pageStepH = viewFitOrSmart ? a4PageWidth * fitPageScale : a4PageWidth;
           const currentPage = isHorizontalFlow
             ? Math.min(totalPages, Math.max(1, Math.floor(mainScrollLeft / pageStepH) + 1))
             : Math.min(totalPages, Math.max(1, Math.floor(mainScrollTop / pageStepV) + 1));
