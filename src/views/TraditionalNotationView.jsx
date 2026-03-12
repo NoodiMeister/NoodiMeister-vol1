@@ -11,7 +11,7 @@ import { getJoName } from '../notation/joNames';
 import { getRhythmSyllableForNote } from '../notation/rhythmSyllables';
 import { expandEmojiShortcuts } from '../utils/emojiShortcuts';
 import { SmuflGlyph } from '../notation/smufl/SmuflGlyph';
-import { SMUFL_GLYPH, smuflRestForDurationLabel } from '../notation/smufl/glyphs';
+import { SMUFL_GLYPH, NOTEHEAD_SHAPE_GLYPH, smuflRestForDurationLabel } from '../notation/smufl/glyphs';
 import {
   getStaffLinePositions,
   getYFromStaffPosition,
@@ -65,11 +65,14 @@ function StaffClefSymbol({ x, y, height, clefType, fill = '#000', staffSpace = 1
   return <TrebleClefSymbol x={x} y={y} height={height} fill={fill} />;
 }
 
-function getNoteheadGlyph(durationLabel) {
+/** Returns Leland glyph for notehead, or null when shape is 'emoji' (caller draws noteheadEmoji as text). */
+function getNoteheadGlyph(durationLabel, noteheadShape = 'oval', noteheadEmoji = '♪') {
+  if (noteheadShape === 'emoji') return null;
   const dur = durationLabel || '1/4';
   if (dur === '1/1') return SMUFL.noteheadWhole;
   if (dur === '1/2') return SMUFL.noteheadHalf;
-  return SMUFL.noteheadBlack;
+  const shapeGlyph = NOTEHEAD_SHAPE_GLYPH[noteheadShape];
+  return shapeGlyph || SMUFL.noteheadBlack;
 }
 
 function getFlagCount(durationLabel) {
@@ -190,10 +193,16 @@ export function TraditionalNotationView({
   showRhythmSyllables = false,
   showAllNoteLabels = false,
   enableEmojiOverlays = true,
+  noteheadShape = 'oval',
+  noteheadEmoji = '♪',
   chords = [],
   isNoteSelected,
   onNoteClick,
+  onNoteMouseDown,
+  onNoteMouseEnter,
   onNotePitchChange,
+  onNoteBeatChange,
+  canHandDragNotes = false,
   onNoteTeacherLabelChange,
   onNoteLabelClick,
   getPitchY, // (pitch, octave) => Y relative to staff center (Timeline arvutab JO/viiulivõtme järgi)
@@ -202,6 +211,7 @@ export function TraditionalNotationView({
   isFirstInBraceGroup = false,
   braceGroupSize = 0,
   lyricFontFamily = TEXT_FONT_FAMILY,
+  lyricLineYOffset = 0,
   isHorizontal = false,
   a4PageHeight = 400,
   getStaffHeight = () => 140,
@@ -219,7 +229,57 @@ export function TraditionalNotationView({
   const timeSigTextColor = themeColors?.textColor ?? '#333';
   const timeSigNoteFill = themeColors?.noteFill ?? '#333';
   const [noteDrag, setNoteDrag] = useState(null); // { noteIndex, staffY } when dragging a note to change pitch
+  const [noteBeatDrag, setNoteBeatDrag] = useState(null); // { noteIndex, startClientX } when hand tool dragging note to new beat
   const lastPitchRef = useRef(null); // avoid duplicate updates when pitch unchanged
+
+  // Measure layout for getBeatFromX (first system only; x is shared across systems)
+  const measureLayout = React.useMemo(() => {
+    const sys = systems?.[0];
+    if (!sys || !effectiveMeasuresProp) return [];
+    const mw = sys.measureWidths ?? [];
+    const beatsPerMeasure = timeSignature?.beats ?? 4;
+    return sys.measureIndices.map((measureIdx, j) => {
+      const measure = effectiveMeasuresProp[measureIdx];
+      if (!measure) return null;
+      const xStart = marginLeft + mw.slice(0, j).reduce((a, b) => a + b, 0);
+      const xEnd = xStart + (mw[j] ?? 0);
+      const startBeat = measure.startBeat;
+      const endBeat = measure.startBeat + (measure.beatCount ?? beatsPerMeasure);
+      return { xStart, xEnd, startBeat, endBeat };
+    }).filter(Boolean);
+  }, [systems, effectiveMeasuresProp, marginLeft, timeSignature]);
+
+  const getBeatFromX = React.useCallback((x) => {
+    for (const m of measureLayout) {
+      if (x >= m.xStart && x <= m.xEnd) {
+        const t = (m.xEnd - m.xStart) > 0 ? (x - m.xStart) / (m.xEnd - m.xStart) : 0;
+        return m.startBeat + t * (m.endBeat - m.startBeat);
+      }
+    }
+    if (measureLayout.length > 0) return measureLayout[0].startBeat;
+    return 0;
+  }, [measureLayout]);
+
+  useEffect(() => {
+    if (!noteBeatDrag || typeof onNoteBeatChange !== 'function' || !timelineSvgRef?.current) return;
+    const { noteIndex } = noteBeatDrag;
+    const onMove = () => {};
+    const onUp = (e) => {
+      const svg = timelineSvgRef.current;
+      if (svg) {
+        const pt = svg.createSVGPoint();
+        pt.x = e.clientX;
+        pt.y = 0;
+        const local = pt.matrixTransform(svg.getScreenCTM().inverse());
+        const beat = getBeatFromX(local.x);
+        onNoteBeatChange(noteIndex, beat);
+      }
+      setNoteBeatDrag(null);
+    };
+    window.addEventListener('mouseup', onUp);
+    return () => window.removeEventListener('mouseup', onUp);
+  }, [noteBeatDrag, onNoteBeatChange, getBeatFromX, timelineSvgRef]);
+
   useEffect(() => {
     if (!noteDrag || typeof onNotePitchChange !== 'function' || typeof getPitchFromY !== 'function' || !timelineSvgRef?.current) return;
     const { noteIndex, staffY } = noteDrag;
@@ -599,16 +659,28 @@ export function TraditionalNotationView({
                       const noteY = staffY + pitchY;
                       const beamGroup = getBeamGroup(noteIdx);
                       const stemUp = beamGroup ? beamGroup.stemUp : (pitchY > middleLineY);
-                      const canDragPitch = !note.isRest && typeof onNotePitchChange === 'function' && typeof getPitchFromY === 'function';
+                      const canDragPitch = !note.isRest && typeof onNotePitchChange === 'function' && typeof getPitchFromY === 'function' && !canHandDragNotes;
+                      const canDragBeat = canHandDragNotes && typeof onNoteBeatChange === 'function';
                       const noteGroupProps = {
                         onClick: (e) => { e.stopPropagation(); onNoteClick?.(globalNoteIndex); },
-                        onMouseDown: canDragPitch ? (e) => {
+                        onMouseDown: (e) => {
+                          if (typeof onNoteMouseDown === 'function' && e.shiftKey) {
+                            onNoteMouseDown(globalNoteIndex, e);
+                            return;
+                          }
+                          if (canDragBeat && e.button === 0) {
+                            e.stopPropagation();
+                            setNoteBeatDrag({ noteIndex: globalNoteIndex, startClientX: e.clientX });
+                            return;
+                          }
+                          if (!canDragPitch) return;
                           if (e.button !== 0) return;
                           e.stopPropagation();
                           lastPitchRef.current = { pitch: note.pitch, octave: note.octave };
                           setNoteDrag({ noteIndex: globalNoteIndex, staffY });
-                        } : undefined,
-                        style: { cursor: (onNoteClick || canDragPitch) ? 'pointer' : undefined }
+                        },
+                        onMouseEnter: typeof onNoteMouseEnter === 'function' ? (e) => onNoteMouseEnter(globalNoteIndex, e) : undefined,
+                        style: { cursor: (onNoteClick || canDragPitch || canDragBeat) ? 'pointer' : undefined }
                       };
                       const restLabelY = staffY + lastLineY + spacing * 1.8;
 
@@ -632,7 +704,7 @@ export function TraditionalNotationView({
                       const isSelected = isNoteSelected ? isNoteSelected(globalNoteIndex) : false;
                       const ledgerHalfWidth = getLedgerHalfWidth(spacing);
                       const { above: nLedgerAbove, below: nLedgerBelow } = getLedgerLineCountExact(pitchY, firstLineY, lastLineY, spacing);
-                      const glyph = getNoteheadGlyph(note.durationLabel);
+                      const glyph = getNoteheadGlyph(note.durationLabel, noteheadShape, noteheadEmoji);
                       const lelandSize = Math.max(18, spacing * 4.2);
                       const stemLenDefault = getStemLength(spacing);
                       const stemStrokeW = getStemThickness(spacing);
@@ -654,14 +726,18 @@ export function TraditionalNotationView({
                           {(note.accidental === 1 || note.accidental === -1) && (
                             <text x={noteX - (noteheadRx + spacing * 0.5)} y={noteY} textAnchor="middle" dominantBaseline="central" fontSize={Math.round(spacing * 1.4)} fill="#1a1a1a" fontFamily="serif">{note.accidental === 1 ? '♯' : '♭'}</text>
                           )}
-                          <SmuflGlyph
-                            x={noteX}
-                            y={noteY}
-                            glyph={glyph}
-                            fontSize={lelandSize}
-                            fill="var(--note-fill, #1a1a1a)"
-                            dominantBaseline="central"
-                          />
+                          {glyph ? (
+                            <SmuflGlyph
+                              x={noteX}
+                              y={noteY}
+                              glyph={glyph}
+                              fontSize={lelandSize}
+                              fill="var(--note-fill, #1a1a1a)"
+                              dominantBaseline="central"
+                            />
+                          ) : (
+                            <text x={noteX} y={noteY} textAnchor="middle" dominantBaseline="central" fontSize={lelandSize} fill="var(--note-fill, #1a1a1a)">{noteheadEmoji}</text>
+                          )}
                           {/* Vars + lipud (talatud nootidel lipud peidetud, vars ulatub talani) */}
                           {note.durationLabel !== '1/1' && (
                             <g>
@@ -721,7 +797,10 @@ export function TraditionalNotationView({
                             return <g>{beams}</g>;
                           })()}
                           {(note.lyric != null && String(note.lyric).trim() !== '') && (
-                            <text x={noteX} y={staffY + lastLineY + 18} textAnchor="middle" fontSize="12" fill="#333" fontFamily={lyricFontFamily}>{note.lyric}</text>
+                            <text x={noteX} y={staffY + lastLineY + 18 + (lyricLineYOffset || 0)} textAnchor="middle" fontSize="12" fill="#333" fontFamily={lyricFontFamily}>{note.lyric}</text>
+                          )}
+                          {(note.lyric2 != null && String(note.lyric2).trim() !== '') && (
+                            <text x={noteX} y={staffY + lastLineY + 34 + (lyricLineYOffset || 0)} textAnchor="middle" fontSize="12" fill="#555" fontFamily={lyricFontFamily}>{note.lyric2}</text>
                           )}
                           {showRhythmSyllables && (() => {
                             const labelY = staffY + lastLineY + spacing * 1.8;

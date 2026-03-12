@@ -15,10 +15,16 @@ export const SMUFL_GLYPH = Object.freeze({
   cClef: '\uE05C',
   fClef: '\uE062',
 
+  // Accidentals (key signatures, etc.)
+  accidentalSharp: '\uE262',
+
   // Noteheads (for beamed notes or when stem length is custom)
   noteheadWhole: '\uE0A2',
   noteheadHalf: '\uE0A3',
   noteheadBlack: '\uE0A4',
+  noteheadXBlack: '\uE0A9',
+  noteheadSquareBlack: '\uE0B9',
+  noteheadTriangleUpBlack: '\uE0BE',
 
   // Precomposed notes (U+E1D0–E1EF): full note from font – use for standalone notes
   noteWhole: '\uE1D2',
@@ -38,7 +44,17 @@ export const SMUFL_GLYPH = Object.freeze({
   rest32nd: '\uE4E8',
 });
 
-export function smuflNoteheadForType(type) {
+/** Shape key for notehead (oval, x, square, triangle). Used by toolbox and rendering. */
+export const NOTEHEAD_SHAPE_GLYPH = {
+  oval: SMUFL_GLYPH.noteheadBlack,
+  x: SMUFL_GLYPH.noteheadXBlack,
+  square: SMUFL_GLYPH.noteheadSquareBlack,
+  triangle: SMUFL_GLYPH.noteheadTriangleUpBlack,
+};
+
+export function smuflNoteheadForType(type, shapeKey = 'oval') {
+  const shapeGlyph = NOTEHEAD_SHAPE_GLYPH[shapeKey];
+  const defaultGlyph = shapeGlyph || SMUFL_GLYPH.noteheadBlack;
   switch (type) {
     case 'whole':
       return SMUFL_GLYPH.noteheadWhole;
@@ -48,7 +64,7 @@ export function smuflNoteheadForType(type) {
     case 'eighth':
     case 'sixteenth':
     default:
-      return SMUFL_GLYPH.noteheadBlack;
+      return defaultGlyph;
   }
 }
 

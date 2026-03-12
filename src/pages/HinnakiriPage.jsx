@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Check, FileMusic, Cloud, UserPlus, LogIn, Heart } from 'lucide-react';
+import { AppLogo } from '../components/AppLogo';
 
 const PRICE_PER_MONTH = 5;
 const DISCOUNT_12_MONTHS = 55;
@@ -20,7 +21,7 @@ export default function HinnakiriPage() {
       <header className="flex-shrink-0 border-b border-amber-200/60 dark:border-white/20 bg-white/70 dark:bg-black/90 backdrop-blur-sm sticky top-0 z-10">
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
           <Link to="/" className="flex items-center">
-            <img src="/logo.png" alt="NoodiMeister" className="h-9 w-auto" />
+            <AppLogo variant="header" alt="NoodiMeister" />
           </Link>
           <nav className="flex items-center gap-3">
             <Link to="/" className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-amber-800 dark:text-white font-medium hover:bg-amber-100 dark:hover:bg-white/10 transition-colors">

@@ -2,7 +2,7 @@
  * Figuurnotatsiooni vaade – TÄIELIKULT ERALDI traditsioonilisest vaatest.
  * Siin JO-võtit EI kuvata. Kasutatakse ainult taktikaste, rütmifiguure ja oktaavipõhiseid kujundeid (rist, ruut, ring jne).
  */
-import React from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { getFigureSymbol, getFigureColor } from '../utils/figurenotes';
 import { RhythmSyllableLabel } from '../components/RhythmSyllableLabel';
 import { getRhythmSyllableForNote } from '../notation/rhythmSyllables';
@@ -10,6 +10,7 @@ import { getFigureNoteWidth, FIGURE_BASE_WIDTH } from '../layout/LayoutEngine';
 import { SmuflGlyph } from '../notation/smufl/SmuflGlyph';
 import { smuflNoteheadForType } from '../notation/smufl/glyphs';
 import { getShapePathsByOctave, getFigureStyle } from '../constants/FigureNotesLibrary';
+import { getChordMidiNotes } from '../musical/chordPlayback';
 
 const LAYOUT = { MARGIN_LEFT: 60, MEASURE_MIN_WIDTH: 28 };
 const FIGURE_START_PADDING = 8;
@@ -20,6 +21,39 @@ const NOTATION_SIZE_REF = 75;
 function getFigurenoteTextColor(pitch) {
   const p = String(pitch || '').toUpperCase();
   return (p === 'A' || p === 'E' || p === 'B') ? '#000000' : '#ffffff';
+}
+
+const CHORD_ROOT_COLORS = {
+  C: '#ef4444', // red
+  D: '#92400e', // brown
+  E: '#f97316', // orange
+  F: '#22c55e', // green
+  G: '#3b82f6', // blue
+  A: '#a855f7', // purple
+  B: '#6b7280'  // gray
+};
+
+const PITCH_CLASS_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+
+function getChordColor(chordSymbol) {
+  if (!chordSymbol) return '#e5e7eb';
+  const s = String(chordSymbol).trim();
+  if (!s) return '#e5e7eb';
+  const rootChar = s.charAt(0).toUpperCase();
+  return CHORD_ROOT_COLORS[rootChar] || '#e5e7eb';
+}
+
+function getChordToneNames(chordSymbol) {
+  try {
+    const midiNotes = getChordMidiNotes(chordSymbol);
+    if (!Array.isArray(midiNotes) || midiNotes.length === 0) return [];
+    return midiNotes.map((n) => {
+      const pc = ((Number(n) % 12) + 12) % 12;
+      return PITCH_CLASS_NAMES[pc] || '';
+    }).filter(Boolean);
+  } catch (_) {
+    return [];
+  }
 }
 
 /** Reference size used when design was at 16px; scale = size/16. */
@@ -78,6 +112,9 @@ export function FigurenotesView({
   effectiveMeasures,
   marginLeft = LAYOUT.MARGIN_LEFT,
   timelineHeight,
+  chordLineGap = 0,
+  chordLineHeight = 0,
+  chordBlocksEnabled = false,
   pageWidth,
   timeSignature,
   timeSignatureMode,
@@ -93,9 +130,15 @@ export function FigurenotesView({
   keySignature = 'C',
   isNoteSelected,
   onNoteClick,
+  onNoteMouseDown,
+  onNoteMouseEnter,
+  onNoteBeatChange,
+  canHandDragNotes = false,
+  timelineSvgRef,
   onBeatSlotClick,
   showRhythmSyllables = false,
   lyricFontFamily = 'sans-serif',
+  lyricLineYOffset = 0,
   isHorizontal = false,
   a4PageHeight = 400,
   pageFlowDirection = 'vertical',
@@ -104,7 +147,9 @@ export function FigurenotesView({
   onStaffSpacerMouseDown,
   themeColors,
 }) {
-  const centerY = timelineHeight / 2;
+  /** Melody row height (beat-box); chord line sits below with chordLineGap and height chordLineHeight (half of melody when in chord mode). */
+  const melodyRowHeight = timelineHeight;
+  const centerY = melodyRowHeight / 2;
   const beatsPerMeasure = timeSignature?.beats ?? 4;
   const timeSigTextColor = themeColors?.textColor ?? '#333';
   const timeSigNoteFill = themeColors?.noteFill ?? '#333';
@@ -114,6 +159,49 @@ export function FigurenotesView({
   const padVertical = Math.max(2, Math.round(4 * notationScale));
   const barLineInset = Math.max(2, Math.round(5 * notationScale));
   const barLineWidth = Math.max(2, Math.round(5 * notationScale));
+
+  const [noteBeatDrag, setNoteBeatDrag] = useState(null);
+  const measureLayout = useMemo(() => {
+    const sys = systems?.[0];
+    if (!sys || !effectiveMeasures?.length) return [];
+    const mw = sys.measureWidths ?? [];
+    return sys.measureIndices.map((measureIdx, j) => {
+      const measure = effectiveMeasures[measureIdx];
+      if (!measure) return null;
+      const xStart = marginLeft + mw.slice(0, j).reduce((a, b) => a + b, 0);
+      const xEnd = xStart + (mw[j] ?? 0);
+      const startBeat = measure.startBeat;
+      const endBeat = measure.endBeat ?? measure.startBeat + beatsPerMeasure;
+      return { xStart, xEnd, startBeat, endBeat };
+    }).filter(Boolean);
+  }, [systems, effectiveMeasures, marginLeft, beatsPerMeasure]);
+  const getBeatFromX = useCallback((x) => {
+    for (const m of measureLayout) {
+      if (x >= m.xStart && x <= m.xEnd) {
+        const t = (m.xEnd - m.xStart) > 0 ? (x - m.xStart) / (m.xEnd - m.xStart) : 0;
+        return m.startBeat + t * (m.endBeat - m.startBeat);
+      }
+    }
+    return measureLayout.length > 0 ? measureLayout[0].startBeat : 0;
+  }, [measureLayout]);
+  useEffect(() => {
+    if (!noteBeatDrag || typeof onNoteBeatChange !== 'function' || !timelineSvgRef?.current) return;
+    const { noteIndex } = noteBeatDrag;
+    const onUp = (e) => {
+      const svg = timelineSvgRef.current;
+      if (svg) {
+        const pt = svg.createSVGPoint();
+        pt.x = e.clientX;
+        pt.y = 0;
+        const local = pt.matrixTransform(svg.getScreenCTM().inverse());
+        const beat = getBeatFromX(local.x);
+        onNoteBeatChange(noteIndex, beat);
+      }
+      setNoteBeatDrag(null);
+    };
+    window.addEventListener('mouseup', onUp);
+    return () => window.removeEventListener('mouseup', onUp);
+  }, [noteBeatDrag, onNoteBeatChange, getBeatFromX, timelineSvgRef]);
 
   return (
     <>
@@ -127,7 +215,7 @@ export function FigurenotesView({
                 x={0}
                 y={sys.yOffset}
                 width={14}
-                height={timelineHeight}
+                height={melodyRowHeight + chordLineGap + chordLineHeight}
                 fill="#e5e7eb"
                 stroke="#9ca3af"
                 strokeWidth={1}
@@ -210,9 +298,19 @@ export function FigurenotesView({
               };
 
               /* Bottom of beat box row for long-duration rectangle (so long notes don't overlap barlines). */
-              const beatBoxBottomY = sys.yOffset + timelineHeight - padVertical;
+              const beatBoxBottomY = sys.yOffset + melodyRowHeight - padVertical;
 
-              const renderFigurenote = (note, x, y, noteIndex, noteWidth, figureSize) => {
+              /** Duration in beats for long rectangle: 1/4=1, 1/2=2, 1/1=4. */
+              const getDurationInBeats = (durLabel) => {
+                if (durLabel === '1/1') return 4;
+                if (durLabel === '1/2') return 2;
+                if (durLabel === '1/4') return 1;
+                if (durLabel === '1/8') return 0.5;
+                if (durLabel === '1/16' || durLabel === '1/32') return 0.25;
+                return 1;
+              };
+
+              const renderFigurenote = (note, x, y, noteIndex, noteWidth, figureSize, longRectEndX = null) => {
                 const pitch = String(note.pitch || '').toUpperCase().replace('H', 'B');
                 const style = getFigureStyle(note.pitch, note.octave);
                 const shapePaths = getShapePathsByOctave(note.octave);
@@ -225,12 +323,13 @@ export function FigurenotesView({
                       : dur === '1/8' ? 'eighth'
                         : dur === '1/16' || dur === '1/32' ? 'sixteenth'
                           : 'quarter';
-                /* Long rhythm (1/2, 1/1): rectangle starts at middle of figure, extends right: base size/2 + size/4 per longer rhythm. */
+                /* Long rhythm (1/2, 1/1): rectangle from center of figure until end of last beat (e.g. half note → end of 2nd beat). */
                 const hasTail = dur === '1/2' || dur === '1/1';
                 const tailSize = hasTail ? size / 2 : 0;
-                const numTailSquares = dur === '1/1' ? 2 : dur === '1/2' ? 1 : 0;
-                const longRectWidth = hasTail ? size / 2 + numTailSquares * (size / 4) : 0;
                 const figureCenterX = x;
+                const longRectWidth = (hasTail && typeof longRectEndX === 'number' && longRectEndX > figureCenterX)
+                  ? longRectEndX - figureCenterX
+                  : 0;
                 const stemLength = 26;
                 const stemX = figureCenterX + size / 2 + 1;
                 const stemY1 = y;
@@ -244,8 +343,8 @@ export function FigurenotesView({
                 const effectiveStroke = style.stroke ?? 'none';
                 const effectiveStrokeWidth = style.strokeWidth ?? 0;
 
-                /* Long-duration rectangle: left at middle of figure, width = size/2 + (size/4) per longer rhythm, at bottom of beat box, under figure layer. */
-                const longDurationRectEl = hasTail && numTailSquares > 0 && (
+                /* Long-duration rectangle: left at middle of figure, width to end of last beat (e.g. half note → end of 2nd beat), at bottom of beat box, under figure layer. */
+                const longDurationRectEl = hasTail && longRectWidth > 0 && (
                   <rect
                     x={figureCenterX}
                     y={beatBoxBottomY - tailSize}
@@ -263,6 +362,18 @@ export function FigurenotesView({
                 const shapeSize = size;
                 const svgX = figureCenterX - shapeSize / 2;
                 const svgY = y - shapeSize / 2;
+
+                const isBlackFigure = !fill || String(fill).toLowerCase() === '#000000' || String(fill).toLowerCase() === 'black';
+                const showWhiteHalo = !!themeColors?.isDark && isBlackFigure;
+
+                const haloEl = showWhiteHalo ? (
+                  <circle
+                    cx={figureCenterX}
+                    cy={y}
+                    r={shapeSize / 2 + 4}
+                    fill="#ffffff"
+                  />
+                ) : null;
 
                 const shapeEl = (
                   <svg
@@ -300,6 +411,7 @@ export function FigurenotesView({
                       fill="var(--note-fill, #1a1a1a)"
                       style={{ opacity: 0.18 }}
                     />
+                    {haloEl}
                     {shapeEl}
                     <text x={figureCenterX} y={y} textAnchor="middle" dominantBaseline="central" fill={textColor} fontSize={Math.max(8, size * 0.5)} fontWeight="bold">
                       {String(note.pitch || '').toUpperCase().replace('H', 'B')}
@@ -343,7 +455,7 @@ export function FigurenotesView({
                   {/* Taktikast + löögivõre */}
                   <rect x={measureX} y={sys.yOffset + padVertical} width={measureWidth} height={boxHeight} fill="transparent" stroke="#c8c8c8" strokeWidth="1.5" />
                   {Array.from({ length: Math.max(0, Math.ceil(beatsInMeasure) - 1) }, (_, b) => (
-                    <line key={`beat-${b}`} x1={measureX + (b + 1) * beatWidth} y1={sys.yOffset + padVertical} x2={measureX + (b + 1) * beatWidth} y2={sys.yOffset + timelineHeight - padVertical} stroke="#e0e0e0" strokeWidth="1" />
+                    <line key={`beat-${b}`} x1={measureX + (b + 1) * beatWidth} y1={sys.yOffset + padVertical} x2={measureX + (b + 1) * beatWidth} y2={sys.yOffset + melodyRowHeight - padVertical} stroke="#e0e0e0" strokeWidth="1" />
                   ))}
                   {/* Tahvel/sõrm: puudeala löögikastidele – noodi lisamine soovitud löögile */}
                   {onBeatSlotClick && Array.from({ length: Math.ceil(beatsInMeasure) }, (_, beatIndex) => (
@@ -359,7 +471,7 @@ export function FigurenotesView({
                     />
                   ))}
                   {measureWidth < (LAYOUT.MEASURE_MIN_WIDTH || 28) && (
-                    <rect x={measureX - 1} y={sys.yOffset + 2} width={measureWidth + 2} height={timelineHeight - 2 * padVertical} fill="none" stroke="#dc2626" strokeWidth={2} strokeDasharray="4 2" rx={2} />
+                    <rect x={measureX - 1} y={sys.yOffset + 2} width={measureWidth + 2} height={melodyRowHeight - 2 * padVertical} fill="none" stroke="#dc2626" strokeWidth={2} strokeDasharray="4 2" rx={2} />
                   )}
                   {showLayoutBreakIcons && typeof onToggleLineBreakAfter === 'function' && (
                     <g className="cursor-pointer" onClick={(e) => { e.stopPropagation(); onToggleLineBreakAfter(measureIdx); }} style={{ pointerEvents: 'auto' }} title={translateLabel ? translateLabel('layout.lineBreakAfter') : 'Reavahetus selle takti järel'}>
@@ -367,33 +479,192 @@ export function FigurenotesView({
                       <path d={`M ${measureX + measureWidth / 2 - 4} ${sys.yOffset - 10} L ${measureX + measureWidth / 2} ${sys.yOffset - 14} L ${measureX + measureWidth / 2 + 4} ${sys.yOffset - 10}`} fill="none" stroke="#92400e" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
                     </g>
                   )}
-                  {j !== 0 && <line x1={measureX} y1={sys.yOffset + barLineInset} x2={measureX} y2={sys.yOffset + timelineHeight - barLineInset} stroke="#1a1a1a" strokeWidth={barLineWidth} />}
+                  {j !== 0 && <line x1={measureX} y1={sys.yOffset + barLineInset} x2={measureX} y2={sys.yOffset + melodyRowHeight - barLineInset} stroke="#1a1a1a" strokeWidth={barLineWidth} />}
                   {measureIdx === sys.measureIndices[sys.measureIndices.length - 1] && (
-                    <line x1={measureX + measureWidth} y1={sys.yOffset + barLineInset} x2={measureX + measureWidth} y2={sys.yOffset + timelineHeight - barLineInset} stroke="#1a1a1a" strokeWidth={barLineWidth} />
+                    <line x1={measureX + measureWidth} y1={sys.yOffset + barLineInset} x2={measureX + measureWidth} y2={sys.yOffset + melodyRowHeight - barLineInset} stroke="#1a1a1a" strokeWidth={barLineWidth} />
                   )}
-                  {chords.filter(c => c.beatPosition >= measure.startBeat && c.beatPosition < measure.endBeat).map((chord) => {
-                    const chordX = measureX + (chord.beatPosition - measure.startBeat) * beatWidth;
-                    const chordY = sys.yOffset + padVertical + 4;
-                    return (
-                      <g key={chord.id}>
-                        <text x={chordX} y={chordY} textAnchor="start" fontSize={Math.round(14 * (figurenotesSize / 16))} fontWeight="bold" fill="#1a1a1a" fontFamily="sans-serif">{chord.chord}</text>
-                        {chord.figuredBass && <text x={chordX} y={chordY + Math.round(14 * (figurenotesSize / 16))} textAnchor="start" fontSize={Math.round(11 * (figurenotesSize / 16))} fill="#555" fontFamily="serif">{chord.figuredBass}</text>}
-                      </g>
-                    );
-                  })}
+                  {/* Chord line: half-height row below melody; chords drawn in that row */}
+                  {chordLineHeight > 0 && j === 0 && (
+                    <rect
+                      x={marginLeft}
+                      y={sys.yOffset + melodyRowHeight + chordLineGap}
+                      width={measureWidths.reduce((a, b) => a + b, 0)}
+                      height={chordLineHeight}
+                      fill="rgba(0,0,0,0.03)"
+                      stroke="#e8e8e8"
+                      strokeWidth={1}
+                      rx={2}
+                    />
+                  )}
+                  {chords
+                    .filter((c) => c.beatPosition >= measure.startBeat && c.beatPosition < measure.endBeat)
+                    .map((chord) => {
+                      const chordX = measureX + (chord.beatPosition - measure.startBeat) * beatWidth;
+                      const chordY = chordLineHeight > 0
+                        ? sys.yOffset + melodyRowHeight + chordLineGap + chordLineHeight / 2
+                        : sys.yOffset + padVertical + 4;
+                      const chordFontSizeBase = Math.round(14 * (figurenotesSize / 16));
+                      const chordFontSize = chordLineHeight > 0
+                        ? Math.min(chordLineHeight * 0.6, chordFontSizeBase)
+                        : chordFontSizeBase;
+
+                      if (!chordBlocksEnabled || chordLineHeight <= 0) {
+                        return (
+                          <g key={chord.id}>
+                            <text
+                              x={chordX}
+                              y={chordY}
+                              textAnchor="start"
+                              dominantBaseline="middle"
+                              fontSize={chordFontSize}
+                              fontWeight="bold"
+                              fill="#1a1a1a"
+                              fontFamily="sans-serif"
+                            >
+                              {chord.chord}
+                            </text>
+                            {chord.figuredBass && (
+                              <text
+                                x={chordX}
+                                y={chordY + chordFontSize * 0.85}
+                                textAnchor="start"
+                                dominantBaseline="middle"
+                                fontSize={Math.round(chordFontSize * 0.75)}
+                                fill="#555"
+                                fontFamily="serif"
+                              >
+                                {chord.figuredBass}
+                              </text>
+                            )}
+                          </g>
+                        );
+                      }
+
+                      // Chord blocks mode: one-beat colored rectangle with chord name and tone spelling.
+                      const rectGap = 2;
+                      const rectWidth = Math.max(0, beatWidth - rectGap);
+                      const rectX = chordX;
+                      const chordRowTop = sys.yOffset + melodyRowHeight + chordLineGap;
+                      const rectY = chordRowTop + 2;
+                      const rectH = Math.max(0, chordLineHeight - 4);
+                      const fill = getChordColor(chord.chord);
+                      const tones = getChordToneNames(chord.chord);
+                      const textX = rectX + 4;
+                      const mainTextY = chordRowTop + chordLineHeight * 0.45;
+                      const tonesFontSize = Math.max(8, Math.round(chordFontSize * 0.6));
+
+                      return (
+                        <g key={chord.id}>
+                          <rect
+                            x={rectX}
+                            y={rectY}
+                            width={rectWidth}
+                            height={rectH}
+                            fill={fill}
+                            stroke="#111827"
+                            strokeWidth={0.8}
+                            rx={3}
+                          />
+                          <text
+                            x={textX}
+                            y={mainTextY}
+                            textAnchor="start"
+                            dominantBaseline="middle"
+                            fontSize={chordFontSize}
+                            fontWeight="bold"
+                            fill="#ffffff"
+                            fontFamily="sans-serif"
+                          >
+                            {chord.chord}
+                          </text>
+                          {tones.length > 0 && (
+                            <text
+                              x={textX}
+                              y={mainTextY + tonesFontSize}
+                              textAnchor="start"
+                              dominantBaseline="hanging"
+                              fontSize={tonesFontSize}
+                              fill="#f9fafb"
+                              fontFamily="monospace"
+                            >
+                              {tones.join(' ')}
+                            </text>
+                          )}
+                          {chord.figuredBass && (
+                            <text
+                              x={rectX + rectWidth - 4}
+                              y={rectY + rectH - 3}
+                              textAnchor="end"
+                              fontSize={Math.max(8, Math.round(chordFontSize * 0.6))}
+                              fill="#111827"
+                              fontFamily="serif"
+                            >
+                              {chord.figuredBass}
+                            </text>
+                          )}
+                        </g>
+                      );
+                    })}
                   {(() => {
+                    // Shorter-than-quarter notes in the same beat: place so that
+                    // right edge of one shape + 1px gap + left edge of next shape (repeated for every short note).
+                    const compactCenters = new Map();
+                    const notesByBeat = new Map();
+                    measure.notes.forEach((note, idx) => {
+                      if (note.isRest) return;
+                      const durLabel = note.durationLabel || '1/4';
+                      const durBeats = typeof note.duration === 'number' ? note.duration : getDurationInBeats(durLabel);
+                      if (durBeats >= 1) return; // only shorter than quarter
+                      const beatInMeasure = note.beat - measure.startBeat;
+                      const beatIndex = Math.floor(beatInMeasure);
+                      if (!notesByBeat.has(beatIndex)) notesByBeat.set(beatIndex, []);
+                      const scale = getFigureScaleForDuration(durLabel);
+                      const figureSize = figureSizeBaseForMeasure * scale;
+                      notesByBeat.get(beatIndex).push({ note, idx, figureSize });
+                    });
+                    notesByBeat.forEach((group, beatIndex) => {
+                      if (!group || group.length <= 1) return;
+                      group.sort((a, b) => (a.note.beat ?? 0) - (b.note.beat ?? 0) || a.idx - b.idx);
+                      const beatLeft = measureX + beatIndex * beatWidth;
+                      let leftEdge = beatLeft + 1; // left edge of first short note in this beat
+                      group.forEach(({ idx, figureSize }) => {
+                        const center = leftEdge + figureSize / 2;
+                        compactCenters.set(idx, center);
+                        const rightEdge = leftEdge + figureSize;
+                        leftEdge = rightEdge + 1; // 1px gap, then left edge of next shape
+                      });
+                    });
+
                     return measure.notes.map((note, noteIdx) => {
                       const dur = note.durationLabel || '1/4';
                       const scale = getFigureScaleForDuration(dur);
                       const figureSize = figureSizeBaseForMeasure * scale;
-                      const figureCenterX = getNoteSlotCenterX(note);
+                      const defaultCenterX = getNoteSlotCenterX(note);
+                      const figureCenterX = compactCenters.has(noteIdx) ? compactCenters.get(noteIdx) : defaultCenterX;
                       const noteWidth = getRestBoxWidth(note);
 
                       let globalNoteIndex = 0;
                       for (let i = 0; i < measureIdx; i++) globalNoteIndex += effectiveMeasures[i].notes.length;
                       globalNoteIndex += noteIdx;
                       const noteY = sys.yOffset + centerY;
-                      const noteGroupProps = { onClick: (e) => { e.stopPropagation(); onNoteClick?.(globalNoteIndex); }, style: { cursor: onNoteClick ? 'pointer' : undefined } };
+                      const canDragBeat = canHandDragNotes && typeof onNoteBeatChange === 'function';
+                      const noteGroupProps = {
+                        onClick: (e) => { e.stopPropagation(); onNoteClick?.(globalNoteIndex); },
+                        onMouseDown: (e) => {
+                          if (typeof onNoteMouseDown === 'function' && e.shiftKey) {
+                            onNoteMouseDown(globalNoteIndex, e);
+                            return;
+                          }
+                          if (canDragBeat && e.button === 0) {
+                            e.stopPropagation();
+                            setNoteBeatDrag({ noteIndex: globalNoteIndex, startClientX: e.clientX });
+                            return;
+                          }
+                          if (typeof onNoteMouseDown === 'function') onNoteMouseDown(globalNoteIndex, e);
+                        },
+                        onMouseEnter: typeof onNoteMouseEnter === 'function' ? (e) => onNoteMouseEnter(globalNoteIndex, e) : undefined,
+                        style: { cursor: (onNoteClick || onNoteMouseDown || canDragBeat) ? 'pointer' : undefined }
+                      };
                       if (note.isRest) {
                         const restLabelY = sys.yOffset + centerY + 20;
                         const restSyllable = showRhythmSyllables ? getRhythmSyllableForNote(note) : '';
@@ -409,14 +680,31 @@ export function FigurenotesView({
                       const labelY = noteY + figureSize * 0.5 + labelFontSize;
                       const bandLeft = figureCenterX - noteWidth / 2;
                       const bandY = sys.yOffset + padVertical + 2;
-                      const bandH = timelineHeight - 2 * (padVertical + 2);
+                      const bandH = melodyRowHeight - 2 * (padVertical + 2);
                       const bandColor = getFigureColor(note.pitch);
+                      const isDarkTheme = !!themeColors?.isDark;
+                      const pitchLabel = String(note.pitch || '').toUpperCase().replace('H', 'B');
+                      const isGNote = pitchLabel.startsWith('G');
+                      const durLabel = note.durationLabel || '1/4';
+                      const noteDurationBeats = typeof note.duration === 'number' ? note.duration : getDurationInBeats(durLabel);
+                      const isLongerThanQuarter = noteDurationBeats > 1;
+                      const showBand = isDarkTheme && isGNote && isLongerThanQuarter;
+                      /* Long-duration rectangle: from center of figure to end of last beat (e.g. half note → end of 2nd beat). */
+                      const endBeat = Math.min(note.beat + noteDurationBeats, measure.endBeat ?? measure.startBeat + beatsInMeasure);
+                      const longRectEndX = (durLabel === '1/2' || durLabel === '1/1')
+                        ? Math.min(measureX + measureWidth, measureX + (endBeat - measure.startBeat) * beatWidth)
+                        : null;
                       return (
                         <g key={noteIdx} {...noteGroupProps}>
-                          <rect x={bandLeft} y={bandY} width={noteWidth} height={bandH} fill={bandColor} opacity="0.2" rx="2" />
-                          {renderFigurenote(note, figureX, noteY, globalNoteIndex, noteWidth, figureSize)}
+                          {showBand && (
+                            <rect x={bandLeft} y={bandY} width={noteWidth} height={bandH} fill={bandColor} opacity="0.2" rx="2" />
+                          )}
+                          {renderFigurenote(note, figureX, noteY, globalNoteIndex, noteWidth, figureSize, longRectEndX)}
                           {(note.lyric != null && String(note.lyric).trim() !== '') && (
-                            <text x={figureX} y={labelY + Math.round(14 * (figurenotesSize / 16))} textAnchor="middle" fontSize={Math.round(11 * (figurenotesSize / 16))} fill="#333" fontFamily={lyricFontFamily}>{note.lyric}</text>
+                            <text x={figureX} y={labelY + Math.round(14 * (figurenotesSize / 16)) + (lyricLineYOffset || 0)} textAnchor="middle" fontSize={Math.round(11 * (figurenotesSize / 16))} fill="#333" fontFamily={lyricFontFamily}>{note.lyric}</text>
+                          )}
+                          {(note.lyric2 != null && String(note.lyric2).trim() !== '') && (
+                            <text x={figureX} y={labelY + Math.round(28 * (figurenotesSize / 16)) + (lyricLineYOffset || 0)} textAnchor="middle" fontSize={Math.round(11 * (figurenotesSize / 16))} fill="#555" fontFamily={lyricFontFamily}>{note.lyric2}</text>
                           )}
                         </g>
                       );

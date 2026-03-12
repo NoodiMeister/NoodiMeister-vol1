@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { UserPlus, Mail, Lock, User } from 'lucide-react';
 import { CloudLoginButtons } from '../components/CloudLogin';
 import { AuthErrorBlock } from '../components/AuthErrorBlock';
+import { AppLogo } from '../components/AppLogo';
 import { formatAuthError } from '../utils/authError';
 
 export default function RegisterPage() {
@@ -78,7 +79,7 @@ export default function RegisterPage() {
       <header className="flex-shrink-0 border-b border-amber-200/60 dark:border-white/20 bg-white/70 dark:bg-black/90 backdrop-blur-sm">
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
           <Link to="/" className="flex items-center">
-            <img src="/logo.png" alt="NoodiMeister" className="h-9 w-auto" />
+            <AppLogo variant="header" alt="NoodiMeister" />
           </Link>
           <Link to="/" className="text-amber-700 dark:text-white hover:text-amber-900 dark:hover:text-white/90 font-medium">Tagasi esilehele</Link>
         </div>

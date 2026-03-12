@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { FileMusic, Cloud, UserPlus, LogIn, PenTool, Save, Share2 } from 'lucide-react';
+import { AppLogo } from '../components/AppLogo';
 import { LOCALE_STORAGE_KEY, DEFAULT_LOCALE, getTranslations } from '../i18n';
 
 export default function LandingPage() {
@@ -19,7 +20,7 @@ export default function LandingPage() {
       <header className="flex-shrink-0 border-b border-amber-200/60 dark:border-white/20 bg-white/70 dark:bg-black/90 backdrop-blur-sm sticky top-0 z-10">
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
           <Link to="/" className="flex items-center">
-            <img src="/logo.png" alt="NoodiMeister" className="h-9 w-auto" />
+            <AppLogo variant="header" alt="NoodiMeister" />
           </Link>
           <nav className="flex items-center gap-3">
             <Link

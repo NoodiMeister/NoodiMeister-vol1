@@ -5,6 +5,7 @@ import * as googleDrive from '../services/googleDrive';
 import * as oneDrive from '../services/oneDrive';
 import * as authStorage from '../services/authStorage';
 import { LOCALE_STORAGE_KEY, DEFAULT_LOCALE, LOCALES, getTranslations } from '../i18n';
+import { AppLogo } from '../components/AppLogo';
 import { useNoodimeisterOptional } from '../store/NoodimeisterContext';
 
 /** Error Boundary: sisselogimise järgne vaade – punane kast veateatega */
@@ -264,7 +265,7 @@ export default function MinuTöödPage() {
       <header className="flex-shrink-0 border-b border-amber-200/60 dark:border-white/20 bg-white/70 dark:bg-black/90 backdrop-blur-sm">
         <div className="max-w-4xl mx-auto px-6 py-4 flex items-center justify-between flex-wrap gap-2">
           <Link to="/" className="flex items-center">
-            <img src="/logo.png" alt="NoodiMeister" className="h-9 w-auto" />
+            <AppLogo variant="header" alt="NoodiMeister" />
           </Link>
           <nav className="flex items-center gap-3 flex-wrap" ref={settingsRef}>
             {/* Seaded – keel ja värvirežiim */}
@@ -447,7 +448,7 @@ export default function MinuTöödPage() {
                             href={`${basePath}/app?fileId=${encodeURIComponent(f.id)}`}
                             className="flex-1 min-w-0 text-left flex items-center gap-3 px-4 py-3 rounded-xl bg-white dark:bg-zinc-900 border border-amber-200/60 dark:border-white/20 shadow-sm hover:bg-amber-50 dark:hover:bg-white/10 hover:border-amber-300 dark:hover:border-white/30 transition-colors no-underline text-inherit text-amber-900 dark:text-white"
                           >
-                            <img src="/logo.png" alt="" className="h-8 w-8 flex-shrink-0 object-contain" aria-hidden />
+                            <AppLogo variant="iconMd" alt="" />
                             <span className="font-medium text-amber-900 dark:text-white truncate flex-1">{f.name}</span>
                             <span className="text-sm text-amber-600 dark:text-white/70 flex-shrink-0">{formatDate(f.modifiedTime, locale)}</span>
                           </a>
@@ -525,7 +526,7 @@ export default function MinuTöödPage() {
                             href={`${basePath}/app?fileId=${encodeURIComponent(f.id)}&cloud=onedrive`}
                             className="flex-1 min-w-0 text-left flex items-center gap-3 px-4 py-3 rounded-xl bg-white dark:bg-zinc-900 border border-amber-200/60 dark:border-white/20 shadow-sm hover:bg-amber-50 dark:hover:bg-white/10 hover:border-amber-300 dark:hover:border-white/30 transition-colors no-underline text-inherit text-amber-900 dark:text-white"
                           >
-                            <img src="/logo.png" alt="" className="h-8 w-8 flex-shrink-0 object-contain" aria-hidden />
+                            <AppLogo variant="iconMd" alt="" />
                             <span className="font-medium text-amber-900 dark:text-white truncate flex-1">{f.name}</span>
                             <span className="text-sm text-amber-600 dark:text-white/70 flex-shrink-0">{formatOneDriveDate(f, locale)}</span>
                           </a>

@@ -24,6 +24,7 @@ import {
   getItemName as oneDriveGetItemName,
   deleteFile as oneDriveDeleteFile,
 } from '../services/oneDrive';
+import { AppLogo } from '../components/AppLogo';
 
 export default function AccountPage() {
   const navigate = useNavigate();
@@ -315,7 +316,7 @@ export default function AccountPage() {
       <header className="flex-shrink-0 border-b border-amber-200/60 dark:border-white/20 bg-white/70 dark:bg-black/90 backdrop-blur-sm">
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
           <Link to="/" className="flex items-center">
-            <img src="/logo.png" alt="NoodiMeister" className="h-9 w-auto" />
+            <AppLogo variant="header" alt="NoodiMeister" />
           </Link>
           <nav className="flex items-center gap-3 flex-wrap" ref={settingsRef}>
             <div className="relative">
@@ -451,7 +452,7 @@ export default function AccountPage() {
                             href={`${basePath}/app?fileId=${encodeURIComponent(f.id)}`}
                             className="flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-50/70 dark:bg-white/10 border border-amber-200/60 dark:border-white/20 hover:bg-amber-100/80 dark:hover:bg-white/20 no-underline text-inherit"
                           >
-                            <img src="/logo.png" alt="" className="h-6 w-6 flex-shrink-0 object-contain" aria-hidden />
+                            <AppLogo variant="iconSm" alt="" />
                             <span className="truncate flex-1 text-sm font-medium">{f.name}</span>
                             <span className="text-xs text-amber-600 dark:text-white/70 flex-shrink-0">{formatDate(f.modifiedTime)}</span>
                           </a>
@@ -483,7 +484,7 @@ export default function AccountPage() {
                             href={`${basePath}/app?fileId=${encodeURIComponent(f.id)}&cloud=onedrive`}
                             className="flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-50/70 dark:bg-white/10 border border-amber-200/60 dark:border-white/20 hover:bg-amber-100/80 dark:hover:bg-white/20 no-underline text-inherit"
                           >
-                            <img src="/logo.png" alt="" className="h-6 w-6 flex-shrink-0 object-contain" aria-hidden />
+                            <AppLogo variant="iconSm" alt="" />
                             <span className="truncate flex-1 text-sm font-medium">{f.name}</span>
                             <span className="text-xs text-amber-600 dark:text-white/70 flex-shrink-0">{formatDate(f.lastModifiedDateTime)}</span>
                           </a>
@@ -707,7 +708,7 @@ className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-amb
                           <ul className="max-h-40 overflow-y-auto text-sm space-y-2">
                             {oneDriveFiles.data.map((f) => (
                               <li key={f.id} className="flex items-center gap-2">
-                                <img src="/logo.png" alt="" className="h-6 w-6 flex-shrink-0 object-contain" aria-hidden />
+                                <AppLogo variant="iconSm" alt="" />
                                 <span className="truncate flex-1">{f.name}</span>
                                 {f.webUrl && (
                                   <a
