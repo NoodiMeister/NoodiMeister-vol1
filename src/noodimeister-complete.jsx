@@ -4829,6 +4829,10 @@ function NoodiMeisterCore({ icons }) {
     return Math.max(LAYOUT.PAGE_WIDTH_MIN, Math.min(w, 2400));
   };
   const [fitPageDisplayWidth, setFitPageDisplayWidth] = useState(() => getFullPageWidthFromViewport('portrait'));
+  // Reset cached fit width when orientation changes so portrait/landscape use correct dimensions immediately
+  useEffect(() => {
+    setFitPageDisplayWidth(0);
+  }, [pageOrientation]);
   const effectivePageWidthMax = pageOrientation === 'landscape' ? LAYOUT.PAGE_WIDTH_MAX_LANDSCAPE : LAYOUT.PAGE_WIDTH_MAX;
   useEffect(() => {
     const el = scoreContainerRef.current;
