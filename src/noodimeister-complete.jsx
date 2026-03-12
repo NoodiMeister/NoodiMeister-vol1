@@ -893,7 +893,7 @@ function NoodiMeisterCore({ icons }) {
       if (typeof window !== 'undefined') window.NOODIMEISTER_APP_READY = true;
     }, 50);
     return () => clearTimeout(t);
-  }, [notationStyle]);
+  }, []);
 
   const t = useMemo(() => createT(locale), [locale]);
   const instrumentConfig = useMemo(() => getInstrumentConfig(t), [t]);
