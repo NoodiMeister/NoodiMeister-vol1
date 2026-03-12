@@ -1,5 +1,5 @@
 /**
- * Ühekordne administraatori registreerimine: noodimeister.ee/administraator-registreerimine
+ * Ühekordne administraatori registreerimine: noodimeister.ee/administraator/register
  * Ainult üks administraatori konto saab siin registreerida. Pärast seda leht ei luba uut registreerimist.
  */
 import React, { useState, useEffect } from 'react';
@@ -200,7 +200,7 @@ export default function AdminRegistrationPage() {
           </form>
 
           <p className="mt-6 text-xs text-slate-500 dark:text-white/60">
-            Leht on peidetud (menüüs linki pole). Pärast registreerimist hoia aadress ja ADMIN_SECRET salajane.
+            Leht on peidetud (menüüs linki pole). Aadress: <strong>/administraator/register</strong>. Pärast registreerimist hoia see aadress ja ADMIN_SECRET salajane.
           </p>
         </div>
       </main>

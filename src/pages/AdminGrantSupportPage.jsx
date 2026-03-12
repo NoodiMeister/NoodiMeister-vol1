@@ -386,15 +386,21 @@ export default function AdminGrantSupportPage() {
 
               <div className="mb-6 p-4 rounded-xl bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-white/10">
                 <h2 className="text-sm font-semibold text-slate-700 dark:text-white mb-2 flex items-center gap-2">
-                  <ExternalLink className="w-4 h-4" /> Rakenduse lingid
+                  <ExternalLink className="w-4 h-4" /> Kogu rakendus – lingid
                 </h2>
+                <p className="text-xs text-slate-500 dark:text-white/60 mb-3">Administraatoril on ligipääs kõigile lehtedele. Avage vajadusel uues vahekaardis.</p>
                 <div className="flex flex-wrap gap-2 text-sm">
+                  <Link to="/" className="px-3 py-1.5 rounded-lg bg-white dark:bg-zinc-700 text-slate-700 dark:text-white border border-slate-200 dark:border-white/20 hover:bg-amber-50 dark:hover:bg-zinc-600" target="_blank" rel="noopener noreferrer">Avaleht</Link>
                   <Link to="/tood" className="px-3 py-1.5 rounded-lg bg-white dark:bg-zinc-700 text-slate-700 dark:text-white border border-slate-200 dark:border-white/20 hover:bg-amber-50 dark:hover:bg-zinc-600" target="_blank" rel="noopener noreferrer">Minu tööd</Link>
                   <Link to="/app" className="px-3 py-1.5 rounded-lg bg-white dark:bg-zinc-700 text-slate-700 dark:text-white border border-slate-200 dark:border-white/20 hover:bg-amber-50 dark:hover:bg-zinc-600" target="_blank" rel="noopener noreferrer">Tööriist (noodiredaktor)</Link>
+                  <Link to="/konto" className="px-3 py-1.5 rounded-lg bg-white dark:bg-zinc-700 text-slate-700 dark:text-white border border-slate-200 dark:border-white/20 hover:bg-amber-50 dark:hover:bg-zinc-600" target="_blank" rel="noopener noreferrer">Minu konto</Link>
+                  <Link to="/login" className="px-3 py-1.5 rounded-lg bg-white dark:bg-zinc-700 text-slate-700 dark:text-white border border-slate-200 dark:border-white/20 hover:bg-amber-50 dark:hover:bg-zinc-600" target="_blank" rel="noopener noreferrer">Logi sisse</Link>
+                  <Link to="/registreeru" className="px-3 py-1.5 rounded-lg bg-white dark:bg-zinc-700 text-slate-700 dark:text-white border border-slate-200 dark:border-white/20 hover:bg-amber-50 dark:hover:bg-zinc-600" target="_blank" rel="noopener noreferrer">Registreeru</Link>
                   <Link to="/hinnakiri" className="px-3 py-1.5 rounded-lg bg-white dark:bg-zinc-700 text-slate-700 dark:text-white border border-slate-200 dark:border-white/20 hover:bg-amber-50 dark:hover:bg-zinc-600" target="_blank" rel="noopener noreferrer">Hinnakiri</Link>
                   <Link to="/toeta" className="px-3 py-1.5 rounded-lg bg-white dark:bg-zinc-700 text-slate-700 dark:text-white border border-slate-200 dark:border-white/20 hover:bg-amber-50 dark:hover:bg-zinc-600" target="_blank" rel="noopener noreferrer">Toeta</Link>
-                  <Link to="/konto" className="px-3 py-1.5 rounded-lg bg-white dark:bg-zinc-700 text-slate-700 dark:text-white border border-slate-200 dark:border-white/20 hover:bg-amber-50 dark:hover:bg-zinc-600" target="_blank" rel="noopener noreferrer">Minu konto</Link>
-                  <Link to="/" className="px-3 py-1.5 rounded-lg bg-white dark:bg-zinc-700 text-slate-700 dark:text-white border border-slate-200 dark:border-white/20 hover:bg-amber-50 dark:hover:bg-zinc-600" target="_blank" rel="noopener noreferrer">Avaleht</Link>
+                  <Link to="/gallery" className="px-3 py-1.5 rounded-lg bg-white dark:bg-zinc-700 text-slate-700 dark:text-white border border-slate-200 dark:border-white/20 hover:bg-amber-50 dark:hover:bg-zinc-600" target="_blank" rel="noopener noreferrer">Sümboligalerii</Link>
+                  <Link to="/gallery/figurenotes" className="px-3 py-1.5 rounded-lg bg-white dark:bg-zinc-700 text-slate-700 dark:text-white border border-slate-200 dark:border-white/20 hover:bg-amber-50 dark:hover:bg-zinc-600" target="_blank" rel="noopener noreferrer">Figuurnoodi galerii</Link>
+                  <Link to="/piano" className="px-3 py-1.5 rounded-lg bg-white dark:bg-zinc-700 text-slate-700 dark:text-white border border-slate-200 dark:border-white/20 hover:bg-amber-50 dark:hover:bg-zinc-600" target="_blank" rel="noopener noreferrer">Klaver</Link>
                 </div>
               </div>
 

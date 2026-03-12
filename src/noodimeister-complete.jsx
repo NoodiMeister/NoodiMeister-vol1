@@ -1074,6 +1074,16 @@ function NoodiMeisterCore({ icons }) {
     dirtyRef.current = true;
   }, [notes, setNotes]);
 
+  // Resolve explicit beat for each note (used by onNoteBeatChange and addNoteAtCursor; must be defined before first use).
+  const notesWithExplicitBeatsEarly = useCallback((noteList) => {
+    let runningBeat = 0;
+    return (noteList || []).map((n) => {
+      const beat = typeof n.beat === 'number' ? n.beat : runningBeat;
+      runningBeat = beat + (n.duration ?? 1);
+      return { ...n, beat };
+    });
+  }, []);
+
   /** Hand tool: move note to a new beat. Re-sorts notes by beat. */
   const onNoteBeatChange = useCallback((noteIndex, newBeat) => {
     if (noteIndex < 0 || noteIndex >= notes.length) return;
@@ -1081,11 +1091,11 @@ function NoodiMeisterCore({ icons }) {
     if (saveToHistoryRef.current) saveToHistoryRef.current(notes);
     setNotes((prev) => {
       const withNew = prev.map((n, i) => i === noteIndex ? { ...n, beat } : n);
-      const withBeats = notesWithExplicitBeats(withNew);
+      const withBeats = notesWithExplicitBeatsEarly(withNew);
       return withBeats.sort((a, b) => (a.beat ?? 0) - (b.beat ?? 0));
     });
     dirtyRef.current = true;
-  }, [notes, notesWithExplicitBeats]);
+  }, [notes, notesWithExplicitBeatsEarly]);
   const clearAllNoteLabels = useCallback(() => {
     if (saveToHistoryRef.current) saveToHistoryRef.current(notes);
     setNotes((prev) => prev.map((n) => ({ ...n, teacherLabel: '' })));
@@ -3276,15 +3286,8 @@ function NoodiMeisterCore({ icons }) {
     setActiveStaffIndex(staves.length);
   }, [notationStyle, notationMode, staves.length]);
 
-  // Resolve explicit beat for each note (notes may have beat set or use cumulative duration order).
-  const notesWithExplicitBeats = useCallback((noteList) => {
-    let runningBeat = 0;
-    return (noteList || []).map((n) => {
-      const beat = typeof n.beat === 'number' ? n.beat : runningBeat;
-      runningBeat = beat + (n.duration ?? 1);
-      return { ...n, beat };
-    });
-  }, []);
+  // Alias for use in addNoteAtCursor etc. (defined early as notesWithExplicitBeatsEarly to avoid TDZ).
+  const notesWithExplicitBeats = notesWithExplicitBeatsEarly;
 
   // Handle toolbox selection (clickedIndex = option index when clicking, else uses selectedOptionIndex for keyboard).
   // When options.insertAtBeat is set (e.g. from figure-beat click), use it so the writer follows the cursor/click position (avoids stale cursorPosition from async setState).

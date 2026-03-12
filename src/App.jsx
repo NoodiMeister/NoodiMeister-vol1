@@ -200,7 +200,8 @@ function AppRoutes() {
           <Route path="/hinnakiri" element={<HinnakiriPage />} />
           <Route path="/toeta" element={<ToetaPage />} />
           <Route path="/administraator" element={<AdminGrantSupportPage />} />
-          <Route path="/administraator-registreerimine" element={<AdminRegistrationPage />} />
+          <Route path="/administraator/register" element={<AdminRegistrationPage />} />
+          <Route path="/administraator-registreerimine" element={<Navigate to="/administraator/register" replace />} />
           <Route path="/admin" element={<Navigate to="/administraator" replace />} />
           <Route path="/" element={<LandingOrRedirect />} />
           <Route path="*" element={<Navigate to="/" replace />} />
