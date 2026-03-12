@@ -4999,7 +4999,7 @@ function NoodiMeisterCore({ icons }) {
         window.removeEventListener('resize', scheduleUpdate);
       }
     };
-  }, [viewFitPage, viewSmartPage, viewFitOrSmart, basePageWidth, logicalContentHeight, cloudLoadComplete, pageOrientation]);
+  }, [viewFitPage, viewSmartPage, viewFitOrSmart, basePageWidth, logicalContentHeight, cloudLoadComplete, pageOrientation, pageDesignDataUrl]);
 
   // Zoom noodiala: hiireratas (Ctrl/Cmd), touchpad pinch, iPad pinch, Cmd/Ctrl+/- (handler on klaviatuuril). Only when notation frame has focus (user clicked on score).
   const handleScoreZoomWheel = useCallback((e) => {
@@ -7735,9 +7735,9 @@ function NoodiMeisterCore({ icons }) {
                   style={{
                     zIndex: pageDesignLayer === 'inFront' ? 1 : 0,
                     backgroundImage: `url(${pageDesignDataUrl})`,
-                    backgroundRepeat: 'no-repeat',
-                    backgroundPosition: 'center',
-                    backgroundSize: pageDesignFit === 'contain' ? 'contain' : 'cover',
+                    backgroundRepeat: 'repeat-y',
+                    backgroundPosition: '0 0',
+                    backgroundSize: `${pw}px ${a4PageHeightVal}px`,
                     opacity: clampNumber(Number(pageDesignOpacity) || 0.25, 0, 1),
                   }}
                 />
