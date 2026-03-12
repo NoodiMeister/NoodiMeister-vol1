@@ -1276,7 +1276,8 @@ function NoodiMeisterCore({ icons }) {
   // Animeeritud notatsioon: nooti lugeva kursori kuju (püstine joon, emoji)
   const [pedagogicalPlayheadStyle, setPedagogicalPlayheadStyle] = useState('line'); // 'line' | 'violin' | 'smiley' | 'custom'
   const [pedagogicalPlayheadEmoji, setPedagogicalPlayheadEmoji] = useState('🎵'); // kasutub kui style === 'custom'; seadetes "Kursori karakter"
-  const [pedagogicalPlayheadEmojiSize, setPedagogicalPlayheadEmojiSize] = useState(32); // HEV: 20–60 px
+  const [pedagogicalPlayheadEmojiSize, setPedagogicalPlayheadEmojiSize] = useState(30); // HEV: 20–60 px (2px smaller default for N cursor)
+  const [cursorSizePx, setCursorSizePx] = useState(30); // User setting: cursor/playhead size 1–500 px (used in Settings ruler)
   const [cursorLineStrokeWidth, setCursorLineStrokeWidth] = useState(4); // N-mode / reading cursor line thickness (1–8 px)
   const [pedagogicalPlayheadMovement, setPedagogicalPlayheadMovement] = useState('arch'); // 'arch' (distance-dependent) | 'horizontal'
   const [isExportingAnimation, setIsExportingAnimation] = useState(false);
@@ -1939,16 +1940,31 @@ function NoodiMeisterCore({ icons }) {
     audio.playbackRate = clampNumber(Number(pedagogicalAudioPlaybackRate) || 1, 0.5, 2);
     pedagogicalAudioRef.current = audio;
     const bpm = Math.max(20, Math.min(300, pedagogicalAudioBpm));
+    pedagogicalLastSnappedBeatRef.current = 0;
     audio.play().then(() => {
       setIsPedagogicalAudioPlaying(true);
       pedagogicalPlaybackIntervalRef.current = setInterval(() => {
-        const totalBeats = notes.reduce((acc, n) => acc + n.duration, 0);
+        let run = 0;
+        const withBeats = (notes || []).map((n) => {
+          const beat = typeof n.beat === 'number' ? n.beat : run;
+          run = beat + (n.duration ?? 1);
+          return { ...n, beat };
+        }).sort((a, b) => a.beat - b.beat);
+        const totalBeats = run;
         const beat = (audio.currentTime * bpm) / 60;
+        let snapped = 0;
+        for (const n of withBeats) {
+          if (n.beat <= beat) snapped = n.beat;
+        }
+        const lastSnapped = pedagogicalLastSnappedBeatRef.current;
+        for (const n of withBeats) {
+          if (n.beat > lastSnapped && n.beat <= beat && !n.isRest) {
+            playPianoNote(n.pitch, n.octave ?? 4, n.accidental ?? 0);
+          }
+        }
+        pedagogicalLastSnappedBeatRef.current = snapped;
         setPedagogicalAudioCurrentTime(audio.currentTime || 0);
-        setCursorPosition(prev => {
-          const next = Math.max(0, Math.min(totalBeats, beat));
-          return next;
-        });
+        setCursorPosition(Math.max(0, Math.min(totalBeats, snapped)));
         if (audio.ended || audio.currentTime >= audio.duration) {
           clearInterval(pedagogicalPlaybackIntervalRef.current);
           pedagogicalPlaybackIntervalRef.current = null;
@@ -1962,7 +1978,7 @@ function NoodiMeisterCore({ icons }) {
       stopPedagogicalPlayback();
       setCursorPosition(0);
     };
-  }, [pedagogicalAudioUrl, pedagogicalAudioBpm, notes, stopPedagogicalPlayback, pedagogicalAudioPlaybackRate]);
+  }, [pedagogicalAudioUrl, pedagogicalAudioBpm, notes, stopPedagogicalPlayback, pedagogicalAudioPlaybackRate, playPianoNote]);
 
   const seekPedagogicalAudio = useCallback((deltaSeconds) => {
     if (!pedagogicalAudioUrl) return;
@@ -2301,6 +2317,7 @@ function NoodiMeisterCore({ icons }) {
     pedagogicalPlayheadStyle,
     pedagogicalPlayheadEmoji,
     pedagogicalPlayheadEmojiSize,
+    cursorSizePx,
     cursorLineStrokeWidth,
     pedagogicalPlayheadMovement,
     chords,
@@ -2505,6 +2522,8 @@ function NoodiMeisterCore({ icons }) {
       if (data.pedagogicalPlayheadStyle) setPedagogicalPlayheadStyle(data.pedagogicalPlayheadStyle);
       if (data.pedagogicalPlayheadEmoji != null) setPedagogicalPlayheadEmoji(data.pedagogicalPlayheadEmoji);
       if (data.pedagogicalPlayheadEmojiSize != null) setPedagogicalPlayheadEmojiSize(Math.max(20, Math.min(60, data.pedagogicalPlayheadEmojiSize)));
+      if (data.cursorSizePx != null) setCursorSizePx(Math.max(1, Math.min(500, data.cursorSizePx)));
+      else if (data.pedagogicalPlayheadEmojiSize != null) setCursorSizePx(Math.max(1, Math.min(500, data.pedagogicalPlayheadEmojiSize)));
       if (data.pedagogicalPlayheadMovement === 'arch' || data.pedagogicalPlayheadMovement === 'horizontal') setPedagogicalPlayheadMovement(data.pedagogicalPlayheadMovement);
       if (data.cursorLineStrokeWidth != null) setCursorLineStrokeWidth(Math.max(1, Math.min(8, data.cursorLineStrokeWidth)));
       if (data.pedagogicalAudioData) {
@@ -2775,6 +2794,8 @@ function NoodiMeisterCore({ icons }) {
         if (data.pedagogicalPlayheadStyle) setPedagogicalPlayheadStyle(data.pedagogicalPlayheadStyle);
         if (data.pedagogicalPlayheadEmoji != null) setPedagogicalPlayheadEmoji(data.pedagogicalPlayheadEmoji);
         if (data.pedagogicalPlayheadEmojiSize != null) setPedagogicalPlayheadEmojiSize(Math.max(20, Math.min(60, data.pedagogicalPlayheadEmojiSize)));
+        if (data.cursorSizePx != null) setCursorSizePx(Math.max(1, Math.min(500, data.cursorSizePx)));
+        else if (data.pedagogicalPlayheadEmojiSize != null) setCursorSizePx(Math.max(1, Math.min(500, data.pedagogicalPlayheadEmojiSize)));
         if (data.pedagogicalPlayheadMovement === 'arch' || data.pedagogicalPlayheadMovement === 'horizontal') setPedagogicalPlayheadMovement(data.pedagogicalPlayheadMovement);
         if (data.cursorLineStrokeWidth != null) setCursorLineStrokeWidth(Math.max(1, Math.min(8, data.cursorLineStrokeWidth)));
         if (data.pedagogicalAudioData) {
@@ -3056,6 +3077,8 @@ function NoodiMeisterCore({ icons }) {
           if (data.pedagogicalPlayheadStyle) setPedagogicalPlayheadStyle(data.pedagogicalPlayheadStyle);
           if (data.pedagogicalPlayheadEmoji != null) setPedagogicalPlayheadEmoji(data.pedagogicalPlayheadEmoji);
           if (data.pedagogicalPlayheadEmojiSize != null) setPedagogicalPlayheadEmojiSize(Math.max(20, Math.min(60, data.pedagogicalPlayheadEmojiSize)));
+          if (data.cursorSizePx != null) setCursorSizePx(Math.max(1, Math.min(500, data.cursorSizePx)));
+          else if (data.pedagogicalPlayheadEmojiSize != null) setCursorSizePx(Math.max(1, Math.min(500, data.pedagogicalPlayheadEmojiSize)));
           if (data.pedagogicalPlayheadMovement === 'arch' || data.pedagogicalPlayheadMovement === 'horizontal') setPedagogicalPlayheadMovement(data.pedagogicalPlayheadMovement);
           if (data.cursorLineStrokeWidth != null) setCursorLineStrokeWidth(Math.max(1, Math.min(8, data.cursorLineStrokeWidth)));
           if (data.pedagogicalAudioData) {
@@ -3190,12 +3213,7 @@ function NoodiMeisterCore({ icons }) {
     return () => window.removeEventListener('beforeunload', onBeforeUnload);
   }, [getPersistedState]);
 
-  // Rütmi (takti) vahetusel: kursor jääb kehtivasse vahemikku (MuseScore-sarnane käitumine); demo puhul max 8 takti
-  useEffect(() => {
-    const totalBeats = notes.reduce((acc, n) => acc + n.duration, 0);
-    const maxCursor = hasFullAccess ? totalBeats : Math.min(totalBeats, DEMO_MAX_BEATS);
-    setCursorPosition(prev => Math.max(0, Math.min(prev, maxCursor)));
-  }, [timeSignature.beats, timeSignature.beatUnit, notes, hasFullAccess]);
+  // Cursor clamp is done later (after measures) so last beat of last bar is allowed; no early clamp here
 
   const durations = { '1/1': 4, '1/2': 2, '1/4': 1, '1/8': 0.5, '1/16': 0.25, '1/32': 0.125 };
   
@@ -3311,25 +3329,8 @@ function NoodiMeisterCore({ icons }) {
       return { startBeat, endBeat: startBeat + beatsPerMeasure, beatCount: beatsPerMeasure };
     };
 
-    const totalDuration = staves.length
-      ? Math.max(0, ...staves.map((s) => {
-          if (!s.notes.length) return 0;
-          const sorted = [...s.notes].sort((a, b) => (a.beat ?? 0) - (b.beat ?? 0));
-          let run = 0;
-          for (const n of sorted) {
-            const b = typeof n.beat === 'number' ? n.beat : run;
-            run = b + (n.duration ?? 1);
-          }
-          return run;
-        }))
-      : 0;
-    let measureIndex = 0;
-    let endBeat = getMeasureBounds(0).endBeat;
-    while (totalDuration > endBeat) {
-      measureIndex++;
-      endBeat = getMeasureBounds(measureIndex).endBeat;
-    }
-    let totalMeasures = measureIndex + 1 + (addedMeasures || 0);
+    // Bar count is user-driven only: 1 initial bar + bars added via Cmd+B. Do not auto-create bars from note content.
+    let totalMeasures = Math.max(1, 1 + (addedMeasures || 0));
     if (!hasFullAccess) {
       totalMeasures = Math.min(DEMO_MAX_MEASURES, totalMeasures);
     }
@@ -3339,7 +3340,20 @@ function NoodiMeisterCore({ icons }) {
       measures.push({ ...b, notes: [] });
     }
     return !hasFullAccess ? measures.slice(0, DEMO_MAX_MEASURES) : measures;
-  }, [staves, timeSignature, addedMeasures, pickupEnabled, pickupQuantity, pickupDuration, durationToBeats, hasFullAccess]);
+  }, [timeSignature, addedMeasures, pickupEnabled, pickupQuantity, pickupDuration, durationToBeats, hasFullAccess]);
+
+  const maxCursorAllowed = useMemo(() => {
+    const ms = calculateMeasures();
+    return ms.length ? ms[ms.length - 1].endBeat : 0;
+  }, [calculateMeasures]);
+  const maxCursor = hasFullAccess ? maxCursorAllowed : Math.min(maxCursorAllowed, DEMO_MAX_BEATS);
+  useEffect(() => {
+    setCursorPosition(prev => {
+      if (prev < 0) return 0;
+      if (prev > maxCursor) return maxCursor;
+      return prev;
+    });
+  }, [maxCursor]);
 
   const playPianoNote = useCallback((pitch, octave, semitonesOffset = 0) => {
     const semi = semitonesOffset === true || semitonesOffset === 1 ? 1 : semitonesOffset === -1 ? -1 : 0;
@@ -4035,8 +4049,85 @@ function NoodiMeisterCore({ icons }) {
         return;
       }
 
-      // Backspace/Delete kustutab valitud nooti(d) alati, kui midagi on valitud (sõltumata tööriistakastist või režiimist)
-      if ((e.code === 'Backspace' || e.key === 'Backspace' || e.code === 'Delete') && selectedNoteIndex >= 0) {
+      // N-mode Backspace: delete note at cursor (or empty bar) first – so it always works instead of converting selection to rest
+      if (noteInputMode && (e.key === 'Backspace' || e.code === 'Backspace')) {
+        e.preventDefault();
+        const indexAtCursor = getNoteIndexAtCursor();
+        if (indexAtCursor >= 0 && notes.length > 0) {
+          let beat = 0;
+          let deletedNoteBeat = 0;
+          for (let i = 0; i < notes.length; i++) {
+            const n = notes[i];
+            const noteBeat = typeof n.beat === 'number' ? n.beat : beat;
+            if (i === indexAtCursor) {
+              deletedNoteBeat = noteBeat;
+              break;
+            }
+            beat = noteBeat + n.duration;
+          }
+          const newCursor = deletedNoteBeat;
+          saveToHistory(notes);
+          setNotes(prev => prev.filter((_, i) => i !== indexAtCursor));
+          setCursorPosition(newCursor);
+          setSelectionStart(-1);
+          setSelectionEnd(-1);
+          setSelectedNoteIndex(-1);
+          const remaining = notes.filter((_, i) => i !== indexAtCursor);
+          if (remaining.length > 0) {
+            beat = 0;
+            const atCursor = [];
+            for (let i = 0; i < remaining.length; i++) {
+              const n = remaining[i];
+              const noteBeat = typeof n.beat === 'number' ? n.beat : beat;
+              if (newCursor >= noteBeat && newCursor <= noteBeat + n.duration) atCursor.push(n);
+              beat = noteBeat + n.duration;
+            }
+            const prevNote = atCursor.length === 0 ? null : atCursor.length === 1 ? atCursor[0] : atCursor.reduce((a, b) => ((a.octave + 1) * 12 + (PITCH_TO_SEMI[a.pitch] ?? 0)) >= ((b.octave + 1) * 12 + (PITCH_TO_SEMI[b.pitch] ?? 0)) ? a : b);
+            if (prevNote) {
+              setGhostPitch(prevNote.pitch);
+              setGhostOctave(prevNote.octave);
+            }
+          }
+          return;
+        }
+        const ms = measuresRef.current;
+        let removedExcessBar = false;
+        if (ms && ms.length > 1) {
+          const cursorMeasureIndex = ms.findIndex((m) => cursorPosition >= m.startBeat && cursorPosition < m.endBeat);
+          if (cursorMeasureIndex >= 1) {
+            const m = ms[cursorMeasureIndex];
+            let beatRun = 0;
+            const hasNoteInBar = notes.some((n) => {
+              const noteBeat = typeof n.beat === 'number' ? n.beat : beatRun;
+              const inBar = noteBeat < m.endBeat && noteBeat + n.duration > m.startBeat;
+              beatRun = noteBeat + n.duration;
+              return inBar;
+            });
+            if (!hasNoteInBar) {
+              saveToHistory(notes);
+              setAddedMeasures((a) => Math.max(0, (a || 0) - 1));
+              const prev = ms[cursorMeasureIndex - 1];
+              const oneBeat = (prev.beatCount || timeSignature?.beats || 4) / (timeSignature?.beatUnit || 4);
+              setCursorPosition(Math.max(prev.startBeat, prev.endBeat - oneBeat));
+              removedExcessBar = true;
+            }
+          }
+        }
+        if (!removedExcessBar && ms && ms.length > 0) {
+          const cursorMeasureIndex = ms.findIndex((m) => cursorPosition >= m.startBeat && cursorPosition < m.endBeat);
+          if (cursorMeasureIndex >= 0 && measureRepeatMarks[cursorMeasureIndex] && Object.keys(measureRepeatMarks[cursorMeasureIndex]).length > 0) {
+            setMeasureRepeatMarks((prev) => {
+              const next = { ...prev };
+              delete next[cursorMeasureIndex];
+              return next;
+            });
+          }
+        }
+        return;
+      }
+
+      // Backspace/Delete kustutab valitud nooti(d) alati, kui midagi on valitud (sõltumata tööriistakastist või režiimist) – mitte N-režiimis
+      if (!noteInputMode && (e.code === 'Backspace' || e.key === 'Backspace' || e.code === 'Delete') && selectedNoteIndex >= 0) {
         e.preventDefault();
         const newNotes = notes.map((note, i) => {
           const inRange = selectionStart >= 0 && selectionEnd >= 0
@@ -4158,8 +4249,6 @@ function NoodiMeisterCore({ icons }) {
 
       // Noodi sisestusrežiim: nooltedega kursor, tähtedega noot (ka tööriistakast avatud)
       if (noteInputMode) {
-        const totalBeats = notes.reduce((acc, n) => acc + n.duration, 0);
-        const maxCursor = hasFullAccess ? totalBeats : Math.min(totalBeats, DEMO_MAX_BEATS);
         const cursorStep = e.shiftKey ? 0.25 : 1;
         if (e.code === 'ArrowLeft') {
           e.preventDefault();
@@ -4636,81 +4725,7 @@ function NoodiMeisterCore({ icons }) {
           setGhostPitch(pitch);
         }
 
-        // Backspace in input mode: delete the note at cursor, or if cursor is on an empty (excess) bar, delete that bar and move cursor to last beat of previous bar.
-        if (e.key === 'Backspace') {
-          e.preventDefault();
-          const indexAtCursor = getNoteIndexAtCursor();
-          if (indexAtCursor >= 0 && notes.length > 0) {
-          let beat = 0;
-          let deletedNoteBeat = 0;
-          for (let i = 0; i < notes.length; i++) {
-            const n = notes[i];
-            const noteBeat = typeof n.beat === 'number' ? n.beat : beat;
-            if (i === indexAtCursor) {
-              deletedNoteBeat = noteBeat;
-              break;
-            }
-            beat = noteBeat + n.duration;
-          }
-          const newCursor = deletedNoteBeat;
-          saveToHistory(notes);
-          setNotes(prev => prev.filter((_, i) => i !== indexAtCursor));
-          setCursorPosition(newCursor);
-          const remaining = notes.filter((_, i) => i !== indexAtCursor);
-          if (remaining.length > 0) {
-            beat = 0;
-            const atCursor = [];
-            for (let i = 0; i < remaining.length; i++) {
-              const n = remaining[i];
-              const noteBeat = typeof n.beat === 'number' ? n.beat : beat;
-              if (newCursor >= noteBeat && newCursor <= noteBeat + n.duration) atCursor.push(n);
-              beat = noteBeat + n.duration;
-            }
-            const prevNote = atCursor.length === 0 ? null : atCursor.length === 1 ? atCursor[0] : atCursor.reduce((a, b) => ((a.octave + 1) * 12 + (PITCH_TO_SEMI[a.pitch] ?? 0)) >= ((b.octave + 1) * 12 + (PITCH_TO_SEMI[b.pitch] ?? 0)) ? a : b);
-            if (prevNote) {
-              setGhostPitch(prevNote.pitch);
-              setGhostOctave(prevNote.octave);
-            }
-          }
-          } else {
-          // Cursor not on a note: 1) if current bar is empty and excess (added) bar, delete it; 2) else remove repeat marks from current measure if any
-          const ms = measuresRef.current;
-          let removedExcessBar = false;
-          if (ms && ms.length > 0 && addedMeasures > 0) {
-            const cursorMeasureIndex = ms.findIndex((m) => cursorPosition >= m.startBeat && cursorPosition < m.endBeat);
-            if (cursorMeasureIndex >= 1) {
-              const contentMeasureCount = ms.length - addedMeasures;
-              if (cursorMeasureIndex >= contentMeasureCount) {
-                const m = ms[cursorMeasureIndex];
-                let beatRun = 0;
-                const hasNoteInBar = notes.some((n) => {
-                  const noteBeat = typeof n.beat === 'number' ? n.beat : beatRun;
-                  const inBar = noteBeat < m.endBeat && noteBeat + n.duration > m.startBeat;
-                  beatRun = noteBeat + n.duration;
-                  return inBar;
-                });
-                if (!hasNoteInBar) {
-                  saveToHistory(notes);
-                  setAddedMeasures((a) => Math.max(0, (a || 0) - 1));
-                  const prev = ms[cursorMeasureIndex - 1];
-                  const oneBeat = (prev.beatCount || timeSignature?.beats || 4) / (timeSignature?.beatUnit || 4);
-                  setCursorPosition(Math.max(prev.startBeat, prev.endBeat - oneBeat));
-                  removedExcessBar = true;
-                }
-              }
-            }
-          }
-          if (!removedExcessBar && ms && ms.length > 0) {
-            const cursorMeasureIndex = ms.findIndex((m) => cursorPosition >= m.startBeat && cursorPosition < m.endBeat);
-            if (cursorMeasureIndex >= 0 && measureRepeatMarks[cursorMeasureIndex] && Object.keys(measureRepeatMarks[cursorMeasureIndex]).length > 0) {
-              setMeasureRepeatMarks((prev) => {
-                const next = { ...prev };
-                delete next[cursorMeasureIndex];
-                return next;
-              });
-            }
-          }
-        }
+        // Backspace in N mode is handled earlier (before convert-selection-to-rest) so delete-at-cursor always works
       }
     }
     };
@@ -4723,7 +4738,8 @@ function NoodiMeisterCore({ icons }) {
     getEffectiveDuration, selectedNoteIndex, selectionStart, selectionEnd, clipboard, undo, saveToHistory, getSelectedNotes,
     shiftPitchClassSameOctave, shiftOctave, addMeasure, ghostPitch, ghostOctave, ghostAccidental, playNoteOnInsert, playPianoNote,
     cursorPosition, joClefFocused, joClefStaffPosition, keySignature, setNotes, setKeySignature, notationMode, addNoteOnTopOfCursor,
-    handleSaveShortcut, handlePrint, addedMeasures, timeSignature, setAddedMeasures, setCursorPosition, measureRepeatMarks, setMeasureRepeatMarks
+    handleSaveShortcut, handlePrint, addedMeasures, timeSignature, setAddedMeasures, setCursorPosition, measureRepeatMarks, setMeasureRepeatMarks,
+    maxCursor
   ]);
 
   // JO-võti: klõps väljaspool võtit lõpetab valiku
@@ -5655,6 +5671,23 @@ function NoodiMeisterCore({ icons }) {
                 )}
               </div>
               <div className="flex flex-wrap items-center gap-3">
+                <label htmlFor="notation-number-of-bars" className="text-sm font-semibold text-amber-900 whitespace-nowrap">{t('settings.numberOfBars')}</label>
+                <input
+                  id="notation-number-of-bars"
+                  type="number"
+                  min={1}
+                  max={64}
+                  value={1 + (addedMeasures || 0)}
+                  onChange={(e) => {
+                    const v = Math.max(1, Math.min(64, parseInt(e.target.value, 10) || 1));
+                    dirtyRef.current = true;
+                    setAddedMeasures(Math.max(0, v - 1));
+                  }}
+                  className="w-20 px-2 py-1.5 rounded-lg border-2 border-amber-200 bg-amber-50 text-amber-900 text-sm tabular-nums"
+                />
+                <span className="text-xs text-amber-700">{t('settings.numberOfBarsHint')}</span>
+              </div>
+              <div className="flex flex-wrap items-center gap-3">
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input
                     type="checkbox"
@@ -5692,6 +5725,20 @@ function NoodiMeisterCore({ icons }) {
                   <span className="text-sm text-amber-800 w-10">{pedagogicalPlayheadEmojiSize} px</span>
                 </div>
                 <p className="text-xs text-amber-600 mt-1">Suurem suurus aitab vaegnägijatel ja tähelepanuhäiretega õpilastel.</p>
+                <div className="flex items-center gap-3 mt-3">
+                  <label htmlFor="cursor-size-px" className="text-sm font-semibold text-amber-900 shrink-0">{t('settings.cursorSize')}</label>
+                  <input
+                    id="cursor-size-px"
+                    type="range"
+                    min={1}
+                    max={500}
+                    value={cursorSizePx}
+                    onChange={(e) => { dirtyRef.current = true; setCursorSizePx(Math.max(1, Math.min(500, Number(e.target.value)))); }}
+                    className="flex-1 h-2 rounded-lg appearance-none bg-amber-200 accent-amber-600"
+                  />
+                  <span className="text-sm text-amber-800 w-12">{cursorSizePx} px</span>
+                </div>
+                <p className="text-xs text-amber-600 mt-1">N-kursori (lugeja/kirjutaja) suurus 1–500 px.</p>
               </div>
               <div className="border-t border-amber-200 pt-4 mt-4">
                 <label className="block text-sm font-semibold text-amber-900 mb-1">{t('layout.pageOrientation')}</label>
@@ -6990,14 +7037,14 @@ function NoodiMeisterCore({ icons }) {
                           <span className="text-xs font-medium text-amber-900 shrink-0">{t('cursor.playheadSize')}</span>
                           <input
                             type="range"
-                            min={20}
-                            max={60}
+                            min={1}
+                            max={500}
                             step={2}
-                            value={pedagogicalPlayheadEmojiSize}
-                            onChange={(e) => { const v = parseInt(e.target.value, 10); if (!isNaN(v)) { dirtyRef.current = true; setPedagogicalPlayheadEmojiSize(Math.max(20, Math.min(60, v))); } }}
+                            value={cursorSizePx}
+                            onChange={(e) => { const v = parseInt(e.target.value, 10); if (!isNaN(v)) { dirtyRef.current = true; setCursorSizePx(Math.max(1, Math.min(500, v))); } }}
                             className="flex-1 h-2 rounded-lg appearance-none bg-amber-100 accent-amber-600"
                           />
-                          <span className="text-xs text-amber-800 w-10">{pedagogicalPlayheadEmojiSize} px</span>
+                          <span className="text-xs text-amber-800 w-10">{cursorSizePx} px</span>
                         </label>
                       </div>
                       <p className="text-[10px] text-amber-600">{t('cursor.rulerHint')}</p>
@@ -7815,6 +7862,7 @@ function NoodiMeisterCore({ icons }) {
                   pedagogicalPlayheadStyle={pedagogicalPlayheadStyle}
                   pedagogicalPlayheadEmoji={pedagogicalPlayheadEmoji}
                   pedagogicalPlayheadEmojiSize={pedagogicalPlayheadEmojiSize}
+                  cursorSizePx={cursorSizePx}
                   cursorLineStrokeWidth={cursorLineStrokeWidth}
                   pedagogicalPlayheadMovement={pedagogicalPlayheadMovement}
                   isPedagogicalAudioPlaying={isPedagogicalAudioPlaying}
@@ -8113,7 +8161,7 @@ function getFingeringForNote(pitch, octave, instrumentId) {
 }
 
 // Timeline Component – multi-system layout (VexFlow loogika). (PAGE_BREAK_GAP on defineeritud üleval.)
-function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, pageWidth, cursorPosition, notationMode, staffLines, clefType, keySignature = 'C', relativeNotationShowKeySignature = false, relativeNotationShowTraditionalClef = false, onJoClefPositionChange, joClefFocused = false, onJoClefFocus, instrument = 'single-staff-treble', instrumentNotationVariant = 'standard', instrumentConfig = {}, showBarNumbers = true, barNumberSize = 11, showRhythmSyllables = false, joClefStaffPosition: joClefStaffPositionProp, showAllNoteLabels = false, enableEmojiOverlays = true, noteheadShape = 'oval', noteheadEmoji = '♪', onNoteTeacherLabelChange, onNoteLabelClick, chords = [], isDotted, isRest, selectedDuration, noteInputMode, selectedNoteIndex, isNoteSelected, notes: allNotes, onStaffAddNote, onNoteClick, onNoteMouseDown, onNoteMouseEnter, onNotePitchChange, onNoteBeatChange, canHandDragNotes = false, ghostPitch, ghostOctave, onFigureBeatClick, onChordLineMouseMove, notationStyle, layoutMeasuresPerLine = 4, layoutLineBreakBefore = [], layoutPageBreakBefore = [], layoutSystemGap = 120, layoutPartsGap, layoutConnectedBarlines = false, staffIndexInScore = 0, systemTotalHeight, layoutGlobalSpacingMultiplier = 1, systems: systemsProp, baseYOffset = 0, isActiveStaff = true, staffCount = 1, staffHeight: staffHeightProp, figurenotesSize = 16, figurenotesStems = false, figurenotesChordLineGap = 6, figurenotesChordBlocks = false, figurenotesRowHeight: figurenotesRowHeightProp, figurenotesChordLineHeight: figurenotesChordLineHeightProp, timeSignatureSize = 16, themeColors: themeColorsProp, pedagogicalPlayheadStyle = 'line', pedagogicalPlayheadEmoji = '🎵', pedagogicalPlayheadEmojiSize = 32, cursorLineStrokeWidth = 4, pedagogicalPlayheadMovement = 'arch', isPedagogicalAudioPlaying = false, isExportingAnimation = false, exportCursorRef, scoreContainerRef, pageFlowDirection = 'vertical', isFirstInBraceGroup = false, braceGroupSize = 0, lyricFontFamily = 'sans-serif', lyricLineYOffset = 0, translateLabel, showLayoutBreakIcons = false, showStaffSpacerHandles = false, onSystemYOffsetChange, onToggleLineBreakAfter }) {
+function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, pageWidth, cursorPosition, notationMode, staffLines, clefType, keySignature = 'C', relativeNotationShowKeySignature = false, relativeNotationShowTraditionalClef = false, onJoClefPositionChange, joClefFocused = false, onJoClefFocus, instrument = 'single-staff-treble', instrumentNotationVariant = 'standard', instrumentConfig = {}, showBarNumbers = true, barNumberSize = 11, showRhythmSyllables = false, joClefStaffPosition: joClefStaffPositionProp, showAllNoteLabels = false, enableEmojiOverlays = true, noteheadShape = 'oval', noteheadEmoji = '♪', onNoteTeacherLabelChange, onNoteLabelClick, chords = [], isDotted, isRest, selectedDuration, noteInputMode, selectedNoteIndex, isNoteSelected, notes: allNotes, onStaffAddNote, onNoteClick, onNoteMouseDown, onNoteMouseEnter, onNotePitchChange, onNoteBeatChange, canHandDragNotes = false, ghostPitch, ghostOctave, onFigureBeatClick, onChordLineMouseMove, notationStyle, layoutMeasuresPerLine = 4, layoutLineBreakBefore = [], layoutPageBreakBefore = [], layoutSystemGap = 120, layoutPartsGap, layoutConnectedBarlines = false, staffIndexInScore = 0, systemTotalHeight, layoutGlobalSpacingMultiplier = 1, systems: systemsProp, baseYOffset = 0, isActiveStaff = true, staffCount = 1, staffHeight: staffHeightProp, figurenotesSize = 16, figurenotesStems = false, figurenotesChordLineGap = 6, figurenotesChordBlocks = false, figurenotesRowHeight: figurenotesRowHeightProp, figurenotesChordLineHeight: figurenotesChordLineHeightProp, timeSignatureSize = 16, themeColors: themeColorsProp, pedagogicalPlayheadStyle = 'line', pedagogicalPlayheadEmoji = '🎵', pedagogicalPlayheadEmojiSize = 32, cursorSizePx, cursorLineStrokeWidth = 4, pedagogicalPlayheadMovement = 'arch', isPedagogicalAudioPlaying = false, isExportingAnimation = false, exportCursorRef, scoreContainerRef, pageFlowDirection = 'vertical', isFirstInBraceGroup = false, braceGroupSize = 0, lyricFontFamily = 'sans-serif', lyricLineYOffset = 0, translateLabel, showLayoutBreakIcons = false, showStaffSpacerHandles = false, onSystemYOffsetChange, onToggleLineBreakAfter }) {
   if (typeof GLOBAL_NOTATION_CONFIG === 'undefined' || !GLOBAL_NOTATION_CONFIG || GLOBAL_NOTATION_CONFIG.EMOJIS === false) return null;
   const themeColors = themeColorsProp || { staffLineColor: '#000', noteFill: '#1a1a1a', textColor: '#1a1a1a', scoreBg: '#fffbf0', isDark: false };
   const safeKey = keySignature ?? 'C';
@@ -8735,7 +8783,7 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
         const cursorChar = (pedagogicalPlayheadEmoji || '').trim();
         const showLine = cursorChar === '';
         const displayEmoji = cursorChar || '🎵';
-        const emojiSizePx = Math.max(20, Math.min(60, pedagogicalPlayheadEmojiSize));
+        const emojiSizePx = Math.max(1, Math.min(500, cursorSizePx ?? pedagogicalPlayheadEmojiSize));
         const beatProgress = cursorPosition % 1;
         const BASE_JUMP = 14;
         const distanceToNextNote = (() => {
@@ -8811,9 +8859,7 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
             isFigurenotesMode
               ? (() => {
                   const sys = cursorInfo.system;
-                  const widths = sys.measureWidths ?? [sys.measureWidth ?? timeSignature.beats * 80];
-                  const beatW = (widths[0] ?? sys.measureWidth) / (timeSignature.beats || 1);
-                  const zSize = Math.min(beatW * 0.55, 26);
+                  const zSize = Math.max(10, Math.min(80, emojiSizePx * 0.6));
                   return <text x={cursorX} y={cursorInfo.system.yOffset + centerY + zSize * 0.2} textAnchor="middle" fontSize={zSize} fontWeight="bold" fill="#dc2626" fontFamily="serif">Z</text>;
                 })()
               : (() => {
@@ -8837,7 +8883,7 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
               const stemUp = pitchY > middleLineY;
               if (notationMode === 'figurenotes') {
                 const { color, shape } = getFigureSymbol(ghostPitch, ghostOctave);
-                const size = figurenotesSize + 2;
+                const size = Math.max(8, Math.min(150, emojiSizePx));
                 const r = size / 2;
                 const strokeW = Math.max(2, size * 0.38);
                 let el;

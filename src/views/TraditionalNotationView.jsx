@@ -685,14 +685,25 @@ export function TraditionalNotationView({
                             )}
                           </g>
                         ) : measureIdx === sys.measureIndices[sys.measureIndices.length - 1] ? (
-                          <line
-                            x1={measureX + measureWidth}
-                            y1={connectedBarlines && staffIndexInScore === 0 ? 0 : staffY + firstLineY}
-                            x2={measureX + measureWidth}
-                            y2={connectedBarlines && staffIndexInScore === 0 ? (systemTotalHeight ?? (staffY + lastLineY)) : staffY + lastLineY}
-                            stroke="#1a1a1a"
-                            strokeWidth={getThinBarlineThickness(spacing)}
-                          />
+                          measureIdx === instMeasures.length - 1 ? (
+                            <SmuflGlyph
+                              glyph={SMUFL_GLYPH.barlineFinal}
+                              x={measureX + measureWidth}
+                              y={connectedBarlines && staffIndexInScore === 0 ? (systemTotalHeight ?? (staffY + lastLineY)) / 2 : staffY + (firstLineY + lastLineY) / 2}
+                              fontSize={getGlyphFontSize(spacing) * (connectedBarlines && staffIndexInScore === 0 ? (systemTotalHeight ?? (staffY + lastLineY - firstLineY)) / (lastLineY - firstLineY) : 1)}
+                              fill="#1a1a1a"
+                              textAnchor="start"
+                            />
+                          ) : (
+                            <line
+                              x1={measureX + measureWidth}
+                              y1={connectedBarlines && staffIndexInScore === 0 ? 0 : staffY + firstLineY}
+                              x2={measureX + measureWidth}
+                              y2={connectedBarlines && staffIndexInScore === 0 ? (systemTotalHeight ?? (staffY + lastLineY)) : staffY + lastLineY}
+                              stroke="#1a1a1a"
+                              strokeWidth={getThinBarlineThickness(spacing)}
+                            />
+                          )
                         ) : null}
                       </>
                     )}

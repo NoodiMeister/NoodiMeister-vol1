@@ -8,7 +8,7 @@ import { RhythmSyllableLabel } from '../components/RhythmSyllableLabel';
 import { getRhythmSyllableForNote } from '../notation/rhythmSyllables';
 import { getFigureNoteWidth, FIGURE_BASE_WIDTH } from '../layout/LayoutEngine';
 import { SmuflGlyph } from '../notation/smufl/SmuflGlyph';
-import { smuflNoteheadForType } from '../notation/smufl/glyphs';
+import { smuflNoteheadForType, SMUFL_GLYPH } from '../notation/smufl/glyphs';
 import { getShapePathsByOctave, getFigureStyle } from '../constants/FigureNotesLibrary';
 import { getChordMidiNotes } from '../musical/chordPlayback';
 
@@ -485,11 +485,27 @@ export function FigurenotesView({
                     const barLineBottomY = chordLineHeight > 0
                       ? sys.yOffset + melodyRowHeight + chordLineGap + chordLineHeight - barLineInset
                       : sys.yOffset + melodyRowHeight - barLineInset;
+                    const barLineTopY = sys.yOffset + barLineInset;
+                    const barLineCenterY = (barLineTopY + barLineBottomY) / 2;
+                    const barLineHeight = barLineBottomY - barLineTopY;
+                    const isLastMeasureOfScore = measureIdx === effectiveMeasures.length - 1;
+                    const isRightBarlineOfSystem = measureIdx === sys.measureIndices[sys.measureIndices.length - 1];
                     return (
                       <>
-                        {j !== 0 && <line x1={measureX} y1={sys.yOffset + barLineInset} x2={measureX} y2={barLineBottomY} stroke="#1a1a1a" strokeWidth={barLineWidth} />}
-                        {measureIdx === sys.measureIndices[sys.measureIndices.length - 1] && (
-                          <line x1={measureX + measureWidth} y1={sys.yOffset + barLineInset} x2={measureX + measureWidth} y2={barLineBottomY} stroke="#1a1a1a" strokeWidth={barLineWidth} />
+                        {j !== 0 && <line x1={measureX} y1={barLineTopY} x2={measureX} y2={barLineBottomY} stroke="#1a1a1a" strokeWidth={barLineWidth} />}
+                        {isRightBarlineOfSystem && (
+                          isLastMeasureOfScore ? (
+                            <SmuflGlyph
+                              glyph={SMUFL_GLYPH.barlineFinal}
+                              x={measureX + measureWidth}
+                              y={barLineCenterY}
+                              fontSize={Math.max(12, barLineHeight * 1.2)}
+                              fill="#1a1a1a"
+                              textAnchor="start"
+                            />
+                          ) : (
+                            <line x1={measureX + measureWidth} y1={barLineTopY} x2={measureX + measureWidth} y2={barLineBottomY} stroke="#1a1a1a" strokeWidth={barLineWidth} />
+                          )
                         )}
                       </>
                     );

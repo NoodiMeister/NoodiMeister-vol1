@@ -53,6 +53,9 @@ export const SMUFL_GLYPH = Object.freeze({
   segno: '\uE047',           // Segno (𝄋)
   coda: '\uE048',            // Coda (𝄌)
   codaSquare: '\uE049',      // square coda
+
+  // Barlines (Leland / SMuFL)
+  barlineFinal: '\uE032',    // final/ending barline (thin + thick double bar)
 });
 
 /** Shape key for notehead (oval, x, square, triangle). Used by toolbox and rendering. */
