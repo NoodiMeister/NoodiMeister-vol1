@@ -237,6 +237,13 @@ export function TraditionalNotationView({
   const [noteBeatDrag, setNoteBeatDrag] = useState(null); // { noteIndex, startClientX } when hand tool dragging note to new beat
   const lastPitchRef = useRef(null); // avoid duplicate updates when pitch unchanged
 
+  // Layout: must be before measureLayout useMemo (which uses effectiveMarginLeft)
+  const staffLeft = (isFirstInBraceGroup && braceGroupSize >= 2) ? STAFF_LEFT_WITH_BRACE : STAFF_LEFT_WITHOUT_BRACE;
+  const clefX = staffLeft + GAP_BEFORE_CLEF_PX;
+  const timeSigWidthPx = 28;
+  const minContentStart = staffLeft + 1 + LAYOUT.CLEF_WIDTH + 1 + 24 + timeSigWidthPx + 2;
+  const effectiveMarginLeft = Math.max(marginLeft, minContentStart);
+
   // Measure layout for getBeatFromX (first system only; notation starts at effectiveMarginLeft after clef/key/time sig)
   const measureLayout = React.useMemo(() => {
     const sys = systems?.[0];
@@ -320,11 +327,6 @@ export function TraditionalNotationView({
   const cClefTenorLine = staffLinePositions[1];
   const resolvePitchY = (pitch, octave) => (typeof getPitchY === 'function' ? getPitchY(pitch, octave) : centerY);
   const clefFontSize = spacing * 4; // Leland: 4× staff-space
-  const staffLeft = (isFirstInBraceGroup && braceGroupSize >= 2) ? STAFF_LEFT_WITH_BRACE : STAFF_LEFT_WITHOUT_BRACE;
-  const clefX = staffLeft + GAP_BEFORE_CLEF_PX;
-  const timeSigWidthPx = 28;
-  const minContentStart = staffLeft + 1 + LAYOUT.CLEF_WIDTH + 1 + 24 + timeSigWidthPx + 2;
-  const effectiveMarginLeft = Math.max(marginLeft, minContentStart);
   const firstLineY = staffLinePositions[0];
   const lastLineY = staffLinePositions[staffLinePositions.length - 1];
 

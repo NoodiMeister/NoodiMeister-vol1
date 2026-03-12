@@ -214,34 +214,6 @@ export default function MinuTöödPage() {
     }
   }, [microsoftToken, t]);
 
-  useEffect(() => {
-    refreshFolders();
-  }, [refreshFolders]);
-  useEffect(() => {
-    loadFiles();
-  }, [loadFiles, googleFolders.length]);
-  useEffect(() => {
-    loadOneDriveFiles();
-  }, [loadOneDriveFiles, oneDriveFolders.length]);
-
-  // Auto-sync file lists when user returns to the tab (no refresh needed) and every 60s while tab is visible
-  useEffect(() => {
-    const sync = () => {
-      if (document.visibilityState !== 'visible') return;
-      if (token) loadFiles();
-      if (microsoftToken) loadOneDriveFiles();
-      if (hasGoogle || hasMicrosoft) loadSharedFiles();
-    };
-    document.addEventListener('visibilitychange', sync);
-    const interval = setInterval(() => {
-      if (document.visibilityState === 'visible') sync();
-    }, 60_000);
-    return () => {
-      document.removeEventListener('visibilitychange', sync);
-      clearInterval(interval);
-    };
-  }, [token, microsoftToken, hasGoogle, hasMicrosoft, loadFiles, loadOneDriveFiles, loadSharedFiles]);
-
   const loadSharedFiles = useCallback(async () => {
     if (token) {
       setSharedGoogleLoading(true);
@@ -270,6 +242,34 @@ export default function MinuTöödPage() {
       setSharedOneDriveFiles([]);
     }
   }, [token, microsoftToken]);
+
+  useEffect(() => {
+    refreshFolders();
+  }, [refreshFolders]);
+  useEffect(() => {
+    loadFiles();
+  }, [loadFiles, googleFolders.length]);
+  useEffect(() => {
+    loadOneDriveFiles();
+  }, [loadOneDriveFiles, oneDriveFolders.length]);
+
+  // Auto-sync file lists when user returns to the tab (no refresh needed) and every 60s while tab is visible
+  useEffect(() => {
+    const sync = () => {
+      if (document.visibilityState !== 'visible') return;
+      if (token) loadFiles();
+      if (microsoftToken) loadOneDriveFiles();
+      if (hasGoogle || hasMicrosoft) loadSharedFiles();
+    };
+    document.addEventListener('visibilitychange', sync);
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') sync();
+    }, 60_000);
+    return () => {
+      document.removeEventListener('visibilitychange', sync);
+      clearInterval(interval);
+    };
+  }, [token, microsoftToken, hasGoogle, hasMicrosoft, loadFiles, loadOneDriveFiles, loadSharedFiles]);
 
   useEffect(() => {
     if (hasGoogle || hasMicrosoft) loadSharedFiles();
