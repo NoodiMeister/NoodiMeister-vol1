@@ -1,6 +1,6 @@
-import React, { Suspense, lazy } from 'react';
-import { BrowserRouter, Routes, Route, Navigate, useLocation, useSearchParams } from 'react-router-dom';
-import { NoodimeisterProvider } from './store/NoodimeisterContext';
+import React, { Suspense, lazy, useEffect } from 'react';
+import { BrowserRouter, Routes, Route, Navigate, useLocation, useSearchParams, useNavigate } from 'react-router-dom';
+import { NoodimeisterProvider, useNoodimeisterOptional } from './store/NoodimeisterContext';
 import LandingPage from './pages/LandingPage';
 // Lazy load, et vältida TDZ-viga ühes suures bundle'is
 const RegisterPage = lazy(() => import('./pages/RegisterPage'));
@@ -17,6 +17,24 @@ const SymbolGalleryPage = lazy(() => import('./pages/SymbolGalleryPage'));
 const FigurenotesSymbolGalleryPage = lazy(() => import('./pages/FigurenotesSymbolGalleryPage'));
 
 import * as authStorage from './services/authStorage';
+
+/** Esc vajutamine logib sisselogitud kasutaja välja ja suunab avalehele. */
+function EscapeLogoutHandler() {
+  const navigate = useNavigate();
+  const store = useNoodimeisterOptional();
+  useEffect(() => {
+    const onKeyDown = (e) => {
+      if (e.key !== 'Escape') return;
+      if (!authStorage.isLoggedIn()) return;
+      if (store) store.logout();
+      else authStorage.clearAuth();
+      navigate('/', { replace: true });
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [navigate, store]);
+  return null;
+}
 
 /** Kas kasutaja on endiselt sisse logitud (pole välja loginud). */
 function isLoggedIn() {
@@ -187,6 +205,7 @@ function AppRoutes() {
   // and loses layout/setup (scroll, panels, view options). Routes still unmount/mount per route.
   return (
     <div style={{ minHeight: '100vh', isolation: 'isolate', paddingTop: needBannerSpace ? 40 : 0 }}>
+      <EscapeLogoutHandler />
       <EnvBanner />
       <Suspense fallback={<div style={{ padding: 24, textAlign: 'center' }}>Laen…</div>}>
         <Routes>

@@ -898,8 +898,8 @@ function NoodiMeisterCore({ icons }) {
   const toolboxes = useMemo(() => getToolboxes(t, instrumentConfig), [t, instrumentConfig]);
 
   const store = useNoodimeisterOptional();
-  const searchParamsForAccess = useSearchParams();
-  const hasFullAccess = (store?.hasFullAccess ?? authStorage.isLoggedIn()) || !!searchParamsForAccess.get('fileId');
+  const [searchParamsForAccess] = useSearchParams();
+  const hasFullAccess = (store?.hasFullAccess ?? authStorage.isLoggedIn()) || !!(searchParamsForAccess && typeof searchParamsForAccess.get === 'function' && searchParamsForAccess.get('fileId'));
 
   // JO-võti ja noodigraafika state (GLOBAL_NOTATION_CONFIG on faili alguses)
   const [joClefFocused, setJoClefFocused] = useState(false);
@@ -1396,8 +1396,8 @@ function NoodiMeisterCore({ icons }) {
   const soundfontCacheRef = useRef(Object.create(null)); // instrumentId -> Soundfont player (MuseScore-style GM)
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const isNewWorkFlow = searchParams.get('new') === '1';
-  const partStaffId = searchParams.get('staffId');
+  const isNewWorkFlow = (searchParams && typeof searchParams.get === 'function' && searchParams.get('new')) === '1';
+  const partStaffId = searchParams && typeof searchParams.get === 'function' ? searchParams.get('staffId') : undefined;
   const isPartWindow = !!partStaffId;
   const [newWorkSetupOpen, setNewWorkSetupOpen] = useState(false);
   // Uue töö seadistuse vormi väljad (küsitakse enne töö loomist)
@@ -2950,8 +2950,8 @@ function NoodiMeisterCore({ icons }) {
   // Load from localStorage on mount (skip when opening as new work /app?new=1 or /app?fileId=...)
   // Use importProject so both staves and legacy notes format load in full (taktid, lehekülje disain jms).
   useEffect(() => {
-    if (searchParams.get('new') === '1') return;
-    if (searchParams.get('fileId')) return; // laaditakse Drive'ist eraldi effect'iga
+    if (searchParams?.get?.('new') === '1') return;
+    if (searchParams?.get?.('fileId')) return; // laaditakse Drive'ist eraldi effect'iga
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) {
@@ -2966,8 +2966,8 @@ function NoodiMeisterCore({ icons }) {
   }, [importProject]);
 
   // Load from Google Drive or OneDrive when opening /app?fileId=... [&cloud=onedrive]
-  const driveFileId = searchParams.get('fileId');
-  const cloudProvider = searchParams.get('cloud');
+  const driveFileId = searchParams?.get?.('fileId');
+  const cloudProvider = searchParams?.get?.('cloud');
   const isOneDrive = cloudProvider === 'onedrive';
   useEffect(() => {
     if (!driveFileId) return;
