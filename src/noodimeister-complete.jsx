@@ -2347,6 +2347,8 @@ function NoodiMeisterCore({ icons }) {
     partLayoutPageBreakBefore,
     showPageNavigator,
     pageFlowDirection,
+    viewFitPage,
+    viewSmartPage,
     visibleToolIds,
     tuningReferenceNote,
     tuningReferenceOctave,
@@ -3232,8 +3234,8 @@ function NoodiMeisterCore({ icons }) {
 
     // Bar count is user-driven only: 1 initial bar + bars added via Cmd+B. Do not auto-create bars from note content.
     let totalMeasures = Math.max(1, 1 + (addedMeasures || 0));
-    // Only apply demo cap when user has at most 2 measures. If they have 3+, they loaded a project – show all.
-    const applyDemoCap = !hasFullAccess && totalMeasures <= DEMO_MAX_MEASURES;
+    // Apply demo cap only when user has exactly 1 measure (0 added). Any 2+ measures = loaded project or user added – show all.
+    const applyDemoCap = !hasFullAccess && (addedMeasures || 0) < 1 && totalMeasures <= DEMO_MAX_MEASURES;
     if (applyDemoCap) {
       totalMeasures = Math.min(DEMO_MAX_MEASURES, totalMeasures);
     }
