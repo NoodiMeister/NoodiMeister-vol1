@@ -11,6 +11,8 @@ export const LAYOUT = {
   SYSTEM_GAP: 120,
   MARGIN_LEFT: 60,
   MARGIN_RIGHT: 40,
+  /** Left margin for traditional/pedagogical notation (clef + key + time sig). Used so measure widths fit within page. */
+  CONTENT_LEFT_TRADITIONAL: 150,
   CLEF_WIDTH: 45,
   MEASURE_MIN_WIDTH: 28,
 };
@@ -43,7 +45,8 @@ export function setLayoutConfig(config) {
  */
 export function computeLayout(measures, timeSignature, pixelsPerBeat, pageWidth, layoutOptions = {}) {
   const w = Number(pageWidth) || LAYOUT.PAGE_WIDTH_MIN;
-  const availableWidth = Math.max(200, w - LAYOUT.MARGIN_LEFT - LAYOUT.MARGIN_RIGHT);
+  const leftMargin = typeof layoutOptions.marginLeft === 'number' ? layoutOptions.marginLeft : LAYOUT.MARGIN_LEFT;
+  const availableWidth = Math.max(200, w - leftMargin - LAYOUT.MARGIN_RIGHT);
   const beatsPerMeasure = timeSignature?.beats ?? 4;
   const {
     measuresPerLine = 0,

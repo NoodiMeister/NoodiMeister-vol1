@@ -4717,7 +4717,13 @@ function NoodiMeisterCore({ icons }) {
     // Globaalne window keydown: JO-võti nooltega ↑↓ muudab võtme asukohta ja transponeerib kõik noodid reaalajas (mõlemal joonestikul)
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [activeToolbox, selectedOptionIndex, handleToolboxSelection, noteInputMode, selectedDuration, isDotted, isRest, notes, getEffectiveDuration, selectedNoteIndex, selectionStart, selectionEnd, clipboard, undo, saveToHistory, getSelectedNotes, shiftPitchClassSameOctave, shiftOctave, addMeasure, ghostPitch, ghostOctave, ghostAccidental, playNoteOnInsert, playPianoNote, cursorPosition, joClefFocused, joClefStaffPosition, keySignature, setNotes, setKeySignature, notationMode, addNoteOnTopOfCursor, handleSaveShortcut, handlePrint, addedMeasures, timeSignature, setAddedMeasures, setCursorPosition, measureRepeatMarks, setMeasureRepeatMarks]);
+  }, [
+    activeToolbox, selectedOptionIndex, handleToolboxSelection, noteInputMode, selectedDuration, isDotted, isRest, notes,
+    getEffectiveDuration, selectedNoteIndex, selectionStart, selectionEnd, clipboard, undo, saveToHistory, getSelectedNotes,
+    shiftPitchClassSameOctave, shiftOctave, addMeasure, ghostPitch, ghostOctave, ghostAccidental, playNoteOnInsert, playPianoNote,
+    cursorPosition, joClefFocused, joClefStaffPosition, keySignature, setNotes, setKeySignature, notationMode, addNoteOnTopOfCursor,
+    handleSaveShortcut, handlePrint, addedMeasures, timeSignature, setAddedMeasures, setCursorPosition, measureRepeatMarks, setMeasureRepeatMarks
+  ]);
 
   // JO-võti: klõps väljaspool võtit lõpetab valiku
   useEffect(() => {
@@ -8131,7 +8137,15 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
     : 5;
   const cursorY2 = cursorRowHeight - cursorInset;
   const BEAT_BOX_STROKE = '#b0b0b0';
-  const layoutOptions = { measuresPerLine: layoutMeasuresPerLine, lineBreakBefore: layoutLineBreakBefore, pageBreakBefore: layoutPageBreakBefore, systemGap: layoutSystemGap, staffCount, globalSpacingMultiplier: layoutGlobalSpacingMultiplier };
+  const layoutOptions = {
+    measuresPerLine: layoutMeasuresPerLine,
+    lineBreakBefore: layoutLineBreakBefore,
+    pageBreakBefore: layoutPageBreakBefore,
+    systemGap: layoutSystemGap,
+    staffCount,
+    globalSpacingMultiplier: layoutGlobalSpacingMultiplier,
+    ...(isFigurenotesMode ? {} : { marginLeft: LAYOUT.CONTENT_LEFT_TRADITIONAL }),
+  };
   const systemsComputed = systemsProp ?? computeLayout(measures, timeSignature, pixelsPerBeat, pageWidth || LAYOUT.PAGE_WIDTH_MIN, layoutOptions);
   const systems = systemsComputed.map((s) => ({ ...s, yOffset: s.yOffset + baseYOffset }));
   const notesByMeasure = React.useMemo(() => {

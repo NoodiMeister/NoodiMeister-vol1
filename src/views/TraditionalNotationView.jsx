@@ -37,6 +37,10 @@ import { renderFiguredBassFigurations } from '../notation/figuredBassFigurations
 const LAYOUT = { MARGIN_LEFT: 60, CLEF_WIDTH: 45, MEASURE_MIN_WIDTH: 28 };
 const PAGE_BREAK_GAP = 80;
 const STAFF_SPACE = 10;
+/** Left edge of staff lines: after system bracket + instrument brace (piano). Clef is 1px to the right. */
+const STAFF_LEFT_WITH_BRACE = 44;
+const STAFF_LEFT_WITHOUT_BRACE = 10;
+const GAP_BEFORE_CLEF_PX = 1;
 /** Treble clef anchor: one staff line higher than standard (B line). staffLinePositions[2]. */
 const TREBLE_CLEF_LINE_INDEX = 3; // G4 = 2nd line from bottom (0=top=F5, 4=bottom=E4)
 
@@ -123,8 +127,7 @@ function Flags({ stemX, stemEndY, staffSpace, stemUp, count = 1 }) {
   return <g>{elements}</g>;
 }
 
-function renderTimeSignature(timeSignature, timeSignatureMode, centerY, textColor = '#333', noteFill = '#333') {
-  const x = 45;
+function renderTimeSignature(timeSignature, timeSignatureMode, centerY, textColor = '#333', noteFill = '#333', x = 45) {
   const y = centerY;
   if (timeSignatureMode === 'pedagogical') {
     const stemX = x - 4;
@@ -234,22 +237,23 @@ export function TraditionalNotationView({
   const [noteBeatDrag, setNoteBeatDrag] = useState(null); // { noteIndex, startClientX } when hand tool dragging note to new beat
   const lastPitchRef = useRef(null); // avoid duplicate updates when pitch unchanged
 
-  // Measure layout for getBeatFromX (first system only; x is shared across systems)
+  // Measure layout for getBeatFromX (first system only; notation starts at effectiveMarginLeft after clef/key/time sig)
   const measureLayout = React.useMemo(() => {
     const sys = systems?.[0];
     if (!sys || !effectiveMeasuresProp) return [];
     const mw = sys.measureWidths ?? [];
     const beatsPerMeasure = timeSignature?.beats ?? 4;
+    const left = effectiveMarginLeft;
     return sys.measureIndices.map((measureIdx, j) => {
       const measure = effectiveMeasuresProp[measureIdx];
       if (!measure) return null;
-      const xStart = marginLeft + mw.slice(0, j).reduce((a, b) => a + b, 0);
+      const xStart = left + mw.slice(0, j).reduce((a, b) => a + b, 0);
       const xEnd = xStart + (mw[j] ?? 0);
       const startBeat = measure.startBeat;
       const endBeat = measure.startBeat + (measure.beatCount ?? beatsPerMeasure);
       return { xStart, xEnd, startBeat, endBeat };
     }).filter(Boolean);
-  }, [systems, effectiveMeasuresProp, marginLeft, timeSignature]);
+  }, [systems, effectiveMeasuresProp, effectiveMarginLeft, timeSignature]);
 
   const getBeatFromX = React.useCallback((x) => {
     for (const m of measureLayout) {
@@ -316,7 +320,11 @@ export function TraditionalNotationView({
   const cClefTenorLine = staffLinePositions[1];
   const resolvePitchY = (pitch, octave) => (typeof getPitchY === 'function' ? getPitchY(pitch, octave) : centerY);
   const clefFontSize = spacing * 4; // Leland: 4× staff-space
-  const clefX = 24;
+  const staffLeft = (isFirstInBraceGroup && braceGroupSize >= 2) ? STAFF_LEFT_WITH_BRACE : STAFF_LEFT_WITHOUT_BRACE;
+  const clefX = staffLeft + GAP_BEFORE_CLEF_PX;
+  const timeSigWidthPx = 28;
+  const minContentStart = staffLeft + 1 + LAYOUT.CLEF_WIDTH + 1 + 24 + timeSigWidthPx + 2;
+  const effectiveMarginLeft = Math.max(marginLeft, minContentStart);
   const firstLineY = staffLinePositions[0];
   const lastLineY = staffLinePositions[staffLinePositions.length - 1];
 
@@ -429,13 +437,13 @@ export function TraditionalNotationView({
 
               return (
                 <g key={inst.id + staffIndex}>
-                  {/* 5-liiniline noodijoonestik */}
+                  {/* 5-liiniline noodijoonestik (staff lines start at staffLeft; order: bracket, brace, staff, 1px gap, clef) */}
                   {staffLinePositions.map((y, index) => (
                     <line
                       key={`staff-${sys.systemIndex}-${staffIndex}-${index}`}
-                      x1={0}
+                      x1={staffLeft}
                       y1={staffY + y}
-                      x2={marginLeft + (sys.measureWidths ?? []).reduce((a, b) => a + b, 0)}
+                      x2={effectiveMarginLeft + (sys.measureWidths ?? []).reduce((a, b) => a + b, 0)}
                       y2={staffY + y}
                       stroke="#000"
                       strokeWidth={getStaffLineThickness(spacing)}
@@ -457,7 +465,7 @@ export function TraditionalNotationView({
                       {inst.name}
                     </text>
                   )}
-                  {/* Üks noodivõti per staff */}
+                  {/* Üks noodivõti per staff (1px from left edge of staff; order: staff, 1px gap, clef, key marks if on, time sig first bar only, repeat, notation) */}
                   {staffLines === 5 && (
                     (() => {
                       const nameWidth = multiStaff ? 50 : 0;
@@ -548,8 +556,17 @@ export function TraditionalNotationView({
                     </text>
                   )}
 
+                  {/* Time signature only on first system (first bar); after clef and key marks */}
                   {sys.systemIndex === 0 && staffIndex === 0 && (
-                    <g transform={`translate(0, ${staffY})`}>{renderTimeSignature(timeSignature, timeSignatureMode, centerY, timeSigTextColor, timeSigNoteFill)}</g>
+                    (() => {
+                      const sharpCount = (relativeNotationShowKeySignature && keySignature && keySignature !== 'C') ? ({ G: 1, D: 2, A: 3, E: 4, B: 5 }[keySignature] || 0) : 0;
+                      const flatCount = (relativeNotationShowKeySignature && keySignature && keySignature !== 'C') ? ({ F: 1, Bb: 2, Eb: 3 }[keySignature] || 0) : 0;
+                      const keySigWidth = Math.max(sharpCount, flatCount) * 12;
+                      const timeSigX = clefX + (multiStaff ? 50 : 0) + LAYOUT.CLEF_WIDTH + 1 + keySigWidth;
+                      return (
+                        <g transform={`translate(${timeSigX}, ${staffY})`}>{renderTimeSignature(timeSignature, timeSignatureMode, centerY, timeSigTextColor, timeSigNoteFill, 0)}</g>
+                      );
+                    })()
                   )}
 
                   {/* Taktid: jooned, akordid, nootid (per staff) */}
@@ -560,7 +577,7 @@ export function TraditionalNotationView({
                       if (!measure) return null;
                 const measureWidths = sys.measureWidths ?? sys.measureIndices.map(() => sys.measureWidth ?? beatsPerMeasure * 80);
                 const measureWidth = measureWidths[j] ?? (sys.measureWidth ?? beatsPerMeasure * 80);
-                const measureX = marginLeft + measureWidths.slice(0, j).reduce((a, b) => a + b, 0);
+                const measureX = effectiveMarginLeft + measureWidths.slice(0, j).reduce((a, b) => a + b, 0);
                 const beatsInMeasure = measure.beatCount ?? beatsPerMeasure;
                 const beatWidth = measureWidth / beatsInMeasure;
 
@@ -968,9 +985,9 @@ export function TraditionalNotationView({
                   {/* Rea lõpu taktijoon (topelt) */}
                   {sys.measureIndices.length > 0 && (
                     <line
-                      x1={marginLeft + (sys.measureWidths ?? []).reduce((a, b) => a + b, 0)}
+                      x1={effectiveMarginLeft + (sys.measureWidths ?? []).reduce((a, b) => a + b, 0)}
                       y1={staffY + firstLineY - 5}
-                      x2={marginLeft + (sys.measureWidths ?? []).reduce((a, b) => a + b, 0)}
+                      x2={effectiveMarginLeft + (sys.measureWidths ?? []).reduce((a, b) => a + b, 0)}
                       y2={staffY + lastLineY + 5}
                       stroke="#333"
                       strokeWidth="2"
