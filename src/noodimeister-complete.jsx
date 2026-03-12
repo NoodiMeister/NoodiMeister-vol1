@@ -1054,9 +1054,15 @@ function NoodiMeisterCore({ icons }) {
   const [viewFitPage, setViewFitPage] = useState(true);
   /** When true (and viewFitPage on), scale to fit only the notated area instead of full A4 page. */
   const [viewSmartPage, setViewSmartPage] = useState(false);
+  /** When true, show notation at full A4 size (210×297 mm on screen, 100% / actual print size). */
+  const [viewFullSizeA4, setViewFullSizeA4] = useState(false);
   /** Zoom for notation area only (1 = 100%); wheel with Ctrl/Cmd, pinch, Cmd/Ctrl+/- */
   const [scoreZoomLevel, setScoreZoomLevel] = useState(1);
   const scoreZoomPinchRef = useRef(null); // { initialDistance, initialZoom } for touch pinch
+  /** When true, user has clicked/touched the notation frame so pinch and wheel zoom are allowed. */
+  const [notationFrameFocused, setNotationFrameFocused] = useState(false);
+  const notationFrameFocusedRef = useRef(false);
+  const notationZoomAreaRef = useRef(null); // wrapper that contains the score; used to detect "inside notation" for zoom
   const mainRef = useRef(null);
   const mainAreaRef = useRef(null); // used for fit-page scale calculation
   const lastVerticalContentHeightRef = useRef(0);
@@ -3035,6 +3041,11 @@ function NoodiMeisterCore({ icons }) {
           if (importProject(data)) {
             setSaveFeedback('Laaditud!');
             setTimeout(() => setSaveFeedback(''), 2500);
+            // Täislehe režiim: laius nii, et üks A4 (laius × pikkus 210:297) mahuks ekraanile. Pikkus = laius × 297/210.
+            if (typeof window !== 'undefined') {
+              const w = Math.min(window.innerWidth, Math.round(window.innerHeight * 210 / 297));
+              setFitPageDisplayWidth(Math.max(LAYOUT.PAGE_WIDTH_MIN, Math.min(w, 2400)));
+            }
           } else {
             setSaveFeedback('Vigane projektifail');
             setTimeout(() => setSaveFeedback(''), 3000);
@@ -3064,6 +3075,11 @@ function NoodiMeisterCore({ icons }) {
           if (importProject(data)) {
             setSaveFeedback('Laaditud!');
             setTimeout(() => setSaveFeedback(''), 2500);
+            // Täislehe režiim: laius nii, et üks A4 (laius × pikkus 210:297) mahuks ekraanile. Pikkus = laius × 297/210.
+            if (typeof window !== 'undefined') {
+              const w = Math.min(window.innerWidth, Math.round(window.innerHeight * 210 / 297));
+              setFitPageDisplayWidth(Math.max(LAYOUT.PAGE_WIDTH_MIN, Math.min(w, 2400)));
+            }
           } else {
             setSaveFeedback('Vigane projektifail');
             setTimeout(() => setSaveFeedback(''), 3000);
@@ -3213,6 +3229,32 @@ function NoodiMeisterCore({ icons }) {
     return beatUnit / denom;
   }, []);
 
+  // Minimum measures needed so that all notes in staves are visible (laadimise viga: kui addedMeasures puudub/vale, näitame ikkagi kõiki noote).
+  const minMeasuresFromNotes = useMemo(() => {
+    let maxEndBeat = 0;
+    for (const staff of staves || []) {
+      const notes = staff.notes || [];
+      let run = 0;
+      for (const n of notes) {
+        const beat = typeof n.beat === 'number' ? n.beat : run;
+        const dur = Number(n.duration) || 1;
+        maxEndBeat = Math.max(maxEndBeat, beat + dur);
+        run = beat + dur;
+      }
+    }
+    if (maxEndBeat <= 0) return 1;
+    const beatsPerMeasure = timeSignature.beats;
+    const beatUnit = timeSignature.beatUnit;
+    let firstMeasureBeats = beatsPerMeasure;
+    if (pickupEnabled && pickupQuantity > 0 && pickupDuration) {
+      const denom = parseInt(String(pickupDuration).split('/')[1], 10) || 4;
+      firstMeasureBeats = Math.max(0.25, Math.min((pickupQuantity * beatUnit) / denom, beatsPerMeasure - 0.25));
+    }
+    if (maxEndBeat <= firstMeasureBeats) return 1;
+    const measuresAfterFirst = Math.ceil((maxEndBeat - firstMeasureBeats) / beatsPerMeasure);
+    return 1 + measuresAfterFirst;
+  }, [staves, timeSignature, pickupEnabled, pickupQuantity, pickupDuration]);
+
   // Calculate measures (with optional pickup / eeltakt – exact rhythmic value). Pikkus = max kõigi ridade pikkus.
   const calculateMeasures = useCallback(() => {
     const beatsPerMeasure = timeSignature.beats;
@@ -3232,10 +3274,10 @@ function NoodiMeisterCore({ icons }) {
       return { startBeat, endBeat: startBeat + beatsPerMeasure, beatCount: beatsPerMeasure };
     };
 
-    // Bar count is user-driven only: 1 initial bar + bars added via Cmd+B. Do not auto-create bars from note content.
-    let totalMeasures = Math.max(1, 1 + (addedMeasures || 0));
-    // Apply demo cap only when user has exactly 1 measure (0 added). Any 2+ measures = loaded project or user added – show all.
-    const applyDemoCap = !hasFullAccess && (addedMeasures || 0) < 1 && totalMeasures <= DEMO_MAX_MEASURES;
+    // User-driven bar count (1 + addedMeasures), but at least minMeasuresFromNotes so laaditud fail näitab alati kõiki noote.
+    let totalMeasures = Math.max(1, Math.max(1 + (addedMeasures || 0), minMeasuresFromNotes));
+    // Apply demo cap only when user has exactly 1 measure (0 added) and notes don't need more. Any 2+ = show all.
+    const applyDemoCap = !hasFullAccess && (addedMeasures || 0) < 1 && minMeasuresFromNotes <= DEMO_MAX_MEASURES && totalMeasures <= DEMO_MAX_MEASURES;
     if (applyDemoCap) {
       totalMeasures = Math.min(DEMO_MAX_MEASURES, totalMeasures);
     }
@@ -3245,7 +3287,7 @@ function NoodiMeisterCore({ icons }) {
       measures.push({ ...b, notes: [] });
     }
     return applyDemoCap ? measures.slice(0, DEMO_MAX_MEASURES) : measures;
-  }, [timeSignature, addedMeasures, pickupEnabled, pickupQuantity, pickupDuration, durationToBeats, hasFullAccess]);
+  }, [timeSignature, addedMeasures, pickupEnabled, pickupQuantity, pickupDuration, durationToBeats, hasFullAccess, minMeasuresFromNotes]);
 
   const maxCursorAllowed = useMemo(() => {
     const ms = calculateMeasures();
@@ -4777,10 +4819,12 @@ function NoodiMeisterCore({ icons }) {
     pdfExportOptionsRef.current = { pageFlowDirection, pageWidth };
   }, [pageFlowDirection, pageWidth]);
   const basePageWidth = pageWidth || LAYOUT.PAGE_WIDTH_MIN;
-  const effectiveLayoutPageWidth = (viewFitPage && !viewSmartPage)
-    ? (fitPageDisplayWidth > 0 ? fitPageDisplayWidth : (getFullPageWidthFromViewport() || basePageWidth))
-    : basePageWidth;
-  const a4PageHeightPx = effectiveLayoutPageWidth * LAYOUT.A4_HEIGHT_RATIO;
+  const effectiveLayoutPageWidth = viewFullSizeA4
+    ? LAYOUT.A4_WIDTH_PX_AT_96DPI
+    : (viewFitPage && !viewSmartPage)
+      ? Math.max(LAYOUT.PAGE_WIDTH_MIN, fitPageDisplayWidth > 0 ? fitPageDisplayWidth : (getFullPageWidthFromViewport() || basePageWidth))
+      : basePageWidth;
+  const a4PageHeightPx = Math.max(LAYOUT.PAGE_WIDTH_MIN * LAYOUT.A4_HEIGHT_RATIO, effectiveLayoutPageWidth * LAYOUT.A4_HEIGHT_RATIO);
   /** Figurenotes row height (beat-box / line) scales with Noodigraafika suurus so barlines and box match note size. */
   const figurenotesRowHeight = Math.max(FIGURE_ROW_HEIGHT, Math.round(FIGURE_ROW_HEIGHT * figurenotesSize / 75));
   /** Chord line in figurenotes: only when user has enabled it in chord toolbox; half height of beat-box, below melody row; gap 0–20 px. */
@@ -4852,18 +4896,19 @@ function NoodiMeisterCore({ icons }) {
     return () => cancelAnimationFrame(t);
   }, [measures, layoutMeasuresPerLine, partLayoutMeasuresPerLine, layoutSystemGap, viewMode, pageOrientation, notes, addedMeasures]);
 
-  // Terve leht: A4 täidab vaateakna (viewport-põhine laius). Tark lehe vaade: skaleeritakse ainult noteeritud ala.
-  const a4PageHeightVal = effectiveLayoutPageWidth * LAYOUT.A4_HEIGHT_RATIO;
+  // Terve leht: A4 laius + pikkus (suhe 210:297). Pikkus = laius × 297/210, et üks leht mahuks ekraanile.
+  const a4PageHeightVal = Math.max(LAYOUT.PAGE_WIDTH_MIN * LAYOUT.A4_HEIGHT_RATIO, effectiveLayoutPageWidth * LAYOUT.A4_HEIGHT_RATIO);
   const [fitPageScale, setFitPageScale] = useState(1);
-  const viewFitOrSmart = viewFitPage || viewSmartPage;
+  const viewFitOrSmart = (viewFitPage || viewSmartPage) && !viewFullSizeA4;
   useEffect(() => {
-    if (!viewFitOrSmart) {
+    if (!viewFitOrSmart || viewFullSizeA4) {
       setFitPageScale(1);
       setFitPageDisplayWidth(0);
       return;
     }
     let ro = null;
     let resizeTimeout = null;
+    let lateLayoutTimeout = null;
     const updateScale = () => {
       const target = mainRef.current;
       let availW = target?.clientWidth ?? 0;
@@ -4909,21 +4954,28 @@ function NoodiMeisterCore({ icons }) {
         if (typeof window !== 'undefined') {
           window.addEventListener('resize', scheduleUpdate);
         }
+        // Pärast pilvest laadimist layout võib olla alles ehitamas – käivita täislehe arvutus uuesti väikese viivituse järel
+        if (cloudLoadComplete && viewFitPage && !viewSmartPage) {
+          lateLayoutTimeout = setTimeout(() => {
+            updateScale();
+          }, 250);
+        }
       });
     });
     return () => {
       cancelAnimationFrame(raf);
       if (resizeTimeout) clearTimeout(resizeTimeout);
+      if (lateLayoutTimeout) clearTimeout(lateLayoutTimeout);
       if (ro) ro.disconnect();
       if (typeof window !== 'undefined') {
         window.removeEventListener('resize', scheduleUpdate);
       }
     };
-  }, [viewFitPage, viewSmartPage, viewFitOrSmart, basePageWidth, logicalContentHeight, cloudLoadComplete]);
+  }, [viewFitPage, viewSmartPage, viewFitOrSmart, viewFullSizeA4, basePageWidth, logicalContentHeight, cloudLoadComplete]);
 
-  // Zoom noodiala: hiireratas (Ctrl/Cmd), touchpad pinch, iPad pinch, Cmd/Ctrl+/- (handler on klaviatuuril)
+  // Zoom noodiala: hiireratas (Ctrl/Cmd), touchpad pinch, iPad pinch, Cmd/Ctrl+/- (handler on klaviatuuril). Only when notation frame has focus (user clicked on score).
   const handleScoreZoomWheel = useCallback((e) => {
-    if (e.ctrlKey || e.metaKey) {
+    if ((e.ctrlKey || e.metaKey) && notationFrameFocusedRef.current) {
       e.preventDefault();
       setScoreZoomLevel((prev) => {
         const delta = -e.deltaY * 0.002;
@@ -4934,12 +4986,13 @@ function NoodiMeisterCore({ icons }) {
   }, []);
   const touchDistance = (t1, t2) => Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
   const handleScoreZoomTouchStart = useCallback((e) => {
+    if (e.touches.length === 1) setNotationFrameFocused(true); // single touch in notation area = focus for pinch
     if (e.touches.length === 2) {
       scoreZoomPinchRef.current = { initialDistance: touchDistance(e.touches[0], e.touches[1]), initialZoom: scoreZoomLevel };
     }
   }, [scoreZoomLevel]);
   const handleScoreZoomTouchMove = useCallback((e) => {
-    if (e.touches.length === 2 && scoreZoomPinchRef.current) {
+    if (e.touches.length === 2 && scoreZoomPinchRef.current && notationFrameFocusedRef.current) {
       e.preventDefault();
       const dist = touchDistance(e.touches[0], e.touches[1]);
       const ratio = dist / scoreZoomPinchRef.current.initialDistance;
@@ -4949,6 +5002,38 @@ function NoodiMeisterCore({ icons }) {
   }, []);
   const handleScoreZoomTouchEnd = useCallback((e) => {
     if (e.touches.length < 2) scoreZoomPinchRef.current = null;
+  }, []);
+
+  useEffect(() => { notationFrameFocusedRef.current = notationFrameFocused; }, [notationFrameFocused]);
+
+  // Pointer down: set notation frame focus when user clicks/taps inside the notation area, clear when outside.
+  useEffect(() => {
+    const onPointerDown = (e) => {
+      const area = notationZoomAreaRef.current;
+      if (area && area.contains(e.target)) setNotationFrameFocused(true);
+      else setNotationFrameFocused(false);
+    };
+    document.addEventListener('pointerdown', onPointerDown, true);
+    return () => document.removeEventListener('pointerdown', onPointerDown, true);
+  }, []);
+
+  // Document-level wheel (capture) so Mac trackpad pinch is handled when pointer is over notation and notation has focus.
+  useEffect(() => {
+    const onWheel = (e) => {
+      if (!(e.ctrlKey || e.metaKey)) return;
+      const area = notationZoomAreaRef.current;
+      if (!area || !area.contains(e.target)) return;
+      if (!notationFrameFocusedRef.current) return;
+      e.preventDefault();
+      e.stopPropagation();
+      setScoreZoomLevel((prev) => {
+        const delta = -e.deltaY * 0.002;
+        const next = Math.max(SCORE_ZOOM_MIN, Math.min(SCORE_ZOOM_MAX, prev + delta));
+        return Math.round(next * 100) / 100;
+      });
+    };
+    document.addEventListener('wheel', onWheel, { capture: true, passive: false });
+    return () => document.removeEventListener('wheel', onWheel, { capture: true });
   }, []);
 
   // Selection drag (Shift + mouse down and drag across notes) – document-level mouseup ends the drag.
@@ -6431,7 +6516,7 @@ function NoodiMeisterCore({ icons }) {
                     {/* Terve leht: üks A4 täidab ekraani (vertikaal = kõrgus, horisontaal = laius). Tark lehe vaade: ainult noteeritud read. Üks režiim korraga. */}
                     <button
                       type="button"
-                      onClick={() => { dirtyRef.current = true; setViewSmartPage(false); setViewFitPage((prev) => !prev); }}
+                      onClick={() => { dirtyRef.current = true; setViewFullSizeA4(false); setViewSmartPage(false); setViewFitPage((prev) => !prev); }}
                       className="w-full flex items-center justify-between gap-2 px-3 py-2 text-left text-sm text-amber-50 hover:bg-slate-600"
                       title={t('view.fitPageHint')}
                     >
@@ -6440,7 +6525,16 @@ function NoodiMeisterCore({ icons }) {
                     </button>
                     <button
                       type="button"
-                      onClick={() => { dirtyRef.current = true; setViewFitPage(false); setViewSmartPage((prev) => !prev); }}
+                      onClick={() => { dirtyRef.current = true; setViewFitPage(false); setViewSmartPage(false); setViewFullSizeA4((prev) => !prev); }}
+                      className="w-full flex items-center justify-between gap-2 px-3 py-2 text-left text-sm text-amber-50 hover:bg-slate-600"
+                      title={t('view.fullSizeA4Hint')}
+                    >
+                      <span>{t('view.fullSizeA4')}</span>
+                      {viewFullSizeA4 && <Check className="w-4 h-4 text-amber-400" />}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { dirtyRef.current = true; setViewFitPage(false); setViewFullSizeA4(false); setViewSmartPage((prev) => !prev); }}
                       className="w-full flex items-center justify-between gap-2 px-3 py-2 text-left text-sm text-amber-50 hover:bg-slate-600"
                       title={t('view.smartPageHint')}
                     >
@@ -7570,6 +7664,7 @@ function NoodiMeisterCore({ icons }) {
             const baseH = isHorizontalFlow ? a4PageHeightVal : contentH;
             return (
           <div
+            ref={notationZoomAreaRef}
             style={{ width: baseW * scoreZoomLevel, height: baseH * scoreZoomLevel, flexShrink: 0 }}
             onWheel={handleScoreZoomWheel}
             onTouchStart={handleScoreZoomTouchStart}
@@ -7597,9 +7692,10 @@ function NoodiMeisterCore({ icons }) {
             style={{
               backgroundColor: themeColors.scoreBg,
               minWidth: LAYOUT.PAGE_WIDTH_MIN,
-              ...(viewFitPage && !viewSmartPage ? {} : { maxWidth: pageOrientation === 'landscape' ? LAYOUT.PAGE_WIDTH_MAX_LANDSCAPE : LAYOUT.PAGE_WIDTH_MAX }),
-              minHeight: Math.max(500, getStaffHeight() + LAYOUT.SYSTEM_GAP + getStaffHeight() + 120),
-              ...(viewFitPage && !viewSmartPage ? { width: pw, boxSizing: 'border-box' } : {}),
+              ...(viewFullSizeA4 ? { width: pageOrientation === 'landscape' ? '297mm' : '210mm', minHeight: pageOrientation === 'landscape' ? '210mm' : '297mm', boxSizing: 'border-box' } : {}),
+              ...(!viewFullSizeA4 && viewFitPage && !viewSmartPage ? {} : !viewFullSizeA4 ? { maxWidth: pageOrientation === 'landscape' ? LAYOUT.PAGE_WIDTH_MAX_LANDSCAPE : LAYOUT.PAGE_WIDTH_MAX } : {}),
+              minHeight: viewFullSizeA4 ? undefined : Math.max(500, getStaffHeight() + LAYOUT.SYSTEM_GAP + getStaffHeight() + 120),
+              ...(viewFitPage && !viewSmartPage && !viewFullSizeA4 ? { width: pw, boxSizing: 'border-box' } : {}),
               ...(isHorizontalFlow ? { width: totalPagesVal * pw, height: a4PageHeightVal } : {})
             }}
             onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; e.currentTarget.classList.add('ring-2', 'ring-amber-400', 'ring-offset-2'); }}
