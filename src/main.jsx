@@ -6,11 +6,11 @@ import App from './App';
 import MicrosoftRedirectHandler from './MicrosoftRedirectHandler';
 import './index.css';
 
-// Teema enne esimest joonistust (vältib vilkumist)
+// Teema enne esimest joonistust (vältib vilkumist). Vaikimisi hele režiim; kasutaja peab ise tume režiimi valima.
 (function applyStoredTheme() {
   try {
     const raw = localStorage.getItem('noodimeister-theme');
-    let mode = 'light';
+    let mode = 'light'; /* default: light; user must change to dark themselves */
     let primaryColor = 'orange';
     if (raw) {
       const o = JSON.parse(raw);

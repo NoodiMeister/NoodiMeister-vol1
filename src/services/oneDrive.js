@@ -148,6 +148,59 @@ export async function getItemName(token, itemId) {
 }
 
 /**
+ * Tagastab elemendi vanemkausta (asukoht).
+ * @param {string} token
+ * @param {string} itemId
+ * @returns {Promise<{ parentId: string, parentName?: string }|null>}
+ */
+export async function getItemParent(token, itemId) {
+  try {
+    const item = await graphGet(token, `/me/drive/items/${encodeURIComponent(itemId)}?$select=parentReference`);
+    const ref = item?.parentReference;
+    if (!ref?.id) return null;
+    return { parentId: ref.id, parentName: ref.name };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Teisalda kaust või fail OneDrive'is teise kausta sisse.
+ * @param {string} token
+ * @param {string} itemId - teisaldatava elemendi ID
+ * @param {string} newParentId - uue vanemkausta ID (või 'root' juurkausta)
+ * @returns {Promise<{ ok: boolean, id?: string, error?: string }>}
+ */
+export async function moveItem(token, itemId, newParentId) {
+  if (!token || !itemId || !newParentId) {
+    return { ok: false, error: 'Missing token, item or parent.' };
+  }
+  try {
+    let targetId = newParentId;
+    if (newParentId === 'root') {
+      const root = await graphGet(token, '/me/drive/root?$select=id');
+      targetId = root?.id || newParentId;
+    }
+    const res = await fetch(`${GRAPH_ROOT}/me/drive/items/${encodeURIComponent(itemId)}`, {
+      method: 'PATCH',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ parentReference: { id: targetId } }),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const msg = body?.error?.message || body?.message || `HTTP ${res.status}`;
+      return { ok: false, error: msg };
+    }
+    return { ok: true, id: body.id };
+  } catch (e) {
+    return { ok: false, error: e?.message || 'Kausta teisaldamine ebaõnnestus.' };
+  }
+}
+
+/**
  * Rename a folder (or item) in OneDrive.
  * @param {string} token
  * @param {string} itemId

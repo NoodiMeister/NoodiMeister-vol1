@@ -21,6 +21,7 @@ export function useNoodimeisterOptional() {
 const STORAGE_KEY = 'noodimeister-data';
 const THEME_STORAGE_KEY = 'noodimeister-theme';
 
+/** Default: light. User must change color mode themselves (no system preference). */
 function getStoredTheme() {
   try {
     const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(THEME_STORAGE_KEY) : null;

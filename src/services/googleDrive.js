@@ -267,6 +267,31 @@ export async function deleteFile(accessToken, fileId) {
 }
 
 /**
+ * Loetleb Google Drive'i kausta alamkaustad (ainult kaustad, mitte failid).
+ * @param {string} accessToken
+ * @param {string|null|'root'} parentId - vanemkausta ID või 'root' / null juurkausta jaoks
+ * @returns {Promise<Array<{ id: string, name: string }>>}
+ */
+export async function listFolderChildren(accessToken, parentId) {
+  const parent = !parentId || parentId === 'root' ? 'root' : parentId;
+  const q = "trashed = false and mimeType = 'application/vnd.google-apps.folder' and '" + parent + "' in parents";
+  const params = new URLSearchParams({
+    q,
+    pageSize: '200',
+    fields: 'files(id, name)'
+  });
+  const res = await fetch(`${DRIVE_API_URL}?${params}`, {
+    headers: { Authorization: `Bearer ${accessToken}` }
+  });
+  if (!res.ok) {
+    if (res.status === 401) throw new Error('Token aegunud. Logi uuesti sisse.');
+    throw new Error('Kaustade nimekirja laadimine ebaõnnestus');
+  }
+  const data = await res.json();
+  return (data.files || []).map((f) => ({ id: f.id, name: f.name || '' }));
+}
+
+/**
  * Tagastab kausta nime (metadata).
  * @param {string} accessToken
  * @param {string} folderId
@@ -281,6 +306,54 @@ export async function getFolderMetadata(accessToken, folderId) {
   if (!res.ok) return null;
   const data = await res.json();
   return { name: data.name || '' };
+}
+
+/**
+ * Tagastab kausta vanemkausta(d) (asukoht). Võib olla mitu, kui kaust on mitmes kaustas.
+ * @param {string} accessToken
+ * @param {string} folderId
+ * @returns {Promise<{ parents: string[] }|null>}
+ */
+export async function getFolderParents(accessToken, folderId) {
+  if (!folderId) return null;
+  const params = new URLSearchParams({ fields: 'parents' });
+  const res = await fetch(`${DRIVE_API_URL}/${folderId}?${params}`, {
+    headers: { Authorization: `Bearer ${accessToken}` }
+  });
+  if (!res.ok) return null;
+  const data = await res.json();
+  const parents = Array.isArray(data.parents) ? data.parents : [];
+  return { parents };
+}
+
+/**
+ * Teisalda kaust (või fail) uude asukohta (teise kausta sisse).
+ * @param {string} accessToken
+ * @param {string} folderId - teisaldatava kausta ID
+ * @param {string} newParentId - uue vanemkausta ID (või 'root' juurkausta)
+ * @returns {Promise<{ id: string, parents: string[] }|null>}
+ */
+export async function moveFolder(accessToken, folderId, newParentId) {
+  if (!folderId || !newParentId) return null;
+  const parentId = newParentId === 'root' || !newParentId ? 'root' : newParentId;
+  const meta = await getFolderParents(accessToken, folderId);
+  const previousParents = meta?.parents?.length ? meta.parents.join(',') : '';
+  const params = new URLSearchParams({ addParents: parentId, fields: 'id,parents,name' });
+  if (previousParents) params.set('removeParents', previousParents);
+  const res = await fetch(`${DRIVE_API_URL}/${folderId}?${params}`, {
+    method: 'PATCH',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({})
+  });
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(res.status === 401 ? 'Token aegunud. Logi uuesti sisse.' : (err || 'Kausta teisaldamine ebaõnnestus'));
+  }
+  const data = await res.json();
+  return { id: data.id, parents: data.parents || [parentId], name: data.name };
 }
 
 /**

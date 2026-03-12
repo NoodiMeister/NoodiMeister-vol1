@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { FilePlus, Folder, FolderOpen, FolderPlus, Cloud, LogIn, Loader2, PenTool, User, Settings, ChevronDown, Trash2, X, Pencil, FolderMinus } from 'lucide-react';
+import { FilePlus, Folder, FolderOpen, FolderPlus, Cloud, LogIn, Loader2, PenTool, User, Settings, ChevronDown, Trash2, X, Pencil, FolderMinus, FolderInput, ChevronRight } from 'lucide-react';
 import * as googleDrive from '../services/googleDrive';
 import * as oneDrive from '../services/oneDrive';
 import * as authStorage from '../services/authStorage';
@@ -80,6 +80,15 @@ export default function MinuTöödPage() {
   const [renameName, setRenameName] = useState('');
   const [renameLoading, setRenameLoading] = useState(false);
   const [renameError, setRenameError] = useState(null);
+  const [moveOpen, setMoveOpen] = useState(null);
+  const [moveLoading, setMoveLoading] = useState(false);
+  const [moveError, setMoveError] = useState(null);
+  const [moveGooglePath, setMoveGooglePath] = useState([]);
+  const [moveGoogleFolders, setMoveGoogleFolders] = useState([]);
+  const [moveGoogleLoading, setMoveGoogleLoading] = useState(false);
+  const [moveOneDrivePath, setMoveOneDrivePath] = useState([]);
+  const [moveOneDriveFolders, setMoveOneDriveFolders] = useState([]);
+  const [moveOneDriveLoading, setMoveOneDriveLoading] = useState(false);
   const settingsRef = useRef(null);
   const store = useNoodimeisterOptional();
   const themeMode = store?.theme?.mode ?? 'light';
@@ -125,8 +134,10 @@ export default function MinuTöödPage() {
   const provider = user?.provider || (hasGoogle ? 'google' : hasMicrosoft ? 'microsoft' : null);
 
   const refreshFolders = useCallback(() => {
-    setGoogleFolders(authStorage.getGoogleSaveFolders());
-    setOneDriveFolders(authStorage.getOneDriveSaveFolders());
+    try {
+      setGoogleFolders(authStorage.getGoogleSaveFolders());
+      setOneDriveFolders(authStorage.getOneDriveSaveFolders());
+    } catch (_) {}
   }, []);
 
   const loadFiles = useCallback(async () => {
@@ -311,6 +322,80 @@ export default function MinuTöödPage() {
       loadOneDriveFiles();
     }
   }, [t, refreshFolders, loadFiles, loadOneDriveFiles]);
+
+  const loadMoveGoogleFolders = useCallback(async (parentId) => {
+    if (!token) return;
+    setMoveGoogleLoading(true);
+    try {
+      const list = await googleDrive.listFolderChildren(token, parentId);
+      setMoveGoogleFolders(list);
+    } catch {
+      setMoveGoogleFolders([]);
+    } finally {
+      setMoveGoogleLoading(false);
+    }
+  }, [token]);
+
+  const loadMoveOneDriveFolders = useCallback(async (parentId) => {
+    if (!microsoftToken) return;
+    setMoveOneDriveLoading(true);
+    const result = await oneDrive.listFolderChildren(microsoftToken, parentId);
+    setMoveOneDriveLoading(false);
+    setMoveOneDriveFolders(result.ok ? (result.folders || []) : []);
+  }, [microsoftToken]);
+
+  useEffect(() => {
+    if (moveOpen?.provider === 'google' && token) {
+      const parentId = moveGooglePath.length > 0 ? moveGooglePath[moveGooglePath.length - 1].id : null;
+      loadMoveGoogleFolders(parentId);
+    }
+  }, [moveOpen?.provider, moveOpen?.folderId, token, moveGooglePath.length, moveGooglePath[moveGooglePath.length - 1]?.id, loadMoveGoogleFolders]);
+
+  useEffect(() => {
+    if (moveOpen?.provider === 'onedrive' && microsoftToken) {
+      const parentId = moveOneDrivePath.length > 0 ? moveOneDrivePath[moveOneDrivePath.length - 1].id : null;
+      loadMoveOneDriveFolders(parentId);
+    }
+  }, [moveOpen?.provider, moveOpen?.folderId, microsoftToken, moveOneDrivePath.length, moveOneDrivePath[moveOneDrivePath.length - 1]?.id, loadMoveOneDriveFolders]);
+
+  const handleMoveFolderGoogleTo = useCallback(async (targetParentId) => {
+    if (!moveOpen || moveOpen.provider !== 'google' || !token) return;
+    if (targetParentId === moveOpen.folderId) return;
+    setMoveError(null);
+    setMoveLoading(true);
+    try {
+      await googleDrive.moveFolder(token, moveOpen.folderId, targetParentId);
+      refreshFolders();
+      loadFiles();
+      setMoveOpen(null);
+      setMoveGooglePath([]);
+    } catch (e) {
+      setMoveError(e?.message || (t['mywork.moveFolderError'] || 'Teisaldamine ebaõnnestus'));
+    } finally {
+      setMoveLoading(false);
+    }
+  }, [moveOpen, token, t, refreshFolders, loadFiles]);
+
+  const handleMoveFolderOneDriveTo = useCallback(async (targetParentId) => {
+    if (!moveOpen || moveOpen.provider !== 'onedrive' || !microsoftToken) return;
+    setMoveError(null);
+    setMoveLoading(true);
+    try {
+      const result = await oneDrive.moveItem(microsoftToken, moveOpen.folderId, targetParentId);
+      if (result.ok) {
+        refreshFolders();
+        loadOneDriveFiles();
+        setMoveOpen(null);
+        setMoveOneDrivePath([]);
+      } else {
+        setMoveError(result.error || (t['mywork.moveFolderError'] || 'Teisaldamine ebaõnnestus'));
+      }
+    } catch (e) {
+      setMoveError(e?.message || (t['mywork.moveFolderError'] || 'Teisaldamine ebaõnnestus'));
+    } finally {
+      setMoveLoading(false);
+    }
+  }, [moveOpen, microsoftToken, t, refreshFolders, loadOneDriveFiles]);
 
   const handleCreateFolder = useCallback(async () => {
     const name = (createFolderName || 'NoodiMeister').trim();
@@ -557,6 +642,15 @@ export default function MinuTöödPage() {
                     </button>
                     <button
                       type="button"
+                      onClick={() => { setMoveOpen({ folderId: folder.id, provider: 'google', folderName: displayName }); setMoveError(null); setMoveGooglePath([]); }}
+                      className="p-2 rounded-lg text-amber-700 dark:text-white/80 hover:bg-amber-100 dark:hover:bg-white/10 border border-amber-200/60 dark:border-white/20"
+                      title={t['mywork.moveFolder'] || 'Teisalda kaust'}
+                      aria-label={t['mywork.moveFolder'] || 'Teisalda kaust'}
+                    >
+                      <FolderInput className="w-5 h-5" />
+                    </button>
+                    <button
+                      type="button"
                       onClick={() => handleRemoveFolderFromList(folder.id, 'google')}
                       className="p-2 rounded-lg text-amber-700 dark:text-white/80 hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-600 border border-amber-200/60 dark:border-white/20"
                       title={t['mywork.removeFolderFromList'] || 'Eemalda nimekirjast'}
@@ -660,6 +754,15 @@ export default function MinuTöödPage() {
                     </button>
                     <button
                       type="button"
+                      onClick={() => { setMoveOpen({ folderId: folder.id, provider: 'onedrive', folderName: displayName }); setMoveError(null); setMoveOneDrivePath([]); }}
+                      className="p-2 rounded-lg text-amber-700 dark:text-white/80 hover:bg-amber-100 dark:hover:bg-white/10 border border-amber-200/60 dark:border-white/20"
+                      title={t['mywork.moveFolder'] || 'Teisalda kaust'}
+                      aria-label={t['mywork.moveFolder'] || 'Teisalda kaust'}
+                    >
+                      <FolderInput className="w-5 h-5" />
+                    </button>
+                    <button
+                      type="button"
                       onClick={() => handleRemoveFolderFromList(folder.id, 'onedrive')}
                       className="p-2 rounded-lg text-amber-700 dark:text-white/80 hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-600 border border-amber-200/60 dark:border-white/20"
                       title={t['mywork.removeFolderFromList'] || 'Eemalda nimekirjast'}
@@ -707,6 +810,160 @@ export default function MinuTöödPage() {
               );
             })}
           </section>
+        )}
+
+        {moveOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => !moveLoading && setMoveOpen(null)}>
+            <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-xl border-2 border-amber-200 dark:border-white/20 max-w-md w-full max-h-[85vh] flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between px-4 py-3 border-b border-amber-200 dark:border-white/20">
+                <h3 className="font-semibold text-amber-900 dark:text-white">{t['mywork.moveFolderTitle'] || 'Teisalda kaust teise asukohta'}</h3>
+                <button type="button" onClick={() => !moveLoading && setMoveOpen(null)} className="p-1 rounded hover:bg-amber-100 dark:hover:bg-white/10 text-amber-900 dark:text-white" aria-label={t['common.close'] || 'Sulge'}>
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="p-4 overflow-y-auto">
+                <p className="text-sm text-amber-800 dark:text-white/90 mb-3">
+                  {t['mywork.moveFolderPickLocation'] || 'Vali uus asukoht'}
+                  {moveOpen.folderName && <><br /><strong>{moveOpen.folderName}</strong></>}
+                </p>
+                {moveError && (
+                  <p className="text-sm text-red-600 dark:text-red-400 mb-3">{moveError}</p>
+                )}
+                {moveOpen.provider === 'google' && (
+                  <>
+                    <div className="flex items-center gap-1 py-2 text-sm text-amber-800 dark:text-white/90 mb-2 flex-wrap">
+                      <button
+                        type="button"
+                        onClick={() => setMoveGooglePath([])}
+                        className="hover:underline font-medium"
+                      >
+                        {t['account.rootFolder'] || 'Juurkaust'}
+                      </button>
+                      {moveGooglePath.map((p, i) => (
+                        <React.Fragment key={p.id}>
+                          <ChevronRight className="w-4 h-4 flex-shrink-0" />
+                          <button
+                            type="button"
+                            onClick={() => setMoveGooglePath(moveGooglePath.slice(0, i + 1))}
+                            className="hover:underline truncate max-w-[140px]"
+                          >
+                            {p.name}
+                          </button>
+                        </React.Fragment>
+                      ))}
+                    </div>
+                    <div className="space-y-1 mb-3">
+                      <button
+                        type="button"
+                        onClick={() => handleMoveFolderGoogleTo(moveGooglePath.length > 0 ? moveGooglePath[moveGooglePath.length - 1].id : 'root')}
+                        disabled={moveLoading}
+                        className="w-full flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-100 dark:bg-amber-900/40 text-amber-900 dark:text-white font-medium hover:bg-amber-200 dark:hover:bg-amber-800/40 disabled:opacity-60"
+                      >
+                        <FolderOpen className="w-4 h-4" />
+                        {moveGooglePath.length > 0 ? (t['account.selectFolder'] || 'Vali siia') : (t['account.rootFolder'] || 'Juurkaust')} – {t['account.selectFolder'] || 'Vali siia'}
+                      </button>
+                    </div>
+                    {moveGoogleLoading ? (
+                      <div className="flex items-center gap-2 text-amber-700 dark:text-white/80 py-2">
+                        <Loader2 className="w-5 h-5 animate-spin" /> {t['mywork.loadingWorks'] || 'Laen…'}
+                      </div>
+                    ) : (
+                      <ul className="space-y-1">
+                        {moveGoogleFolders.map((f) => (
+                          <li key={f.id}>
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => setMoveGooglePath((prev) => [...prev, { id: f.id, name: f.name }])}
+                                className="flex-1 text-left flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-amber-100 dark:hover:bg-white/10 text-amber-900 dark:text-white"
+                              >
+                                <Folder className="w-4 h-4 flex-shrink-0" />
+                                <span className="truncate">{f.name}</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleMoveFolderGoogleTo(f.id)}
+                                disabled={moveLoading}
+                                className="px-3 py-1.5 rounded-lg bg-amber-600 text-white text-sm font-medium hover:bg-amber-500 disabled:opacity-60"
+                              >
+                                {t['account.selectFolder'] || 'Vali'}
+                              </button>
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </>
+                )}
+                {moveOpen.provider === 'onedrive' && (
+                  <>
+                    <div className="flex items-center gap-1 py-2 text-sm text-amber-800 dark:text-white/90 mb-2 flex-wrap">
+                      <button
+                        type="button"
+                        onClick={() => setMoveOneDrivePath([])}
+                        className="hover:underline font-medium"
+                      >
+                        {t['account.rootFolder'] || 'Juurkaust'}
+                      </button>
+                      {moveOneDrivePath.map((p, i) => (
+                        <React.Fragment key={p.id}>
+                          <ChevronRight className="w-4 h-4 flex-shrink-0" />
+                          <button
+                            type="button"
+                            onClick={() => setMoveOneDrivePath(moveOneDrivePath.slice(0, i + 1))}
+                            className="hover:underline truncate max-w-[140px]"
+                          >
+                            {p.name}
+                          </button>
+                        </React.Fragment>
+                      ))}
+                    </div>
+                    <div className="space-y-1 mb-3">
+                      <button
+                        type="button"
+                        onClick={() => handleMoveFolderOneDriveTo(moveOneDrivePath.length > 0 ? moveOneDrivePath[moveOneDrivePath.length - 1].id : 'root')}
+                        disabled={moveLoading}
+                        className="w-full flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-100 dark:bg-amber-900/40 text-amber-900 dark:text-white font-medium hover:bg-amber-200 dark:hover:bg-amber-800/40 disabled:opacity-60"
+                      >
+                        <FolderOpen className="w-4 h-4" />
+                        {moveOneDrivePath.length > 0 ? (t['account.selectFolder'] || 'Vali siia') : (t['account.rootFolder'] || 'Juurkaust')} – {t['account.selectFolder'] || 'Vali siia'}
+                      </button>
+                    </div>
+                    {moveOneDriveLoading ? (
+                      <div className="flex items-center gap-2 text-amber-700 dark:text-white/80 py-2">
+                        <Loader2 className="w-5 h-5 animate-spin" /> {t['mywork.loadingWorks'] || 'Laen…'}
+                      </div>
+                    ) : (
+                      <ul className="space-y-1">
+                        {moveOneDriveFolders.map((f) => (
+                          <li key={f.id}>
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => setMoveOneDrivePath((prev) => [...prev, { id: f.id, name: f.name }])}
+                                className="flex-1 text-left flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-amber-100 dark:hover:bg-white/10 text-amber-900 dark:text-white"
+                              >
+                                <Folder className="w-4 h-4 flex-shrink-0" />
+                                <span className="truncate">{f.name}</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleMoveFolderOneDriveTo(f.id)}
+                                disabled={moveLoading}
+                                className="px-3 py-1.5 rounded-lg bg-amber-600 text-white text-sm font-medium hover:bg-amber-500 disabled:opacity-60"
+                              >
+                                {t['account.selectFolder'] || 'Vali'}
+                              </button>
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
         )}
 
         {renameOpen && (

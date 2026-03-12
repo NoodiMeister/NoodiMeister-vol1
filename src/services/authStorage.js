@@ -103,18 +103,34 @@ export function getStoredMicrosoftTokenFromAuth() {
   return token;
 }
 
-/** Google Drive salvestuskaustade nimekiri (id + name). Tagastab vähemalt ühe kausta, kui on legacy key. */
+/** Loeb legacy kausta ID kas localStorage või sessionStorage'ist (kumbki, kus väärtus on). */
+function getLegacyGoogleFolderIdFromAnyStorage() {
+  if (typeof window === 'undefined') return null;
+  try {
+    const fromLocal = window.localStorage?.getItem(KEY_GOOGLE_SAVE_FOLDER);
+    if (fromLocal) return fromLocal;
+    const fromSession = window.sessionStorage?.getItem(KEY_GOOGLE_SAVE_FOLDER);
+    if (fromSession) return fromSession;
+  } catch (_) {}
+  return null;
+}
+
+/** Google Drive salvestuskaustade nimekiri (id + name). Tagastab vähemalt ühe kausta, kui on legacy key. Loeb mõlemast salvestusest, et kaust ei kaoks. */
 export function getGoogleSaveFolders() {
   const storage = getStorageForRead();
-  if (!storage) return [];
+  if (typeof window === 'undefined') return [];
   try {
-    const raw = storage.getItem(KEY_GOOGLE_SAVE_FOLDERS);
+    const raw = storage?.getItem(KEY_GOOGLE_SAVE_FOLDERS);
     if (raw) {
       const list = JSON.parse(raw);
       if (Array.isArray(list) && list.length > 0) return list;
     }
-    const legacyId = storage.getItem(KEY_GOOGLE_SAVE_FOLDER);
-    if (legacyId) return [{ id: legacyId, name: '' }];
+    let legacyId = storage?.getItem(KEY_GOOGLE_SAVE_FOLDER) || null;
+    if (!legacyId) legacyId = getLegacyGoogleFolderIdFromAnyStorage();
+    if (legacyId) {
+      setGoogleSaveFolderId(legacyId, '');
+      return [{ id: legacyId, name: '' }];
+    }
   } catch (_) {}
   return [];
 }
@@ -195,18 +211,33 @@ export function clearGoogleSaveFolder() {
   } catch (_) {}
 }
 
-/** OneDrive salvestuskaustade nimekiri (id + name). */
+function getLegacyOneDriveFolderIdFromAnyStorage() {
+  if (typeof window === 'undefined') return null;
+  try {
+    const fromLocal = window.localStorage?.getItem(KEY_ONEDRIVE_SAVE_FOLDER);
+    if (fromLocal) return fromLocal;
+    const fromSession = window.sessionStorage?.getItem(KEY_ONEDRIVE_SAVE_FOLDER);
+    if (fromSession) return fromSession;
+  } catch (_) {}
+  return null;
+}
+
+/** OneDrive salvestuskaustade nimekiri (id + name). Loeb mõlemast salvestusest; kui leitakse teisest, kirjutatakse ka peamisse. */
 export function getOneDriveSaveFolders() {
   const storage = getStorageForRead();
-  if (!storage) return [];
+  if (typeof window === 'undefined') return [];
   try {
-    const raw = storage.getItem(KEY_ONEDRIVE_SAVE_FOLDERS);
+    const raw = storage?.getItem(KEY_ONEDRIVE_SAVE_FOLDERS);
     if (raw) {
       const list = JSON.parse(raw);
       if (Array.isArray(list) && list.length > 0) return list;
     }
-    const legacyId = storage.getItem(KEY_ONEDRIVE_SAVE_FOLDER);
-    if (legacyId) return [{ id: legacyId, name: '' }];
+    let legacyId = storage?.getItem(KEY_ONEDRIVE_SAVE_FOLDER) || null;
+    if (!legacyId) legacyId = getLegacyOneDriveFolderIdFromAnyStorage();
+    if (legacyId) {
+      setOneDriveSaveFolderId(legacyId, '');
+      return [{ id: legacyId, name: '' }];
+    }
   } catch (_) {}
   return [];
 }
