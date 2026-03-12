@@ -126,5 +126,67 @@
 [data-theme="dark"] .account-page main {
   background: transparent !important;
 }
+[data-theme="dark"] .account-page [class*="bg-white"],
+[data-theme="dark"] .account-page [class*="bg-amber-50"],
+[data-theme="dark"] .account-page [class*="bg-amber-100"] {
+  background: rgba(255, 255, 255, 0.08) !important;
+}
+
+/* Minu tööd (tööd) page – full dark in dark mode, white text */
+.minutood-page {
+  background: var(--bg-color) !important;
+  color: var(--text-color) !important;
+}
+[data-theme="dark"] .minutood-page {
+  background: #000 !important;
+  color: #fff !important;
+}
+[data-theme="dark"] .minutood-page main,
+[data-theme="dark"] .minutood-page header {
+  background: #000 !important;
+  border-color: rgba(255, 255, 255, 0.2) !important;
+  color: #fff !important;
+}
+[data-theme="dark"] .minutood-page a,
+[data-theme="dark"] .minutood-page span,
+[data-theme="dark"] .minutood-page p,
+[data-theme="dark"] .minutood-page h1,
+[data-theme="dark"] .minutood-page h2,
+[data-theme="dark"] .minutood-page label,
+[data-theme="dark"] .minutood-page button,
+[data-theme="dark"] .minutood-page div,
+[data-theme="dark"] .minutood-page li,
+[data-theme="dark"] .minutood-page section {
+  color: #fff !important;
+}
+[data-theme="dark"] .minutood-page svg {
+  color: #fff !important;
+  stroke: #fff !important;
+}
+[data-theme="dark"] .minutood-page .minutood-settings-dropdown,
+[data-theme="dark"] .minutood-page .minutood-settings-dropdown * {
+  background: #000 !important;
+  border-color: rgba(255, 255, 255, 0.2) !important;
+  color: #fff !important;
+}
+[data-theme="dark"] .minutood-page [class*="bg-white"],
+[data-theme="dark"] .minutood-page [class*="bg-amber-50"],
+[data-theme="dark"] .minutood-page [class*="bg-amber-100"] {
+  background: rgba(255, 255, 255, 0.08) !important;
+}
+[data-theme="dark"] .minutood-page [class*="rounded-xl"][class*="border"] {
+  border-color: rgba(255, 255, 255, 0.2) !important;
+}
+[data-theme="dark"] .minutood-page .loading-screen {
+  background: #000 !important;
+  color: #fff !important;
+}
+/* Error/alert boxes on Minu tööd – dark so white text is visible */
+[data-theme="dark"] .minutood-page [class*="bg-red-50"],
+[data-theme="dark"] .minutood-page [class*="text-red-800"] {
+  background: rgba(127, 29, 29, 0.4) !important;
+  color: #fecaca !important;
+  border-color: rgba(248, 113, 113, 0.4) !important;
+}
 
 

@@ -10,7 +10,9 @@ export const KEY_GOOGLE_EXPIRY = 'noodimeister-google-token-expiry';
 export const KEY_MICROSOFT_TOKEN = 'noodimeister-microsoft-token';
 export const KEY_MICROSOFT_EXPIRY = 'noodimeister-microsoft-token-expiry';
 export const KEY_GOOGLE_SAVE_FOLDER = 'noodimeister-google-save-folder';
+export const KEY_GOOGLE_SAVE_FOLDERS = 'noodimeister-google-save-folders';
 export const KEY_ONEDRIVE_SAVE_FOLDER = 'noodimeister-onedrive-save-folder';
+export const KEY_ONEDRIVE_SAVE_FOLDERS = 'noodimeister-onedrive-save-folders';
 
 function safeStorage(storage) {
   if (typeof window === 'undefined' || !storage) return null;
@@ -101,18 +103,82 @@ export function getStoredMicrosoftTokenFromAuth() {
   return token;
 }
 
-/** Google Drive salvestuskausta ID (kui kasutaja on valinud). */
-export function getGoogleSaveFolderId() {
+/** Google Drive salvestuskaustade nimekiri (id + name). Tagastab vähemalt ühe kausta, kui on legacy key. */
+export function getGoogleSaveFolders() {
   const storage = getStorageForRead();
-  if (!storage) return null;
-  return storage.getItem(KEY_GOOGLE_SAVE_FOLDER) || null;
+  if (!storage) return [];
+  try {
+    const raw = storage.getItem(KEY_GOOGLE_SAVE_FOLDERS);
+    if (raw) {
+      const list = JSON.parse(raw);
+      if (Array.isArray(list) && list.length > 0) return list;
+    }
+    const legacyId = storage.getItem(KEY_GOOGLE_SAVE_FOLDER);
+    if (legacyId) return [{ id: legacyId, name: '' }];
+  } catch (_) {}
+  return [];
 }
 
-export function setGoogleSaveFolderId(folderId) {
+/** Google Drive vaikimisi salvestuskausta ID (esimene nimekirjas). */
+export function getGoogleSaveFolderId() {
+  const folders = getGoogleSaveFolders();
+  return folders[0]?.id ?? null;
+}
+
+export function setGoogleSaveFolderId(folderId, name = '') {
   if (typeof window === 'undefined' || !folderId) return;
+  const list = [{ id: folderId, name: name || '' }];
   try {
     [window.sessionStorage, window.localStorage].forEach((s) => {
-      if (s) s.setItem(KEY_GOOGLE_SAVE_FOLDER, folderId);
+      if (s) {
+        s.setItem(KEY_GOOGLE_SAVE_FOLDER, folderId);
+        s.setItem(KEY_GOOGLE_SAVE_FOLDERS, JSON.stringify(list));
+      }
+    });
+  } catch (_) {}
+}
+
+/** Lisa Google Drive salvestuskaust nimekirja (uued failid salvestatakse esimesse). */
+export function addGoogleSaveFolder(folderId, name = '') {
+  if (typeof window === 'undefined' || !folderId) return;
+  const storage = getStorageForRead();
+  const existing = storage ? getGoogleSaveFolders() : [];
+  const filtered = existing.filter((f) => f.id !== folderId);
+  const list = [{ id: folderId, name: name || '' }, ...filtered];
+  try {
+    [window.sessionStorage, window.localStorage].forEach((s) => {
+      if (s) {
+        s.setItem(KEY_GOOGLE_SAVE_FOLDER, list[0].id);
+        s.setItem(KEY_GOOGLE_SAVE_FOLDERS, JSON.stringify(list));
+      }
+    });
+  } catch (_) {}
+}
+
+/** Uuenda Google Drive kausta nime nimekirjas. */
+export function updateGoogleSaveFolderName(folderId, newName) {
+  if (typeof window === 'undefined' || !folderId) return;
+  const list = getGoogleSaveFolders().map((f) =>
+    f.id === folderId ? { ...f, name: newName || f.name } : f
+  );
+  try {
+    [window.sessionStorage, window.localStorage].forEach((s) => {
+      if (s) s.setItem(KEY_GOOGLE_SAVE_FOLDERS, JSON.stringify(list));
+    });
+  } catch (_) {}
+}
+
+/** Eemalda Google Drive kaust nimekirjast (ei kustuta pilvest). */
+export function removeGoogleSaveFolder(folderId) {
+  if (typeof window === 'undefined') return;
+  const list = getGoogleSaveFolders().filter((f) => f.id !== folderId);
+  try {
+    [window.sessionStorage, window.localStorage].forEach((s) => {
+      if (s) {
+        s.setItem(KEY_GOOGLE_SAVE_FOLDERS, JSON.stringify(list));
+        if (list.length > 0) s.setItem(KEY_GOOGLE_SAVE_FOLDER, list[0].id);
+        else s.removeItem(KEY_GOOGLE_SAVE_FOLDER);
+      }
     });
   } catch (_) {}
 }
@@ -121,23 +187,89 @@ export function clearGoogleSaveFolder() {
   if (typeof window === 'undefined') return;
   try {
     [window.sessionStorage, window.localStorage].forEach((s) => {
-      if (s) s.removeItem(KEY_GOOGLE_SAVE_FOLDER);
+      if (s) {
+        s.removeItem(KEY_GOOGLE_SAVE_FOLDER);
+        s.removeItem(KEY_GOOGLE_SAVE_FOLDERS);
+      }
     });
   } catch (_) {}
 }
 
-/** OneDrive salvestuskausta ID (kui kasutaja on valinud). */
-export function getOneDriveSaveFolderId() {
+/** OneDrive salvestuskaustade nimekiri (id + name). */
+export function getOneDriveSaveFolders() {
   const storage = getStorageForRead();
-  if (!storage) return null;
-  return storage.getItem(KEY_ONEDRIVE_SAVE_FOLDER) || null;
+  if (!storage) return [];
+  try {
+    const raw = storage.getItem(KEY_ONEDRIVE_SAVE_FOLDERS);
+    if (raw) {
+      const list = JSON.parse(raw);
+      if (Array.isArray(list) && list.length > 0) return list;
+    }
+    const legacyId = storage.getItem(KEY_ONEDRIVE_SAVE_FOLDER);
+    if (legacyId) return [{ id: legacyId, name: '' }];
+  } catch (_) {}
+  return [];
 }
 
-export function setOneDriveSaveFolderId(folderId) {
+/** OneDrive vaikimisi salvestuskausta ID (esimene nimekirjas). */
+export function getOneDriveSaveFolderId() {
+  const folders = getOneDriveSaveFolders();
+  return folders[0]?.id ?? null;
+}
+
+export function setOneDriveSaveFolderId(folderId, name = '') {
   if (typeof window === 'undefined' || !folderId) return;
+  const list = [{ id: folderId, name: name || '' }];
   try {
     [window.sessionStorage, window.localStorage].forEach((s) => {
-      if (s) s.setItem(KEY_ONEDRIVE_SAVE_FOLDER, folderId);
+      if (s) {
+        s.setItem(KEY_ONEDRIVE_SAVE_FOLDER, folderId);
+        s.setItem(KEY_ONEDRIVE_SAVE_FOLDERS, JSON.stringify(list));
+      }
+    });
+  } catch (_) {}
+}
+
+/** Lisa OneDrive salvestuskaust nimekirja. */
+export function addOneDriveSaveFolder(folderId, name = '') {
+  if (typeof window === 'undefined' || !folderId) return;
+  const existing = getOneDriveSaveFolders();
+  const filtered = existing.filter((f) => f.id !== folderId);
+  const list = [{ id: folderId, name: name || '' }, ...filtered];
+  try {
+    [window.sessionStorage, window.localStorage].forEach((s) => {
+      if (s) {
+        s.setItem(KEY_ONEDRIVE_SAVE_FOLDER, list[0].id);
+        s.setItem(KEY_ONEDRIVE_SAVE_FOLDERS, JSON.stringify(list));
+      }
+    });
+  } catch (_) {}
+}
+
+/** Uuenda OneDrive kausta nime nimekirjas. */
+export function updateOneDriveSaveFolderName(folderId, newName) {
+  if (typeof window === 'undefined' || !folderId) return;
+  const list = getOneDriveSaveFolders().map((f) =>
+    f.id === folderId ? { ...f, name: newName || f.name } : f
+  );
+  try {
+    [window.sessionStorage, window.localStorage].forEach((s) => {
+      if (s) s.setItem(KEY_ONEDRIVE_SAVE_FOLDERS, JSON.stringify(list));
+    });
+  } catch (_) {}
+}
+
+/** Eemalda OneDrive kaust nimekirjast. */
+export function removeOneDriveSaveFolder(folderId) {
+  if (typeof window === 'undefined') return;
+  const list = getOneDriveSaveFolders().filter((f) => f.id !== folderId);
+  try {
+    [window.sessionStorage, window.localStorage].forEach((s) => {
+      if (s) {
+        s.setItem(KEY_ONEDRIVE_SAVE_FOLDERS, JSON.stringify(list));
+        if (list.length > 0) s.setItem(KEY_ONEDRIVE_SAVE_FOLDER, list[0].id);
+        else s.removeItem(KEY_ONEDRIVE_SAVE_FOLDER);
+      }
     });
   } catch (_) {}
 }
@@ -146,7 +278,10 @@ export function clearOneDriveSaveFolder() {
   if (typeof window === 'undefined') return;
   try {
     [window.sessionStorage, window.localStorage].forEach((s) => {
-      if (s) s.removeItem(KEY_ONEDRIVE_SAVE_FOLDER);
+      if (s) {
+        s.removeItem(KEY_ONEDRIVE_SAVE_FOLDER);
+        s.removeItem(KEY_ONEDRIVE_SAVE_FOLDERS);
+      }
     });
   } catch (_) {}
 }
@@ -176,7 +311,9 @@ export function clearAuth() {
         s.removeItem(KEY_MICROSOFT_TOKEN);
         s.removeItem(KEY_MICROSOFT_EXPIRY);
         s.removeItem(KEY_GOOGLE_SAVE_FOLDER);
+        s.removeItem(KEY_GOOGLE_SAVE_FOLDERS);
         s.removeItem(KEY_ONEDRIVE_SAVE_FOLDER);
+        s.removeItem(KEY_ONEDRIVE_SAVE_FOLDERS);
       }
     });
     clearMsalCache();

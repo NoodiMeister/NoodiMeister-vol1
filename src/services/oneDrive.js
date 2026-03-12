@@ -148,6 +148,37 @@ export async function getItemName(token, itemId) {
 }
 
 /**
+ * Rename a folder (or item) in OneDrive.
+ * @param {string} token
+ * @param {string} itemId
+ * @param {string} newName
+ * @returns {Promise<{ ok: boolean, name?: string, error?: string }>}
+ */
+export async function renameItem(token, itemId, newName) {
+  if (!token || !itemId || !newName?.trim()) {
+    return { ok: false, error: 'Missing token, item or name.' };
+  }
+  try {
+    const res = await fetch(`${GRAPH_ROOT}/me/drive/items/${encodeURIComponent(itemId)}`, {
+      method: 'PATCH',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ name: newName.trim() }),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const msg = body?.error?.message || body?.message || `HTTP ${res.status}`;
+      return { ok: false, error: msg };
+    }
+    return { ok: true, name: body.name || newName.trim() };
+  } catch (e) {
+    return { ok: false, error: e?.message || 'Kausta ümbernimetamine ebaõnnestus.' };
+  }
+}
+
+/**
  * Upload a file to OneDrive root (small files, up to ~250 MB).
  * Requires scope Files.ReadWrite (or Files.ReadWrite.AppFolder).
  * PUT /me/drive/root:/fileName:/content

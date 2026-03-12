@@ -283,6 +283,31 @@ export async function getFolderMetadata(accessToken, folderId) {
   return { name: data.name || '' };
 }
 
+/**
+ * Rename a folder (or file) in Google Drive.
+ * @param {string} accessToken
+ * @param {string} folderId
+ * @param {string} newName
+ * @returns {Promise<{ name: string }|null>}
+ */
+export async function renameFolder(accessToken, folderId, newName) {
+  if (!folderId || !newName?.trim()) return null;
+  const res = await fetch(`${DRIVE_API_URL}/${folderId}`, {
+    method: 'PATCH',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ name: newName.trim() })
+  });
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(res.status === 401 ? 'Token aegunud. Logi uuesti sisse.' : (err || 'Kausta ümbernimetamine ebaõnnestus'));
+  }
+  const data = await res.json();
+  return { name: data.name || newName.trim() };
+}
+
 import * as authStorage from './authStorage';
 
 export function getStoredToken() {

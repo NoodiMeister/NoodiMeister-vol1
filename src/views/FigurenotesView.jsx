@@ -123,6 +123,7 @@ export function FigurenotesView({
   onToggleLineBreakAfter,
   translateLabel,
   showBarNumbers = true,
+  barNumberSize = 11,
   chords = [],
   figurenotesSize = 16,
   figurenotesStems = false,
@@ -230,7 +231,7 @@ export function FigurenotesView({
 
             {/* Taktide number – JO-võtit ei ole; skaleeritud figurenotesSize-ga, max 12px */}
             {showBarNumbers && sys.measureIndices.length > 0 && (
-              <text x={20} y={sys.yOffset + Math.max(10, barLineInset + 4)} fontSize={Math.min(12, Math.round(10 * (figurenotesSize / 16)))} fontWeight="bold" fill="#555" textAnchor="middle" fontFamily="sans-serif">
+              <text x={20} y={sys.yOffset + Math.max(10, barLineInset + 4)} fontSize={barNumberSize} fontWeight="bold" fill="#555" textAnchor="middle" fontFamily="sans-serif">
                 {sys.measureIndices[0] + 1}
               </text>
             )}

@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { User, Cloud, HardDrive, LogIn, LogOut, FolderOpen, FolderPlus, FilePlus, Loader2, X, ChevronRight, Settings, ChevronDown, Trash2 } from 'lucide-react';
+import { User, Cloud, HardDrive, LogIn, LogOut, FolderOpen, FolderPlus, FilePlus, Loader2, X, ChevronRight, Settings, ChevronDown, Trash2, Pencil } from 'lucide-react';
 import { LOCALE_STORAGE_KEY, DEFAULT_LOCALE, LOCALES, getTranslations } from '../i18n';
 import { useNoodimeisterOptional } from '../store/NoodimeisterContext';
 import {
@@ -10,9 +10,11 @@ import {
   getGoogleSaveFolderId,
   setGoogleSaveFolderId,
   clearGoogleSaveFolder,
+  updateGoogleSaveFolderName,
   getOneDriveSaveFolderId,
   setOneDriveSaveFolderId,
   clearOneDriveSaveFolder,
+  updateOneDriveSaveFolderName,
   clearAuth,
 } from '../services/authStorage';
 import * as googleDrive from '../services/googleDrive';
@@ -23,6 +25,7 @@ import {
   createFolder as oneDriveCreateFolder,
   getItemName as oneDriveGetItemName,
   deleteFile as oneDriveDeleteFile,
+  renameItem as oneDriveRenameItem,
 } from '../services/oneDrive';
 import { AppLogo } from '../components/AppLogo';
 
@@ -83,6 +86,10 @@ export default function AccountPage() {
   const [oneDriveCreateLoading, setOneDriveCreateLoading] = useState(false);
   const [googleCreateName, setGoogleCreateName] = useState('NoodiMeister');
   const [googleCreateLoading, setGoogleCreateLoading] = useState(false);
+  const [renameFolderOpen, setRenameFolderOpen] = useState(null);
+  const [renameFolderName, setRenameFolderName] = useState('');
+  const [renameFolderLoading, setRenameFolderLoading] = useState(false);
+  const [renameFolderError, setRenameFolderError] = useState(null);
 
   useEffect(() => {
     const close = (e) => {
@@ -230,8 +237,11 @@ export default function AccountPage() {
     if (!googleToken) return;
     const folderId = await googleDrive.pickFolder(googleToken);
     if (folderId) {
-      setGoogleSaveFolderId(folderId);
+      const meta = await googleDrive.getFolderMetadata(googleToken, folderId).catch(() => null);
+      const name = meta?.name || '';
+      setGoogleSaveFolderId(folderId, name);
       setGoogleSaveFolderIdState(folderId);
+      setGoogleSaveFolderName(name);
     }
   };
 
@@ -242,7 +252,7 @@ export default function AccountPage() {
     setGoogleCreateLoading(true);
     try {
       const folderId = await googleDrive.createFolder(googleToken, 'root', name);
-      setGoogleSaveFolderId(folderId);
+      setGoogleSaveFolderId(folderId, name);
       setGoogleSaveFolderIdState(folderId);
       setGoogleSaveFolderName(name);
     } catch (e) {
@@ -254,7 +264,7 @@ export default function AccountPage() {
 
   const handleOneDriveSelectFolder = (folderId) => {
     oneDriveGetItemName(microsoftToken, folderId).then((name) => {
-      setOneDriveSaveFolderId(folderId);
+      setOneDriveSaveFolderId(folderId, name || '');
       setOneDriveSaveFolderIdState(folderId);
       setOneDriveSaveFolderName(name || '');
     });
@@ -270,7 +280,7 @@ export default function AccountPage() {
     try {
       const result = await oneDriveCreateFolder(microsoftToken, oneDriveSaveFolderId || 'root', name);
       if (result.ok && result.id) {
-        setOneDriveSaveFolderId(result.id);
+        setOneDriveSaveFolderId(result.id, result.name || name);
         setOneDriveSaveFolderIdState(result.id);
         setOneDriveSaveFolderName(result.name || name);
       }
@@ -280,6 +290,36 @@ export default function AccountPage() {
       setOneDriveCreateLoading(false);
     }
   };
+
+  const handleRenameFolder = useCallback(async () => {
+    if (!renameFolderOpen || !renameFolderName.trim()) return;
+    const { provider } = renameFolderOpen;
+    setRenameFolderError(null);
+    setRenameFolderLoading(true);
+    try {
+      if (provider === 'google' && googleToken && googleSaveFolderId) {
+        await googleDrive.renameFolder(googleToken, googleSaveFolderId, renameFolderName.trim());
+        updateGoogleSaveFolderName(googleSaveFolderId, renameFolderName.trim());
+        setGoogleSaveFolderName(renameFolderName.trim());
+        setRenameFolderOpen(null);
+        setRenameFolderName('');
+      } else if (provider === 'onedrive' && microsoftToken && oneDriveSaveFolderId) {
+        const result = await oneDriveRenameItem(microsoftToken, oneDriveSaveFolderId, renameFolderName.trim());
+        if (result.ok) {
+          updateOneDriveSaveFolderName(oneDriveSaveFolderId, result.name || renameFolderName.trim());
+          setOneDriveSaveFolderName(result.name || renameFolderName.trim());
+          setRenameFolderOpen(null);
+          setRenameFolderName('');
+        } else {
+          setRenameFolderError(result.error || (t['account.createFolderError'] || 'Ümbernimetamine ebaõnnestus'));
+        }
+      }
+    } catch (e) {
+      setRenameFolderError(e?.message || (t['account.createFolderError'] || 'Ümbernimetamine ebaõnnestus'));
+    } finally {
+      setRenameFolderLoading(false);
+    }
+  }, [renameFolderOpen, renameFolderName, googleToken, googleSaveFolderId, microsoftToken, oneDriveSaveFolderId, t]);
 
   const providerLabel =
     user?.provider === 'google'
@@ -558,11 +598,24 @@ export default function AccountPage() {
                   </p>
                   <div className="border border-amber-200 dark:border-white/20 rounded-xl p-4 bg-amber-50/70 dark:bg-white/10 space-y-3">
                     <p className="text-sm font-semibold text-amber-900 dark:text-white">{t['account.saveFolder']}</p>
-                    <p className="text-sm text-amber-800 dark:text-white/90">
-                      {googleSaveFolderId
-                        ? (t['account.saveFolderCurrent'] || 'Praegu: {{name}}').replace('{{name}}', googleSaveFolderName || googleSaveFolderId)
-                        : t['account.saveFolderNotSelected']}
-                    </p>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="text-sm text-amber-800 dark:text-white/90">
+                        {googleSaveFolderId
+                          ? (t['account.saveFolderCurrent'] || 'Praegu: {{name}}').replace('{{name}}', googleSaveFolderName || googleSaveFolderId)
+                          : t['account.saveFolderNotSelected']}
+                      </p>
+                      {googleSaveFolderId && (
+                        <button
+                          type="button"
+                          onClick={() => { setRenameFolderOpen({ provider: 'google' }); setRenameFolderName(googleSaveFolderName || ''); setRenameFolderError(null); }}
+                          className="p-1.5 rounded-lg text-amber-700 dark:text-white/80 hover:bg-amber-100 dark:hover:bg-white/10 border border-amber-200/60 dark:border-white/20"
+                          title={t['account.renameFolder'] || 'Muuda kausta nime'}
+                          aria-label={t['account.renameFolder'] || 'Muuda kausta nime'}
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
                     <div className="flex flex-wrap gap-2">
                       <button
                         type="button"
@@ -640,11 +693,24 @@ className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-amb
 
                   <div className="border border-amber-200 dark:border-white/20 rounded-xl p-4 bg-amber-50/70 dark:bg-white/10 space-y-3">
                     <p className="text-sm font-semibold text-amber-900 dark:text-white">{t['account.saveFolder']}</p>
-                    <p className="text-sm text-amber-800 dark:text-white/90">
-                      {oneDriveSaveFolderId
-                        ? (t['account.saveFolderCurrent'] || 'Praegu: {{name}}').replace('{{name}}', oneDriveSaveFolderName || oneDriveSaveFolderId)
-                        : t['account.saveFolderNotSelectedOneDrive']}
-                    </p>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="text-sm text-amber-800 dark:text-white/90">
+                        {oneDriveSaveFolderId
+                          ? (t['account.saveFolderCurrent'] || 'Praegu: {{name}}').replace('{{name}}', oneDriveSaveFolderName || oneDriveSaveFolderId)
+                          : t['account.saveFolderNotSelectedOneDrive']}
+                      </p>
+                      {oneDriveSaveFolderId && (
+                        <button
+                          type="button"
+                          onClick={() => { setRenameFolderOpen({ provider: 'onedrive' }); setRenameFolderName(oneDriveSaveFolderName || ''); setRenameFolderError(null); }}
+                          className="p-1.5 rounded-lg text-amber-700 dark:text-white/80 hover:bg-amber-100 dark:hover:bg-white/10 border border-amber-200/60 dark:border-white/20"
+                          title={t['account.renameFolder'] || 'Muuda kausta nime'}
+                          aria-label={t['account.renameFolder'] || 'Muuda kausta nime'}
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
                     <div className="flex flex-wrap gap-2">
                       <button
                         type="button"
@@ -814,6 +880,49 @@ className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-amb
                   ))}
                 </ul>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {renameFolderOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => !renameFolderLoading && setRenameFolderOpen(null)}>
+          <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-xl border-2 border-amber-200 dark:border-white/20 max-w-sm w-full p-6" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-semibold text-amber-900 dark:text-white">{t['account.renameFolder'] || 'Muuda kausta nime'}</h3>
+              <button type="button" onClick={() => !renameFolderLoading && setRenameFolderOpen(null)} className="p-1 rounded hover:bg-amber-100 dark:hover:bg-white/10 text-amber-900 dark:text-white" aria-label={t['common.close'] || 'Sulge'}>
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <p className="text-sm text-amber-800 dark:text-white/90 mb-3">{t['account.renameFolderTitle'] || 'Uus kausta nimi'}</p>
+            <input
+              type="text"
+              value={renameFolderName}
+              onChange={(e) => setRenameFolderName(e.target.value)}
+              placeholder={t['account.folderNamePlaceholder']}
+              className="w-full px-3 py-2 rounded-lg border border-amber-200 dark:border-white/30 dark:bg-black/50 dark:text-white text-amber-900 mb-3"
+              disabled={renameFolderLoading}
+            />
+            {renameFolderError && (
+              <p className="text-sm text-red-600 dark:text-red-400 mb-3">{renameFolderError}</p>
+            )}
+            <div className="flex gap-2 justify-end">
+              <button
+                type="button"
+                onClick={() => !renameFolderLoading && setRenameFolderOpen(null)}
+                className="px-4 py-2 rounded-lg border border-amber-300 dark:border-white/30 text-amber-800 dark:text-white hover:bg-amber-50 dark:hover:bg-white/10"
+              >
+                {t['common.cancel'] || 'Tühista'}
+              </button>
+              <button
+                type="button"
+                onClick={handleRenameFolder}
+                disabled={renameFolderLoading || !renameFolderName.trim()}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-amber-600 text-white font-medium hover:bg-amber-500 disabled:opacity-60"
+              >
+                {renameFolderLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Pencil className="w-4 h-4" />}
+                {renameFolderLoading ? (t['feedback.creatingFolder'] || 'Salvestan…') : (t['account.renameFolder'] || 'Muuda nime')}
+              </button>
             </div>
           </div>
         </div>
