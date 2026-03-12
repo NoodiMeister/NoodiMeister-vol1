@@ -42,6 +42,17 @@ export const SMUFL_GLYPH = Object.freeze({
   rest8th: '\uE4E6',
   rest16th: '\uE4E7',
   rest32nd: '\uE4E8',
+
+  // Repeats and jumps (Leland / SMuFL U+E040–E04F) – for toolbox "Kordused ja hüpped"
+  repeatLeft: '\uE040',       // start repeat (|:)
+  repeatRight: '\uE041',     // end repeat (:|)
+  repeatDots: '\uE043',      // repeat dots (center)
+  repeatDot: '\uE044',       // single repeat dot
+  dalSegno: '\uE045',        // Dal segno
+  daCapo: '\uE046',          // Da capo
+  segno: '\uE047',           // Segno (𝄋)
+  coda: '\uE048',            // Coda (𝄌)
+  codaSquare: '\uE049',      // square coda
 });
 
 /** Shape key for notehead (oval, x, square, triangle). Used by toolbox and rendering. */

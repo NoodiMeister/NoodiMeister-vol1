@@ -224,6 +224,7 @@ export function TraditionalNotationView({
   staffIndexInScore = 0,
   systemTotalHeight,
   themeColors,
+  onRemoveRepeatMark, // (measureIndex, markType: 'repeatStart'|'repeatEnd'|'segno'|'coda'|'volta1'|'volta2') => void
 }) {
   const spacing = staffSpaceProp ?? STAFF_SPACE;
   const centerY = timelineHeight / 2;
@@ -616,7 +617,26 @@ export function TraditionalNotationView({
                     )}
                     {!(connectedBarlines && staffIndexInScore > 0) && (
                       <>
-                        {j !== 0 && (
+                        {/* Left barline: turn into repeat-start symbol when measure.repeatStart (including first bar of line) */}
+                        {measure.repeatStart ? (
+                          <g
+                            onClick={typeof onRemoveRepeatMark === 'function' ? (e) => { e.stopPropagation(); onRemoveRepeatMark(measureIdx, 'repeatStart'); } : undefined}
+                            style={{ cursor: onRemoveRepeatMark ? 'pointer' : undefined }}
+                            pointerEvents={onRemoveRepeatMark ? 'auto' : 'none'}
+                          >
+                            <SmuflGlyph
+                              glyph={SMUFL_GLYPH.repeatLeft}
+                              x={measureX}
+                              y={connectedBarlines && staffIndexInScore === 0 ? (systemTotalHeight ?? (staffY + lastLineY)) / 2 : staffY + (firstLineY + lastLineY) / 2}
+                              fontSize={getGlyphFontSize(spacing) * (connectedBarlines && staffIndexInScore === 0 ? (systemTotalHeight ?? (staffY + lastLineY - firstLineY)) / (lastLineY - firstLineY) : 1)}
+                              fill="#1a1a1a"
+                              textAnchor="end"
+                            />
+                            {onRemoveRepeatMark && (
+                              <rect x={measureX - spacing * 2} y={staffY + firstLineY - spacing} width={spacing * 2} height={lastLineY - firstLineY + spacing * 2} fill="transparent" />
+                            )}
+                          </g>
+                        ) : j !== 0 ? (
                           <line
                             x1={measureX}
                             y1={connectedBarlines && staffIndexInScore === 0 ? 0 : staffY + firstLineY}
@@ -625,8 +645,27 @@ export function TraditionalNotationView({
                             stroke="#1a1a1a"
                             strokeWidth={getThinBarlineThickness(spacing)}
                           />
-                        )}
-                        {measureIdx === sys.measureIndices[sys.measureIndices.length - 1] && (
+                        ) : null}
+                        {/* Right barline: turn into repeat-end symbol when measure.repeatEnd */}
+                        {measure.repeatEnd ? (
+                          <g
+                            onClick={typeof onRemoveRepeatMark === 'function' ? (e) => { e.stopPropagation(); onRemoveRepeatMark(measureIdx, 'repeatEnd'); } : undefined}
+                            style={{ cursor: onRemoveRepeatMark ? 'pointer' : undefined }}
+                            pointerEvents={onRemoveRepeatMark ? 'auto' : 'none'}
+                          >
+                            <SmuflGlyph
+                              glyph={SMUFL_GLYPH.repeatRight}
+                              x={measureX + measureWidth}
+                              y={connectedBarlines && staffIndexInScore === 0 ? (systemTotalHeight ?? (staffY + lastLineY)) / 2 : staffY + (firstLineY + lastLineY) / 2}
+                              fontSize={getGlyphFontSize(spacing) * (connectedBarlines && staffIndexInScore === 0 ? (systemTotalHeight ?? (staffY + lastLineY - firstLineY)) / (lastLineY - firstLineY) : 1)}
+                              fill="#1a1a1a"
+                              textAnchor="start"
+                            />
+                            {onRemoveRepeatMark && (
+                              <rect x={measureX + measureWidth} y={staffY + firstLineY - spacing} width={spacing * 2} height={lastLineY - firstLineY + spacing * 2} fill="transparent" />
+                            )}
+                          </g>
+                        ) : measureIdx === sys.measureIndices[sys.measureIndices.length - 1] ? (
                           <line
                             x1={measureX + measureWidth}
                             y1={connectedBarlines && staffIndexInScore === 0 ? 0 : staffY + firstLineY}
@@ -635,9 +674,61 @@ export function TraditionalNotationView({
                             stroke="#1a1a1a"
                             strokeWidth={getThinBarlineThickness(spacing)}
                           />
-                        )}
+                        ) : null}
                       </>
                     )}
+                    {/* Segno, coda: 1px above barline; volta. All clickable to remove. */}
+                    {staffIndexInScore === 0 && (() => {
+                      const fs = getGlyphFontSize(spacing);
+                      const barlineTopY = staffY + firstLineY;
+                      const gapPx = 1;
+                      const segnoCodaY = barlineTopY - gapPx - (fs * 0.9 * 0.5);
+                      const hitW = spacing * 2.5;
+                      const hitH = spacing * 2;
+                      const parts = [];
+                      if (measure.segno) {
+                        parts.push(
+                          <g
+                            key="segno"
+                            onClick={typeof onRemoveRepeatMark === 'function' ? (e) => { e.stopPropagation(); onRemoveRepeatMark(measureIdx, 'segno'); } : undefined}
+                            style={{ cursor: onRemoveRepeatMark ? 'pointer' : undefined }}
+                            pointerEvents={onRemoveRepeatMark ? 'auto' : 'none'}
+                          >
+                            <SmuflGlyph glyph={SMUFL_GLYPH.segno} x={measureX + spacing * 0.5} y={segnoCodaY} fontSize={fs * 0.9} fill="#1a1a1a" />
+                            {onRemoveRepeatMark && <rect x={measureX} y={segnoCodaY - hitH / 2} width={hitW} height={hitH} fill="transparent" />}
+                          </g>
+                        );
+                      }
+                      if (measure.coda) {
+                        parts.push(
+                          <g
+                            key="coda"
+                            onClick={typeof onRemoveRepeatMark === 'function' ? (e) => { e.stopPropagation(); onRemoveRepeatMark(measureIdx, 'coda'); } : undefined}
+                            style={{ cursor: onRemoveRepeatMark ? 'pointer' : undefined }}
+                            pointerEvents={onRemoveRepeatMark ? 'auto' : 'none'}
+                          >
+                            <SmuflGlyph glyph={SMUFL_GLYPH.coda} x={measureX + spacing * 0.5} y={segnoCodaY} fontSize={fs * 0.9} fill="#1a1a1a" />
+                            {onRemoveRepeatMark && <rect x={measureX} y={segnoCodaY - hitH / 2} width={hitW} height={hitH} fill="transparent" />}
+                          </g>
+                        );
+                      }
+                      if (measure.volta1 || measure.volta2) {
+                        const key = measure.volta2 ? 'volta2' : 'volta1';
+                        const num = measure.volta2 ? '2' : '1';
+                        parts.push(
+                          <g
+                            key="volta"
+                            onClick={typeof onRemoveRepeatMark === 'function' ? (e) => { e.stopPropagation(); onRemoveRepeatMark(measureIdx, key); } : undefined}
+                            style={{ cursor: onRemoveRepeatMark ? 'pointer' : undefined }}
+                            pointerEvents={onRemoveRepeatMark ? 'auto' : 'none'}
+                          >
+                            <text x={measureX + spacing * 0.3} y={staffY + firstLineY - spacing * 1.2} textAnchor="start" fontSize={Math.round(spacing * 1.1)} fontWeight="bold" fill="#1a1a1a" fontFamily={TEXT_FONT_FAMILY}>{num}.</text>
+                            {onRemoveRepeatMark && <rect x={measureX} y={staffY + firstLineY - spacing * 2} width={hitW} height={hitH} fill="transparent" />}
+                          </g>
+                        );
+                      }
+                      return parts.length ? <g key="repeatMarks">{parts}</g> : null;
+                    })()}
                     {chords.filter(c => c.beatPosition >= measure.startBeat && c.beatPosition < measure.endBeat).map((chord) => {
                       const chordX = measureX + (chord.beatPosition - measure.startBeat) * beatWidth;
                       const useFigurations = (instrument === 'harpsichord' || instrument === 'organ') && instrumentNotationVariant === 'figuredBass' && chord.figuredBass;
