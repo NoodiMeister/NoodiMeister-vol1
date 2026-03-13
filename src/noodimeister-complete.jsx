@@ -2377,9 +2377,8 @@ function NoodiMeisterCore({ icons }) {
     if (!showPdfExportPreview || !scoreContainerRef?.current) return;
     setPdfPreviewDataUrl(null);
     const el = scoreContainerRef.current;
-    const bounds = exportContentBoundsRef.current;
-    const w = (bounds?.width > 0) ? bounds.width : el.scrollWidth;
-    const h = (bounds?.height > 0) ? Math.min(bounds.height, 3000) : el.scrollHeight;
+    const w = el.scrollWidth;
+    const h = el.scrollHeight;
     html2canvas(el, {
       scale: 0.35,
       useCORS: true,
@@ -2447,12 +2446,11 @@ function NoodiMeisterCore({ icons }) {
       const PAD = 32;
       const padScale = PAD * scale;
       const rawContentW = canvas.width - 2 * padScale;
-      const rawContentH = canvas.height - 2 * padScale;
+      const rawContentH = canvas.height - padScale;
       const bounds = exportContentBoundsRef.current;
       const boundsW = (bounds?.width > 0) ? Math.round(bounds.width * scale) : rawContentW;
-      const boundsH = (bounds?.height > 0) ? Math.round(bounds.height * scale) : rawContentH;
       const contentW = Math.max(1, Math.min(rawContentW, boundsW));
-      const contentH = Math.max(1, Math.min(rawContentH, boundsH));
+      const contentH = Math.max(1, rawContentH);
 
       const { pageFlowDirection: flowDir, pageWidth: pw, pageOrientation: pdfPageOrientation } = pdfExportOptionsRef.current;
       const isHorizontalFlow = flowDir === 'horizontal';
@@ -2478,7 +2476,7 @@ function NoodiMeisterCore({ icons }) {
           sliceCanvas.width = sliceW;
           sliceCanvas.height = sliceH;
           const ctx = sliceCanvas.getContext('2d');
-          ctx.drawImage(canvas, srcX, padScale, sliceW, sliceH, 0, 0, sliceW, sliceH);
+          ctx.drawImage(canvas, srcX, 0, sliceW, sliceH, 0, 0, sliceW, sliceH);
           const sliceData = sliceCanvas.toDataURL('image/png');
           const drawW = Math.min(pageW, pageH * (sliceW / sliceH));
           const drawH = Math.min(pageH, pageW * (sliceH / sliceW));
@@ -2499,7 +2497,7 @@ function NoodiMeisterCore({ icons }) {
             sliceCanvas.width = contentW;
             sliceCanvas.height = Math.round(sliceHeightPx * scale);
             const ctx = sliceCanvas.getContext('2d');
-            ctx.drawImage(canvas, padScale, padScale + startPx * scale, contentW, sliceCanvas.height, 0, 0, contentW, sliceCanvas.height);
+            ctx.drawImage(canvas, padScale, startPx * scale, contentW, sliceCanvas.height, 0, 0, contentW, sliceCanvas.height);
             const sliceData = sliceCanvas.toDataURL('image/png');
             const sliceImgW = sliceCanvas.width;
             const sliceImgH = sliceCanvas.height;
@@ -2513,7 +2511,7 @@ function NoodiMeisterCore({ icons }) {
           contentCanvas.width = contentW;
           contentCanvas.height = contentH;
           const ctx = contentCanvas.getContext('2d');
-          ctx.drawImage(canvas, padScale, padScale, contentW, contentH, 0, 0, contentW, contentH);
+          ctx.drawImage(canvas, padScale, 0, contentW, contentH, 0, 0, contentW, contentH);
           const imgData = contentCanvas.toDataURL('image/png');
           const imgW = pageW;
           const imgH = (contentCanvas.height * imgW) / contentCanvas.width;
@@ -6197,28 +6195,58 @@ function NoodiMeisterCore({ icons }) {
               <button type="button" onClick={() => { setShowPdfExportPreview(false); setPdfPreviewZoom(1); setPdfPreviewDataUrl(null); }} className="text-white/90 hover:text-white text-2xl leading-none">&times;</button>
             </div>
             <div className="flex-1 p-4 overflow-y-auto space-y-4">
+              <p className="text-sm text-amber-800 dark:text-amber-200">
+                {t('file.exportPdfTitle') || 'Preview'}: notation fitted on PDF page (like MuseScore / Google Docs). Margins applied; title and content are not cropped.
+              </p>
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-sm font-medium text-amber-900 dark:text-white">Preview:</span>
+                <span className="text-sm font-medium text-amber-900 dark:text-white">Zoom:</span>
                 <button type="button" onClick={() => setPdfPreviewZoom(z => Math.max(0.25, z - 0.25))} className="px-2 py-1 rounded bg-amber-100 dark:bg-amber-900/40 text-amber-900 dark:text-amber-100 text-sm font-medium">− Shrink</button>
                 <button type="button" onClick={handlePdfPreviewFit} className="px-2 py-1 rounded bg-amber-100 dark:bg-amber-900/40 text-amber-900 dark:text-amber-100 text-sm font-medium">Fit</button>
                 <button type="button" onClick={() => setPdfPreviewZoom(z => Math.min(2, z + 0.25))} className="px-2 py-1 rounded bg-amber-100 dark:bg-amber-900/40 text-amber-900 dark:text-amber-100 text-sm font-medium">+ Expand</button>
               </div>
-              <div ref={pdfPreviewContainerRef} className="border border-amber-200 dark:border-white/20 rounded-lg overflow-auto bg-amber-50/50 dark:bg-black/50 flex items-center justify-center min-h-[200px]" style={{ maxHeight: '40vh' }}>
-                {pdfPreviewDataUrl ? (
-                  <img src={pdfPreviewDataUrl} alt="PDF preview" className="max-w-full object-contain origin-center" style={{ transform: `scale(${pdfPreviewZoom})` }} />
-                ) : (
-                  <span className="text-amber-700 dark:text-amber-300 text-sm">Loading preview…</span>
-                )}
+              <div className="flex flex-col items-center gap-2">
+                <span className="text-sm font-medium text-amber-900 dark:text-white self-start">Notation on page ({paperSize?.toUpperCase() || 'A4'}, {pageOrientation === 'landscape' ? 'landscape' : 'portrait'}):</span>
+                <div
+                  ref={pdfPreviewContainerRef}
+                  className="bg-white dark:bg-gray-100 rounded-lg shadow-lg border-2 border-amber-300 dark:border-amber-600 flex items-center justify-center overflow-hidden"
+                  style={{
+                    maxWidth: 320,
+                    aspectRatio: pageOrientation === 'landscape' ? '297/210' : '210/297',
+                  }}
+                >
+                  {pdfPreviewDataUrl ? (
+                    <div className="w-full h-full p-3 box-border flex items-center justify-center" style={{ padding: 12 }}>
+                      <img
+                        src={pdfPreviewDataUrl}
+                        alt="PDF preview"
+                        className="max-w-full max-h-full object-contain"
+                        style={{ transform: `scale(${pdfPreviewZoom})` }}
+                      />
+                    </div>
+                  ) : (
+                    <span className="text-amber-700 dark:text-amber-600 text-sm">Loading preview…</span>
+                  )}
+                </div>
               </div>
               <div>
-                <span className="text-sm font-medium text-amber-900 dark:text-white block mb-1">Scale ruler (px, max 400):</span>
-                <div className="flex items-end gap-0 border-b-2 border-amber-800 dark:border-amber-200" style={{ width: '100%', maxWidth: 400 }}>
-                  {[0, 50, 100, 150, 200, 250, 300, 350, 400].map((px) => (
-                    <div key={px} className="flex flex-col items-center flex-1">
-                      <div className="w-px bg-amber-700 dark:bg-amber-300" style={{ height: px % 100 === 0 ? 12 : 6 }} />
-                      <span className="text-xs text-amber-800 dark:text-amber-200 mt-0.5">{px}</span>
-                    </div>
-                  ))}
+                <span className="text-sm font-medium text-amber-900 dark:text-white block mb-1">Scale ruler (px, max 400) — cursor shows page width:</span>
+                <div className="relative" style={{ maxWidth: 400 }}>
+                  <div className="flex items-end gap-0 border-b-2 border-amber-800 dark:border-amber-200" style={{ width: '100%' }}>
+                    {[0, 50, 100, 150, 200, 250, 300, 350, 400].map((px) => (
+                      <div key={px} className="flex flex-col items-center flex-1 min-w-0">
+                        <div className="w-px bg-amber-700 dark:bg-amber-300" style={{ height: px % 100 === 0 ? 12 : 6 }} />
+                        <span className="text-xs text-amber-800 dark:text-amber-200 mt-0.5">{px}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div
+                    className="absolute top-0 bottom-0 w-1 bg-blue-600 dark:bg-blue-400 pointer-events-none rounded-full"
+                    style={{ right: 0, width: 4 }}
+                    title={`Page width: ${pdfExportOptionsRef.current?.pageWidth ?? getFullPageLayoutWidth(pageOrientation)} px`}
+                  />
+                  <div className="absolute -top-6 right-0 text-xs font-semibold text-blue-600 dark:text-blue-400 whitespace-nowrap">
+                    ▲ {pdfExportOptionsRef.current?.pageWidth ?? getFullPageLayoutWidth(pageOrientation)} px
+                  </div>
                 </div>
               </div>
               <div>

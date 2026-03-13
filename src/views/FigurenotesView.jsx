@@ -230,16 +230,16 @@ export function FigurenotesView({
               <line x1={0} y1={sys.yOffset - PAGE_BREAK_GAP / 2} x2={pageWidth || 800} y2={sys.yOffset - PAGE_BREAK_GAP / 2} stroke="#c4b896" strokeWidth={1} strokeDasharray="4 4" />
             )}
 
-            {/* Taktinumber iga rea esimese takti juures: vasak ja ülemine nurk */}
+            {/* Taktinumber iga rea esimese takti vasak ja ülemine nurk (esimese taktikasti nurk) */}
             {showBarNumbers && sys.measureIndices.length > 0 && (
               <text
-                x={12}
-                y={sys.yOffset + barLineInset}
+                x={marginLeft}
+                y={sys.yOffset + padVertical}
                 fontSize={barNumberSize}
                 fontWeight="bold"
                 fill="#555"
-                textAnchor="start"
-                dominantBaseline="hanging"
+                textAnchor="end"
+                dominantBaseline="text-after-edge"
                 fontFamily="sans-serif"
               >
                 {sys.measureIndices[0] + 1}
