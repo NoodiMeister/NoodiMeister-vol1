@@ -3,16 +3,23 @@
  * Ekspordib computeLayout, LAYOUT konstandid ja getStaffHeight.
  */
 
+/** A4 at 96 DPI: 210mm → 794px, 297mm → 1123px. Ratio 1 : 1.414. */
+const A4_WIDTH_PX_96 = Math.round((210 * 96) / 25.4);   // 794
+const A4_HEIGHT_PX_96 = Math.round((297 * 96) / 25.4);  // 1123
+
 export const LAYOUT = {
-  PAGE_WIDTH_MIN: 800,
-  PAGE_WIDTH_MAX: 1000,
-  PAGE_WIDTH_MAX_LANDSCAPE: 1400,
+  /** Lehe laius/kõrgus px (96 DPI), kasutatakse preview ja paigutuse vaikimisi. */
+  PAGE_WIDTH_PX: A4_WIDTH_PX_96,
+  PAGE_HEIGHT_PX: A4_HEIGHT_PX_96,
+  PAGE_WIDTH_MIN: A4_WIDTH_PX_96,
+  PAGE_WIDTH_MAX: A4_WIDTH_PX_96,
+  PAGE_WIDTH_MAX_LANDSCAPE: A4_HEIGHT_PX_96,
   /** Portrait: kõrgus/laius = 297/210. Landscape: kõrgus/laius = 210/297. */
   A4_HEIGHT_RATIO: 297 / 210,
   A4_HEIGHT_RATIO_LANDSCAPE: 210 / 297,
-  /** A4 width in px at 96dpi (210mm) for full-size / 100% view. */
-  A4_WIDTH_PX_AT_96DPI: Math.round((210 * 96) / 25.4),
-  A4_HEIGHT_PX_AT_96DPI: Math.round((297 * 96) / 25.4),
+  /** A4 width/height in px at 96dpi (legacy names). */
+  A4_WIDTH_PX_AT_96DPI: A4_WIDTH_PX_96,
+  A4_HEIGHT_PX_AT_96DPI: A4_HEIGHT_PX_96,
   SYSTEM_GAP: 120,
   MARGIN_LEFT: 60,
   MARGIN_RIGHT: 40,

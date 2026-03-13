@@ -5,19 +5,16 @@
  */
 import { computeLayout, getStaffHeight, LAYOUT } from './LayoutManager';
 
-/** A4 proportsioon (laius : kõrgus). */
-const A4_RATIO = 297 / 210;
-
-/** Vaikimisi lehe mõõdud (px). Portrait = LAYOUT.PAGE_WIDTH_MIN laius, kõrgus suhtest. */
+/** Vaikimisi lehe mõõdud (px). A4 96 DPI: 794×1123 (portrait), 1123×794 (landscape); suhe 1 : 1.414. */
 export const PAGE_DIMENSIONS = {
   portrait: {
-    width: 794,
-    height: Math.round(794 * A4_RATIO),
+    width: LAYOUT.PAGE_WIDTH_PX,
+    height: LAYOUT.PAGE_HEIGHT_PX,
     margin: 60,
   },
   landscape: {
-    width: Math.round(1123 * (210 / 297)),
-    height: 794,
+    width: LAYOUT.PAGE_HEIGHT_PX,
+    height: LAYOUT.PAGE_WIDTH_PX,
     margin: 60,
   },
 };

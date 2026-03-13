@@ -51,6 +51,19 @@ html, body, #root {
   overflow-scrolling: touch;
 }
 
+/* Noodipaber: A4 tunnetus, turvaala äärtest. Laius/kõrgus tulevad inline stiilidest (794×1123 px). */
+.sheet-music-page {
+  width: 210mm;
+  height: 297mm;
+  padding: 15mm; /* Turvaala, et noodid ei läheks äärtesse */
+  margin: 10px auto;
+  background: white;
+  box-shadow: 0 0 10px rgba(0,0,0,0.1);
+  box-sizing: border-box;
+  overflow: hidden;
+  position: relative;
+}
+
 .loading-screen {
   display: flex;
   align-items: center;
@@ -73,15 +86,15 @@ html, body, #root {
   display: contents;
 }
 
-/* Print: only the notation sheet (score). Page setup (paper size, orientation, horizontal flow) determines printable view. */
+/* Print: only the notation sheet (score). One browser print page = one paper page (A4 210×297 mm). User can verify in print preview. */
 @media print {
-  /* Named page sizes so print/PDF follow page setup (A4/A3/A5, portrait/landscape). Horizontal flow uses landscape. */
+  /* Named page sizes: trüki eelvaates on üks leht = üks A4 (210×297 mm); sisu ei ületa ega jää põhjendamatult väikeseks. */
   @page a4-portrait {
-    size: A4 portrait;
+    size: 210mm 297mm;
     margin: 12mm;
   }
   @page a4-landscape {
-    size: A4 landscape;
+    size: 297mm 210mm;
     margin: 12mm;
   }
   @page a3-portrait {

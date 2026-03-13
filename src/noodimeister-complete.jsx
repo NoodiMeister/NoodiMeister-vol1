@@ -1436,6 +1436,8 @@ function NoodiMeisterCore({ icons }) {
   const [pdfExportSaveLocation, setPdfExportSaveLocation] = useState('downloads'); // 'downloads' | 'custom'
   const [pdfExportFileHandle, setPdfExportFileHandle] = useState(null);
   const [pdfExportChosenPath, setPdfExportChosenPath] = useState('');
+  const [pdfRulerCursorPx, setPdfRulerCursorPx] = useState(null); // null = use full page width; or px value when dragged
+  const pdfRulerDragRef = useRef(null);
   const pedagogicalAudioRef = useRef(null); // HTMLAudioElement
   const pedagogicalPlaybackIntervalRef = useRef(null);
   const pedagogicalAudioDataRef = useRef(null); // base64 string (salvestamiseks)
@@ -2371,7 +2373,7 @@ function NoodiMeisterCore({ icons }) {
     return () => window.removeEventListener('beforeprint', onBeforePrint);
   }, []);
 
-  const pdfExportOptionsRef = useRef({ pageFlowDirection: 'vertical', pageWidth: LAYOUT.PAGE_WIDTH_MIN });
+  const pdfExportOptionsRef = useRef({ pageFlowDirection: 'vertical', pageWidth: LAYOUT.PAGE_WIDTH_PX });
 
   useEffect(() => {
     if (!showPdfExportPreview || !scoreContainerRef?.current) return;
@@ -2433,8 +2435,10 @@ function NoodiMeisterCore({ icons }) {
     setShowPageNavigator(true);
     await new Promise((r) => setTimeout(r, 150));
     try {
+      /** 2× render for retina/print (A4 794×1123 → 1588×2246 px). Võib kasutada 3 täiendava teravuse jaoks. */
+      const exportScale = 2;
       const canvas = await html2canvas(container, {
-        scale: 2,
+        scale: exportScale,
         useCORS: true,
         logging: false,
         width: container.scrollWidth,
@@ -2442,7 +2446,7 @@ function NoodiMeisterCore({ icons }) {
         windowWidth: container.scrollWidth,
         windowHeight: container.scrollHeight,
       });
-      const scale = 2;
+      const scale = exportScale;
       const PAD = 32;
       const padScale = PAD * scale;
       const rawContentW = canvas.width - 2 * padScale;
@@ -2455,18 +2459,25 @@ function NoodiMeisterCore({ icons }) {
       const { pageFlowDirection: flowDir, pageWidth: pw, pageOrientation: pdfPageOrientation } = pdfExportOptionsRef.current;
       const isHorizontalFlow = flowDir === 'horizontal';
       const pdfOrientation = isHorizontalFlow ? 'landscape' : pageOrientation;
+      /* Eksport alati A4-le: 210mm laius × 297mm kõrgus (püstine) või 297×210 (risti). Trükkimine A4 paberile. */
+      const A4_WIDTH_MM = 210;
+      const A4_HEIGHT_MM = 297;
       const pdf = new jsPDF({
         orientation: pdfOrientation,
         unit: 'mm',
-        format: paperSize,
+        format: 'a4',
       });
-      const pageW = pdf.internal.pageSize.getWidth();
-      const pageH = pdf.internal.pageSize.getHeight();
+      const pdfPageWmm = pdf.internal.pageSize.getWidth();
+      const pdfPageHmm = pdf.internal.pageSize.getHeight();
+      const PDF_TOP_MARGIN_MM = 3;
+      const imgWmm = pdfOrientation === 'landscape' ? A4_HEIGHT_MM : A4_WIDTH_MM;   /* 210 */
+      const imgHmm = pdfOrientation === 'landscape' ? A4_WIDTH_MM : A4_HEIGHT_MM;   /* 297 */
 
       if (isHorizontalFlow) {
-        const pageWidthPx = pw || LAYOUT.PAGE_WIDTH_MIN;
+        const pageWidthPx = pw || LAYOUT.PAGE_WIDTH_PX;
         const a4PageHeightPx = pageWidthPx * LAYOUT.A4_HEIGHT_RATIO_LANDSCAPE;
         const totalPages = Math.max(1, Math.ceil(contentW / (pageWidthPx * scale)));
+        const extraTopPxH = 3 * scale;
         for (let p = 0; p < totalPages; p++) {
           const srcX = padScale + p * pageWidthPx * scale;
           const sliceW = Math.min(Math.round(pageWidthPx * scale), contentW - Math.round(p * pageWidthPx * scale));
@@ -2474,54 +2485,64 @@ function NoodiMeisterCore({ icons }) {
           if (sliceW <= 0 || sliceH <= 0) continue;
           const sliceCanvas = document.createElement('canvas');
           sliceCanvas.width = sliceW;
-          sliceCanvas.height = sliceH;
+          sliceCanvas.height = p === 0 ? sliceH + extraTopPxH : sliceH;
           const ctx = sliceCanvas.getContext('2d');
-          ctx.drawImage(canvas, srcX, 0, sliceW, sliceH, 0, 0, sliceW, sliceH);
+          if (p === 0) {
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, sliceW, extraTopPxH);
+            ctx.drawImage(canvas, srcX, 0, sliceW, sliceH, 0, extraTopPxH, sliceW, sliceH);
+          } else {
+            ctx.drawImage(canvas, srcX, 0, sliceW, sliceH, 0, 0, sliceW, sliceH);
+          }
           const sliceData = sliceCanvas.toDataURL('image/png');
-          const drawW = Math.min(pageW, pageH * (sliceW / sliceH));
-          const drawH = Math.min(pageH, pageW * (sliceH / sliceW));
-          if (p > 0) pdf.addPage(paperSize, pdfOrientation);
-          pdf.addImage(sliceData, 'PNG', 0, 0, drawW, drawH);
+          if (p > 0) pdf.addPage('a4', pdfOrientation);
+          pdf.addImage(sliceData, 'PNG', 0, p === 0 ? PDF_TOP_MARGIN_MM : 0, imgWmm, imgHmm);
         }
       } else {
         const systems = systemsForScoreRef.current || [];
         const pageStarts = [0, ...systems.filter((s) => s.pageBreakBefore).map((s) => s.yOffset)];
         const totalContentHeightPx = contentH / scale;
         if (pageStarts.length >= 2) {
+          const extraTopPx = 3 * scale;
           for (let p = 0; p < pageStarts.length; p++) {
             const startPx = pageStarts[p];
             const endPx = p < pageStarts.length - 1 ? pageStarts[p + 1] : totalContentHeightPx;
             const sliceHeightPx = endPx - startPx;
             if (sliceHeightPx <= 0) continue;
+            const sliceH = Math.round(sliceHeightPx * scale);
             const sliceCanvas = document.createElement('canvas');
             sliceCanvas.width = contentW;
-            sliceCanvas.height = Math.round(sliceHeightPx * scale);
+            sliceCanvas.height = p === 0 ? sliceH + extraTopPx : sliceH;
             const ctx = sliceCanvas.getContext('2d');
-            ctx.drawImage(canvas, padScale, startPx * scale, contentW, sliceCanvas.height, 0, 0, contentW, sliceCanvas.height);
+            if (p === 0) {
+              ctx.fillStyle = '#ffffff';
+              ctx.fillRect(0, 0, contentW, extraTopPx);
+              ctx.drawImage(canvas, padScale, startPx * scale, contentW, sliceH, 0, extraTopPx, contentW, sliceH);
+            } else {
+              ctx.drawImage(canvas, padScale, startPx * scale, contentW, sliceH, 0, 0, contentW, sliceH);
+            }
             const sliceData = sliceCanvas.toDataURL('image/png');
-            const sliceImgW = sliceCanvas.width;
-            const sliceImgH = sliceCanvas.height;
-            const drawW = Math.min(pageW, pageH * (sliceImgW / sliceImgH));
-            const drawH = Math.min(pageH, pageW * (sliceImgH / sliceImgW));
-            if (p > 0) pdf.addPage(paperSize, pdfOrientation);
-            pdf.addImage(sliceData, 'PNG', 0, 0, drawW, drawH);
+            if (p > 0) pdf.addPage('a4', pdfOrientation);
+            pdf.addImage(sliceData, 'PNG', 0, p === 0 ? PDF_TOP_MARGIN_MM : 0, imgWmm, imgHmm);
           }
         } else {
+          const extraTopPx = 3 * scale;
           const contentCanvas = document.createElement('canvas');
           contentCanvas.width = contentW;
-          contentCanvas.height = contentH;
+          contentCanvas.height = contentH + extraTopPx;
           const ctx = contentCanvas.getContext('2d');
-          ctx.drawImage(canvas, padScale, 0, contentW, contentH, 0, 0, contentW, contentH);
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, contentW, extraTopPx);
+          ctx.drawImage(canvas, padScale, 0, contentW, contentH, 0, extraTopPx, contentW, contentH);
           const imgData = contentCanvas.toDataURL('image/png');
-          const imgW = pageW;
-          const imgH = (contentCanvas.height * imgW) / contentCanvas.width;
-          const numPages = Math.max(1, Math.ceil(imgH / pageH));
-          let position = 0;
-          pdf.addImage(imgData, 'PNG', 0, position, imgW, imgH);
+          const imgHLongMm = (contentCanvas.height * imgWmm) / contentCanvas.width;
+          const numPages = Math.max(1, Math.ceil(imgHLongMm / pdfPageHmm));
+          let position = PDF_TOP_MARGIN_MM;
+          pdf.addImage(imgData, 'PNG', 0, position, imgWmm, imgHLongMm);
           for (let p = 1; p < numPages; p++) {
-            pdf.addPage(paperSize, pdfOrientation);
-            position = -p * pageH;
-            pdf.addImage(imgData, 'PNG', 0, position, imgW, imgH);
+            pdf.addPage('a4', pdfOrientation);
+            position = PDF_TOP_MARGIN_MM - p * pdfPageHmm;
+            pdf.addImage(imgData, 'PNG', 0, position, imgWmm, imgHLongMm);
           }
         }
       }
@@ -5244,7 +5265,8 @@ function NoodiMeisterCore({ icons }) {
   const exportContentBoundsRef = useRef({ width: 0, height: 0 });
   const exportCursorRef = useRef(null); // { x, y, emoji, size } container-relative, for MP4 fillText
   /** Lehe laius ja suund sõltuvad ainult rakenduse valikust (Vaade → Lehe suund), mitte seadme ega brauseri ekraani suurusest (iPad, Android, MacBook, PC). */
-  const getFullPageLayoutWidth = (orientation) => (orientation === 'landscape' ? LAYOUT.PAGE_WIDTH_MAX_LANDSCAPE : LAYOUT.PAGE_WIDTH_MAX);
+  /** A4 96 DPI: portrait 794×1123, landscape 1123×794 (suhe 1 : 1.414). */
+  const getFullPageLayoutWidth = (orientation) => (orientation === 'landscape' ? LAYOUT.PAGE_HEIGHT_PX : LAYOUT.PAGE_WIDTH_PX);
   const pageWidth = getFullPageLayoutWidth(pageOrientation);
   const [fitPageDisplayWidth, setFitPageDisplayWidth] = useState(() => getFullPageLayoutWidth('portrait'));
   useEffect(() => { setFitPageDisplayWidth(0); }, [pageOrientation]);
@@ -6185,18 +6207,18 @@ function NoodiMeisterCore({ icons }) {
 
       {/* PDF Export Preview – zoom, ruler, save location */}
       {showPdfExportPreview && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-amber-950/60 dark:bg-black/70 backdrop-blur-sm p-4" onClick={() => { setShowPdfExportPreview(false); setPdfPreviewZoom(1); setPdfPreviewDataUrl(null); }}>
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-amber-950/60 dark:bg-black/70 backdrop-blur-sm p-4" onClick={() => { setShowPdfExportPreview(false); setPdfPreviewZoom(1); setPdfPreviewDataUrl(null); setPdfRulerCursorPx(null); }}>
           <div
             className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden border-2 border-amber-200 dark:border-white/20 flex flex-col"
             onClick={e => e.stopPropagation()}
           >
             <div className="bg-gradient-to-r from-slate-600 to-slate-700 text-white px-4 py-3 flex items-center justify-between">
               <h2 className="text-lg font-bold">{t('file.exportPdf')} – {t('file.exportPdfTitle') || 'Preview'}</h2>
-              <button type="button" onClick={() => { setShowPdfExportPreview(false); setPdfPreviewZoom(1); setPdfPreviewDataUrl(null); }} className="text-white/90 hover:text-white text-2xl leading-none">&times;</button>
+              <button type="button" onClick={() => { setShowPdfExportPreview(false); setPdfPreviewZoom(1); setPdfPreviewDataUrl(null); setPdfRulerCursorPx(null); }} className="text-white/90 hover:text-white text-2xl leading-none">&times;</button>
             </div>
             <div className="flex-1 p-4 overflow-y-auto space-y-4">
               <p className="text-sm text-amber-800 dark:text-amber-200">
-                {t('file.exportPdfTitle') || 'Preview'}: notation fitted on PDF page (like MuseScore / Google Docs). Margins applied; title and content are not cropped.
+                Eksporditud PDF ja trükk on täpselt <strong>A4 (210×297 mm)</strong>. Noodid jäävad selle raami sisse; üle ääre ei lähe ega jää põhjendamatult väikeseks. Kontrolli eelvaates, et sisu sobib.
               </p>
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-sm font-medium text-amber-900 dark:text-white">Zoom:</span>
@@ -6205,49 +6227,91 @@ function NoodiMeisterCore({ icons }) {
                 <button type="button" onClick={() => setPdfPreviewZoom(z => Math.min(2, z + 0.25))} className="px-2 py-1 rounded bg-amber-100 dark:bg-amber-900/40 text-amber-900 dark:text-amber-100 text-sm font-medium">+ Expand</button>
               </div>
               <div className="flex flex-col items-center gap-2">
-                <span className="text-sm font-medium text-amber-900 dark:text-white self-start">Notation on page ({paperSize?.toUpperCase() || 'A4'}, {pageOrientation === 'landscape' ? 'landscape' : 'portrait'}):</span>
+                <span className="text-sm font-medium text-amber-900 dark:text-white self-start">A4 lehe raam (210×297 mm) — noodipaber ei ületa ega jää väikeseks:</span>
                 <div
                   ref={pdfPreviewContainerRef}
-                  className="bg-white dark:bg-gray-100 rounded-lg shadow-lg border-2 border-amber-300 dark:border-amber-600 flex items-center justify-center overflow-hidden"
+                  className="relative bg-white dark:bg-gray-100 rounded-sm shadow-lg flex items-center justify-center overflow-hidden box-border"
                   style={{
-                    maxWidth: 320,
+                    maxWidth: 420,
                     aspectRatio: pageOrientation === 'landscape' ? '297/210' : '210/297',
+                    border: '3px solid #b45309',
+                    boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.08)',
                   }}
                 >
                   {pdfPreviewDataUrl ? (
-                    <div className="w-full h-full p-3 box-border flex items-center justify-center" style={{ padding: 12 }}>
+                    <div className="w-full h-full flex items-center justify-center overflow-hidden box-border" style={{ padding: 12, margin: 0 }}>
                       <img
                         src={pdfPreviewDataUrl}
                         alt="PDF preview"
                         className="max-w-full max-h-full object-contain"
-                        style={{ transform: `scale(${pdfPreviewZoom})` }}
+                        style={{ transform: `scale(${pdfPreviewZoom})`, maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
                       />
                     </div>
                   ) : (
                     <span className="text-amber-700 dark:text-amber-600 text-sm">Loading preview…</span>
                   )}
+                  <span className="absolute bottom-1 right-1 px-1.5 py-0.5 rounded text-xs font-medium bg-amber-200/95 dark:bg-amber-800/95 text-amber-900 dark:text-amber-100 pointer-events-none" aria-hidden="true">
+                    A4 {pageOrientation === 'landscape' ? '297×210' : '210×297'} mm
+                  </span>
                 </div>
               </div>
               <div>
-                <span className="text-sm font-medium text-amber-900 dark:text-white block mb-1">Scale ruler (px, max 400) — cursor shows page width:</span>
-                <div className="relative" style={{ maxWidth: 400 }}>
-                  <div className="flex items-end gap-0 border-b-2 border-amber-800 dark:border-amber-200" style={{ width: '100%' }}>
-                    {[0, 50, 100, 150, 200, 250, 300, 350, 400].map((px) => (
-                      <div key={px} className="flex flex-col items-center flex-1 min-w-0">
-                        <div className="w-px bg-amber-700 dark:bg-amber-300" style={{ height: px % 100 === 0 ? 12 : 6 }} />
-                        <span className="text-xs text-amber-800 dark:text-amber-200 mt-0.5">{px}</span>
+                <span className="text-sm font-medium text-amber-900 dark:text-white block mb-1">Page width ruler (0–{pdfExportOptionsRef.current?.pageWidth ?? getFullPageLayoutWidth(pageOrientation)} px) — click or drag; cursor stays inside:</span>
+                {(() => {
+                  const pageWidthPx = pdfExportOptionsRef.current?.pageWidth ?? getFullPageLayoutWidth(pageOrientation);
+                  const cursorPx = pdfRulerCursorPx ?? pageWidthPx;
+                  const cursorPercent = Math.min(100, Math.max(0, (cursorPx / pageWidthPx) * 100));
+                  const tickCount = 6;
+                  const ticks = Array.from({ length: tickCount }, (_, i) => Math.round((i / (tickCount - 1)) * pageWidthPx));
+                  const syncCursor = (e, el) => {
+                    const rect = el.getBoundingClientRect();
+                    const x = Math.max(0, Math.min(rect.width, (e.clientX ?? e.touches?.[0]?.clientX) - rect.left));
+                    const px = Math.round((x / rect.width) * pageWidthPx);
+                    setPdfRulerCursorPx(Math.max(0, Math.min(pageWidthPx, px)));
+                  };
+                  return (
+                    <div
+                      className="relative rounded border-2 border-amber-700 dark:border-amber-400 overflow-hidden box-border"
+                      style={{ maxWidth: 400, paddingTop: 28, paddingLeft: 4, paddingRight: 4, paddingBottom: 4 }}
+                    >
+                      <div
+                        className="relative h-8 border-b-2 border-amber-800 dark:border-amber-200 cursor-crosshair select-none touch-none"
+                        style={{ width: '100%' }}
+                        onMouseDown={(e) => { syncCursor(e, e.currentTarget); pdfRulerDragRef.current = true; }}
+                        onTouchStart={(e) => { syncCursor(e, e.currentTarget); pdfRulerDragRef.current = true; }}
+                        onMouseMove={(e) => {
+                          if (!pdfRulerDragRef.current) return;
+                          syncCursor(e, e.currentTarget);
+                        }}
+                        onTouchMove={(e) => {
+                          if (!pdfRulerDragRef.current) return;
+                          syncCursor(e, e.currentTarget);
+                        }}
+                        onMouseLeave={() => { pdfRulerDragRef.current = false; }}
+                        onMouseUp={() => { pdfRulerDragRef.current = false; }}
+                        onTouchEnd={() => { pdfRulerDragRef.current = false; }}
+                      >
+                        {ticks.map((px) => (
+                          <div
+                            key={px}
+                            className="absolute flex flex-col items-center"
+                            style={{ left: `${(px / pageWidthPx) * 100}%`, transform: 'translateX(-50%)' }}
+                          >
+                            <div className="w-px bg-amber-700 dark:bg-amber-300" style={{ height: 10 }} />
+                            <span className="text-xs text-amber-800 dark:text-amber-200 mt-0.5">{px}</span>
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
-                  <div
-                    className="absolute top-0 bottom-0 w-1 bg-blue-600 dark:bg-blue-400 pointer-events-none rounded-full"
-                    style={{ right: 0, width: 4 }}
-                    title={`Page width: ${pdfExportOptionsRef.current?.pageWidth ?? getFullPageLayoutWidth(pageOrientation)} px`}
-                  />
-                  <div className="absolute -top-6 right-0 text-xs font-semibold text-blue-600 dark:text-blue-400 whitespace-nowrap">
-                    ▲ {pdfExportOptionsRef.current?.pageWidth ?? getFullPageLayoutWidth(pageOrientation)} px
-                  </div>
-                </div>
+                      <div
+                        className="absolute top-0 bottom-0 w-1.5 bg-blue-600 dark:bg-blue-400 rounded-full cursor-ew-resize pointer-events-none"
+                        style={{ left: `calc(4px + (100% - 8px) * ${cursorPercent} / 100)`, width: 6, marginLeft: -3, top: 28, bottom: 4 }}
+                      />
+                      <div className="absolute text-xs font-semibold text-blue-600 dark:text-blue-400 whitespace-nowrap pointer-events-none" style={{ left: `calc(4px + (100% - 8px) * ${cursorPercent} / 100)`, top: 4, transform: 'translateX(-50%)' }}>
+                        ▲ {cursorPx} px
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
               <div>
                 <span className="text-sm font-medium text-amber-900 dark:text-white block mb-2">Save location:</span>
@@ -6265,7 +6329,7 @@ function NoodiMeisterCore({ icons }) {
               </div>
             </div>
             <div className="p-4 border-t border-amber-200 dark:border-white/20 flex justify-end gap-2">
-              <button type="button" onClick={() => { setShowPdfExportPreview(false); setPdfPreviewZoom(1); setPdfPreviewDataUrl(null); }} className="px-4 py-2 rounded-lg border-2 border-amber-300 text-amber-800 dark:text-amber-200 font-medium hover:bg-amber-50 dark:hover:bg-amber-900/30">
+              <button type="button" onClick={() => { setShowPdfExportPreview(false); setPdfPreviewZoom(1); setPdfPreviewDataUrl(null); setPdfRulerCursorPx(null); }} className="px-4 py-2 rounded-lg border-2 border-amber-300 text-amber-800 dark:text-amber-200 font-medium hover:bg-amber-50 dark:hover:bg-amber-900/30">
                 Cancel
               </button>
               <button
@@ -8410,7 +8474,7 @@ function NoodiMeisterCore({ icons }) {
             >
           <div
             ref={scoreContainerRef}
-            className={`noodimeister-print-area print-page-${paperSize}-${pageFlowDirection === 'horizontal' ? 'landscape' : pageOrientation} relative p-8 flex-1 transition-colors ${viewFitPage && !viewSmartPage ? 'ml-0' : 'mx-auto'} ${isHorizontalFlow ? '' : 'rounded-lg shadow-lg border-2 border-amber-200 dark:border-white/20'}`}
+            className={`noodimeister-print-area sheet-music-page print-page-${paperSize}-${pageFlowDirection === 'horizontal' ? 'landscape' : pageOrientation} relative flex-1 transition-colors ${viewFitPage && !viewSmartPage ? 'ml-0' : 'mx-auto'} ${isHorizontalFlow ? '' : 'rounded-lg border-2 border-amber-200 dark:border-white/20'}`}
             style={{
               backgroundColor: themeColors.scoreBg,
               minWidth: LAYOUT.PAGE_WIDTH_MIN,
@@ -8433,6 +8497,10 @@ function NoodiMeisterCore({ icons }) {
               if (!Number.isNaN(optionIndex) && toolboxes.rhythm?.options?.[optionIndex]) handleToolboxSelection(optionIndex);
             }}
           >
+              {/* A4 trim caption: kasutaja näeb, et noodipaberi ala = trüki/PDF piir (ei ületa, ei jää väikeseks). */}
+              <span className="absolute bottom-2 right-2 px-2 py-1 rounded text-xs font-medium bg-amber-100/90 dark:bg-amber-900/50 text-amber-800 dark:text-amber-200 border border-amber-300 dark:border-amber-700 pointer-events-none select-none print:hidden" aria-hidden="true" title="Trükkimise ja PDF ekspordi piir = A4 (210×297 mm)">
+                A4 {pageOrientation === 'landscape' ? '297×210' : '210×297'} mm
+              </span>
               <div className="noodimeister-print-scaler">
               {pageDesignDataUrl && (() => {
                 const pos = `${pageDesignPositionX}% ${pageDesignPositionY}%`;
