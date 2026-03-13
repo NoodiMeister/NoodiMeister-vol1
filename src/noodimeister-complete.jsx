@@ -1427,10 +1427,46 @@ function NoodiMeisterCore({ icons }) {
   const pageDesignDimensionsRef = useRef({ pw: 1000, a4: 1414 }); // updated for delta→% conversion
   const bodyOverflowRef = useRef(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsDragOffset, setSettingsDragOffset] = useState({ x: 0, y: 0 });
+  const settingsDragRef = useRef(null);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [shortcutsEditingActionKey, setShortcutsEditingActionKey] = useState(null);
   const [shortcutsDraftPrefs, setShortcutsDraftPrefs] = useState({});
   const [saveCloudDialogOpen, setSaveCloudDialogOpen] = useState(false);
+
+  useEffect(() => {
+    if (!settingsOpen) return;
+    const onPointerMove = (e) => {
+      if (!settingsDragRef.current) return;
+      const { startX, startY, originX, originY } = settingsDragRef.current;
+      const dx = e.clientX - startX;
+      const dy = e.clientY - startY;
+      let nextX = originX + dx;
+      let nextY = originY + dy;
+      const vw = typeof window !== 'undefined' ? window.innerWidth || 1024 : 1024;
+      const vh = typeof window !== 'undefined' ? window.innerHeight || 768 : 768;
+      const marginX = 40;
+      const marginY = 40;
+      const minX = -vw / 2 + marginX;
+      const maxX = vw / 2 - marginX;
+      const minY = -vh / 2 + marginY;
+      const maxY = vh / 2 - marginY;
+      if (nextX < minX) nextX = minX;
+      if (nextX > maxX) nextX = maxX;
+      if (nextY < minY) nextY = minY;
+      if (nextY > maxY) nextY = maxY;
+      setSettingsDragOffset({ x: nextX, y: nextY });
+    };
+    const onPointerUp = () => {
+      settingsDragRef.current = null;
+    };
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup', onPointerUp);
+    return () => {
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup', onPointerUp);
+    };
+  }, [settingsOpen]);
 
   useEffect(() => {
     if (shortcutsOpen) {
@@ -2597,7 +2633,7 @@ function NoodiMeisterCore({ icons }) {
       const data = exportScoreToJSON();
       const json = JSON.stringify(data, null, 2);
       const blob = new Blob([json], { type: 'application/json' });
-      const filename = ((data.songTitle || t('common.untitled')).replace(/\s+/g, '-').replace(/[^\w\-.]/g, '') || t('common.untitled')) + '.noodimeister';
+      const filename = ((data.songTitle || t('common.untitled')).replace(/\s+/g, '-').replace(/[^\w\-.]/g, '') || t('common.untitled')) + '.nm';
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -3057,7 +3093,7 @@ function NoodiMeisterCore({ icons }) {
         setSaveFeedback('Salvestan…');
         const data = exportScoreToJSON();
         const json = JSON.stringify(data, null, 2);
-        const fileName = ((data.songTitle || t('common.untitled')).replace(/\s+/g, '-').replace(/[^\w\-.]/g, '') || t('common.untitled')) + '.noodimeister';
+        const fileName = ((data.songTitle || t('common.untitled')).replace(/\s+/g, '-').replace(/[^\w\-.]/g, '') || t('common.untitled')) + '.nm';
         await googleDrive.createFileInFolder(token, savedFolderId, fileName, json);
         setSaveFeedback('Salvestatud pilve!');
         setTimeout(() => setSaveFeedback(''), 2500);
@@ -3085,7 +3121,7 @@ function NoodiMeisterCore({ icons }) {
       setSaveFeedback('Salvestan…');
       const data = exportScoreToJSON();
       const json = JSON.stringify(data, null, 2);
-      const fileName = ((data.songTitle || t('common.untitled')).replace(/\s+/g, '-').replace(/[^\w\-.]/g, '') || t('common.untitled')) + '.noodimeister';
+      const fileName = ((data.songTitle || t('common.untitled')).replace(/\s+/g, '-').replace(/[^\w\-.]/g, '') || t('common.untitled')) + '.nm';
       await googleDrive.createFileInFolder(token, folderId, fileName, json);
       authStorage.addGoogleSaveFolder(folderId, '');
       try { await googleDrive.setSaveFoldersConfig(token, authStorage.getGoogleSaveFolders()); } catch (_) {}
@@ -3113,7 +3149,7 @@ function NoodiMeisterCore({ icons }) {
       setSaveFeedback('Salvestan…');
       const data = exportScoreToJSON();
       const json = JSON.stringify(data, null, 2);
-      const fileName = ((data.songTitle || t('common.untitled')).replace(/\s+/g, '-').replace(/[^\w\-.]/g, '') || t('common.untitled')) + '.noodimeister';
+      const fileName = ((data.songTitle || t('common.untitled')).replace(/\s+/g, '-').replace(/[^\w\-.]/g, '') || t('common.untitled')) + '.nm';
       await googleDrive.createFileInFolder(token, folderId, fileName, json);
       authStorage.addGoogleSaveFolder(folderId, name);
       try { await googleDrive.setSaveFoldersConfig(token, authStorage.getGoogleSaveFolders()); } catch (_) {}
@@ -5979,13 +6015,37 @@ function NoodiMeisterCore({ icons }) {
 
       {/* Settings modal – Title, Author, Pickup (post-setup editing) */}
       {settingsOpen && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-amber-950/60 dark:bg-black/70 backdrop-blur-sm p-6" onClick={() => setSettingsOpen(false)}>
-          <div className="bg-white dark:bg-black rounded-2xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-hidden border-2 border-amber-200 dark:border-white/20 flex flex-col" onClick={e => e.stopPropagation()}>
-            <div className="bg-gradient-to-r from-slate-600 to-slate-700 text-white px-6 py-4 flex items-center justify-between">
-              <h2 className="text-lg font-bold flex items-center gap-2"><Settings className="w-5 h-5" /> Seaded</h2>
-              <button onClick={() => setSettingsOpen(false)} className="text-white/90 hover:text-white text-2xl leading-none">&times;</button>
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-amber-950/60 dark:bg-black/70 backdrop-blur-sm p-4 sm:p-6" onClick={() => setSettingsOpen(false)}>
+          <div
+            className="bg-white dark:bg-black rounded-2xl shadow-2xl w-full max-w-sm max-h-[70vh] overflow-hidden border-2 border-amber-200 dark:border-white/20 flex flex-col"
+            style={{ transform: `translate(${settingsDragOffset.x}px, ${settingsDragOffset.y}px)` }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div
+              className="bg-gradient-to-r from-slate-600 to-slate-700 text-white px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between cursor-move select-none"
+              onPointerDown={(e) => {
+                // Ainult vasak nupp hiirel; puute/pencil puhul nuppu ei kontrolli
+                if (e.pointerType === 'mouse' && e.button !== 0) return;
+                e.preventDefault();
+                e.stopPropagation();
+                settingsDragRef.current = {
+                  startX: e.clientX,
+                  startY: e.clientY,
+                  originX: settingsDragOffset.x,
+                  originY: settingsDragOffset.y,
+                };
+              }}
+            >
+              <h2 className="text-base sm:text-lg font-bold flex items-center gap-2"><Settings className="w-5 h-5" /> Seaded</h2>
+              <button
+                onClick={() => setSettingsOpen(false)}
+                onPointerDown={(e) => e.stopPropagation()}
+                className="text-white/90 hover:text-white text-2xl leading-none"
+              >
+                &times;
+              </button>
             </div>
-            <div className="flex-1 p-6 space-y-4 dark:text-white overflow-y-auto">
+            <div className="flex-1 p-4 sm:p-6 space-y-4 dark:text-white overflow-y-auto">
               {/* Teema: põhivärv ja režiim (hele/tume) */}
               <div className="border-b border-amber-200 dark:border-white/20 pb-4">
                 <h3 className="text-sm font-bold text-amber-900 dark:text-white mb-2">{t('theme.title')}</h3>
@@ -7790,7 +7850,7 @@ function NoodiMeisterCore({ icons }) {
                       <div className="flex flex-col gap-2">
                         <button type="button" onClick={downloadProject} className="w-full py-2 px-3 rounded-lg bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-500">{t('layout.saveProject')}</button>
                         <button type="button" onClick={() => { setPianoStripVisible(false); projectFileInputRef.current?.click(); }} className="w-full py-2 px-3 rounded-lg bg-slate-600 text-white text-sm font-semibold hover:bg-slate-500">{t('layout.openProject')}</button>
-                        <input ref={projectFileInputRef} type="file" accept=".json,.noodimeister,application/json" className="hidden" onChange={handleOpenProjectFile} />
+                        <input ref={projectFileInputRef} type="file" accept=".json,.nm,application/json" className="hidden" onChange={handleOpenProjectFile} />
                       </div>
                     </div>
                   </>

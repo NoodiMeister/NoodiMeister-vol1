@@ -1,7 +1,7 @@
 /**
  * OneDrive (Microsoft Graph) – minimaalne teenus:
  * - loe /me profiili
- * - loe /me/drive/root/children ja filtreeri NoodiMeisteri failid (nt .noodimeister)
+ * - loe /me/drive/root/children ja filtreeri NoodiMeisteri failid (nt .nm)
  *
  * Eeldab, et:
  * - kasutaja on sisse loginud Microsoftiga
@@ -67,7 +67,10 @@ export async function listNoodimeisterFilesFromOneDrive(token, folderId) {
     const items = Array.isArray(data.value) ? data.value : [];
     const files = items
       .filter((item) => !item.folder && typeof item.name === 'string')
-      .filter((item) => item.name.toLowerCase().includes('.noodimeister'));
+      .filter((item) => {
+        const name = item.name.toLowerCase();
+        return name.includes('.nm') || name.includes('.noodimeister');
+      });
     return {
       ok: true,
       files: files.map((f) => ({
@@ -87,7 +90,7 @@ export async function listNoodimeisterFilesFromOneDrive(token, folderId) {
 }
 
 /**
- * Loetleb OneDrive'ist failid, mis on kasutajaga jagatud (shared with me), mille nimi sisaldab ".noodimeister".
+ * Loetleb OneDrive'ist failid, mis on kasutajaga jagatud (shared with me), mille nimi sisaldab ".nm" (või vana ".noodimeister").
  * @param {string} token
  * @returns {Promise<{ ok: boolean, files?: Array<{ id, name, lastModifiedDateTime, size, webUrl }>, error?: string }>}
  */
@@ -97,7 +100,10 @@ export async function listNoodimeisterFilesSharedWithMe(token) {
     const items = Array.isArray(data.value) ? data.value : [];
     const files = items
       .filter((item) => !item.folder && typeof item.name === 'string')
-      .filter((item) => item.name.toLowerCase().includes('.noodimeister'))
+      .filter((item) => {
+        const name = item.name.toLowerCase();
+        return name.includes('.nm') || name.includes('.noodimeister');
+      })
       .map((f) => ({
         id: f.id,
         name: f.name,

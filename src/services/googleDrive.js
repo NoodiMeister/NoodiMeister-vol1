@@ -221,14 +221,14 @@ export async function getFileContent(accessToken, fileId) {
 }
 
 /**
- * Loetleb Google Drive'ist failid, mille nimi sisaldab ".noodimeister".
+ * Loetleb Google Drive'ist failid, mille nimi sisaldab ".nm" (või vana ".noodimeister").
  * @param {string} accessToken
  * @param {object} [options] - pageSize, orderBy, folderId (piirdu kaustaga)
  * @returns {Promise<Array<{ id, name, modifiedTime, createdTime }>>}
  */
 export async function listNoodimeisterFiles(accessToken, options = {}) {
   const { pageSize = 50, orderBy = 'modifiedTime desc', folderId } = options;
-  let q = "trashed = false and name contains '.noodimeister'";
+  let q = "trashed = false and (name contains '.nm' or name contains '.noodimeister')";
   if (folderId) {
     q += ` and '${folderId}' in parents`;
   }
@@ -250,12 +250,12 @@ export async function listNoodimeisterFiles(accessToken, options = {}) {
 }
 
 /**
- * Loetleb Google Drive'ist failid, mis on kasutajaga jagatud (shared with me) ja mille nimi sisaldab ".noodimeister".
+ * Loetleb Google Drive'ist failid, mis on kasutajaga jagatud (shared with me) ja mille nimi sisaldab ".nm" (või vana ".noodimeister").
  * @param {string} accessToken
  * @returns {Promise<Array<{ id, name, modifiedTime, createdTime }>>}
  */
 export async function listNoodimeisterFilesSharedWithMe(accessToken) {
-  const q = "sharedWithMe = true and trashed = false and name contains '.noodimeister'";
+  const q = "sharedWithMe = true and trashed = false and (name contains '.nm' or name contains '.noodimeister')";
   const params = new URLSearchParams({
     q,
     pageSize: '50',
