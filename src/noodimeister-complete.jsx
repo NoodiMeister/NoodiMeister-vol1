@@ -3190,7 +3190,7 @@ function NoodiMeisterCore({ icons }) {
       setSaveFeedback('Salvestan…');
       const data = exportScoreToJSON();
       const json = JSON.stringify(data, null, 2);
-      const fileName = ((data.songTitle || t('common.untitled')).replace(/\s+/g, '-').replace(/[^\w\-.]/g, '') || t('common.untitled')) + '.noodimeister';
+      const fileName = ((data.songTitle || t('common.untitled')).replace(/\s+/g, '-').replace(/[^\w\-.]/g, '') || t('common.untitled')) + '.nm';
       const folderId = (sessionSaveFolderId?.cloud === 'onedrive' ? sessionSaveFolderId.folderId : null) || authStorage.getOneDriveSaveFolderId();
       if (folderId) {
         await oneDrive.uploadFileToFolder(token, folderId, fileName, json, 'application/json');
