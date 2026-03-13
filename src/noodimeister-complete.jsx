@@ -8368,13 +8368,16 @@ function NoodiMeisterCore({ icons }) {
             // Mouse-based note input is only allowed when N-mode is ON
             // and the active toolbox is the pitch-input toolbox.
             const mousePitchInputEnabled = noteInputMode && activeToolbox === 'pitchInput';
-            return (visibleStaffList.length > 0 ? visibleStaffList : staves.map((staff, i) => ({ staff, staffIdx: i, visibleIndex: i }))).map(({ staff, staffIdx, visibleIndex }) => {
-                const isFirstInBraceGroup = staff.braceGroupId && staves[staffIdx + 1]?.braceGroupId === staff.braceGroupId;
-                const braceGroupSize = isFirstInBraceGroup ? 2 : 0;
-                const partsGap = layoutPartsGap;
-                const baseYOffset = visibleIndex * (effectiveStaffHeight + partsGap) + (staffYOffsets[staffIdx] ?? 0);
-                const isFirstVisible = visibleIndex === 0;
-                return (
+            const staffEntries = visibleStaffList.length > 0
+              ? visibleStaffList
+              : staves.map((staff, i) => ({ staff, staffIdx: i, visibleIndex: i }));
+            return staffEntries.map(({ staff, staffIdx, visibleIndex }) => {
+              const isFirstInBraceGroup = staff.braceGroupId && staves[staffIdx + 1]?.braceGroupId === staff.braceGroupId;
+              const braceGroupSize = isFirstInBraceGroup ? 2 : 0;
+              const partsGap = layoutPartsGap;
+              const baseYOffset = visibleIndex * (effectiveStaffHeight + partsGap) + (staffYOffsets[staffIdx] ?? 0);
+              const isFirstVisible = visibleIndex === 0;
+              return (
                 <Timeline
                   key={staff.id}
                   measures={measuresWithMarks}
@@ -8546,7 +8549,9 @@ function NoodiMeisterCore({ icons }) {
                   lyricFontFamily={lyricFontFamily}
                   lyricLineYOffset={lyricLineYOffset}
                 />
-              );})}
+              );
+            });
+          })()}
           </div>
           {/* Puhkehetkede sildid: suur tekst, kui kursor on antud löökide vahel (video/animatsioon) */}
           {intermissionLabels.some((lab) => cursorPosition >= lab.startBeat && cursorPosition < lab.endBeat) && (
