@@ -56,7 +56,10 @@ import { useNoodimeisterOptional } from './store/NoodimeisterContext';
 import { useNotationOptional } from './store/NotationContext';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
+import 'svg2pdf.js';
 import Soundfont from 'soundfont-player';
+import { scoreToSvg, getFirstPageSvgString, getPageSvgString } from './utils/scoreToSvg';
+import { getScorePageDimensions } from './layout/LayoutManager';
 
 // Safe Initialization: väline seadete objekt KÕIGE ALGUSES (väljaspool komponente). Vercel ei minifitseeri var-deklaratsioone YA/JA-ks.
 var GLOBAL_NOTATION_CONFIG = {
@@ -1434,7 +1437,10 @@ function NoodiMeisterCore({ icons }) {
   const [showPdfExportPreview, setShowPdfExportPreview] = useState(false);
   const [pdfPreviewDataUrl, setPdfPreviewDataUrl] = useState(null);
   const [pdfPreviewSize, setPdfPreviewSize] = useState({ w: 0, h: 0 });
+  /** SVG-põhine eksport: { defsString, contentString, contentHeight } – kasutatakse eelvaate ja PDF vektorite jaoks. */
+  const [pdfPreviewSvgData, setPdfPreviewSvgData] = useState(null);
   const [pdfPreviewZoom, setPdfPreviewZoom] = useState(1);
+  const [pdfPreviewCaptureKey, setPdfPreviewCaptureKey] = useState(0);
   const pdfPreviewContainerRef = useRef(null);
   const [pdfExportSaveLocation, setPdfExportSaveLocation] = useState('downloads'); // 'downloads' | 'custom'
   const [pdfExportFileHandle, setPdfExportFileHandle] = useState(null);
@@ -2379,22 +2385,66 @@ function NoodiMeisterCore({ icons }) {
   useEffect(() => {
     if (!showPdfExportPreview || !scoreContainerRef?.current) return;
     setPdfPreviewDataUrl(null);
+    setPdfPreviewSvgData(null);
     const el = scoreContainerRef.current;
-    const w = el.scrollWidth;
-    const h = el.scrollHeight;
-    html2canvas(el, {
-      scale: 0.55,
-      useCORS: true,
-      logging: false,
-      width: w,
-      height: h,
-      windowWidth: w,
-      windowHeight: h,
-    }).then((canvas) => {
-      setPdfPreviewDataUrl(canvas.toDataURL('image/png'));
-      setPdfPreviewSize({ w: canvas.width, h: canvas.height });
-    }).catch(() => { setPdfPreviewDataUrl(null); setPdfPreviewSize({ w: 0, h: 0 }); });
-  }, [showPdfExportPreview]);
+    el.classList.add('noodimeister-export-capture');
+    const cleanup = () => {
+      if (el.classList.contains('noodimeister-export-capture')) el.classList.remove('noodimeister-export-capture');
+    };
+    const runCapture = () => {
+      /* Proovime esmalt SVG-põhist eelvaadet (viewBox 0 0 794 1123, vektorid, ilma mastaabikadudeta). */
+      try {
+        const opts = {
+          pageDesignDataUrl: pageDesignDataUrl || null,
+          pageDesignOpacity,
+          songTitle,
+          author,
+          documentFontFamily,
+          titleFontFamily,
+          titleFontSize,
+          authorFontSize,
+          titleBold,
+          titleItalic,
+          authorBold,
+          authorItalic,
+          titleAlignment,
+          authorAlignment,
+          pageOrientation,
+        };
+        const { defsString, contentString, contentHeight, orientation } = scoreToSvg(el, opts);
+        const firstPageSvg = getFirstPageSvgString(defsString, contentString, contentHeight, orientation);
+        const dataUrl = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(firstPageSvg)));
+        setPdfPreviewDataUrl(dataUrl);
+        const dims = getScorePageDimensions(orientation);
+        setPdfPreviewSize({ w: dims.width, h: dims.height });
+        setPdfPreviewSvgData({ defsString, contentString, contentHeight, orientation });
+        cleanup();
+      } catch (e) {
+        /* Fallback: PNG html2canvas (nt kui SVG kloon ebaõnnestub). */
+        cleanup();
+        const w = el.scrollWidth;
+        const h = el.scrollHeight;
+        html2canvas(el, {
+          scale: 2,
+          useCORS: true,
+          logging: false,
+          scrollX: 0,
+          scrollY: 0,
+          width: w,
+          height: h,
+          windowWidth: w,
+          windowHeight: h,
+        }).then((canvas) => {
+          setPdfPreviewDataUrl(canvas.toDataURL('image/png'));
+          setPdfPreviewSize({ w: canvas.width, h: canvas.height });
+        }).catch(() => {
+          setPdfPreviewDataUrl(null);
+          setPdfPreviewSize({ w: 0, h: 0 });
+        });
+      }
+    };
+    requestAnimationFrame(() => runCapture());
+  }, [showPdfExportPreview, pdfPreviewCaptureKey, pageOrientation, pageDesignDataUrl, pageDesignOpacity, songTitle, author, documentFontFamily, titleFontFamily, titleFontSize, authorFontSize, titleBold, titleItalic, authorBold, authorItalic, titleAlignment, authorAlignment]);
 
   const handlePdfPreviewFit = useCallback(() => {
     setPdfPreviewZoom(1);
@@ -2420,35 +2470,85 @@ function NoodiMeisterCore({ icons }) {
   }, [songTitle, t]);
 
   const exportToPdf = useCallback(async (saveOptions = {}) => {
-    /* Zoom on ainult ekraanil; PDF kasutab alati mastaapi 1.0 (A4 täismõõt), nagu Sibelius/MuseScore. */
+    const { fileHandle, usePreviewImage, previewDataUrl, previewSize, usePreviewSvg, previewSvgData } = saveOptions;
+    const useSvgExport = Boolean(usePreviewSvg && previewSvgData?.defsString != null && previewSvgData?.contentString != null);
+    const usePreviewPng = Boolean(!useSvgExport && usePreviewImage && previewDataUrl && previewSize?.w > 0 && previewSize?.h > 0);
+
     const container = scoreContainerRef?.current;
-    if (!container) {
+    if (!useSvgExport && !usePreviewPng && !container) {
       setSaveFeedback(t('feedback.exportFailed'));
       setTimeout(() => setSaveFeedback(''), 2000);
       return;
     }
-    const { fileHandle } = saveOptions;
     setIsExportingPdf(true);
     setSaveFeedback('PDF…');
     setShowPageNavigator(true);
     await new Promise((r) => setTimeout(r, 150));
     try {
-      container.classList.add('noodimeister-export-capture');
-      await new Promise((r) => requestAnimationFrame(r));
-      /** 2× render for retina/print; scrollY/scrollX nullib brauseri kerimise nihke (3–4 px). */
+      /* SVG → PDF vektoritega (svg2pdf.js): terav, viewBox sünkroonitud orientationiga (portrait 794×1123, landscape 1123×794). */
+      if (useSvgExport) {
+        const { defsString, contentString, contentHeight, orientation } = previewSvgData;
+        const orient = (orientation ?? pageOrientation) === 'landscape' ? 'landscape' : 'portrait';
+        const pageH = orient === 'landscape' ? 794 : 1123;
+        const numPages = Math.max(1, Math.ceil(contentHeight / pageH));
+        const pdf = new jsPDF({ orientation: orient, unit: 'pt', format: 'a4' });
+        const widthPt = orient === 'landscape' ? 841.89 : 595.28;
+        const heightPt = orient === 'landscape' ? 595.28 : 841.89;
+        for (let p = 0; p < numPages; p++) {
+          if (p > 0) pdf.addPage('a4', orient);
+          const pageSvgString = getPageSvgString(defsString, contentString, contentHeight, p, orient);
+          const wrap = document.createElement('div');
+          wrap.innerHTML = pageSvgString;
+          const svgEl = wrap.querySelector('svg');
+          if (svgEl) {
+            await pdf.svg(svgEl, { x: 0, y: 0, width: widthPt, height: heightPt });
+          }
+        }
+        const filename = ((songTitle || t('common.untitled')).replace(/\s+/g, '-').replace(/[^\w\-.]/g, '') || 'score') + '.pdf';
+        if (fileHandle && typeof fileHandle.createWritable === 'function') {
+          const blob = pdf.output('blob');
+          const writable = await fileHandle.createWritable();
+          await writable.write(blob);
+          await writable.close();
+        } else {
+          pdf.save(filename);
+        }
+        setSaveFeedback('');
+        return;
+      }
+
+      let canvas;
       const exportScale = 2;
-      const canvas = await html2canvas(container, {
-        scale: exportScale,
-        useCORS: true,
-        logging: false,
-        scrollX: 0,
-        scrollY: 0,
-        width: container.scrollWidth,
-        height: container.scrollHeight,
-        windowWidth: container.scrollWidth,
-        windowHeight: container.scrollHeight,
-      });
-      container.classList.remove('noodimeister-export-capture');
+      if (usePreviewPng) {
+        canvas = await new Promise((resolve, reject) => {
+          const img = new Image();
+          img.onload = () => {
+            const c = document.createElement('canvas');
+            c.width = previewSize.w;
+            c.height = previewSize.h;
+            const ctx = c.getContext('2d');
+            ctx.drawImage(img, 0, 0);
+            resolve(c);
+          };
+          img.onerror = () => reject(new Error('Preview image failed to load'));
+          img.src = previewDataUrl;
+        });
+      } else {
+        container.classList.add('noodimeister-export-capture');
+        await new Promise((r) => requestAnimationFrame(r));
+        canvas = await html2canvas(container, {
+          scale: exportScale,
+          useCORS: true,
+          logging: false,
+          scrollX: 0,
+          scrollY: 0,
+          width: container.scrollWidth,
+          height: container.scrollHeight,
+          windowWidth: container.scrollWidth,
+          windowHeight: container.scrollHeight,
+        });
+        container.classList.remove('noodimeister-export-capture');
+      }
       const scale = exportScale;
       /* 0 px / 0 mm nihke: täisleht kasutuses, teksti ega noote ei lõigata ära. */
       const PAD = 0;
@@ -6226,37 +6326,38 @@ function NoodiMeisterCore({ icons }) {
                 <span className="text-sm text-amber-800 dark:text-amber-200 tabular-nums">{Math.round(pdfPreviewZoom * 100)}%</span>
               </div>
               <div className="flex flex-col items-center gap-2">
-                <span className="text-sm font-medium text-amber-900 dark:text-white self-start">A4 raam = noodileht (ühine 210×297 mm / 794×1123 px); mahub ilma lõigeta ja nihuta.</span>
+                <span className="text-sm font-medium text-amber-900 dark:text-white self-start">Eelvaade = SVG (viewBox sünkroonitud: vertikaal 794×1123, horisontaal 1123×794). PDF eksportitakse vektoritena; A4 trükk vastavalt lehe suunale.</span>
+                <button type="button" onClick={() => setPdfPreviewCaptureKey(k => k + 1)} className="self-start px-2 py-1 rounded text-sm font-medium bg-amber-100 dark:bg-amber-900/40 text-amber-900 dark:text-amber-100 hover:bg-amber-200 dark:hover:bg-amber-800/50" title="Tee uus pilt noodilehest">Värskenda eelvaadet</button>
                 <div
                   ref={pdfPreviewContainerRef}
                   className="relative bg-white dark:bg-gray-100 rounded-sm shadow-lg box-border"
                   style={{
                     width: '100%',
-                    maxWidth: pageOrientation === 'landscape' ? LAYOUT.PAGE_HEIGHT_PX : LAYOUT.PAGE_WIDTH_PX,
+                    maxWidth: getScorePageDimensions(pageOrientation).width,
                     aspectRatio: pageOrientation === 'landscape' ? '297/210' : '210/297',
                     border: '3px solid #b45309',
                     boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.08)',
                     overflow: 'auto',
                     display: 'flex',
-                    alignItems: 'flex-start',
-                    justifyContent: 'center',
+                    alignItems: 'stretch',
+                    justifyContent: 'stretch',
                   }}
                 >
                   {pdfPreviewDataUrl ? (
                     <div
-                      className="flex items-start justify-center box-border flex-shrink-0"
+                      className="box-border flex-shrink-0"
                       style={{
-                        minWidth: '100%',
-                        minHeight: '100%',
                         width: `${pdfPreviewZoom * 100}%`,
                         height: `${pdfPreviewZoom * 100}%`,
+                        minWidth: '100%',
+                        minHeight: '100%',
                       }}
                     >
                       <img
                         src={pdfPreviewDataUrl}
                         alt="PDF preview"
-                        className="object-contain"
-                        style={{ width: '100%', height: '100%', display: 'block' }}
+                        className="block object-contain"
+                        style={{ width: '100%', height: '100%', objectFit: 'contain', imageRendering: 'auto' }}
                       />
                     </div>
                   ) : (
@@ -6288,10 +6389,17 @@ function NoodiMeisterCore({ icons }) {
               </button>
               <button
                 type="button"
-                disabled={isExportingPdf}
+                disabled={isExportingPdf || !pdfPreviewDataUrl}
                 onClick={async () => {
                   const opts = pdfExportSaveLocation === 'custom' && pdfExportFileHandle ? { fileHandle: pdfExportFileHandle } : {};
-                  await exportToPdf(opts);
+                  await exportToPdf({
+                    ...opts,
+                    usePreviewSvg: !!pdfPreviewSvgData,
+                    previewSvgData: pdfPreviewSvgData || undefined,
+                    usePreviewImage: !pdfPreviewSvgData,
+                    previewDataUrl: pdfPreviewDataUrl,
+                    previewSize: pdfPreviewSize,
+                  });
                   setShowPdfExportPreview(false);
                   setHeaderMenuOpen(null);
                 }}
@@ -8564,9 +8672,9 @@ function NoodiMeisterCore({ icons }) {
                 }}
                 role="presentation"
               >
-              {/* Pealkiri muudetav otse lehel; pt-4 tagab, et pealkirja ei lõigata eksporti/trüki ülaosast. */}
+              {/* Pealkiri muudetav otse lehel; pt-6 tagab, et pealkirja ei lõigata eksporti/trüki ülaosast. */}
               <div
-                className="pt-4 mb-4"
+                className="pt-6 mb-4"
                 style={isHorizontalFlow ? { width: effectiveLayoutPageWidth, flexShrink: 0 } : undefined}
               >
                 <input

@@ -7,6 +7,17 @@
 const A4_WIDTH_PX_96 = Math.round((210 * 96) / 25.4);   // 794
 const A4_HEIGHT_PX_96 = Math.round((297 * 96) / 25.4);  // 1123
 
+/**
+ * Noodileht (ScorePage): ala noodi sisestus programmis, kuhu kantakse noodiga seotud kujutised, tekstid ja lehe disainid.
+ * Mõõtmed sõltuvad lehe suunast (orientation).
+ */
+export function getScorePageDimensions (orientation) {
+  const isLandscape = orientation === 'landscape';
+  return isLandscape
+    ? { width: A4_HEIGHT_PX_96, height: A4_WIDTH_PX_96 }   // horisontaalne A4: 297×210 mm → 1123×794 px
+    : { width: A4_WIDTH_PX_96, height: A4_HEIGHT_PX_96 };  // püstine A4: 210×297 mm → 794×1123 px
+}
+
 export const LAYOUT = {
   /** Lehe laius/kõrgus px (96 DPI), kasutatakse preview ja paigutuse vaikimisi. */
   PAGE_WIDTH_PX: A4_WIDTH_PX_96,
