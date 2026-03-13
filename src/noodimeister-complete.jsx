@@ -1276,6 +1276,8 @@ function NoodiMeisterCore({ icons }) {
   const [titleItalic, setTitleItalic] = useState(false);
   const [authorBold, setAuthorBold] = useState(false);
   const [authorItalic, setAuthorItalic] = useState(false);
+  const [titleAlignment, setTitleAlignment] = useState('center'); // 'left' | 'center' | 'right'
+  const [authorAlignment, setAuthorAlignment] = useState('right'); // 'left' | 'center' | 'right'
   const titleInputRef = useRef(null);
   const authorInputRef = useRef(null);
   const [textToolPosition, setTextToolPosition] = useState({ top: 0, left: 0 });
@@ -1407,6 +1409,15 @@ function NoodiMeisterCore({ icons }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const isNewWorkFlow = (searchParams && typeof searchParams.get === 'function' && searchParams.get('new')) === '1';
   const partStaffId = searchParams && typeof searchParams.get === 'function' ? searchParams.get('staffId') : undefined;
+  /** Minu tööd lehelt "Uus töö selles kaustas": salvesta siia kausta (session, URL-ist saveFolderId & cloud). */
+  const [sessionSaveFolderId, setSessionSaveFolderId] = useState(() => {
+    if (typeof window === 'undefined') return null;
+    const p = new URLSearchParams(window.location.search);
+    const folderId = p.get('saveFolderId');
+    const cloud = p.get('cloud');
+    if (folderId && (cloud === 'google' || cloud === 'onedrive')) return { folderId, cloud };
+    return null;
+  });
   const isPartWindow = !!partStaffId;
   const [newWorkSetupOpen, setNewWorkSetupOpen] = useState(false);
   // Uue töö seadistuse vormi väljad (küsitakse enne töö loomist)
@@ -2302,6 +2313,8 @@ function NoodiMeisterCore({ icons }) {
     titleItalic,
     authorBold,
     authorItalic,
+    titleAlignment,
+    authorAlignment,
     pageDesignDataUrl: pageDesignDataUrl || undefined,
     pageDesignOpacity,
     pageDesignFit,
@@ -2312,7 +2325,7 @@ function NoodiMeisterCore({ icons }) {
     lyricLineYOffset,
     noteheadShape,
     noteheadEmoji
-  }), [staves, activeStaffIndex, staffYOffsets, measureStretchFactors, systemYOffsets, visibleStaves, intermissionLabels, timeSignature, timeSignatureMode, keySignature, staffLines, notationStyle, pixelsPerBeat, notationMode, instrumentNotationVariant, cursorPosition, addedMeasures, measureRepeatMarks, setupCompleted, songTitle, author, pickupEnabled, pickupQuantity, pickupDuration, pageOrientation, paperSize, layoutMeasuresPerLine, layoutLineBreakBefore, layoutPageBreakBefore, layoutSystemGap, layoutPartsGap, layoutConnectedBarlines, layoutGlobalSpacingMultiplier, viewMode, partLayoutMeasuresPerLine, partLayoutLineBreakBefore, partLayoutPageBreakBefore, showPageNavigator, pageFlowDirection, viewFitPage, viewSmartPage, visibleToolIds, tuningReferenceNote, tuningReferenceOctave, tuningReferenceHz, playNoteOnInsert, figurenotesSize, figurenotesStems, figurenotesChordLineGap, figurenotesChordBlocks, timeSignatureSize, showBarNumbers, barNumberSize, showRhythmSyllables, showAllNoteLabels, enableEmojiOverlays, joClefStaffPosition, relativeNotationShowKeySignature, relativeNotationShowTraditionalClef, isPedagogicalProject, pedagogicalAudioBpm, pedagogicalAudioPlaybackRate, pedagogicalPlayheadStyle, pedagogicalPlayheadEmoji, pedagogicalPlayheadEmojiSize, cursorLineStrokeWidth, pedagogicalPlayheadMovement, chords, textBoxes, documentFontFamily, lyricFontFamily, titleFontSize, authorFontSize, titleFontFamily, authorFontFamily, titleBold, titleItalic, authorBold, authorItalic, pageDesignDataUrl, pageDesignOpacity, pageDesignFit, pageDesignLayer, lyricLineIndex, lyricLineYOffset, noteheadShape, noteheadEmoji]);
+  }), [staves, activeStaffIndex, staffYOffsets, measureStretchFactors, systemYOffsets, visibleStaves, intermissionLabels, timeSignature, timeSignatureMode, keySignature, staffLines, notationStyle, pixelsPerBeat, notationMode, instrumentNotationVariant, cursorPosition, addedMeasures, measureRepeatMarks, setupCompleted, songTitle, author, pickupEnabled, pickupQuantity, pickupDuration, pageOrientation, paperSize, layoutMeasuresPerLine, layoutLineBreakBefore, layoutPageBreakBefore, layoutSystemGap, layoutPartsGap, layoutConnectedBarlines, layoutGlobalSpacingMultiplier, viewMode, partLayoutMeasuresPerLine, partLayoutLineBreakBefore, partLayoutPageBreakBefore, showPageNavigator, pageFlowDirection, viewFitPage, viewSmartPage, visibleToolIds, tuningReferenceNote, tuningReferenceOctave, tuningReferenceHz, playNoteOnInsert, figurenotesSize, figurenotesStems, figurenotesChordLineGap, figurenotesChordBlocks, timeSignatureSize, showBarNumbers, barNumberSize, showRhythmSyllables, showAllNoteLabels, enableEmojiOverlays, joClefStaffPosition, relativeNotationShowKeySignature, relativeNotationShowTraditionalClef, isPedagogicalProject, pedagogicalAudioBpm, pedagogicalAudioPlaybackRate, pedagogicalPlayheadStyle, pedagogicalPlayheadEmoji, pedagogicalPlayheadEmojiSize, cursorLineStrokeWidth, pedagogicalPlayheadMovement, chords, textBoxes, documentFontFamily, lyricFontFamily, titleFontSize, authorFontSize, titleFontFamily, authorFontFamily, titleBold, titleItalic, authorBold, authorItalic, titleAlignment, authorAlignment, pageDesignDataUrl, pageDesignOpacity, pageDesignFit, pageDesignLayer, lyricLineIndex, lyricLineYOffset, noteheadShape, noteheadEmoji]);
 
   const saveToStorageSync = useCallback(() => {
     try {
@@ -2417,13 +2430,15 @@ function NoodiMeisterCore({ icons }) {
     titleItalic,
     authorBold,
     authorItalic,
+    titleAlignment,
+    authorAlignment,
     pageDesignDataUrl: pageDesignDataUrl || undefined,
     pageDesignOpacity,
     pageDesignFit,
     pageDesignLayer,
     visibleStaves: visibleStaves.length === staves.length ? visibleStaves : staves.map(() => true),
     intermissionLabels
-  }), [songTitle, author, notationStyle, notationMode, isPedagogicalProject, timeSignature, timeSignatureMode, keySignature, staffLines, pixelsPerBeat, instrumentNotationVariant, pickupEnabled, pickupQuantity, pickupDuration, setupCompleted, cursorPosition, addedMeasures, pageOrientation, paperSize, layoutMeasuresPerLine, layoutLineBreakBefore, layoutPageBreakBefore, layoutSystemGap, layoutPartsGap, layoutConnectedBarlines, layoutGlobalSpacingMultiplier, viewMode, partLayoutMeasuresPerLine, partLayoutLineBreakBefore, partLayoutPageBreakBefore, showPageNavigator, pageFlowDirection, viewFitPage, viewSmartPage, visibleToolIds, tuningReferenceNote, tuningReferenceOctave, tuningReferenceHz, playNoteOnInsert, figurenotesSize, figurenotesStems, figurenotesChordLineGap, timeSignatureSize, showBarNumbers, barNumberSize, showRhythmSyllables, showAllNoteLabels, enableEmojiOverlays, joClefStaffPosition, relativeNotationShowKeySignature, relativeNotationShowTraditionalClef, pedagogicalAudioBpm, pedagogicalAudioPlaybackRate, pedagogicalPlayheadStyle, pedagogicalPlayheadEmoji, pedagogicalPlayheadEmojiSize, cursorLineStrokeWidth, pedagogicalPlayheadMovement, staves, activeStaffIndex, staffYOffsets, measureStretchFactors, systemYOffsets, visibleStaves, intermissionLabels, chords, textBoxes, documentFontFamily, lyricFontFamily, titleFontSize, authorFontSize, titleFontFamily, authorFontFamily, titleBold, titleItalic, authorBold, authorItalic, pageDesignDataUrl, pageDesignOpacity, pageDesignFit, pageDesignLayer]);
+  }), [songTitle, author, notationStyle, notationMode, isPedagogicalProject, timeSignature, timeSignatureMode, keySignature, staffLines, pixelsPerBeat, instrumentNotationVariant, pickupEnabled, pickupQuantity, pickupDuration, setupCompleted, cursorPosition, addedMeasures, pageOrientation, paperSize, layoutMeasuresPerLine, layoutLineBreakBefore, layoutPageBreakBefore, layoutSystemGap, layoutPartsGap, layoutConnectedBarlines, layoutGlobalSpacingMultiplier, viewMode, partLayoutMeasuresPerLine, partLayoutLineBreakBefore, partLayoutPageBreakBefore, showPageNavigator, pageFlowDirection, viewFitPage, viewSmartPage, visibleToolIds, tuningReferenceNote, tuningReferenceOctave, tuningReferenceHz, playNoteOnInsert, figurenotesSize, figurenotesStems, figurenotesChordLineGap, timeSignatureSize, showBarNumbers, barNumberSize, showRhythmSyllables, showAllNoteLabels, enableEmojiOverlays, joClefStaffPosition, relativeNotationShowKeySignature, relativeNotationShowTraditionalClef, pedagogicalAudioBpm, pedagogicalAudioPlaybackRate, pedagogicalPlayheadStyle, pedagogicalPlayheadEmoji, pedagogicalPlayheadEmojiSize, cursorLineStrokeWidth, pedagogicalPlayheadMovement, staves, activeStaffIndex, staffYOffsets, measureStretchFactors, systemYOffsets, visibleStaves, intermissionLabels, chords, textBoxes, documentFontFamily, lyricFontFamily, titleFontSize, authorFontSize, titleFontFamily, authorFontFamily, titleBold, titleItalic, authorBold, authorItalic, titleAlignment, authorAlignment, pageDesignDataUrl, pageDesignOpacity, pageDesignFit, pageDesignLayer]);
 
   // Download project file (future: replace with upload to Google Drive / OneDrive)
   const downloadProject = useCallback(() => {
@@ -2605,6 +2620,8 @@ function NoodiMeisterCore({ icons }) {
       if (typeof data.titleItalic === 'boolean') setTitleItalic(data.titleItalic);
       if (typeof data.authorBold === 'boolean') setAuthorBold(data.authorBold);
       if (typeof data.authorItalic === 'boolean') setAuthorItalic(data.authorItalic);
+      if (data.titleAlignment === 'left' || data.titleAlignment === 'center' || data.titleAlignment === 'right') setTitleAlignment(data.titleAlignment);
+      if (data.authorAlignment === 'left' || data.authorAlignment === 'center' || data.authorAlignment === 'right') setAuthorAlignment(data.authorAlignment);
       if (data.lyricLineIndex === 0 || data.lyricLineIndex === 1) setLyricLineIndex(data.lyricLineIndex);
       if (typeof data.lyricLineYOffset === 'number') setLyricLineYOffset(Math.max(-40, Math.min(40, data.lyricLineYOffset)));
       clearDirty();
@@ -2844,6 +2861,8 @@ function NoodiMeisterCore({ icons }) {
         if (typeof data.titleItalic === 'boolean') setTitleItalic(data.titleItalic);
         if (typeof data.authorBold === 'boolean') setAuthorBold(data.authorBold);
         if (typeof data.authorItalic === 'boolean') setAuthorItalic(data.authorItalic);
+        if (data.titleAlignment === 'left' || data.titleAlignment === 'center' || data.titleAlignment === 'right') setTitleAlignment(data.titleAlignment);
+        if (data.authorAlignment === 'left' || data.authorAlignment === 'center' || data.authorAlignment === 'right') setAuthorAlignment(data.authorAlignment);
         if (data.lyricLineIndex === 0 || data.lyricLineIndex === 1) setLyricLineIndex(data.lyricLineIndex);
         if (typeof data.lyricLineYOffset === 'number') setLyricLineYOffset(Math.max(-40, Math.min(40, data.lyricLineYOffset)));
         clearDirty();
@@ -2864,7 +2883,7 @@ function NoodiMeisterCore({ icons }) {
       setTimeout(() => setSaveFeedback(''), 3000);
       return;
     }
-    const savedFolderId = authStorage.getGoogleSaveFolderId();
+    const savedFolderId = (sessionSaveFolderId?.cloud === 'google' ? sessionSaveFolderId.folderId : null) || authStorage.getGoogleSaveFolderId();
     if (savedFolderId) {
       try {
         setSaveFeedback('Salvestan…');
@@ -2881,7 +2900,7 @@ function NoodiMeisterCore({ icons }) {
       return;
     }
     setSaveCloudDialogOpen(true);
-  }, [exportScoreToJSON]);
+  }, [exportScoreToJSON, sessionSaveFolderId]);
 
   // Vali olemasolev kaust (Picker) ja salvesta sinna. Lisa kaust nimekirja, et järgmine salvestamine kasutaks sama kausta.
   const saveToCloudPickExisting = useCallback(async () => {
@@ -2952,7 +2971,7 @@ function NoodiMeisterCore({ icons }) {
       const data = exportScoreToJSON();
       const json = JSON.stringify(data, null, 2);
       const fileName = ((data.songTitle || t('common.untitled')).replace(/\s+/g, '-').replace(/[^\w\-.]/g, '') || t('common.untitled')) + '.noodimeister';
-      const folderId = authStorage.getOneDriveSaveFolderId();
+      const folderId = (sessionSaveFolderId?.cloud === 'onedrive' ? sessionSaveFolderId.folderId : null) || authStorage.getOneDriveSaveFolderId();
       if (folderId) {
         await oneDrive.uploadFileToFolder(token, folderId, fileName, json, 'application/json');
       } else {
@@ -2964,7 +2983,7 @@ function NoodiMeisterCore({ icons }) {
       setSaveFeedback(e?.message || 'Pilve salvestamine ebaõnnestus');
       setTimeout(() => setSaveFeedback(''), 3000);
     }
-  }, [exportScoreToJSON]);
+  }, [exportScoreToJSON, sessionSaveFolderId]);
 
   /** Cmd/Ctrl+S: save to browser if not logged in; otherwise save to the provider's cloud (Google Drive, OneDrive, or browser for Apple). */
   const handleSaveShortcut = useCallback(() => {
@@ -5816,6 +5835,22 @@ function NoodiMeisterCore({ icons }) {
                   className="w-full px-3 py-2 rounded-lg border-2 border-amber-200 bg-amber-50 text-amber-900"
                 />
               </div>
+              <div>
+                <span className="block text-sm font-semibold text-amber-900 mb-1">{t('layout.titleAlignment')}</span>
+                <div className="flex gap-2">
+                  {(['left', 'center', 'right']).map((align) => (
+                    <button key={align} type="button" onClick={() => { dirtyRef.current = true; setTitleAlignment(align); }} className={`flex-1 py-1.5 px-2 rounded text-sm font-medium ${titleAlignment === align ? 'bg-amber-600 text-white' : 'bg-amber-100 text-amber-800 hover:bg-amber-200'}`}>{align === 'left' ? t('layout.alignLeft') : align === 'center' ? t('layout.alignCenter') : t('layout.alignRight')}</button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <span className="block text-sm font-semibold text-amber-900 mb-1">{t('layout.authorAlignment')}</span>
+                <div className="flex gap-2">
+                  {(['left', 'center', 'right']).map((align) => (
+                    <button key={align} type="button" onClick={() => { dirtyRef.current = true; setAuthorAlignment(align); }} className={`flex-1 py-1.5 px-2 rounded text-sm font-medium ${authorAlignment === align ? 'bg-amber-600 text-white' : 'bg-amber-100 text-amber-800 hover:bg-amber-200'}`}>{align === 'left' ? t('layout.alignLeft') : align === 'center' ? t('layout.alignCenter') : t('layout.alignRight')}</button>
+                  ))}
+                </div>
+              </div>
               <div className="flex flex-wrap items-center gap-3">
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input
@@ -7399,6 +7434,13 @@ function NoodiMeisterCore({ icons }) {
                     {pageDesignDataUrl && (
                       <>
                         <div className="mt-4 pt-4 border-t-2 border-amber-200">
+                          <h4 className="text-xs font-bold text-amber-900 uppercase mb-2">{t('layout.pageDesignTitle')}</h4>
+                          <div className="flex flex-col gap-2">
+                            <button type="button" title={t('layout.pageDesignReplaceHint')} onClick={() => { pageDesignInputRef.current?.click(); }} className="w-full py-1.5 px-2 rounded text-sm font-medium bg-amber-100 text-amber-800 hover:bg-amber-200">{t('layout.pageDesignReplace')}</button>
+                            <button type="button" title={t('layout.pageDesignRemoveHint')} onClick={() => { dirtyRef.current = true; setPageDesignDataUrl(null); }} className="w-full py-1.5 px-2 rounded text-sm font-medium bg-slate-100 text-slate-800 hover:bg-slate-200">{t('layout.pageDesignRemove')}</button>
+                          </div>
+                        </div>
+                        <div className="mt-4 pt-4 border-t-2 border-amber-200">
                           <h4 className="text-xs font-bold text-amber-900 uppercase mb-2">{t('layout.pageDesignFitTitle')}</h4>
                           <div className="flex gap-2">
                             <button type="button" title={t('layout.pageDesignFitCoverHint')} onClick={() => { dirtyRef.current = true; setPageDesignFit('cover'); }} className={`flex-1 py-1.5 px-2 rounded text-sm font-medium ${pageDesignFit === 'cover' ? 'bg-amber-600 text-white' : 'bg-amber-100 text-amber-800 hover:bg-amber-200'}`}>{t('layout.pageDesignFitCover')}</button>
@@ -7835,7 +7877,7 @@ function NoodiMeisterCore({ icons }) {
                   onChange={(e) => { dirtyRef.current = true; setSongTitle(e.target.value); }}
                   onFocus={() => { setActiveTextLineType('title'); setSelectedTextboxId(null); }}
                   placeholder="Nimetu"
-                  className="w-full text-center text-amber-900 dark:text-white bg-transparent border-0 border-b-2 border-transparent hover:border-amber-300 dark:hover:border-white/30 focus:border-amber-500 dark:focus:border-amber-500 focus:outline-none focus:ring-0 py-0"
+                  className={`w-full text-amber-900 dark:text-white bg-transparent border-0 border-b-2 border-transparent hover:border-amber-300 dark:hover:border-white/30 focus:border-amber-500 dark:focus:border-amber-500 focus:outline-none focus:ring-0 py-0 ${titleAlignment === 'left' ? 'text-left' : titleAlignment === 'right' ? 'text-right' : 'text-center'}`}
                   style={{
                     fontFamily: titleFontFamily || documentFontFamily,
                     fontSize: titleFontSize,
@@ -7851,7 +7893,7 @@ function NoodiMeisterCore({ icons }) {
                   onChange={(e) => { dirtyRef.current = true; setAuthor(e.target.value); }}
                   onFocus={() => { setActiveTextLineType('author'); setSelectedTextboxId(null); }}
                   placeholder={t('score.authorPlaceholder') || 'Autor'}
-                  className="w-full text-right text-amber-700 dark:text-white/80 bg-transparent border-0 border-b border-transparent hover:border-amber-300 dark:hover:border-white/30 focus:border-amber-500 dark:focus:border-amber-500 focus:outline-none focus:ring-0 py-0 mt-1 text-sm"
+                  className={`w-full text-amber-700 dark:text-white/80 bg-transparent border-0 border-b border-transparent hover:border-amber-300 dark:hover:border-white/30 focus:border-amber-500 dark:focus:border-amber-500 focus:outline-none focus:ring-0 py-0 mt-1 text-sm ${authorAlignment === 'left' ? 'text-left' : authorAlignment === 'right' ? 'text-right' : 'text-center'}`}
                   style={{
                     fontFamily: authorFontFamily || documentFontFamily,
                     fontSize: authorFontSize,

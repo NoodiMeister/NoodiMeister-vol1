@@ -766,6 +766,14 @@ export default function MinuTöödPage() {
                   </div>
                   {expanded && (
                     <ul className="space-y-2 mt-2 ml-4 pl-6 border-l-2 border-amber-200/60 dark:border-amber-600/40" role="list">
+                      <li className="pb-2">
+                        <a
+                          href={`${basePath}/app?new=1&saveFolderId=${encodeURIComponent(folder.id)}&cloud=google`}
+                          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-amber-600 text-white hover:bg-amber-500 border border-amber-700/50 transition-colors no-underline"
+                        >
+                          <FilePlus className="w-4 h-4" /> {t['mywork.newWorkInFolder']}
+                        </a>
+                      </li>
                       {files.length === 0 ? (
                         <li className="py-4 text-sm text-amber-700/90 dark:text-white/80 pl-2">
                           {t["mywork.noGoogleFilesHint"]}
@@ -878,6 +886,14 @@ export default function MinuTöödPage() {
                   </div>
                   {expanded && (
                     <ul className="space-y-2 mt-2 ml-4 pl-6 border-l-2 border-amber-200/60 dark:border-amber-600/40" role="list">
+                      <li className="pb-2">
+                        <a
+                          href={`${basePath}/app?new=1&saveFolderId=${encodeURIComponent(folder.id)}&cloud=onedrive`}
+                          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-amber-600 text-white hover:bg-amber-500 border border-amber-700/50 transition-colors no-underline"
+                        >
+                          <FilePlus className="w-4 h-4" /> {t['mywork.newWorkInFolder']}
+                        </a>
+                      </li>
                       {files.length === 0 ? (
                         <li className="py-4 text-sm text-amber-700/90 dark:text-white/80 pl-2">
                           {t["mywork.noOneDriveFilesHint"]}
