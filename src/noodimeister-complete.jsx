@@ -6339,24 +6339,26 @@ function NoodiMeisterCore({ icons }) {
                     boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.08)',
                     overflow: 'auto',
                     display: 'flex',
-                    alignItems: 'stretch',
-                    justifyContent: 'stretch',
+                    alignItems: 'center',
+                    justifyContent: 'center',
                   }}
                 >
+                  {/* Eelvaate zoom: 100% = noodileht täidab raami; <100% vähendab, >100% suurendab (keritav). Programmi zoom ei mõjuta eelvaate sisu (pildistatakse A4 1:1). */}
                   {pdfPreviewDataUrl ? (
                     <div
-                      className="box-border flex-shrink-0"
+                      className="box-border flex-shrink-0 flex items-center justify-center"
                       style={{
                         width: `${pdfPreviewZoom * 100}%`,
                         height: `${pdfPreviewZoom * 100}%`,
-                        minWidth: '100%',
-                        minHeight: '100%',
+                        minWidth: 0,
+                        minHeight: 0,
+                        alignSelf: 'center',
                       }}
                     >
                       <img
                         src={pdfPreviewDataUrl}
                         alt="PDF preview"
-                        className="block object-contain"
+                        className="block object-contain max-w-full max-h-full"
                         style={{ width: '100%', height: '100%', objectFit: 'contain', imageRendering: 'auto' }}
                       />
                     </div>

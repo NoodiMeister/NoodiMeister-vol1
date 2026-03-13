@@ -107,6 +107,9 @@ export function scoreToSvg (container, options = {}) {
   const titleText = `<text x="${titleX}" y="${titleY}" text-anchor="${anchor}" dominant-baseline="middle" style="${titleStyle}">${escapeXml(songTitle) || 'Nimetu'}</text>`;
   const authorText = `<text x="${authorX}" y="${authorY}" text-anchor="${authorAnchor}" dominant-baseline="middle" style="${authorStyle}">${escapeXml(author)}</text>`;
 
+  /* Pealkiri ja autor alati nootide KOHAL: noodistiku Y asetame alati päise alla (export-capture ajal võib offsetTop olla 0). */
+  const HEADER_HEIGHT = Math.max(160, authorY + 40);
+
   let notationGroup = '';
   const notationSvg = findNotationSvg(container);
   if (!notationSvg) {
@@ -121,13 +124,14 @@ export function scoreToSvg (container, options = {}) {
       ty += el.offsetTop || 0;
       el = el.offsetParent;
     }
+    const notationY = Math.max(ty, HEADER_HEIGHT);
     const w = notationSvg.getAttribute('width');
     const h = notationSvg.getAttribute('height');
     const width = (w != null && w !== '100%') ? parseFloat(w) : (notationSvg.getBoundingClientRect().width || pageWidth);
     const height = (h != null && h !== '100%') ? parseFloat(h) : (notationSvg.getBoundingClientRect().height || 500);
     const inner = notationSvg.innerHTML;
     const vb = notationSvg.getAttribute('viewBox') || `0 0 ${width} ${height}`;
-    notationGroup = `<g transform="translate(${tx}, ${ty})"><svg xmlns="${XMLNS}" x="0" y="0" width="${width}" height="${height}" viewBox="${escapeXml(vb)}" preserveAspectRatio="xMidYMin meet">${inner}</svg></g>`;
+    notationGroup = `<g transform="translate(${tx}, ${notationY})"><svg xmlns="${XMLNS}" x="0" y="0" width="${width}" height="${height}" viewBox="${escapeXml(vb)}" preserveAspectRatio="xMidYMin meet">${inner}</svg></g>`;
   }
 
   const contentString = `<g id="scoreContent">${bg}${titleText}${authorText}${notationGroup}</g>`;
