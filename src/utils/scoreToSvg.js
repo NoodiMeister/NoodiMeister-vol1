@@ -27,10 +27,12 @@ function escapeXml (str) {
 function buildFontDefs (documentFontFamily, titleFontFamily) {
   const titleFont = titleFontFamily || documentFontFamily || 'Georgia, serif';
   const bodyFont = documentFontFamily || 'Georgia, serif';
+  const titleLocal = escapeXml(titleFont.split(',')[0].trim());
+  const bodyLocal = escapeXml(bodyFont.split(',')[0].trim());
   return `<defs>
   <style type="text/css">
-    @font-face { font-family: 'ExportTitle'; src: local('${escapeXml(titleFont.split(',')[0].trim())'), local('serif'); }
-    @font-face { font-family: 'ExportBody'; src: local('${escapeXml(bodyFont.split(',')[0].trim())'), local('serif'); }
+    @font-face { font-family: 'ExportTitle'; src: local("${titleLocal}"), local("serif"); }
+    @font-face { font-family: 'ExportBody'; src: local("${bodyLocal}"), local("serif"); }
   </style>
 </defs>`;
 }
