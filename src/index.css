@@ -131,6 +131,10 @@ html, body, #root {
   .noodimeister-print-area * {
     visibility: visible;
   }
+  /* Hide noodirea liigutusnupp (staff spacer handle) in print and export – do not show in print preview or PDF */
+  .noodimeister-print-area .staff-spacer-handle {
+    visibility: hidden !important;
+  }
   /* Assign named page so @page size/orientation from page setup is used */
   .noodimeister-print-area.print-page-a4-portrait { page: a4-portrait; }
   .noodimeister-print-area.print-page-a4-landscape { page: a4-landscape; }

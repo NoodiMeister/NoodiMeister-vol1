@@ -214,6 +214,7 @@ export function FigurenotesView({
           <g key={sys.systemIndex} transform={groupTransform}>
             {showStaffSpacerHandles && typeof onStaffSpacerMouseDown === 'function' && (
               <rect
+                className="staff-spacer-handle"
                 x={0}
                 y={sys.yOffset}
                 width={14}

@@ -1164,13 +1164,16 @@ function NoodiMeisterCore({ icons }) {
   const [viewFitPage, setViewFitPage] = useState(true);
   /** When true (and viewFitPage on), scale to fit only the notated area instead of full A4 page. */
   const [viewSmartPage, setViewSmartPage] = useState(false);
-  /** Zoom for notation area only (1 = 100%); wheel with Ctrl/Cmd, pinch, Cmd/Ctrl+/- */
+  /** Zoom for notation area only (1 = 100%); slider, wheel with Ctrl/Cmd, pinch, Cmd/Ctrl+/-. Same scaleFactor for PDF export. */
   const [scoreZoomLevel, setScoreZoomLevel] = useState(1);
+  const scoreZoomLevelRef = useRef(1); // always current for PDF export
+  useEffect(() => { scoreZoomLevelRef.current = scoreZoomLevel; }, [scoreZoomLevel]);
   const scoreZoomPinchRef = useRef(null); // { initialDistance, initialZoom } for touch pinch
   /** When true, user has clicked/touched the notation frame so pinch and wheel zoom are allowed. */
   const [notationFrameFocused, setNotationFrameFocused] = useState(false);
   const notationFrameFocusedRef = useRef(false);
   const notationZoomAreaRef = useRef(null); // wrapper that contains the score; used to detect "inside notation" for zoom
+  const scoreScaledWrapperRef = useRef(null); // div with transform: scale(scoreZoomLevel); used for PDF so export matches view
   const mainRef = useRef(null);
   const mainAreaRef = useRef(null); // used for fit-page scale calculation
   const lastVerticalContentHeightRef = useRef(0);
@@ -2423,7 +2426,9 @@ function NoodiMeisterCore({ icons }) {
   }, [songTitle, t]);
 
   const exportToPdf = useCallback(async (saveOptions = {}) => {
-    const container = scoreContainerRef?.current;
+    const zoom = scoreZoomLevelRef.current ?? 1;
+    const useScaledWrapper = !!scoreScaledWrapperRef.current;
+    const container = useScaledWrapper ? scoreScaledWrapperRef.current : scoreContainerRef?.current;
     if (!container) {
       setSaveFeedback(t('feedback.exportFailed'));
       setTimeout(() => setSaveFeedback(''), 2000);
@@ -2435,7 +2440,7 @@ function NoodiMeisterCore({ icons }) {
     setShowPageNavigator(true);
     await new Promise((r) => setTimeout(r, 150));
     try {
-      /** 2× render for retina/print (A4 794×1123 → 1588×2246 px). Võib kasutada 3 täiendava teravuse jaoks. */
+      /** 2× render for retina/print; kui kasutaja on suumimud, sama scaleFactor kandub PDF-i (tulemus = nagu eelvaates). */
       const exportScale = 2;
       const canvas = await html2canvas(container, {
         scale: exportScale,
@@ -2446,7 +2451,7 @@ function NoodiMeisterCore({ icons }) {
         windowWidth: container.scrollWidth,
         windowHeight: container.scrollHeight,
       });
-      const scale = exportScale;
+      const scale = useScaledWrapper ? exportScale * zoom : exportScale;
       const PAD = 32;
       const padScale = PAD * scale;
       const rawContentW = canvas.width - 2 * padScale;
@@ -8448,7 +8453,21 @@ function NoodiMeisterCore({ icons }) {
             const contentH = viewFitOrSmart ? (logicalContentHeight || 800) : (mainContentHeight || logicalContentHeight || 800);
             const baseW = isHorizontalFlow ? totalPagesVal * pw : (viewFitOrSmart ? pw * fitPageScale : pw);
             const baseH = isHorizontalFlow ? a4PageHeightVal : contentH;
+            const handleFitToWidth = () => {
+              const viewW = mainRef.current?.clientWidth ?? 800;
+              const padding = 32;
+              const fitScale = Math.max(SCORE_ZOOM_MIN, Math.min(SCORE_ZOOM_MAX, (viewW - padding) / baseW));
+              setScoreZoomLevel(Math.round(fitScale * 100) / 100);
+            };
             return (
+          <div className="flex flex-col flex-1 min-h-0 w-full">
+          <div className="flex items-center gap-3 flex-wrap flex-shrink-0 py-2 px-1 border-b border-amber-200/60 dark:border-white/20">
+            <span className="text-sm font-medium text-amber-900 dark:text-amber-100">Suum:</span>
+            <button type="button" onClick={handleFitToWidth} className="px-3 py-1.5 rounded-lg bg-amber-100 dark:bg-amber-900/50 text-amber-900 dark:text-amber-100 text-sm font-medium hover:bg-amber-200 dark:hover:bg-amber-800/60" title="Mahuta noodipaber A4 raami laiusele">Mahuta lehele</button>
+            <input type="range" min={SCORE_ZOOM_MIN * 100} max={SCORE_ZOOM_MAX * 100} step="5" value={scoreZoomLevel * 100} onChange={(e) => setScoreZoomLevel(Math.round((Number(e.target.value) / 100) * 100) / 100)} className="w-28 accent-amber-600" aria-label="Noodiala suum" />
+            <span className="text-sm text-amber-800 dark:text-amber-200 tabular-nums">{Math.round(scoreZoomLevel * 100)}%</span>
+          </div>
+          <div className="flex justify-center items-start flex-1 min-h-0 w-full" style={{ display: 'flex' }}>
           <div
             ref={notationZoomAreaRef}
             style={{ width: baseW * scoreZoomLevel, height: baseH * scoreZoomLevel, flexShrink: 0 }}
@@ -8458,6 +8477,7 @@ function NoodiMeisterCore({ icons }) {
             onTouchEnd={handleScoreZoomTouchEnd}
           >
           <div
+            ref={scoreScaledWrapperRef}
             style={{ transform: `scale(${scoreZoomLevel})`, transformOrigin: '0 0', width: baseW, height: baseH }}
           >
           <div
@@ -8872,7 +8892,7 @@ function NoodiMeisterCore({ icons }) {
                   systemTotalHeight={((visibleStaffList.length > 0 ? visibleStaffList.length : staves.length) * (effectiveStaffHeight + layoutPartsGap)) - layoutPartsGap}
                   layoutGlobalSpacingMultiplier={layoutGlobalSpacingMultiplier}
                   showLayoutBreakIcons={false}
-                  showStaffSpacerHandles={!isExportingPdf}
+                  showStaffSpacerHandles={!isExportingPdf && !showPdfExportPreview}
                   onSystemYOffsetChange={isFirstVisible ? (systemIndex, deltaY) => {
                     dirtyRef.current = true;
                     setSystemYOffsets((prev) => {
@@ -9023,6 +9043,8 @@ function NoodiMeisterCore({ icons }) {
                 </div>
               );
             })}
+          </div>
+          </div>
           </div>
           </div>
           </div>
