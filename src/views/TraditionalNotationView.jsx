@@ -553,7 +553,15 @@ export function TraditionalNotationView({
                   )}
 
                   {showBarNumbers && staffIndex === 0 && sys.measureIndices.length > 0 && (
-                    <text x={20} y={staffY + staffLinePositions[0] - 14} fontSize={barNumberSize} fontWeight="bold" fill="#555" textAnchor="middle" fontFamily="sans-serif">
+                    <text
+                      x={effectiveMarginLeft}
+                      y={staffY + staffLinePositions[0]}
+                      fontSize={barNumberSize}
+                      fontWeight="bold"
+                      fill="#555"
+                      textAnchor="end"
+                      fontFamily="sans-serif"
+                    >
                       {sys.measureIndices[0] + 1}
                     </text>
                   )}

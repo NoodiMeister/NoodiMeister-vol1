@@ -201,7 +201,7 @@ const translations = {
     'toolbox.notehead': 'Noodipea režiim',
     'toolbox.instruments': 'Instrumendid',
     'toolbox.addInstrument': 'Lisa instrument',
-    'toolbox.repeatsJumps': 'Kordused ja hüpped',
+    'toolbox.repeatsJumps': 'Kordused, hüpped ja taktijooned',
     'toolbox.layout': 'Paigutus',
     'toolbox.chords': 'Akordid',
     'toolbox.textBox': 'Teksti kast',

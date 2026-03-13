@@ -68,6 +68,11 @@ html, body, #root {
   min-height: 100px;
 }
 
+/* Wrapper for print scaling: invisible for layout on screen */
+.noodimeister-print-scaler {
+  display: contents;
+}
+
 /* Print: only the notation sheet (score). Page setup (paper size, orientation, horizontal flow) determines printable view. */
 @media print {
   /* Named page sizes so print/PDF follow page setup (A4/A3/A5, portrait/landscape). Horizontal flow uses landscape. */
@@ -132,5 +137,14 @@ html, body, #root {
     box-shadow: none !important;
     border: none !important;
     border-radius: 0 !important;
+    overflow: hidden !important;
+  }
+  /* Scale score to fit printable area (A4 etc.) so nothing is cut and page is filled */
+  .noodimeister-print-scaler {
+    display: block !important;
+    width: var(--print-content-w, 100%) !important;
+    height: var(--print-content-h) !important;
+    transform: scale(var(--print-scale, 1)) !important;
+    transform-origin: top left !important;
   }
 }

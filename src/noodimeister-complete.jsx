@@ -1102,6 +1102,7 @@ function NoodiMeisterCore({ icons }) {
   const [clipboard, setClipboard] = useState([]);
   const [clipboardHistory, setClipboardHistory] = useState([]); // [{ id, notes, createdAt }]
   const [clipboardHistoryOpen, setClipboardHistoryOpen] = useState(false);
+  const [scoreContextMenu, setScoreContextMenu] = useState(null); // { x, y, canCopy, canPaste }
   // Laulusõna ahelrežiim: valitud noodist alates järjest silbitamine; "-" lisab tühiku ja liigub järgmise noodi alla
   const [lyricChainStart, setLyricChainStart] = useState(-1);
   const [lyricChainEnd, setLyricChainEnd] = useState(-1);
@@ -1138,6 +1139,27 @@ function NoodiMeisterCore({ icons }) {
   useEffect(() => {
     setLyricChainIndex(null);
   }, [selectedNoteIndex, selectionStart, selectionEnd]);
+
+  // SEL-režiimis näita kleepimiskohta: liigu kursori positsiooniga valiku lõppu,
+  // et noodirea kursorijoon saaks näidata kleepimise sihtkohta (pärast valitud noote).
+  useEffect(() => {
+    if (noteInputMode) return;
+    // Kui midagi pole valitud, ei nihuta kursori positsiooni (kursor jääb eelmisse asukohta).
+    let lastSelectedIndex = -1;
+    if (selectionStart >= 0 && selectionEnd >= 0) {
+      lastSelectedIndex = Math.max(selectionStart, selectionEnd);
+    } else if (selectedNoteIndex >= 0) {
+      lastSelectedIndex = selectedNoteIndex;
+    }
+    if (lastSelectedIndex < 0 || lastSelectedIndex >= notes.length) return;
+    let beat = 0;
+    for (let i = 0; i <= lastSelectedIndex; i += 1) {
+      const n = notes[i];
+      const dur = Number(n?.duration) || 1;
+      beat += dur;
+    }
+    setCursorPosition(beat);
+  }, [noteInputMode, selectedNoteIndex, selectionStart, selectionEnd, notes, setCursorPosition]);
 
   // Paigutus: lehekülje suund, taktide arv rea kohta (0 = automaatne), käsitsi rea- ja lehevahetused
   const [pageOrientation, setPageOrientation] = useState('portrait'); // 'portrait' | 'landscape'
@@ -2303,9 +2325,42 @@ function NoodiMeisterCore({ icons }) {
     }, durationSec * 1000 + 1500);
   }, [isPedagogicalProject, notes, pedagogicalAudioUrl, pedagogicalAudioDuration, pedagogicalAudioBpm, songTitle, stopPedagogicalPlayback, t]);
 
+  const printOptionsRef = useRef({ paperSize: 'a4', pageOrientation: 'portrait' });
+
   const handlePrint = useCallback(() => {
     setHeaderMenuOpen(null);
     window.print();
+  }, []);
+
+  useEffect(() => {
+    printOptionsRef.current = { paperSize, pageOrientation };
+  }, [paperSize, pageOrientation]);
+
+  useEffect(() => {
+    const onBeforePrint = () => {
+      const el = scoreContainerRef?.current;
+      if (!el) return;
+      const pad = 32;
+      const cw = el.scrollWidth - 2 * pad;
+      const ch = Math.max(1, el.scrollHeight - 2 * pad);
+      const { paperSize: ps, pageOrientation: orient } = printOptionsRef.current;
+      const mmToPx = (mm) => Math.round((mm * 96) / 25.4);
+      const margin = 12 * 2;
+      const printable = {
+        'a4': { portrait: [210 - margin, 297 - margin], landscape: [297 - margin, 210 - margin] },
+        'a3': { portrait: [297 - margin, 420 - margin], landscape: [420 - margin, 297 - margin] },
+        'a5': { portrait: [148 - margin, 210 - margin], landscape: [210 - margin, 148 - margin] },
+      };
+      const [wMm, hMm] = (printable[ps] || printable.a4)[orient === 'landscape' ? 'landscape' : 'portrait'];
+      const printW = mmToPx(wMm);
+      const printH = mmToPx(hMm);
+      const scale = Math.min(1, printW / cw, printH / ch);
+      document.documentElement.style.setProperty('--print-scale', String(scale));
+      document.documentElement.style.setProperty('--print-content-w', `${cw}px`);
+      document.documentElement.style.setProperty('--print-content-h', `${ch}px`);
+    };
+    window.addEventListener('beforeprint', onBeforePrint);
+    return () => window.removeEventListener('beforeprint', onBeforePrint);
   }, []);
 
   const pdfExportOptionsRef = useRef({ pageFlowDirection: 'vertical', pageWidth: LAYOUT.PAGE_WIDTH_MIN });
@@ -2332,6 +2387,12 @@ function NoodiMeisterCore({ icons }) {
         windowHeight: container.scrollHeight,
       });
       const scale = 2;
+      // Noodiala padding (p-8) – PDF-is lõikame ära, et sisu täidaks A4 lehe ja ülemist ei kärbi
+      const PAD = 32;
+      const padScale = PAD * scale;
+      const contentW = Math.max(1, canvas.width - 2 * padScale);
+      const contentH = Math.max(1, canvas.height - 2 * padScale);
+
       const { pageFlowDirection: flowDir, pageWidth: pw, pageOrientation: pdfPageOrientation } = pdfExportOptionsRef.current;
       const isHorizontalFlow = flowDir === 'horizontal';
       const pdfOrientation = isHorizontalFlow ? 'landscape' : pageOrientation;
@@ -2346,17 +2407,17 @@ function NoodiMeisterCore({ icons }) {
       if (isHorizontalFlow) {
         const pageWidthPx = pw || LAYOUT.PAGE_WIDTH_MIN;
         const a4PageHeightPx = pageWidthPx * LAYOUT.A4_HEIGHT_RATIO_LANDSCAPE;
-        const totalPages = Math.max(1, Math.round(container.scrollWidth / pageWidthPx));
+        const totalPages = Math.max(1, Math.round((container.scrollWidth - 2 * PAD) / pageWidthPx));
         for (let p = 0; p < totalPages; p++) {
-          const srcX = p * pageWidthPx * scale;
+          const srcX = padScale + p * pageWidthPx * scale;
           const sliceW = Math.round(pageWidthPx * scale);
-          const sliceH = Math.round(a4PageHeightPx * scale);
-          if (srcX + sliceW > canvas.width || sliceH > canvas.height) continue;
+          const sliceH = Math.round((a4PageHeightPx - 2 * PAD) * scale);
+          if (srcX + sliceW > canvas.width || sliceH > canvas.height - padScale * 2) continue;
           const sliceCanvas = document.createElement('canvas');
           sliceCanvas.width = sliceW;
           sliceCanvas.height = sliceH;
           const ctx = sliceCanvas.getContext('2d');
-          ctx.drawImage(canvas, srcX, 0, sliceW, sliceH, 0, 0, sliceW, sliceH);
+          ctx.drawImage(canvas, srcX, padScale, sliceW, sliceH, 0, 0, sliceW, sliceH);
           const sliceData = sliceCanvas.toDataURL('image/png');
           const drawW = Math.min(pageW, pageH * (sliceW / sliceH));
           const drawH = Math.min(pageH, pageW * (sliceH / sliceW));
@@ -2366,7 +2427,7 @@ function NoodiMeisterCore({ icons }) {
       } else {
         const systems = systemsForScoreRef.current || [];
         const pageStarts = [0, ...systems.filter((s) => s.pageBreakBefore).map((s) => s.yOffset)];
-        const totalContentHeight = container.scrollHeight;
+        const totalContentHeight = container.scrollHeight - 2 * PAD;
         if (pageStarts.length >= 2) {
           for (let p = 0; p < pageStarts.length; p++) {
             const startPx = pageStarts[p];
@@ -2374,10 +2435,10 @@ function NoodiMeisterCore({ icons }) {
             const sliceHeightPx = endPx - startPx;
             if (sliceHeightPx <= 0) continue;
             const sliceCanvas = document.createElement('canvas');
-            sliceCanvas.width = canvas.width;
+            sliceCanvas.width = contentW;
             sliceCanvas.height = Math.round(sliceHeightPx * scale);
             const ctx = sliceCanvas.getContext('2d');
-            ctx.drawImage(canvas, 0, startPx * scale, canvas.width, sliceCanvas.height, 0, 0, canvas.width, sliceCanvas.height);
+            ctx.drawImage(canvas, padScale, padScale + startPx * scale, contentW, sliceCanvas.height, 0, 0, contentW, sliceCanvas.height);
             const sliceData = sliceCanvas.toDataURL('image/png');
             const sliceImgW = sliceCanvas.width;
             const sliceImgH = sliceCanvas.height;
@@ -2387,9 +2448,14 @@ function NoodiMeisterCore({ icons }) {
             pdf.addImage(sliceData, 'PNG', 0, 0, drawW, drawH);
           }
         } else {
-          const imgData = canvas.toDataURL('image/png');
+          const contentCanvas = document.createElement('canvas');
+          contentCanvas.width = contentW;
+          contentCanvas.height = contentH;
+          const ctx = contentCanvas.getContext('2d');
+          ctx.drawImage(canvas, padScale, padScale, contentW, contentH, 0, 0, contentW, contentH);
+          const imgData = contentCanvas.toDataURL('image/png');
           const imgW = pageW;
-          const imgH = (canvas.height * imgW) / canvas.width;
+          const imgH = (contentCanvas.height * imgW) / contentCanvas.width;
           let heightLeft = imgH;
           let position = 0;
           pdf.addImage(imgData, 'PNG', 0, position, imgW, imgH);
@@ -3428,6 +3494,23 @@ function NoodiMeisterCore({ icons }) {
     return [];
   }, [notes, selectedNoteIndex, selectionStart, selectionEnd]);
 
+  // Kopeeri praegune valik lõikelauale (Ctrl/Cmd+C, kontekstimenüü).
+  const copySelectionToClipboard = useCallback(() => {
+    const selectedNotes = getSelectedNotes();
+    if (!selectedNotes.length) return;
+    const payload = JSON.parse(JSON.stringify(selectedNotes));
+    setClipboard(payload);
+    setClipboardHistory((prev) => {
+      const entry = {
+        id: Date.now() + Math.random(),
+        notes: payload,
+        createdAt: Date.now()
+      };
+      const next = [entry, ...prev];
+      return next.slice(0, 20);
+    });
+  }, [getSelectedNotes, setClipboardHistory]);
+
   // Check if note is in selection range
   const isNoteSelected = useCallback((index) => {
     if (selectionStart >= 0 && selectionEnd >= 0) {
@@ -4233,20 +4316,7 @@ function NoodiMeisterCore({ icons }) {
       // also allow copying while N-mode is ON so users can select & duplicate patterns.
       if (modKey && e.code === 'KeyC' && (!noteInputMode || notationStyle === 'FIGURENOTES')) {
         e.preventDefault();
-        const selectedNotes = getSelectedNotes();
-        if (selectedNotes.length > 0) {
-          const payload = JSON.parse(JSON.stringify(selectedNotes));
-          setClipboard(payload);
-          setClipboardHistory((prev) => {
-            const entry = {
-              id: Date.now() + Math.random(),
-              notes: payload,
-              createdAt: Date.now()
-            };
-            const next = [entry, ...prev];
-            return next.slice(0, 20);
-          });
-        }
+        copySelectionToClipboard();
         return;
       }
 
@@ -8186,6 +8256,7 @@ function NoodiMeisterCore({ icons }) {
               if (!Number.isNaN(optionIndex) && toolboxes.rhythm?.options?.[optionIndex]) handleToolboxSelection(optionIndex);
             }}
           >
+              <div className="noodimeister-print-scaler">
               {pageDesignDataUrl && (() => {
                 const pos = `${pageDesignPositionX}% ${pageDesignPositionY}%`;
                 const hasCrop = pageDesignCrop.top > 0 || pageDesignCrop.right > 0 || pageDesignCrop.bottom > 0 || pageDesignCrop.left > 0;
@@ -8262,34 +8333,19 @@ function NoodiMeisterCore({ icons }) {
                   }
                 }}
                 onContextMenu={(e) => {
-                  // Right-click paste in SEL mode (selection mode).
-                  if (noteInputModeRef.current) return;
-                  if (!clipboard || clipboard.length <= 0) return;
+                  // Avatud kontekstimenüü: kopeeri / kleebi / tühista valik.
+                  // Töötame ainult SEL-režiimis (noteInputModeRef.current === false),
+                  // et mitte segada N-režiimi noodisisestust.
+                  if (noteInputModeRef.current && notationStyle !== 'FIGURENOTES') return;
                   e.preventDefault();
-                  const insertBase = selectedNoteIndex >= 0 ? selectedNoteIndex : -1;
-                  const insertIndex = Math.max(0, Math.min(notes.length, insertBase + 1));
-                  const pastedNotes = clipboard.map(note => ({ ...note, id: Date.now() + Math.random() }));
-                  const clipboardDuration = pastedNotes.reduce((sum, note) => sum + (Number(note.duration) || 1), 0);
-                  const insertBeat = notes.slice(0, insertIndex).reduce((s, n) => s + (Number(n.duration) || 1), 0);
-                  const beatsPerMeasure = timeSignature.beats;
-                  const beatUnit = timeSignature.beatUnit;
-                  let firstMeasureBeats = beatsPerMeasure;
-                  if (pickupEnabled && pickupQuantity > 0 && pickupDuration) {
-                    const oneUnitBeats = durationToBeats(pickupDuration, beatUnit);
-                    firstMeasureBeats = Math.max(0.25, Math.min(pickupQuantity * oneUnitBeats, beatsPerMeasure - 0.25));
-                  }
-                  const totalMeasures = Math.max(1, 1 + (addedMeasures || 0));
-                  const endBeat = firstMeasureBeats + (totalMeasures - 1) * beatsPerMeasure;
-                  const availableBeats = Math.max(0, endBeat - insertBeat);
-                  const needExtraBeats = Math.max(0, clipboardDuration - availableBeats);
-                  const measuresToAdd = hasFullAccess && needExtraBeats > 0
-                    ? Math.ceil(needExtraBeats / beatsPerMeasure)
-                    : 0;
-                  if (measuresToAdd > 0) setAddedMeasures((prev) => prev + measuresToAdd);
-                  const newNotes = [...notes];
-                  newNotes.splice(insertIndex, 0, ...pastedNotes);
-                  saveToHistory(notes);
-                  setNotes(newNotes);
+                  const hasSelection = selectedNoteIndex >= 0 || (selectionStart >= 0 && selectionEnd >= 0);
+                  const hasClipboard = clipboard && clipboard.length > 0;
+                  setScoreContextMenu({
+                    x: e.clientX,
+                    y: e.clientY,
+                    canCopy: hasSelection,
+                    canPaste: hasClipboard
+                  });
                 }}
                 role="presentation"
               >
@@ -8571,7 +8627,7 @@ function NoodiMeisterCore({ icons }) {
                   systemTotalHeight={((visibleStaffList.length > 0 ? visibleStaffList.length : staves.length) * (effectiveStaffHeight + layoutPartsGap)) - layoutPartsGap}
                   layoutGlobalSpacingMultiplier={layoutGlobalSpacingMultiplier}
                   showLayoutBreakIcons={false}
-                  showStaffSpacerHandles={true}
+                  showStaffSpacerHandles={!isExportingPdf}
                   onSystemYOffsetChange={isFirstVisible ? (systemIndex, deltaY) => {
                     dirtyRef.current = true;
                     setSystemYOffsets((prev) => {
@@ -8722,6 +8778,7 @@ function NoodiMeisterCore({ icons }) {
                 </div>
               );
             })}
+          </div>
           </div>
           </div>
           </div>
@@ -9296,18 +9353,6 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
     const selectionHeight = size * 2.5 + tailLength;
     return (
       <g>
-        {/* Selection highlight background */}
-        {isSelected && (
-          <rect
-            x={x - size - pad * 0.5}
-            y={y - size * 1.25}
-            width={size * 2 + pad}
-            height={selectionHeight}
-            fill="#93c5fd"
-            opacity="0.3"
-            rx="4"
-          />
-        )}
         {shapeElement}
         {/* Noodi nimi kujundi sees: JO, LE, MI (Kodály solfeeg) */}
         <text x={x} y={y} textAnchor="middle" dominantBaseline="central" fill={textColor} fontSize={Math.max(8, size * 0.5)} fontWeight="bold">
@@ -9425,6 +9470,85 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
   })() : null;
   const cursorSlotCenterXValid = cursorSlotCenterX != null && Number.isFinite(cursorSlotCenterX);
 
+  // Ühtne valikukast (esimese kuni viimase valitud löögi vahel) – ainult siis, kui ajajoon on aktiivne staff.
+  const selectionHighlightRect = (() => {
+    if (!isActiveStaff) return null;
+    if (!Array.isArray(allNotes) || allNotes.length === 0) return null;
+    // Leia globaalne valik (kasutame sama loogikat, mida isNoteSelected).
+    let firstIdx = -1;
+    let lastIdx = -1;
+    for (let i = 0; i < allNotes.length; i += 1) {
+      if (isNoteSelected(i)) {
+        if (firstIdx === -1) firstIdx = i;
+        lastIdx = i;
+      }
+    }
+    if (firstIdx < 0 || lastIdx < firstIdx) return null;
+    // Arvuta valiku alg- ja lõpp-löök.
+    let beat = 0;
+    let startBeat = 0;
+    let endBeat = 0;
+    for (let i = 0; i < allNotes.length; i += 1) {
+      const n = allNotes[i];
+      const dur = Number(n?.duration) || 1;
+      if (i === firstIdx) startBeat = beat;
+      if (i === lastIdx) endBeat = beat + dur;
+      beat += dur;
+    }
+    if (endBeat <= startBeat) return null;
+    // Leia süsteem ja x-koordinaadid.
+    let beatAcc = 0;
+    for (let s = 0; s < systems.length; s += 1) {
+      const sys = systems[s];
+      const beatsInSys = getSystemTotalBeats(sys);
+      const sysStartBeat = beatAcc;
+      const sysEndBeat = beatAcc + beatsInSys;
+      const selStart = Math.max(startBeat, sysStartBeat);
+      const selEnd = Math.min(endBeat, sysEndBeat);
+      if (selEnd <= selStart) {
+        beatAcc += beatsInSys;
+        continue;
+      }
+      const widths = sys.measureWidths ?? sys.measureIndices.map(() => sys.measureWidth ?? beatsPerMeasure * 80);
+      let localStart = selStart - sysStartBeat;
+      let localEnd = selEnd - sysStartBeat;
+      let xStart = marginLeft;
+      let xEnd = marginLeft;
+      for (let j = 0; j < sys.measureIndices.length; j += 1) {
+        const m = effectiveMeasures[sys.measureIndices[j]];
+        const beatCount = m.beatCount ?? beatsPerMeasure;
+        const mw = widths[j] ?? 80 * beatCount;
+        const beatWidth = mw / beatCount;
+        if (localStart > 0) {
+          const step = Math.min(localStart, beatCount);
+          xStart += step * beatWidth;
+          localStart -= step;
+        }
+        if (localEnd > 0) {
+          const step = Math.min(localEnd, beatCount);
+          xEnd += step * beatWidth;
+          localEnd -= step;
+        }
+        if (localStart <= 0 && localEnd <= 0) break;
+      }
+      const yTop = sys.yOffset + cursorInset;
+      const height = cursorRowHeight - cursorInset * 2;
+      return (
+        <rect
+          key={`sel-${s}`}
+          x={xStart}
+          y={yTop}
+          width={Math.max(2, xEnd - xStart)}
+          height={Math.max(4, height)}
+          fill="#bfdbfe"
+          opacity="0.35"
+          rx="4"
+        />
+      );
+    }
+    return null;
+  })();
+
   const svgWidth = isHorizontal ? totalPages * (pageWidth || LAYOUT.PAGE_WIDTH_MIN) : '100%';
   const svgHeight = isHorizontal ? a4PageHeight : totalHeight;
   var viewBoxW = typeof svgWidth === 'number' ? svgWidth : (pageWidth || LAYOUT.PAGE_WIDTH_MIN);
@@ -9442,6 +9566,7 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
       onPointerDown={(e) => { if (e.pointerType !== 'mouse') handleStaffClick(e); }}
       style={isHorizontal ? { display: 'block', minWidth: svgWidth } : undefined}
     >
+      {selectionHighlightRect}
       {/* No canvas/SVG background: paper style comes from the score container (CSS) like Docs/MuseScore */}
       {isFigurenotesMode ? (
         <FigurenotesView
@@ -9546,12 +9671,15 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
       )}
 
 
-      {/* Cursor + Ghost note: visible in note input mode, or when pedagogical playback/export. Always show when we have cursorInfo; use fallback X if slot X is invalid so the cursor is never missing in N mode. */}
-      {(noteInputMode || isPedagogicalAudioPlaying || isExportingAnimation) && cursorInfo && (!isFigurenotesMode || isActiveStaff) && (() => {
+  {/* Cursor + Ghost note / kleepimise kursor: nähtav noodisisestusrežiimis,
+          pedagoogilisel taasesitusel/ekspordil ning SEL-režiimis, kui mõni noot on valitud.
+          SEL-režiimis kuvatakse ainult püstjoont (ilma ringi/emojita), et näidata kleepimiskohta. */}
+      {(noteInputMode || isPedagogicalAudioPlaying || isExportingAnimation || (!noteInputMode && selectedNoteIndex >= 0)) && cursorInfo && (!isFigurenotesMode || isActiveStaff) && (() => {
         const cursorX = (cursorSlotCenterX != null && Number.isFinite(cursorSlotCenterX)) ? cursorSlotCenterX : (marginLeft + 40);
         const cursorChar = (pedagogicalPlayheadEmoji || '').trim();
-        const showLine = cursorChar === '';
-        const displayEmoji = cursorChar || '🎵';
+        const isSelectionCursor = !noteInputMode && !isPedagogicalAudioPlaying && !isExportingAnimation && selectedNoteIndex >= 0;
+        const showLine = isSelectionCursor || cursorChar === '';
+        const displayEmoji = isSelectionCursor ? '' : (cursorChar || '🎵');
         const emojiSizePx = Math.max(1, Math.min(500, cursorSizePx ?? pedagogicalPlayheadEmojiSize));
         const beatProgress = cursorPosition % 1;
         const BASE_JUMP = 14;
