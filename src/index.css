@@ -86,6 +86,33 @@ html, body, #root {
   display: contents;
 }
 
+/* PDF export capture: eemaldab teksti-põhise tühimiku (3–4 px nihe), lukustab tausta. */
+.noodimeister-export-capture,
+.noodimeister-export-capture div,
+.noodimeister-export-capture svg,
+.noodimeister-export-capture img {
+  display: block;
+  margin: 0;
+  padding: 0;
+  vertical-align: top;
+}
+.noodimeister-export-capture .noodimeister-print-scaler {
+  line-height: 0;
+  font-size: 0;
+}
+/* Ekspordi ajal ei lõigata sisu ära: kõik, mis on noodilehel, jääb nähtavale. */
+.noodimeister-export-capture,
+.noodimeister-export-capture.A4-page-container {
+  overflow: visible;
+}
+
+/* A4 lehekülg: lehekatkemise kontroll. (overflow: hidden ainult trükkimisel, mitte ekspordi capture’il.) */
+.A4-page-container {
+  page-break-after: always;
+  break-after: page;
+  overflow: hidden;
+}
+
 /* Print: only the notation sheet (score). One browser print page = one paper page (A4 210×297 mm). User can verify in print preview. */
 @media print {
   /* Named page sizes: trüki eelvaates on üks leht = üks A4 (210×297 mm); sisu ei ületa ega jää põhjendamatult väikeseks. */

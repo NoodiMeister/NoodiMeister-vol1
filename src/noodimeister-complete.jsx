@@ -1021,7 +1021,7 @@ function NoodiMeisterCore({ icons }) {
   // Tuplet mode: null = normal; { type: 3|5|6|7, inSpaceOf: 2|4 } – triool 3 in 2, kvintool 5 in 4, jne. Aktiveeritakse Cmd/Ctrl+3,5,6,7
   const [tupletMode, setTupletMode] = useState(null);
   const [timeSignature, setTimeSignature] = useState({ beats: 4, beatUnit: 4 });
-  const [pixelsPerBeat, setPixelsPerBeat] = useState(75); // laius löögi kohta (px), vaikimisi 75 (vastab noodigraafika vaikimisi suurusele)
+  const [pixelsPerBeat, setPixelsPerBeat] = useState(92); // laius löögi kohta (px), vaikimisi 92 (vastab noodigraafika vaikimisi suurusele)
   const [cursorPosition, setCursorPosition] = useState(3);
   const [keySignature, setKeySignature] = useState('C');
   const [staffLines, setStaffLines] = useState(5);
@@ -1365,7 +1365,7 @@ function NoodiMeisterCore({ icons }) {
   const [tuningReferenceOctave, setTuningReferenceOctave] = useState(3);
   const [tuningReferenceHz, setTuningReferenceHz] = useState(440);
   const [playNoteOnInsert, setPlayNoteOnInsert] = useState(true);
-  const [figurenotesSize, setFigurenotesSize] = useState(105); // Noodigraafika suurus (figuurid ja noodid), 12–500 px (vaikimisi 105)
+  const [figurenotesSize, setFigurenotesSize] = useState(92); // Noodigraafika suurus (figuurid ja noodid), 12–500 px (vaikimisi 92)
   const [figurenotesStems, setFigurenotesStems] = useState(false); // Figuurnotatsioonis rütmi näitamine noodivartega (vaikimisi välja)
   const [figurenotesChordLineGap, setFigurenotesChordLineGap] = useState(6); // Akordirida figuurnotatsioonis: vahe meloodiareal ja akordirea vahel 0–20 px
   const [figurenotesChordBlocks, setFigurenotesChordBlocks] = useState(false); // Akordirežiim figuurnotatsioonis: värvilised akordiplokid akordireal
@@ -2385,7 +2385,7 @@ function NoodiMeisterCore({ icons }) {
     const w = el.scrollWidth;
     const h = el.scrollHeight;
     html2canvas(el, {
-      scale: 0.35,
+      scale: 0.55,
       useCORS: true,
       logging: false,
       width: w,
@@ -2399,12 +2399,8 @@ function NoodiMeisterCore({ icons }) {
   }, [showPdfExportPreview]);
 
   const handlePdfPreviewFit = useCallback(() => {
-    const cont = pdfPreviewContainerRef?.current;
-    if (!cont || !pdfPreviewSize?.w || !pdfPreviewSize?.h) { setPdfPreviewZoom(1); return; }
-    const r = cont.getBoundingClientRect();
-    const scale = Math.min(1, (r.width || 400) / pdfPreviewSize.w, (r.height || 200) / pdfPreviewSize.h);
-    setPdfPreviewZoom(Math.max(0.2, scale));
-  }, [pdfPreviewSize]);
+    setPdfPreviewZoom(1);
+  }, []);
 
   const handlePdfExportChooseLocation = useCallback(async () => {
     const filename = ((songTitle || t('common.untitled')).replace(/\s+/g, '-').replace(/[^\w\-.]/g, '') || 'score') + '.pdf';
@@ -2426,9 +2422,8 @@ function NoodiMeisterCore({ icons }) {
   }, [songTitle, t]);
 
   const exportToPdf = useCallback(async (saveOptions = {}) => {
-    const zoom = scoreZoomLevelRef.current ?? 1;
-    const useScaledWrapper = !!scoreScaledWrapperRef.current;
-    const container = useScaledWrapper ? scoreScaledWrapperRef.current : scoreContainerRef?.current;
+    /* Zoom on ainult ekraanil; PDF kasutab alati mastaapi 1.0 (A4 täismõõt), nagu Sibelius/MuseScore. */
+    const container = scoreContainerRef?.current;
     if (!container) {
       setSaveFeedback(t('feedback.exportFailed'));
       setTimeout(() => setSaveFeedback(''), 2000);
@@ -2440,22 +2435,28 @@ function NoodiMeisterCore({ icons }) {
     setShowPageNavigator(true);
     await new Promise((r) => setTimeout(r, 150));
     try {
-      /** 2× render for retina/print; kui kasutaja on suumimud, sama scaleFactor kandub PDF-i (tulemus = nagu eelvaates). */
+      container.classList.add('noodimeister-export-capture');
+      await new Promise((r) => requestAnimationFrame(r));
+      /** 2× render for retina/print; scrollY/scrollX nullib brauseri kerimise nihke (3–4 px). */
       const exportScale = 2;
       const canvas = await html2canvas(container, {
         scale: exportScale,
         useCORS: true,
         logging: false,
+        scrollX: 0,
+        scrollY: 0,
         width: container.scrollWidth,
         height: container.scrollHeight,
         windowWidth: container.scrollWidth,
         windowHeight: container.scrollHeight,
       });
-      const scale = useScaledWrapper ? exportScale * zoom : exportScale;
-      const PAD = 32;
-      const padScale = PAD * scale;
-      const rawContentW = canvas.width - 2 * padScale;
-      const rawContentH = canvas.height - padScale;
+      container.classList.remove('noodimeister-export-capture');
+      const scale = exportScale;
+      /* 0 px / 0 mm nihke: täisleht kasutuses, teksti ega noote ei lõigata ära. */
+      const PAD = 0;
+      const padScale = 0;
+      const rawContentW = canvas.width;
+      const rawContentH = canvas.height;
       const bounds = exportContentBoundsRef.current;
       const boundsW = (bounds?.width > 0) ? Math.round(bounds.width * scale) : rawContentW;
       const contentW = Math.max(1, Math.min(rawContentW, boundsW));
@@ -2474,7 +2475,7 @@ function NoodiMeisterCore({ icons }) {
       });
       const pdfPageWmm = pdf.internal.pageSize.getWidth();
       const pdfPageHmm = pdf.internal.pageSize.getHeight();
-      const PDF_TOP_MARGIN_MM = 3;
+      const PDF_TOP_MARGIN_MM = 0;
       const imgWmm = pdfOrientation === 'landscape' ? A4_HEIGHT_MM : A4_WIDTH_MM;   /* 210 */
       const imgHmm = pdfOrientation === 'landscape' ? A4_WIDTH_MM : A4_HEIGHT_MM;   /* 297 */
 
@@ -2482,33 +2483,25 @@ function NoodiMeisterCore({ icons }) {
         const pageWidthPx = pw || LAYOUT.PAGE_WIDTH_PX;
         const a4PageHeightPx = pageWidthPx * LAYOUT.A4_HEIGHT_RATIO_LANDSCAPE;
         const totalPages = Math.max(1, Math.ceil(contentW / (pageWidthPx * scale)));
-        const extraTopPxH = 3 * scale;
         for (let p = 0; p < totalPages; p++) {
-          const srcX = padScale + p * pageWidthPx * scale;
+          const srcX = p * pageWidthPx * scale;
           const sliceW = Math.min(Math.round(pageWidthPx * scale), contentW - Math.round(p * pageWidthPx * scale));
-          const sliceH = Math.min(Math.round((a4PageHeightPx - 2 * PAD) * scale), contentH);
+          const sliceH = Math.min(Math.round(a4PageHeightPx * scale), contentH);
           if (sliceW <= 0 || sliceH <= 0) continue;
           const sliceCanvas = document.createElement('canvas');
           sliceCanvas.width = sliceW;
-          sliceCanvas.height = p === 0 ? sliceH + extraTopPxH : sliceH;
+          sliceCanvas.height = sliceH;
           const ctx = sliceCanvas.getContext('2d');
-          if (p === 0) {
-            ctx.fillStyle = '#ffffff';
-            ctx.fillRect(0, 0, sliceW, extraTopPxH);
-            ctx.drawImage(canvas, srcX, 0, sliceW, sliceH, 0, extraTopPxH, sliceW, sliceH);
-          } else {
-            ctx.drawImage(canvas, srcX, 0, sliceW, sliceH, 0, 0, sliceW, sliceH);
-          }
+          ctx.drawImage(canvas, srcX, 0, sliceW, sliceH, 0, 0, sliceW, sliceH);
           const sliceData = sliceCanvas.toDataURL('image/png');
           if (p > 0) pdf.addPage('a4', pdfOrientation);
-          pdf.addImage(sliceData, 'PNG', 0, p === 0 ? PDF_TOP_MARGIN_MM : 0, imgWmm, imgHmm);
+          pdf.addImage(sliceData, 'PNG', 0, 0, imgWmm, imgHmm);
         }
       } else {
         const systems = systemsForScoreRef.current || [];
         const pageStarts = [0, ...systems.filter((s) => s.pageBreakBefore).map((s) => s.yOffset)];
         const totalContentHeightPx = contentH / scale;
         if (pageStarts.length >= 2) {
-          const extraTopPx = 3 * scale;
           for (let p = 0; p < pageStarts.length; p++) {
             const startPx = pageStarts[p];
             const endPx = p < pageStarts.length - 1 ? pageStarts[p + 1] : totalContentHeightPx;
@@ -2517,36 +2510,27 @@ function NoodiMeisterCore({ icons }) {
             const sliceH = Math.round(sliceHeightPx * scale);
             const sliceCanvas = document.createElement('canvas');
             sliceCanvas.width = contentW;
-            sliceCanvas.height = p === 0 ? sliceH + extraTopPx : sliceH;
+            sliceCanvas.height = sliceH;
             const ctx = sliceCanvas.getContext('2d');
-            if (p === 0) {
-              ctx.fillStyle = '#ffffff';
-              ctx.fillRect(0, 0, contentW, extraTopPx);
-              ctx.drawImage(canvas, padScale, startPx * scale, contentW, sliceH, 0, extraTopPx, contentW, sliceH);
-            } else {
-              ctx.drawImage(canvas, padScale, startPx * scale, contentW, sliceH, 0, 0, contentW, sliceH);
-            }
+            ctx.drawImage(canvas, 0, startPx * scale, contentW, sliceH, 0, 0, contentW, sliceH);
             const sliceData = sliceCanvas.toDataURL('image/png');
             if (p > 0) pdf.addPage('a4', pdfOrientation);
-            pdf.addImage(sliceData, 'PNG', 0, p === 0 ? PDF_TOP_MARGIN_MM : 0, imgWmm, imgHmm);
+            pdf.addImage(sliceData, 'PNG', 0, 0, imgWmm, imgHmm);
           }
         } else {
-          const extraTopPx = 3 * scale;
           const contentCanvas = document.createElement('canvas');
           contentCanvas.width = contentW;
-          contentCanvas.height = contentH + extraTopPx;
+          contentCanvas.height = contentH;
           const ctx = contentCanvas.getContext('2d');
-          ctx.fillStyle = '#ffffff';
-          ctx.fillRect(0, 0, contentW, extraTopPx);
-          ctx.drawImage(canvas, padScale, 0, contentW, contentH, 0, extraTopPx, contentW, contentH);
+          ctx.drawImage(canvas, 0, 0, contentW, contentH, 0, 0, contentW, contentH);
           const imgData = contentCanvas.toDataURL('image/png');
           const imgHLongMm = (contentCanvas.height * imgWmm) / contentCanvas.width;
           const numPages = Math.max(1, Math.ceil(imgHLongMm / pdfPageHmm));
-          let position = PDF_TOP_MARGIN_MM;
+          let position = 0;
           pdf.addImage(imgData, 'PNG', 0, position, imgWmm, imgHLongMm);
           for (let p = 1; p < numPages; p++) {
             pdf.addPage('a4', pdfOrientation);
-            position = PDF_TOP_MARGIN_MM - p * pdfPageHmm;
+            position = -p * pdfPageHmm;
             pdf.addImage(imgData, 'PNG', 0, position, imgWmm, imgHLongMm);
           }
         }
@@ -2565,6 +2549,7 @@ function NoodiMeisterCore({ icons }) {
       setSaveFeedback(t('feedback.exportFailed'));
       setTimeout(() => setSaveFeedback(''), 2000);
     } finally {
+      if (container?.classList?.contains('noodimeister-export-capture')) container.classList.remove('noodimeister-export-capture');
       setIsExportingPdf(false);
     }
   }, [songTitle, t, pageOrientation, paperSize]);
@@ -6227,29 +6212,52 @@ function NoodiMeisterCore({ icons }) {
               </p>
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-sm font-medium text-amber-900 dark:text-white">Zoom:</span>
-                <button type="button" onClick={() => setPdfPreviewZoom(z => Math.max(0.25, z - 0.25))} className="px-2 py-1 rounded bg-amber-100 dark:bg-amber-900/40 text-amber-900 dark:text-amber-100 text-sm font-medium">− Shrink</button>
-                <button type="button" onClick={handlePdfPreviewFit} className="px-2 py-1 rounded bg-amber-100 dark:bg-amber-900/40 text-amber-900 dark:text-amber-100 text-sm font-medium">Fit</button>
-                <button type="button" onClick={() => setPdfPreviewZoom(z => Math.min(2, z + 0.25))} className="px-2 py-1 rounded bg-amber-100 dark:bg-amber-900/40 text-amber-900 dark:text-amber-100 text-sm font-medium">+ Expand</button>
+                <button type="button" onClick={() => setPdfPreviewZoom(z => Math.max(0.25, z - 0.25))} className="px-2 py-1 rounded bg-amber-100 dark:bg-amber-900/40 text-amber-900 dark:text-amber-100 text-sm font-medium">−</button>
+                <button type="button" onClick={handlePdfPreviewFit} className="px-2 py-1 rounded bg-amber-100 dark:bg-amber-900/40 text-amber-900 dark:text-amber-100 text-sm font-medium">Mahuta</button>
+                <button type="button" onClick={() => setPdfPreviewZoom(z => Math.min(2.5, z + 0.25))} className="px-2 py-1 rounded bg-amber-100 dark:bg-amber-900/40 text-amber-900 dark:text-amber-100 text-sm font-medium">+</button>
+                <input
+                  type="range"
+                  min={25}
+                  max={250}
+                  step={5}
+                  value={Math.round(pdfPreviewZoom * 100)}
+                  onChange={(e) => setPdfPreviewZoom(Math.round((Number(e.target.value) / 100) * 100) / 100)}
+                  className="w-24 accent-amber-600"
+                  aria-label="Eelvaate suum"
+                />
+                <span className="text-sm text-amber-800 dark:text-amber-200 tabular-nums">{Math.round(pdfPreviewZoom * 100)}%</span>
               </div>
               <div className="flex flex-col items-center gap-2">
                 <span className="text-sm font-medium text-amber-900 dark:text-white self-start">A4 lehe raam (210×297 mm) — noodipaber ei ületa ega jää väikeseks:</span>
                 <div
                   ref={pdfPreviewContainerRef}
-                  className="relative bg-white dark:bg-gray-100 rounded-sm shadow-lg flex items-center justify-center overflow-hidden box-border"
+                  className="relative bg-white dark:bg-gray-100 rounded-sm shadow-lg box-border"
                   style={{
                     maxWidth: 420,
                     aspectRatio: pageOrientation === 'landscape' ? '297/210' : '210/297',
                     border: '3px solid #b45309',
                     boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.08)',
+                    overflow: 'auto',
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    justifyContent: 'center',
                   }}
                 >
                   {pdfPreviewDataUrl ? (
-                    <div className="w-full h-full flex items-center justify-center overflow-hidden box-border" style={{ padding: 12, margin: 0 }}>
+                    <div
+                      className="flex items-start justify-center box-border flex-shrink-0"
+                      style={{
+                        minWidth: '100%',
+                        minHeight: '100%',
+                        width: `${pdfPreviewZoom * 100}%`,
+                        height: `${pdfPreviewZoom * 100}%`,
+                      }}
+                    >
                       <img
                         src={pdfPreviewDataUrl}
                         alt="PDF preview"
-                        className="max-w-full max-h-full object-contain"
-                        style={{ transform: `scale(${pdfPreviewZoom})`, maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
+                        className="object-contain"
+                        style={{ width: '100%', height: '100%', display: 'block' }}
                       />
                     </div>
                   ) : (
@@ -8494,7 +8502,7 @@ function NoodiMeisterCore({ icons }) {
             >
           <div
             ref={scoreContainerRef}
-            className={`noodimeister-print-area sheet-music-page print-page-${paperSize}-${pageFlowDirection === 'horizontal' ? 'landscape' : pageOrientation} relative flex-1 transition-colors ${viewFitPage && !viewSmartPage ? 'ml-0' : 'mx-auto'} ${isHorizontalFlow ? '' : 'rounded-lg border-2 border-amber-200 dark:border-white/20'}`}
+            className={`noodimeister-print-area A4-page-container sheet-music-page print-page-${paperSize}-${pageFlowDirection === 'horizontal' ? 'landscape' : pageOrientation} relative flex-1 transition-colors ${viewFitPage && !viewSmartPage ? 'ml-0' : 'mx-auto'} ${isHorizontalFlow ? '' : 'rounded-lg border-2 border-amber-200 dark:border-white/20'}`}
             style={{
               backgroundColor: themeColors.scoreBg,
               minWidth: LAYOUT.PAGE_WIDTH_MIN,
@@ -8536,7 +8544,7 @@ function NoodiMeisterCore({ icons }) {
                   pageDesignDragRef.current = { active: true, startX: e.clientX, startY: e.clientY, startPosX: pageDesignPositionX, startPosY: pageDesignPositionY };
                 } : undefined;
                 const designWrapperStyle = {
-                  position: 'absolute', inset: 0,
+                  position: 'absolute', top: 0, left: 0, width: '100%', height: '100%',
                   zIndex: handOnDesign ? 2 : designZ,
                   pointerEvents: handOnDesign ? 'auto' : 'none',
                   cursor: handOnDesign ? 'grab' : undefined,
