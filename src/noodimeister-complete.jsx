@@ -1589,6 +1589,8 @@ function NoodiMeisterCore({ icons }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const isNewWorkFlow = (searchParams && typeof searchParams.get === 'function' && searchParams.get('new')) === '1';
   const partStaffId = searchParams && typeof searchParams.get === 'function' ? searchParams.get('staffId') : undefined;
+  // Kui fail on avatud pilvest (/app?fileId=...), hoiame meeles, millisest teenusest ja millise fileId-ga, et Cmd/Ctrl+S kirjutaks sama faili üle (mitte ei looks koopiat).
+  const [openedCloudFile, setOpenedCloudFile] = useState(null); // { provider: 'google' | 'onedrive', fileId: string }
   /** Minu tööd lehelt "Uus töö selles kaustas": salvesta siia kausta (session, URL-ist saveFolderId & cloud). */
   const [sessionSaveFolderId, setSessionSaveFolderId] = useState(() => {
     if (typeof window === 'undefined') return null;
@@ -3087,12 +3089,26 @@ function NoodiMeisterCore({ icons }) {
       setTimeout(() => setSaveFeedback(''), 3000);
       return;
     }
+    const data = exportScoreToJSON();
+    const json = JSON.stringify(data, null, 2);
+    // Kui fail on avatud Drive'ist (/app?fileId=...), kirjuta sama fileId üle (ei loo koopiat).
+    if (openedCloudFile?.provider === 'google' && openedCloudFile.fileId) {
+      try {
+        setSaveFeedback('Salvestan…');
+        await googleDrive.updateProjectFile(token, openedCloudFile.fileId, json);
+        setSaveFeedback('Salvestatud pilve (sama fail)!');
+        setTimeout(() => setSaveFeedback(''), 2500);
+      } catch (e) {
+        setSaveFeedback(e?.message || 'Pilve salvestamine ebaõnnestus');
+        setTimeout(() => setSaveFeedback(''), 3000);
+      }
+      return;
+    }
+    // Muidu: salvesta kausta, nagu varem (või küsi kausta).
     const savedFolderId = (sessionSaveFolderId?.cloud === 'google' ? sessionSaveFolderId.folderId : null) || authStorage.getGoogleSaveFolderId();
     if (savedFolderId) {
       try {
         setSaveFeedback('Salvestan…');
-        const data = exportScoreToJSON();
-        const json = JSON.stringify(data, null, 2);
         const fileName = ((data.songTitle || t('common.untitled')).replace(/\s+/g, '-').replace(/[^\w\-.]/g, '') || t('common.untitled')) + '.nm';
         await googleDrive.createFileInFolder(token, savedFolderId, fileName, json);
         setSaveFeedback('Salvestatud pilve!');
@@ -3104,7 +3120,7 @@ function NoodiMeisterCore({ icons }) {
       return;
     }
     setSaveCloudDialogOpen(true);
-  }, [exportScoreToJSON, sessionSaveFolderId]);
+  }, [exportScoreToJSON, sessionSaveFolderId, openedCloudFile]);
 
   // Vali olemasolev kaust (Picker) ja salvesta sinna. Lisa kaust nimekirja, et järgmine salvestamine kasutaks sama kausta.
   const saveToCloudPickExisting = useCallback(async () => {
@@ -3287,8 +3303,8 @@ function NoodiMeisterCore({ icons }) {
           if (importProject(data)) {
             setSaveFeedback('Laaditud!');
             setTimeout(() => setSaveFeedback(''), 2500);
-            // Täislehe režiim: MuseScore-style fixed page width (effect will set scale to fit)
-            setFitPageDisplayWidth((data.pageOrientation === 'landscape' ? LAYOUT.PAGE_WIDTH_MAX_LANDSCAPE : LAYOUT.PAGE_WIDTH_MAX));
+            // Märgi, et praegu avatud fail on OneDrive'i fail – Cmd/Ctrl+S saab selle üle kirjutada sama fileId-ga.
+            setOpenedCloudFile({ provider: 'onedrive', fileId: driveFileId });
           } else {
             setSaveFeedback('Vigane projektifail');
             setTimeout(() => setSaveFeedback(''), 3000);
@@ -3318,8 +3334,8 @@ function NoodiMeisterCore({ icons }) {
           if (importProject(data)) {
             setSaveFeedback('Laaditud!');
             setTimeout(() => setSaveFeedback(''), 2500);
-            // Täislehe režiim: MuseScore-style fixed page width (effect will set scale to fit)
-            setFitPageDisplayWidth((data.pageOrientation === 'landscape' ? LAYOUT.PAGE_WIDTH_MAX_LANDSCAPE : LAYOUT.PAGE_WIDTH_MAX));
+            // Märgi, et praegu avatud fail on Google Drive'i fail – Cmd/Ctrl+S saab selle üle kirjutada sama fileId-ga.
+            setOpenedCloudFile({ provider: 'google', fileId: driveFileId });
           } else {
             setSaveFeedback('Vigane projektifail');
             setTimeout(() => setSaveFeedback(''), 3000);
@@ -6697,6 +6713,15 @@ function NoodiMeisterCore({ icons }) {
                     >
                       <CloudUpload className="w-4 h-4" /> {t('file.saveCloud')}
                     </button>
+                    {openedCloudFile && (
+                      <button
+                        type="button"
+                        onClick={() => { setPianoStripVisible(false); saveToCloud(); setHeaderMenuOpen(null); }}
+                        className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-amber-50 hover:bg-slate-600"
+                      >
+                        <CloudUpload className="w-4 h-4" /> {t('file.overwriteCloud')}
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={() => { setPianoStripVisible(false); loadFromCloud(); setHeaderMenuOpen(null); }}

@@ -430,6 +430,17 @@ async function updateFileContent(accessToken, fileId, content) {
 }
 
 /**
+ * Uuenda olemasoleva NoodiMeisteri projektifaili sisu Google Drive'is.
+ * Kasutab fileId-d (ei loo uut koopiat).
+ * @param {string} accessToken
+ * @param {string} fileId
+ * @param {string} content JSON string
+ */
+export async function updateProjectFile(accessToken, fileId, content) {
+  return updateFileContent(accessToken, fileId, content);
+}
+
+/**
  * Loe salvestuskaustade nimekiri Drive'ist (sünkroonimiseks teise seadmega). Fail juurkaustas.
  * @param {string} accessToken
  * @returns {Promise<Array<{ id: string, name: string }>>}
