@@ -3156,6 +3156,12 @@ function NoodiMeisterCore({ icons }) {
     }
     const data = exportScoreToJSON();
     const json = JSON.stringify(data, null, 2);
+    // Ära salvesta tühja või vigast sisu (vältib faili tühjendamist Drive'is).
+    if (!json || json.length < 50 || !Array.isArray(data?.staves) || data.staves.length === 0) {
+      setSaveFeedback('Projektisisu puudub või on vigane – salvestamine peatatud');
+      setTimeout(() => setSaveFeedback(''), 4000);
+      return;
+    }
     // Kui fail on avatud Drive'ist (/app?fileId=...), kirjuta sama fileId üle (ei loo koopiat).
     if (openedCloudFile?.provider === 'google' && openedCloudFile.fileId) {
       try {

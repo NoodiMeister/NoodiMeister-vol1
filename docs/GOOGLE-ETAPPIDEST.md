@@ -127,3 +127,13 @@ See viga tähendab, et Google ei tunne ära rakenduse aadressi. **Lahendus:**
 | 6 | npm run dev, brauser | Testi Registreeru / Logi sisse / Pilve salvesta / Laadi pilvest |
 
 Token kehtib umbes 1 tundi; pärast aegumist tuleb uuesti **Logi sisse** → **Google** teha.
+
+---
+
+## Tõrge: salvestatud fail läks tühjaks
+
+Kui oled faili Google Drivesse salvestanud (sh olemasoleva faili üle kirjutanud) ja hiljem fail on tühi või sisu kadunud:
+
+1. **Rakenduse kaitse:** NoodiMeister ei salvesta enam tühja ega vigast sisu Drive'i – kui projektisisu puudub või noodiread (staves) on tühjad, kuvatakse teade „Projektisisu puudub või on vigane – salvestamine peatatud“ ja API-kutset ei tehta.
+2. **Google Drive töölaua sünk (Drive for Desktop):** Kui su **projekti- või töökaust** asub Google Drive'i sünkroonitavas kaustas (nt „Minu draiv“ / „My Drive“) ja teed seal ka git commit/push, võib Drive sünk üle kirjutada faile vanema versiooniga. Soovitus: **ära hoia NoodiMeisteri projekti faile (.nm) ega olulist tööd ainult Drive'i sünkroonitavas kaustas koos giti repoga** – kasuta Drive'i pigem brauseris (noodimeister.ee → Pilve salvesta) või hoida repot väljaspool Drive'i sünkroonitavat kausta.
+3. **Taastamine:** Kui fail juba läks tühjaks, vaata Drive'is **Versioonide ajalugu** (paremklõps failil → „Manage versions“ / „Halda versioone“) – sealt saad võimalikult vana versiooni taastada.

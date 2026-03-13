@@ -409,6 +409,33 @@ export async function renameFolder(accessToken, folderId, newName) {
 const SAVE_FOLDERS_CONFIG_FILENAME = 'NoodiMeister-save-folders.json';
 
 /**
+ * Kontrolli, et projektisisu ei ole tühi ega vigane (vältib tühja faili Drive'is).
+ * @param {string} content JSON string
+ * @returns {{ valid: boolean, error?: string }}
+ */
+function validateProjectContent(content) {
+  if (!content || typeof content !== 'string') {
+    return { valid: false, error: 'Sisu puudub' };
+  }
+  const trimmed = content.trim();
+  if (trimmed.length < 50) {
+    return { valid: false, error: 'Projektisisu on liiga lühike või tühi' };
+  }
+  try {
+    const data = JSON.parse(trimmed);
+    if (!data || typeof data !== 'object') {
+      return { valid: false, error: 'Vigane projekti vorming' };
+    }
+    if (!Array.isArray(data.staves) || data.staves.length === 0) {
+      return { valid: false, error: 'Projektis puuduvad noodiread (staves)' };
+    }
+    return { valid: true };
+  } catch {
+    return { valid: false, error: 'Projektisisu ei ole kehtiv JSON' };
+  }
+}
+
+/**
  * Uuenda olemasoleva faili sisu (media).
  * @param {string} accessToken
  * @param {string} fileId
@@ -431,12 +458,16 @@ async function updateFileContent(accessToken, fileId, content) {
 
 /**
  * Uuenda olemasoleva NoodiMeisteri projektifaili sisu Google Drive'is.
- * Kasutab fileId-d (ei loo uut koopiat).
+ * Kasutab fileId-d (ei loo uut koopiat). Ei luba tühja või vigast sisu (vältib tühjendamist).
  * @param {string} accessToken
  * @param {string} fileId
  * @param {string} content JSON string
  */
 export async function updateProjectFile(accessToken, fileId, content) {
+  const check = validateProjectContent(content);
+  if (!check.valid) {
+    throw new Error(check.error || 'Projektisisu ei ole salvestatav');
+  }
   return updateFileContent(accessToken, fileId, content);
 }
 
