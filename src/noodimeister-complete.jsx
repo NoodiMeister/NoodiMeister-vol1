@@ -1159,7 +1159,7 @@ function NoodiMeisterCore({ icons }) {
       beat += dur;
     }
     setCursorPosition(beat);
-  }, [noteInputMode, selectedNoteIndex, selectionStart, selectionEnd, notes, setCursorPosition]);
+  }, [noteInputMode, selectedNoteIndex, selectionStart, selectionEnd, notes]);
 
   // Paigutus: lehekülje suund, taktide arv rea kohta (0 = automaatne), käsitsi rea- ja lehevahetused
   const [pageOrientation, setPageOrientation] = useState('portrait'); // 'portrait' | 'landscape'
