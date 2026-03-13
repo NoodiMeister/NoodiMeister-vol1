@@ -1140,27 +1140,6 @@ function NoodiMeisterCore({ icons }) {
     setLyricChainIndex(null);
   }, [selectedNoteIndex, selectionStart, selectionEnd]);
 
-  // SEL-režiimis näita kleepimiskohta: liigu kursori positsiooniga valiku lõppu,
-  // et noodirea kursorijoon saaks näidata kleepimise sihtkohta (pärast valitud noote).
-  useEffect(() => {
-    if (noteInputMode) return;
-    // Kui midagi pole valitud, ei nihuta kursori positsiooni (kursor jääb eelmisse asukohta).
-    let lastSelectedIndex = -1;
-    if (selectionStart >= 0 && selectionEnd >= 0) {
-      lastSelectedIndex = Math.max(selectionStart, selectionEnd);
-    } else if (selectedNoteIndex >= 0) {
-      lastSelectedIndex = selectedNoteIndex;
-    }
-    if (lastSelectedIndex < 0 || lastSelectedIndex >= notes.length) return;
-    let beat = 0;
-    for (let i = 0; i <= lastSelectedIndex; i += 1) {
-      const n = notes[i];
-      const dur = Number(n?.duration) || 1;
-      beat += dur;
-    }
-    setCursorPosition(beat);
-  }, [noteInputMode, selectedNoteIndex, selectionStart, selectionEnd, notes]);
-
   // Paigutus: lehekülje suund, taktide arv rea kohta (0 = automaatne), käsitsi rea- ja lehevahetused
   const [pageOrientation, setPageOrientation] = useState('portrait'); // 'portrait' | 'landscape'
   /** Paper size for print and PDF: A4, A3, or A5. Page setup determines printable view. */
@@ -1232,6 +1211,26 @@ function NoodiMeisterCore({ icons }) {
   // Aktiivse rea noodid ja instrumendid (tuletatud staves[activeStaffIndex]-ist)
   const activeStaff = staves[activeStaffIndex];
   const notes = activeStaff?.notes ?? [];
+
+  // SEL-režiimis näita kleepimiskohta: liigu kursori positsiooniga valiku lõppu (pärast valitud noote).
+  useEffect(() => {
+    if (noteInputMode) return;
+    let lastSelectedIndex = -1;
+    if (selectionStart >= 0 && selectionEnd >= 0) {
+      lastSelectedIndex = Math.max(selectionStart, selectionEnd);
+    } else if (selectedNoteIndex >= 0) {
+      lastSelectedIndex = selectedNoteIndex;
+    }
+    if (lastSelectedIndex < 0 || lastSelectedIndex >= notes.length) return;
+    let beat = 0;
+    for (let i = 0; i <= lastSelectedIndex; i += 1) {
+      const n = notes[i];
+      const dur = Number(n?.duration) || 1;
+      beat += dur;
+    }
+    setCursorPosition(beat);
+  }, [noteInputMode, selectedNoteIndex, selectionStart, selectionEnd, notes]);
+
   const setNotes = useCallback((updater) => {
     setStaves((prev) => {
       const idx = typeof activeStaffIndex === 'number' ? activeStaffIndex : 0;
