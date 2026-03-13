@@ -21,6 +21,8 @@ Testiversioonil (ja kohalikult) kuvatakse üleval **riba**:
 - **TEST – see on testiversioon…** (Verceli eelvaate deploy’il)
 - **Kohalik arendus – muudatused ei ilmu veebilehele** (localhost)
 
+Testiribal on link toodangulehele (noodimeister.ee), et testija saaks kiiresti toodangut avada.
+
 Toodangul (`main` → noodimeister.ee) seda riba **ei** ole.
 
 ## Soovitatav töövoog

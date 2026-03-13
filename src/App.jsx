@@ -162,7 +162,8 @@ function EnvBanner() {
           boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
         }}
       >
-        TEST – see on testiversioon. Kasutajate andmeid ei mõjuta. Toodang: noodimeister.ee
+        TEST – see on testiversioon. Kasutajate andmeid ei mõjuta. Toodang:{' '}
+        <a href="https://www.noodimeister.ee" target="_blank" rel="noopener noreferrer" style={{ color: '#fff', textDecoration: 'underline', fontWeight: 700 }}>noodimeister.ee</a>
       </div>
     );
   }
