@@ -842,7 +842,7 @@ function getToolboxes(t, instrumentConfig, shortcutLabels = {}) {
         { id: 'staff-5', label: t('layout.staff5'), value: 5, key: '1' },
         { id: 'staff-1', label: t('layout.staff1'), value: 1, key: '2' },
         { id: 'grid-only', label: t('layout.gridOnly'), value: 'gridOnly', key: 'G' },
-        { id: 'spacing-normal', label: t('layout.spacingNormal'), value: 75, key: '3' },
+        { id: 'spacing-normal', label: t('layout.spacingNormal'), value: 92, key: '3' },
         { id: 'spacing-loose', label: t('layout.spacingLoose'), value: 120, key: '4' }
       ]
     },
@@ -1439,8 +1439,6 @@ function NoodiMeisterCore({ icons }) {
   const [pdfExportSaveLocation, setPdfExportSaveLocation] = useState('downloads'); // 'downloads' | 'custom'
   const [pdfExportFileHandle, setPdfExportFileHandle] = useState(null);
   const [pdfExportChosenPath, setPdfExportChosenPath] = useState('');
-  const [pdfRulerCursorPx, setPdfRulerCursorPx] = useState(null); // null = use full page width; or px value when dragged
-  const pdfRulerDragRef = useRef(null);
   const pedagogicalAudioRef = useRef(null); // HTMLAudioElement
   const pedagogicalPlaybackIntervalRef = useRef(null);
   const pedagogicalAudioDataRef = useRef(null); // base64 string (salvestamiseks)
@@ -6197,14 +6195,14 @@ function NoodiMeisterCore({ icons }) {
 
       {/* PDF Export Preview – zoom, ruler, save location */}
       {showPdfExportPreview && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-amber-950/60 dark:bg-black/70 backdrop-blur-sm p-4" onClick={() => { setShowPdfExportPreview(false); setPdfPreviewZoom(1); setPdfPreviewDataUrl(null); setPdfRulerCursorPx(null); }}>
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-amber-950/60 dark:bg-black/70 backdrop-blur-sm p-4" onClick={() => { setShowPdfExportPreview(false); setPdfPreviewZoom(1); setPdfPreviewDataUrl(null); }}>
           <div
             className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden border-2 border-amber-200 dark:border-white/20 flex flex-col"
             onClick={e => e.stopPropagation()}
           >
             <div className="bg-gradient-to-r from-slate-600 to-slate-700 text-white px-4 py-3 flex items-center justify-between">
               <h2 className="text-lg font-bold">{t('file.exportPdf')} – {t('file.exportPdfTitle') || 'Preview'}</h2>
-              <button type="button" onClick={() => { setShowPdfExportPreview(false); setPdfPreviewZoom(1); setPdfPreviewDataUrl(null); setPdfRulerCursorPx(null); }} className="text-white/90 hover:text-white text-2xl leading-none">&times;</button>
+              <button type="button" onClick={() => { setShowPdfExportPreview(false); setPdfPreviewZoom(1); setPdfPreviewDataUrl(null); }} className="text-white/90 hover:text-white text-2xl leading-none">&times;</button>
             </div>
             <div className="flex-1 p-4 overflow-y-auto space-y-4">
               <p className="text-sm text-amber-800 dark:text-amber-200">
@@ -6228,12 +6226,13 @@ function NoodiMeisterCore({ icons }) {
                 <span className="text-sm text-amber-800 dark:text-amber-200 tabular-nums">{Math.round(pdfPreviewZoom * 100)}%</span>
               </div>
               <div className="flex flex-col items-center gap-2">
-                <span className="text-sm font-medium text-amber-900 dark:text-white self-start">A4 lehe raam (210×297 mm) — noodipaber ei ületa ega jää väikeseks:</span>
+                <span className="text-sm font-medium text-amber-900 dark:text-white self-start">A4 raam = noodileht (ühine 210×297 mm / 794×1123 px); mahub ilma lõigeta ja nihuta.</span>
                 <div
                   ref={pdfPreviewContainerRef}
                   className="relative bg-white dark:bg-gray-100 rounded-sm shadow-lg box-border"
                   style={{
-                    maxWidth: 420,
+                    width: '100%',
+                    maxWidth: pageOrientation === 'landscape' ? LAYOUT.PAGE_HEIGHT_PX : LAYOUT.PAGE_WIDTH_PX,
                     aspectRatio: pageOrientation === 'landscape' ? '297/210' : '210/297',
                     border: '3px solid #b45309',
                     boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.08)',
@@ -6269,64 +6268,6 @@ function NoodiMeisterCore({ icons }) {
                 </div>
               </div>
               <div>
-                <span className="text-sm font-medium text-amber-900 dark:text-white block mb-1">Page width ruler (0–{pdfExportOptionsRef.current?.pageWidth ?? getFullPageLayoutWidth(pageOrientation)} px) — click or drag; cursor stays inside:</span>
-                {(() => {
-                  const pageWidthPx = pdfExportOptionsRef.current?.pageWidth ?? getFullPageLayoutWidth(pageOrientation);
-                  const cursorPx = pdfRulerCursorPx ?? pageWidthPx;
-                  const cursorPercent = Math.min(100, Math.max(0, (cursorPx / pageWidthPx) * 100));
-                  const tickCount = 6;
-                  const ticks = Array.from({ length: tickCount }, (_, i) => Math.round((i / (tickCount - 1)) * pageWidthPx));
-                  const syncCursor = (e, el) => {
-                    const rect = el.getBoundingClientRect();
-                    const x = Math.max(0, Math.min(rect.width, (e.clientX ?? e.touches?.[0]?.clientX) - rect.left));
-                    const px = Math.round((x / rect.width) * pageWidthPx);
-                    setPdfRulerCursorPx(Math.max(0, Math.min(pageWidthPx, px)));
-                  };
-                  return (
-                    <div
-                      className="relative rounded border-2 border-amber-700 dark:border-amber-400 overflow-hidden box-border"
-                      style={{ maxWidth: 400, paddingTop: 28, paddingLeft: 4, paddingRight: 4, paddingBottom: 4 }}
-                    >
-                      <div
-                        className="relative h-8 border-b-2 border-amber-800 dark:border-amber-200 cursor-crosshair select-none touch-none"
-                        style={{ width: '100%' }}
-                        onMouseDown={(e) => { syncCursor(e, e.currentTarget); pdfRulerDragRef.current = true; }}
-                        onTouchStart={(e) => { syncCursor(e, e.currentTarget); pdfRulerDragRef.current = true; }}
-                        onMouseMove={(e) => {
-                          if (!pdfRulerDragRef.current) return;
-                          syncCursor(e, e.currentTarget);
-                        }}
-                        onTouchMove={(e) => {
-                          if (!pdfRulerDragRef.current) return;
-                          syncCursor(e, e.currentTarget);
-                        }}
-                        onMouseLeave={() => { pdfRulerDragRef.current = false; }}
-                        onMouseUp={() => { pdfRulerDragRef.current = false; }}
-                        onTouchEnd={() => { pdfRulerDragRef.current = false; }}
-                      >
-                        {ticks.map((px) => (
-                          <div
-                            key={px}
-                            className="absolute flex flex-col items-center"
-                            style={{ left: `${(px / pageWidthPx) * 100}%`, transform: 'translateX(-50%)' }}
-                          >
-                            <div className="w-px bg-amber-700 dark:bg-amber-300" style={{ height: 10 }} />
-                            <span className="text-xs text-amber-800 dark:text-amber-200 mt-0.5">{px}</span>
-                          </div>
-                        ))}
-                      </div>
-                      <div
-                        className="absolute top-0 bottom-0 w-1.5 bg-blue-600 dark:bg-blue-400 rounded-full cursor-ew-resize pointer-events-none"
-                        style={{ left: `calc(4px + (100% - 8px) * ${cursorPercent} / 100)`, width: 6, marginLeft: -3, top: 28, bottom: 4 }}
-                      />
-                      <div className="absolute text-xs font-semibold text-blue-600 dark:text-blue-400 whitespace-nowrap pointer-events-none" style={{ left: `calc(4px + (100% - 8px) * ${cursorPercent} / 100)`, top: 4, transform: 'translateX(-50%)' }}>
-                        ▲ {cursorPx} px
-                      </div>
-                    </div>
-                  );
-                })()}
-              </div>
-              <div>
                 <span className="text-sm font-medium text-amber-900 dark:text-white block mb-2">Save location:</span>
                 <label className="flex items-center gap-2 cursor-pointer mb-1">
                   <input type="radio" name="pdfSaveLocation" checked={pdfExportSaveLocation === 'downloads'} onChange={() => { setPdfExportSaveLocation('downloads'); setPdfExportFileHandle(null); setPdfExportChosenPath(''); }} />
@@ -6342,7 +6283,7 @@ function NoodiMeisterCore({ icons }) {
               </div>
             </div>
             <div className="p-4 border-t border-amber-200 dark:border-white/20 flex justify-end gap-2">
-              <button type="button" onClick={() => { setShowPdfExportPreview(false); setPdfPreviewZoom(1); setPdfPreviewDataUrl(null); setPdfRulerCursorPx(null); }} className="px-4 py-2 rounded-lg border-2 border-amber-300 text-amber-800 dark:text-amber-200 font-medium hover:bg-amber-50 dark:hover:bg-amber-900/30">
+              <button type="button" onClick={() => { setShowPdfExportPreview(false); setPdfPreviewZoom(1); setPdfPreviewDataUrl(null); }} className="px-4 py-2 rounded-lg border-2 border-amber-300 text-amber-800 dark:text-amber-200 font-medium hover:bg-amber-50 dark:hover:bg-amber-900/30">
                 Cancel
               </button>
               <button
@@ -8145,7 +8086,7 @@ function NoodiMeisterCore({ icons }) {
                         <button type="button" title={t('layout.compressMeasureShortcut')} onClick={() => { dirtyRef.current = true; setMeasureStretchFactors((prev) => { const next = [...(prev || [])]; while (next.length <= cursorMeasureIndex) next.push(1); next[cursorMeasureIndex] = Math.max(0.25, (next[cursorMeasureIndex] ?? 1) - 0.1); return next; }); }} className="py-1.5 px-2 rounded bg-slate-100 text-slate-800 hover:bg-slate-200 font-medium">{t('layout.compressMeasure')}</button>
                         <button type="button" title={t('layout.stretchMeasureShortcut')} onClick={() => { dirtyRef.current = true; setMeasureStretchFactors((prev) => { const next = [...(prev || [])]; while (next.length <= cursorMeasureIndex) next.push(1); next[cursorMeasureIndex] = Math.min(4, (next[cursorMeasureIndex] ?? 1) + 0.1); return next; }); }} className="py-1.5 px-2 rounded bg-slate-100 text-slate-800 hover:bg-slate-200 font-medium">{t('layout.stretchMeasure')}</button>
                       </div>
-                      <button type="button" onClick={() => { dirtyRef.current = true; (viewMode === 'score' ? setLayoutLineBreakBefore : setPartLayoutLineBreakBefore)([]); (viewMode === 'score' ? setLayoutPageBreakBefore : setPartLayoutPageBreakBefore)([]); (viewMode === 'score' ? setLayoutMeasuresPerLine : setPartLayoutMeasuresPerLine)(0); setMeasureStretchFactors([]); setSystemYOffsets([]); setLayoutSystemGap(15); setLayoutPartsGap(10); setLayoutConnectedBarlines(true); setLayoutGlobalSpacingMultiplier(1); setPixelsPerBeat(75); }} className="mt-3 w-full py-2 px-3 rounded-lg bg-slate-100 text-slate-800 text-sm font-semibold hover:bg-slate-200 border border-slate-300" title={t('layout.resetLayoutHint')}>{t('layout.resetLayout')}</button>
+                      <button type="button" onClick={() => { dirtyRef.current = true; (viewMode === 'score' ? setLayoutLineBreakBefore : setPartLayoutLineBreakBefore)([]); (viewMode === 'score' ? setLayoutPageBreakBefore : setPartLayoutPageBreakBefore)([]); (viewMode === 'score' ? setLayoutMeasuresPerLine : setPartLayoutMeasuresPerLine)(0); setMeasureStretchFactors([]); setSystemYOffsets([]); setLayoutSystemGap(15); setLayoutPartsGap(10); setLayoutConnectedBarlines(true); setLayoutGlobalSpacingMultiplier(1); setPixelsPerBeat(92); setFigurenotesSize(92); }} className="mt-3 w-full py-2 px-3 rounded-lg bg-slate-100 text-slate-800 text-sm font-semibold hover:bg-slate-200 border border-slate-300" title={t('layout.resetLayoutHint')}>{t('layout.resetLayout')}</button>
                     </div>
                     {pageDesignDataUrl && (
                       <>
@@ -8475,10 +8416,11 @@ function NoodiMeisterCore({ icons }) {
             <input type="range" min={SCORE_ZOOM_MIN * 100} max={SCORE_ZOOM_MAX * 100} step="5" value={scoreZoomLevel * 100} onChange={(e) => setScoreZoomLevel(Math.round((Number(e.target.value) / 100) * 100) / 100)} className="w-28 accent-amber-600" aria-label="Noodiala suum" />
             <span className="text-sm text-amber-800 dark:text-amber-200 tabular-nums">{Math.round(scoreZoomLevel * 100)}%</span>
           </div>
-          <div className="flex justify-center items-start flex-1 min-h-0 w-full" style={{ display: 'flex' }}>
+          {/* Raam: noodileht ei tohi minna üle eelvaate raamide; viewport lõikab/kerib. */}
+          <div className="flex justify-center items-start flex-1 min-h-0 w-full overflow-auto" style={{ display: 'flex', maxWidth: '100%' }}>
           <div
             ref={notationZoomAreaRef}
-            style={{ width: baseW * scoreZoomLevel, height: baseH * scoreZoomLevel, flexShrink: 0 }}
+            style={{ width: baseW * scoreZoomLevel, height: baseH * scoreZoomLevel, flexShrink: 0, minWidth: baseW }}
             onWheel={handleScoreZoomWheel}
             onTouchStart={handleScoreZoomTouchStart}
             onTouchMove={handleScoreZoomTouchMove}
@@ -8622,9 +8564,9 @@ function NoodiMeisterCore({ icons }) {
                 }}
                 role="presentation"
               >
-              {/* Pealkiri muudetav otse lehel (nagu Google Docs); horizontal: constrained to first page width so title is centered on first page */}
+              {/* Pealkiri muudetav otse lehel; pt-4 tagab, et pealkirja ei lõigata eksporti/trüki ülaosast. */}
               <div
-                className="mb-4"
+                className="pt-4 mb-4"
                 style={isHorizontalFlow ? { width: effectiveLayoutPageWidth, flexShrink: 0 } : undefined}
               >
                 <input
