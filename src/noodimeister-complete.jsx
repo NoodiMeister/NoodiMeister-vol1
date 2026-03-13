@@ -1505,9 +1505,9 @@ function NoodiMeisterCore({ icons }) {
       isDark,
     };
   }, [themeMode]);
-  // Rippmenüüd tööriistaribal: 'file' | 'view' | null (Seaded on Faili all)
+  // Rippmenüüd tööriistaribal: 'file' | 'view' | null
   const [headerMenuOpen, setHeaderMenuOpen] = useState(null);
-  const [fileSubmenuOpen, setFileSubmenuOpen] = useState(null); // 'seaded' | 'exportAnimation' | null
+  const [fileSubmenuOpen, setFileSubmenuOpen] = useState(null); // 'exportAnimation' | null
   const [viewSubmenuOpen, setViewSubmenuOpen] = useState(null); // 'orientation' | 'navigator' | 'flow' | null
   const [pageFlowDirection, setPageFlowDirection] = useState('vertical'); // 'vertical' | 'horizontal'
   const headerMenuRef = useRef(null);
@@ -4366,10 +4366,21 @@ function NoodiMeisterCore({ icons }) {
               const n = notes[selectedNoteIndex];
               setGhostPitch(n.pitch);
               setGhostOctave(n.octave);
+              setCursorPosition(typeof n.beat === 'number' ? n.beat : 0);
             } else if (notes.length > 0) {
+              let beat = 0;
+              for (let i = 0; i < notes.length; i++) {
+                const n = notes[i];
+                const noteBeat = typeof n.beat === 'number' ? n.beat : beat;
+                beat = noteBeat + (n.duration ?? 1);
+              }
               const last = notes[notes.length - 1];
               setGhostPitch(last.pitch);
               setGhostOctave(last.octave);
+              setCursorPosition(Math.max(0, beat - (last.duration ?? 1)));
+            } else {
+              // Kui ühtegi nooti pole, alusta alati esimesest löögist esimeses taktis.
+              setCursorPosition(0);
             }
           }
           return !prev;
@@ -4568,9 +4579,9 @@ function NoodiMeisterCore({ icons }) {
         return;
       }
 
-      // Noodi sisestusrežiim: nooltedega kursor, tähtedega noot (ka tööriistakast avatud).
-      // In Figurenotes view, arrow keys in N-mode are reserved for selection (so skip this block).
-      if (noteInputMode && notationStyle !== 'FIGURENOTES') {
+      // Noodi sisestusrežiim (N-mode): nooltega kursor, tähtedega noot (ka tööriistakast avatud).
+      // Kehtib nüüd ühtemoodi nii traditsioonilises kui ka figuurnotatsioonis.
+      if (noteInputMode) {
         const cursorStep = e.shiftKey ? 0.25 : 1;
         if (e.code === 'ArrowLeft') {
           e.preventDefault();
@@ -4750,9 +4761,8 @@ function NoodiMeisterCore({ icons }) {
         }
       }
 
-      // Stage V: Selection mode (when N is OFF). In Figurenotes view we ALSO enable
-      // Shift+Arrow selection while N-mode is ON, because note entry is grid-based.
-      if (!activeToolbox && (!noteInputMode || notationStyle === 'FIGURENOTES')) {
+      // Stage V: Selection mode (kui N-režiim on VÄLJAS).
+      if (!activeToolbox && !noteInputMode) {
         // If nothing is selected yet, initialize selection to the first/last note so Shift+Arrow can't create invalid (-1) ranges.
         const ensureSelectedIndex = (fallback) => {
           if (notes.length <= 0) return -1;
@@ -6033,7 +6043,7 @@ function NoodiMeisterCore({ icons }) {
       {settingsOpen && (
         <div className="fixed inset-0 z-[110] flex items-center justify-center bg-amber-950/60 dark:bg-black/70 backdrop-blur-sm p-4 sm:p-6" onClick={() => setSettingsOpen(false)}>
           <div
-            className="bg-white dark:bg-black rounded-2xl shadow-2xl w-full max-w-sm max-h-[70vh] overflow-hidden border-2 border-amber-200 dark:border-white/20 flex flex-col"
+            className="bg-white dark:bg-black rounded-2xl shadow-2xl w-full max-w-sm max-h-[50vh] overflow-hidden border-2 border-amber-200 dark:border-white/20 flex flex-col"
             style={{ transform: `translate(${settingsDragOffset.x}px, ${settingsDragOffset.y}px)` }}
             onClick={e => e.stopPropagation()}
           >
@@ -6815,32 +6825,16 @@ function NoodiMeisterCore({ icons }) {
                       </div>
                     )}
                     {isPedagogicalProject && <div className="my-1 border-t border-slate-600" />}
-                    {/* Seaded – alammenüü: pealkiri, autor, eeltakt */}
-                    <div className="relative" onMouseEnter={() => setFileSubmenuOpen('seaded')} onMouseLeave={() => setFileSubmenuOpen(null)}>
-                      <button
-                        type="button"
-                        onClick={() => setFileSubmenuOpen(prev => prev === 'seaded' ? null : 'seaded')}
-                        className="w-full flex items-center justify-between gap-2 px-3 py-2 text-left text-sm text-amber-50 hover:bg-slate-600"
-                        title={t('file.settingsTitle')}
-                      >
-                        <span className="flex items-center gap-2">
-                          <Settings className="w-4 h-4" />
-                          {t('file.settings')}
-                        </span>
-                        <ChevronDown className="w-4 h-4 rotate-[-90deg]" />
-                      </button>
-                      {fileSubmenuOpen === 'seaded' && (
-                        <div className="absolute left-full top-0 ml-0 min-w-[220px] py-1 rounded-lg bg-slate-700 border border-slate-600 shadow-xl z-50">
-                          <button
-                            type="button"
-                            onClick={() => { setPianoStripVisible(false); setSettingsOpen(true); setHeaderMenuOpen(null); setFileSubmenuOpen(null); }}
-                            className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-amber-50 hover:bg-slate-600"
-                          >
-                            <Settings className="w-4 h-4" /> {t('file.settingsSub')}
-                          </button>
-                        </div>
-                      )}
-                    </div>
+                    {/* Seaded – ava kohe seadete akna */}
+                    <button
+                      type="button"
+                      onClick={() => { setPianoStripVisible(false); setSettingsOpen(true); setHeaderMenuOpen(null); setFileSubmenuOpen(null); }}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-amber-50 hover:bg-slate-600"
+                      title={t('file.settingsTitle')}
+                    >
+                      <Settings className="w-4 h-4" />
+                      {t('file.settings')}
+                    </button>
                     <button
                       type="button"
                       onClick={() => { setShortcutsOpen(true); setHeaderMenuOpen(null); setFileSubmenuOpen(null); }}
