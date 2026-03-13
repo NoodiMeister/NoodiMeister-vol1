@@ -377,6 +377,8 @@ function NotationOrchestratorInner({ showPiano = true, t = (k) => k }) {
 
   const { systems, staffHeight, staffSpace } = layoutWithScale;
   const timelineHeight = staffHeight;
+  // Figuurnotatsiooni noodirea vaikimisi kõrgus portree-režiimis
+  const figurenotesTimelineHeight = 110;
   const marginLeft = LAYOUT.MARGIN_LEFT ?? 60;
   const pageWidth = PAGE_WIDTH_DEFAULT;
   // JO-võti: toonika (I aste) positsioon sõltub aktiivsest helistikust (alati MAŽOOR, valged klahvid).
@@ -465,7 +467,7 @@ function NotationOrchestratorInner({ showPiano = true, t = (k) => k }) {
               systems={systems}
               effectiveMeasures={effectiveMeasuresPerInstrument[activeInstrumentId] ?? effectiveMeasuresPerInstrument[instruments?.[0]?.id]}
               marginLeft={marginLeft}
-              timelineHeight={timelineHeight}
+              timelineHeight={figurenotesTimelineHeight}
               pageWidth={pageWidth}
               timeSignature={timeSignature}
               timeSignatureMode={timeSignatureMode}

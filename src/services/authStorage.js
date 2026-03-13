@@ -13,6 +13,7 @@ export const KEY_GOOGLE_SAVE_FOLDER = 'noodimeister-google-save-folder';
 export const KEY_GOOGLE_SAVE_FOLDERS = 'noodimeister-google-save-folders';
 export const KEY_ONEDRIVE_SAVE_FOLDER = 'noodimeister-onedrive-save-folder';
 export const KEY_ONEDRIVE_SAVE_FOLDERS = 'noodimeister-onedrive-save-folders';
+export const KEY_SHORTCUT_PREFS = 'noodimeister-shortcut-prefs';
 
 /** Kasutaja e-posti põhine võti (iga kasutaja oma kaustade nimekiri – turvalisus). */
 function getGoogleSaveFoldersStorageKey(email) {
@@ -24,10 +25,60 @@ function getOneDriveSaveFoldersStorageKey(email) {
   return `noodimeister-onedrive-save-folders-${encodeURIComponent(email)}`;
 }
 
+/** Kiirklahvide seaded – kasutajapõhine (e-posti järgi). */
+function getShortcutPrefsStorageKey(email) {
+  if (!email || typeof email !== 'string') return null;
+  return `noodimeister-shortcut-prefs-${encodeURIComponent(email)}`;
+}
+
 /** Praegu sisselogitud kasutaja e-post (või null). */
 export function getCurrentUserEmail() {
   const user = getLoggedInUser();
   return user?.email ?? null;
+}
+
+/**
+ * Tagastab praeguse kasutaja kiirklahvide seaded (localStorage).
+ * Vorm:
+ * {
+ *   "toolbox.rhythm": { code: "Digit1", shift: true, alt: false, mod: false },
+ *   ...
+ * }
+ */
+export function getShortcutPrefs() {
+  const email = getCurrentUserEmail();
+  if (typeof window === 'undefined') return {};
+  if (!email) return {};
+  try {
+    const key = getShortcutPrefsStorageKey(email);
+    const raw = key ? window.localStorage?.getItem(key) : null;
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object') return parsed;
+    }
+    const legacyRaw = window.localStorage?.getItem(KEY_SHORTCUT_PREFS) || window.sessionStorage?.getItem(KEY_SHORTCUT_PREFS);
+    if (legacyRaw) {
+      const legacyParsed = JSON.parse(legacyRaw);
+      if (legacyParsed && typeof legacyParsed === 'object') {
+        setShortcutPrefsForCurrentUser(legacyParsed);
+        return legacyParsed;
+      }
+    }
+  } catch (_) {}
+  return {};
+}
+
+export function setShortcutPrefsForCurrentUser(prefs) {
+  const email = getCurrentUserEmail();
+  if (typeof window === 'undefined') return;
+  if (!email) return;
+  try {
+    const key = getShortcutPrefsStorageKey(email);
+    const value = (prefs && typeof prefs === 'object') ? prefs : {};
+    if (key) window.localStorage?.setItem(key, JSON.stringify(value));
+    // Legacy copy (non-breaking fallback)
+    window.localStorage?.setItem(KEY_SHORTCUT_PREFS, JSON.stringify(value));
+  } catch (_) {}
 }
 
 function safeStorage(storage) {

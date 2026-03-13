@@ -127,7 +127,7 @@ export function FigurenotesView({
   chords = [],
   figurenotesSize = 16,
   figurenotesStems = false,
-  timeSignatureSize,
+  timeSignatureSize = 36,
   keySignature = 'C',
   isNoteSelected,
   onNoteClick,
@@ -238,7 +238,9 @@ export function FigurenotesView({
             )}
 
             {sys.systemIndex === 0 && (
-              <g transform={`translate(0, ${sys.yOffset})`}>{renderTimeSignature(timeSignature, timeSignatureMode, centerY, timeSignatureSize ?? 16, timeSigTextColor, timeSigNoteFill)}</g>
+              <g transform={`translate(0, ${sys.yOffset})`}>
+                {renderTimeSignature(timeSignature, timeSignatureMode, centerY, timeSignatureSize, timeSigTextColor, timeSigNoteFill)}
+              </g>
             )}
 
             {sys.measureIndices.map((measureIdx, j) => {
@@ -488,23 +490,14 @@ export function FigurenotesView({
                     const barLineTopY = sys.yOffset + barLineInset;
                     const barLineCenterY = (barLineTopY + barLineBottomY) / 2;
                     const barLineHeight = barLineBottomY - barLineTopY;
-                    const isLastMeasureOfScore = measureIdx === effectiveMeasures.length - 1;
                     const isRightBarlineOfSystem = measureIdx === sys.measureIndices[sys.measureIndices.length - 1];
+                    const isLastMeasureOfScore = measureIdx === effectiveMeasures.length - 1;
                     return (
                       <>
                         {j !== 0 && <line x1={measureX} y1={barLineTopY} x2={measureX} y2={barLineBottomY} stroke="#1a1a1a" strokeWidth={barLineWidth} />}
-                        {isLastMeasureOfScore ? (
-                          <SmuflGlyph
-                            glyph={SMUFL_GLYPH.barlineFinal}
-                            x={measureX + measureWidth}
-                            y={barLineCenterY}
-                            fontSize={Math.max(12, barLineHeight * 1.2)}
-                            fill="#1a1a1a"
-                            textAnchor="start"
-                          />
-                        ) : isRightBarlineOfSystem ? (
+                        {isRightBarlineOfSystem && !isLastMeasureOfScore && (
                           <line x1={measureX + measureWidth} y1={barLineTopY} x2={measureX + measureWidth} y2={barLineBottomY} stroke="#1a1a1a" strokeWidth={barLineWidth} />
-                        ) : null}
+                        )}
                       </>
                     );
                   })()}
@@ -766,6 +759,30 @@ export function FigurenotesView({
                 </g>
               );
             })}
+            {/* Always draw final double bar at end of score (also when last measure is incomplete or after file creator). */}
+            {Array.isArray(effectiveMeasures) && effectiveMeasures.length > 0 && (() => {
+              const lastIdx = effectiveMeasures.length - 1;
+              const j = sys.measureIndices.indexOf(lastIdx);
+              if (j < 0) return null;
+              const mw = sys.measureWidths ?? sys.measureIndices.map(() => sys.measureWidth ?? beatsPerMeasure * 80);
+              const xEnd = marginLeft + mw.slice(0, j + 1).reduce((a, b) => a + b, 0);
+              const barLineBottomY = chordLineHeight > 0
+                ? sys.yOffset + melodyRowHeight + chordLineGap + chordLineHeight - barLineInset
+                : sys.yOffset + melodyRowHeight - barLineInset;
+              const barLineTopY = sys.yOffset + barLineInset;
+              const barLineCenterY = (barLineTopY + barLineBottomY) / 2;
+              const barLineHeight = barLineBottomY - barLineTopY;
+              return (
+                <SmuflGlyph
+                  glyph={SMUFL_GLYPH.barlineFinal}
+                  x={xEnd}
+                  y={barLineCenterY}
+                  fontSize={Math.max(12, barLineHeight * 1.2)}
+                  fill="#1a1a1a"
+                  textAnchor="start"
+                />
+              );
+            })()}
           </g>
         );
       })}
