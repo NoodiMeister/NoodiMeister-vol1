@@ -4830,27 +4830,15 @@ function NoodiMeisterCore({ icons }) {
   const [isHandPanning, setIsHandPanning] = useState(false);
   const systemsForScoreRef = useRef([]);
   const exportCursorRef = useRef(null); // { x, y, emoji, size } container-relative, for MP4 fillText
-  const [pageWidth, setPageWidth] = useState(LAYOUT.PAGE_WIDTH_MIN);
-  /** Terve leht (MuseScore-style): fixed A4 layout size per orientation; scale to fit viewport so one full page is visible and nothing clips. */
+  /** Lehe laius ja suund sõltuvad ainult rakenduse valikust (Vaade → Lehe suund), mitte seadme ega brauseri ekraani suurusest (iPad, Android, MacBook, PC). */
   const getFullPageLayoutWidth = (orientation) => (orientation === 'landscape' ? LAYOUT.PAGE_WIDTH_MAX_LANDSCAPE : LAYOUT.PAGE_WIDTH_MAX);
+  const pageWidth = getFullPageLayoutWidth(pageOrientation);
   const [fitPageDisplayWidth, setFitPageDisplayWidth] = useState(() => getFullPageLayoutWidth('portrait'));
   useEffect(() => { setFitPageDisplayWidth(0); }, [pageOrientation]);
-  const effectivePageWidthMax = pageOrientation === 'landscape' ? LAYOUT.PAGE_WIDTH_MAX_LANDSCAPE : LAYOUT.PAGE_WIDTH_MAX;
-  useEffect(() => {
-    const el = scoreContainerRef.current;
-    if (!el) return;
-    const ro = new ResizeObserver(([entry]) => {
-      const w = entry.contentRect.width;
-      setPageWidth(Math.max(LAYOUT.PAGE_WIDTH_MIN, Math.min(effectivePageWidthMax, w)));
-    });
-    ro.observe(el);
-    setPageWidth(Math.max(LAYOUT.PAGE_WIDTH_MIN, Math.min(effectivePageWidthMax, el.getBoundingClientRect().width)));
-    return () => ro.disconnect();
-  }, [pageOrientation, effectivePageWidthMax]);
   useEffect(() => {
     pdfExportOptionsRef.current = { pageFlowDirection, pageWidth, pageOrientation };
   }, [pageFlowDirection, pageWidth, pageOrientation]);
-  const basePageWidth = pageWidth || LAYOUT.PAGE_WIDTH_MIN;
+  const basePageWidth = pageWidth;
   const effectiveLayoutPageWidth = (viewFitPage && !viewSmartPage)
     ? (fitPageDisplayWidth > 0 ? fitPageDisplayWidth : getFullPageLayoutWidth(pageOrientation))
     : basePageWidth;
@@ -7409,14 +7397,23 @@ function NoodiMeisterCore({ icons }) {
                       <button type="button" onClick={() => { dirtyRef.current = true; (viewMode === 'score' ? setLayoutLineBreakBefore : setPartLayoutLineBreakBefore)([]); (viewMode === 'score' ? setLayoutPageBreakBefore : setPartLayoutPageBreakBefore)([]); (viewMode === 'score' ? setLayoutMeasuresPerLine : setPartLayoutMeasuresPerLine)(0); setMeasureStretchFactors([]); setSystemYOffsets([]); setLayoutSystemGap(15); setLayoutPartsGap(10); setLayoutConnectedBarlines(true); setLayoutGlobalSpacingMultiplier(1); setPixelsPerBeat(75); }} className="mt-3 w-full py-2 px-3 rounded-lg bg-slate-100 text-slate-800 text-sm font-semibold hover:bg-slate-200 border border-slate-300" title={t('layout.resetLayoutHint')}>{t('layout.resetLayout')}</button>
                     </div>
                     {pageDesignDataUrl && (
-                      <div className="mt-4 pt-4 border-t-2 border-amber-200">
-                        <h4 className="text-xs font-bold text-amber-900 uppercase mb-2">{t('layout.pageDesignLayerTitle')}</h4>
-                        <p className="text-xs text-amber-700 mb-2">{t('layout.pageDesignLayerHint')}</p>
-                        <div className="flex gap-2">
-                          <button type="button" onClick={() => { dirtyRef.current = true; setPageDesignLayer('behind'); }} className={`flex-1 py-1.5 px-2 rounded text-sm font-medium ${pageDesignLayer === 'behind' ? 'bg-amber-600 text-white' : 'bg-amber-100 text-amber-800 hover:bg-amber-200'}`}>{t('layout.pageDesignLayerBehind')}</button>
-                          <button type="button" onClick={() => { dirtyRef.current = true; setPageDesignLayer('inFront'); }} className={`flex-1 py-1.5 px-2 rounded text-sm font-medium ${pageDesignLayer === 'inFront' ? 'bg-amber-600 text-white' : 'bg-amber-100 text-amber-800 hover:bg-amber-200'}`}>{t('layout.pageDesignLayerInFront')}</button>
+                      <>
+                        <div className="mt-4 pt-4 border-t-2 border-amber-200">
+                          <h4 className="text-xs font-bold text-amber-900 uppercase mb-2">{t('layout.pageDesignFitTitle')}</h4>
+                          <div className="flex gap-2">
+                            <button type="button" title={t('layout.pageDesignFitCoverHint')} onClick={() => { dirtyRef.current = true; setPageDesignFit('cover'); }} className={`flex-1 py-1.5 px-2 rounded text-sm font-medium ${pageDesignFit === 'cover' ? 'bg-amber-600 text-white' : 'bg-amber-100 text-amber-800 hover:bg-amber-200'}`}>{t('layout.pageDesignFitCover')}</button>
+                            <button type="button" title={t('layout.pageDesignFitContainHint')} onClick={() => { dirtyRef.current = true; setPageDesignFit('contain'); }} className={`flex-1 py-1.5 px-2 rounded text-sm font-medium ${pageDesignFit === 'contain' ? 'bg-amber-600 text-white' : 'bg-amber-100 text-amber-800 hover:bg-amber-200'}`}>{t('layout.pageDesignFitContain')}</button>
+                          </div>
                         </div>
-                      </div>
+                        <div className="mt-4 pt-4 border-t-2 border-amber-200">
+                          <h4 className="text-xs font-bold text-amber-900 uppercase mb-2">{t('layout.pageDesignLayerTitle')}</h4>
+                          <p className="text-xs text-amber-700 mb-2">{t('layout.pageDesignLayerHint')}</p>
+                          <div className="flex gap-2">
+                            <button type="button" onClick={() => { dirtyRef.current = true; setPageDesignLayer('behind'); }} className={`flex-1 py-1.5 px-2 rounded text-sm font-medium ${pageDesignLayer === 'behind' ? 'bg-amber-600 text-white' : 'bg-amber-100 text-amber-800 hover:bg-amber-200'}`}>{t('layout.pageDesignLayerBehind')}</button>
+                            <button type="button" onClick={() => { dirtyRef.current = true; setPageDesignLayer('inFront'); }} className={`flex-1 py-1.5 px-2 rounded text-sm font-medium ${pageDesignLayer === 'inFront' ? 'bg-amber-600 text-white' : 'bg-amber-100 text-amber-800 hover:bg-amber-200'}`}>{t('layout.pageDesignLayerInFront')}</button>
+                          </div>
+                        </div>
+                      </>
                     )}
                     <div className="mt-4 pt-4 border-t-2 border-amber-200">
                       <h4 className="text-xs font-bold text-amber-900 uppercase mb-2">{t('layout.projectFile')}</h4>
@@ -7721,9 +7718,11 @@ function NoodiMeisterCore({ icons }) {
             style={{
               backgroundColor: themeColors.scoreBg,
               minWidth: LAYOUT.PAGE_WIDTH_MIN,
-              ...(viewFitPage && !viewSmartPage ? {} : { maxWidth: pageOrientation === 'landscape' ? LAYOUT.PAGE_WIDTH_MAX_LANDSCAPE : LAYOUT.PAGE_WIDTH_MAX }),
-              minHeight: Math.max(500, getStaffHeight() + LAYOUT.SYSTEM_GAP + getStaffHeight() + 120),
-              ...(viewFitPage && !viewSmartPage ? { width: pw, boxSizing: 'border-box' } : {}),
+              /* Fikseeritud lehe laius: ei sõltu seadme/brauseri laiusest (iPad, tahvel, MacBook, PC). */
+              ...(viewFitPage && !viewSmartPage ? {} : { width: basePageWidth, maxWidth: basePageWidth }),
+              /* Portrait: minHeight ≥ ühe lehe kõrgus (a4PageHeightVal), et kast oleks püstine, mitte laiune. */
+              minHeight: isHorizontalFlow ? a4PageHeightVal : Math.max(a4PageHeightVal, 500, getStaffHeight() + LAYOUT.SYSTEM_GAP + getStaffHeight() + 120),
+              ...(viewFitPage && !viewSmartPage ? { width: pw, boxSizing: 'border-box' } : { boxSizing: 'border-box' }),
               ...(isHorizontalFlow ? { width: totalPagesVal * pw, height: a4PageHeightVal } : {})
             }}
             onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; e.currentTarget.classList.add('ring-2', 'ring-amber-400', 'ring-offset-2'); }}
@@ -7738,20 +7737,42 @@ function NoodiMeisterCore({ icons }) {
               if (!Number.isNaN(optionIndex) && toolboxes.rhythm?.options?.[optionIndex]) handleToolboxSelection(optionIndex);
             }}
           >
-              {pageDesignDataUrl && (
-                <div
-                  aria-hidden="true"
-                  className="absolute inset-0 pointer-events-none"
-                  style={{
-                    zIndex: pageDesignLayer === 'inFront' ? 1 : 0,
-                    backgroundImage: `url(${pageDesignDataUrl})`,
-                    backgroundRepeat: 'repeat-y',
-                    backgroundPosition: '0 0',
-                    backgroundSize: `${pw}px ${a4PageHeightVal}px`,
-                    opacity: clampNumber(Number(pageDesignOpacity) || 0.25, 0, 1),
-                  }}
-                />
-              )}
+              {pageDesignDataUrl && (() => {
+                const tileStyle = { backgroundRepeat: 'no-repeat', backgroundPosition: 'center' };
+                if (isHorizontalFlow) {
+                  return (
+                    <div aria-hidden="true" className="absolute inset-0 pointer-events-none" style={{ zIndex: pageDesignLayer === 'inFront' ? 1 : 0, backgroundImage: `url(${pageDesignDataUrl})`, backgroundRepeat: 'repeat-x', backgroundPosition: '0 0', backgroundSize: `${pw}px ${a4PageHeightVal}px`, opacity: clampNumber(Number(pageDesignOpacity) || 0.25, 0, 1) }} />
+                  );
+                }
+                const numPagesVertical = totalPagesVal;
+                if (numPagesVertical <= 0) return null;
+                if ((pageDesignFit === 'cover' || pageDesignFit === 'contain') && numPagesVertical >= 1) {
+                  return (
+                    <>
+                      {Array.from({ length: numPagesVertical }, (_, i) => (
+                        <div
+                          key={i}
+                          aria-hidden="true"
+                          className="absolute left-0 right-0 pointer-events-none"
+                          style={{
+                            zIndex: pageDesignLayer === 'inFront' ? 1 : 0,
+                            top: i * a4PageHeightVal,
+                            width: pw,
+                            height: a4PageHeightVal,
+                            backgroundImage: `url(${pageDesignDataUrl})`,
+                            backgroundSize: pageDesignFit === 'cover' ? 'cover' : 'contain',
+                            ...tileStyle,
+                            opacity: clampNumber(Number(pageDesignOpacity) || 0.25, 0, 1),
+                          }}
+                        />
+                      ))}
+                    </>
+                  );
+                }
+                return (
+                  <div aria-hidden="true" className="absolute inset-0 pointer-events-none" style={{ zIndex: pageDesignLayer === 'inFront' ? 1 : 0, backgroundImage: `url(${pageDesignDataUrl})`, backgroundRepeat: 'repeat-y', backgroundPosition: '0 0', backgroundSize: `${pw}px ${a4PageHeightVal}px`, opacity: clampNumber(Number(pageDesignOpacity) || 0.25, 0, 1) }} />
+                );
+              })()}
               <div
                 ref={scoreContentRef}
                 className="relative"
