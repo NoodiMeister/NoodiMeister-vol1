@@ -552,14 +552,16 @@ export function TraditionalNotationView({
                     })()
                   )}
 
+                  {/* Taktinumber iga rea esimese takti juures: vasak ja ülemine nurk (üle noodijoonte) */}
                   {showBarNumbers && staffIndex === 0 && sys.measureIndices.length > 0 && (
                     <text
                       x={effectiveMarginLeft}
-                      y={staffY + staffLinePositions[0]}
+                      y={staffY + firstLineY - 10}
                       fontSize={barNumberSize}
                       fontWeight="bold"
                       fill="#555"
                       textAnchor="end"
+                      dominantBaseline="hanging"
                       fontFamily="sans-serif"
                     >
                       {sys.measureIndices[0] + 1}
@@ -693,7 +695,7 @@ export function TraditionalNotationView({
                             )}
                           </g>
                         ) : measureIdx === sys.measureIndices[sys.measureIndices.length - 1] ? (
-                          measureIdx === instMeasures.length - 1 ? (
+                          (measureIdx === instMeasures.length - 1 || measure.barlineFinal) ? (
                             <SmuflGlyph
                               glyph={SMUFL_GLYPH.barlineFinal}
                               x={measureX + measureWidth}
@@ -712,6 +714,15 @@ export function TraditionalNotationView({
                               strokeWidth={getThinBarlineThickness(spacing)}
                             />
                           )
+                        ) : measure.barlineFinal ? (
+                          <SmuflGlyph
+                            glyph={SMUFL_GLYPH.barlineFinal}
+                            x={measureX + measureWidth}
+                            y={connectedBarlines && staffIndexInScore === 0 ? (systemTotalHeight ?? (staffY + lastLineY)) / 2 : staffY + (firstLineY + lastLineY) / 2}
+                            fontSize={getGlyphFontSize(spacing) * (connectedBarlines && staffIndexInScore === 0 ? (systemTotalHeight ?? (staffY + lastLineY - firstLineY)) / (lastLineY - firstLineY) : 1)}
+                            fill="#1a1a1a"
+                            textAnchor="start"
+                          />
                         ) : null}
                       </>
                     )}

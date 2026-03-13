@@ -314,6 +314,7 @@ const translations = {
     'repeat.volta2': '2. lõpp (2.)',
     'repeat.segno': 'Segno (𝄋)',
     'repeat.coda': 'Coda (𝄌)',
+    'repeat.barlineFinal': 'Lõpujoon (||)',
     // Paigutus
     'layout.staff5': '5 joont (tavaline)',
     'layout.staff1': '1 joon',
@@ -970,6 +971,7 @@ const translations = {
     'repeat.volta2': '2nd ending (2.)',
     'repeat.segno': 'Segno (𝄋)',
     'repeat.coda': 'Coda (𝄌)',
+    'repeat.barlineFinal': 'Final barline (||)',
     'layout.staff5': '5 lines (standard)',
     'layout.staff1': '1 line',
     'layout.gridOnly': 'Grid only (Figurenotes)',

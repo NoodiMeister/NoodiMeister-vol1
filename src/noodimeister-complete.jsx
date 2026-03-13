@@ -832,7 +832,8 @@ function getToolboxes(t, instrumentConfig, shortcutLabels = {}) {
         { id: 'volta-1', label: t('repeat.volta1'), value: 'volta1', key: '3' },
         { id: 'volta-2', label: t('repeat.volta2'), value: 'volta2', key: '4' },
         { id: 'segno', label: t('repeat.segno'), value: 'segno', key: '5' },
-        { id: 'coda', label: t('repeat.coda'), value: 'coda', key: '6' }
+        { id: 'coda', label: t('repeat.coda'), value: 'coda', key: '6' },
+        { id: 'barline-final', label: t('repeat.barlineFinal'), value: 'barlineFinal', key: '7' }
       ]
     },
     layout: {
@@ -1427,6 +1428,14 @@ function NoodiMeisterCore({ icons }) {
   const [pedagogicalPlayheadMovement, setPedagogicalPlayheadMovement] = useState('arch'); // 'arch' (distance-dependent) | 'horizontal'
   const [isExportingAnimation, setIsExportingAnimation] = useState(false);
   const [isExportingPdf, setIsExportingPdf] = useState(false);
+  const [showPdfExportPreview, setShowPdfExportPreview] = useState(false);
+  const [pdfPreviewDataUrl, setPdfPreviewDataUrl] = useState(null);
+  const [pdfPreviewSize, setPdfPreviewSize] = useState({ w: 0, h: 0 });
+  const [pdfPreviewZoom, setPdfPreviewZoom] = useState(1);
+  const pdfPreviewContainerRef = useRef(null);
+  const [pdfExportSaveLocation, setPdfExportSaveLocation] = useState('downloads'); // 'downloads' | 'custom'
+  const [pdfExportFileHandle, setPdfExportFileHandle] = useState(null);
+  const [pdfExportChosenPath, setPdfExportChosenPath] = useState('');
   const pedagogicalAudioRef = useRef(null); // HTMLAudioElement
   const pedagogicalPlaybackIntervalRef = useRef(null);
   const pedagogicalAudioDataRef = useRef(null); // base64 string (salvestamiseks)
@@ -1640,14 +1649,14 @@ function NoodiMeisterCore({ icons }) {
     if (bodyOverflowRef.current == null) {
       bodyOverflowRef.current = body.style.overflow || '';
     }
-    const hasBlockingModal = newWorkSetupOpen || saveCloudDialogOpen || settingsOpen || shortcutsOpen;
+    const hasBlockingModal = newWorkSetupOpen || saveCloudDialogOpen || settingsOpen || shortcutsOpen || showPdfExportPreview;
     body.style.overflow = hasBlockingModal ? 'hidden' : bodyOverflowRef.current;
     return () => {
       if (body && bodyOverflowRef.current != null) {
         body.style.overflow = bodyOverflowRef.current;
       }
     };
-  }, [newWorkSetupOpen, saveCloudDialogOpen, settingsOpen, shortcutsOpen]);
+  }, [newWorkSetupOpen, saveCloudDialogOpen, settingsOpen, shortcutsOpen, showPdfExportPreview]);
 
   useEffect(() => {
     if (isNewWorkFlow) setNewWorkSetupOpen(true);
@@ -2364,13 +2373,62 @@ function NoodiMeisterCore({ icons }) {
 
   const pdfExportOptionsRef = useRef({ pageFlowDirection: 'vertical', pageWidth: LAYOUT.PAGE_WIDTH_MIN });
 
-  const exportToPdf = useCallback(async () => {
+  useEffect(() => {
+    if (!showPdfExportPreview || !scoreContainerRef?.current) return;
+    setPdfPreviewDataUrl(null);
+    const el = scoreContainerRef.current;
+    const bounds = exportContentBoundsRef.current;
+    const w = (bounds?.width > 0) ? bounds.width : el.scrollWidth;
+    const h = (bounds?.height > 0) ? Math.min(bounds.height, 3000) : el.scrollHeight;
+    html2canvas(el, {
+      scale: 0.35,
+      useCORS: true,
+      logging: false,
+      width: w,
+      height: h,
+      windowWidth: w,
+      windowHeight: h,
+    }).then((canvas) => {
+      setPdfPreviewDataUrl(canvas.toDataURL('image/png'));
+      setPdfPreviewSize({ w: canvas.width, h: canvas.height });
+    }).catch(() => { setPdfPreviewDataUrl(null); setPdfPreviewSize({ w: 0, h: 0 }); });
+  }, [showPdfExportPreview]);
+
+  const handlePdfPreviewFit = useCallback(() => {
+    const cont = pdfPreviewContainerRef?.current;
+    if (!cont || !pdfPreviewSize?.w || !pdfPreviewSize?.h) { setPdfPreviewZoom(1); return; }
+    const r = cont.getBoundingClientRect();
+    const scale = Math.min(1, (r.width || 400) / pdfPreviewSize.w, (r.height || 200) / pdfPreviewSize.h);
+    setPdfPreviewZoom(Math.max(0.2, scale));
+  }, [pdfPreviewSize]);
+
+  const handlePdfExportChooseLocation = useCallback(async () => {
+    const filename = ((songTitle || t('common.untitled')).replace(/\s+/g, '-').replace(/[^\w\-.]/g, '') || 'score') + '.pdf';
+    try {
+      if (typeof window.showSaveFilePicker !== 'function') {
+        setPdfExportSaveLocation('downloads');
+        return;
+      }
+      const handle = await window.showSaveFilePicker({
+        suggestedName: filename,
+        types: [{ description: 'PDF', accept: { 'application/pdf': ['.pdf'] } }],
+      });
+      setPdfExportFileHandle(handle);
+      setPdfExportChosenPath(handle.name || filename);
+      setPdfExportSaveLocation('custom');
+    } catch (e) {
+      if (e?.name !== 'AbortError') setPdfExportSaveLocation('downloads');
+    }
+  }, [songTitle, t]);
+
+  const exportToPdf = useCallback(async (saveOptions = {}) => {
     const container = scoreContainerRef?.current;
     if (!container) {
       setSaveFeedback(t('feedback.exportFailed'));
       setTimeout(() => setSaveFeedback(''), 2000);
       return;
     }
+    const { fileHandle } = saveOptions;
     setIsExportingPdf(true);
     setSaveFeedback('PDF…');
     setShowPageNavigator(true);
@@ -2386,11 +2444,15 @@ function NoodiMeisterCore({ icons }) {
         windowHeight: container.scrollHeight,
       });
       const scale = 2;
-      // Noodiala padding (p-8) – PDF-is lõikame ära, et sisu täidaks A4 lehe ja ülemist ei kärbi
       const PAD = 32;
       const padScale = PAD * scale;
-      const contentW = Math.max(1, canvas.width - 2 * padScale);
-      const contentH = Math.max(1, canvas.height - 2 * padScale);
+      const rawContentW = canvas.width - 2 * padScale;
+      const rawContentH = canvas.height - 2 * padScale;
+      const bounds = exportContentBoundsRef.current;
+      const boundsW = (bounds?.width > 0) ? Math.round(bounds.width * scale) : rawContentW;
+      const boundsH = (bounds?.height > 0) ? Math.round(bounds.height * scale) : rawContentH;
+      const contentW = Math.max(1, Math.min(rawContentW, boundsW));
+      const contentH = Math.max(1, Math.min(rawContentH, boundsH));
 
       const { pageFlowDirection: flowDir, pageWidth: pw, pageOrientation: pdfPageOrientation } = pdfExportOptionsRef.current;
       const isHorizontalFlow = flowDir === 'horizontal';
@@ -2406,12 +2468,12 @@ function NoodiMeisterCore({ icons }) {
       if (isHorizontalFlow) {
         const pageWidthPx = pw || LAYOUT.PAGE_WIDTH_MIN;
         const a4PageHeightPx = pageWidthPx * LAYOUT.A4_HEIGHT_RATIO_LANDSCAPE;
-        const totalPages = Math.max(1, Math.round((container.scrollWidth - 2 * PAD) / pageWidthPx));
+        const totalPages = Math.max(1, Math.ceil(contentW / (pageWidthPx * scale)));
         for (let p = 0; p < totalPages; p++) {
           const srcX = padScale + p * pageWidthPx * scale;
-          const sliceW = Math.round(pageWidthPx * scale);
-          const sliceH = Math.round((a4PageHeightPx - 2 * PAD) * scale);
-          if (srcX + sliceW > canvas.width || sliceH > canvas.height - padScale * 2) continue;
+          const sliceW = Math.min(Math.round(pageWidthPx * scale), contentW - Math.round(p * pageWidthPx * scale));
+          const sliceH = Math.min(Math.round((a4PageHeightPx - 2 * PAD) * scale), contentH);
+          if (sliceW <= 0 || sliceH <= 0) continue;
           const sliceCanvas = document.createElement('canvas');
           sliceCanvas.width = sliceW;
           sliceCanvas.height = sliceH;
@@ -2426,11 +2488,11 @@ function NoodiMeisterCore({ icons }) {
       } else {
         const systems = systemsForScoreRef.current || [];
         const pageStarts = [0, ...systems.filter((s) => s.pageBreakBefore).map((s) => s.yOffset)];
-        const totalContentHeight = container.scrollHeight - 2 * PAD;
+        const totalContentHeightPx = contentH / scale;
         if (pageStarts.length >= 2) {
           for (let p = 0; p < pageStarts.length; p++) {
             const startPx = pageStarts[p];
-            const endPx = p < pageStarts.length - 1 ? pageStarts[p + 1] : totalContentHeight;
+            const endPx = p < pageStarts.length - 1 ? pageStarts[p + 1] : totalContentHeightPx;
             const sliceHeightPx = endPx - startPx;
             if (sliceHeightPx <= 0) continue;
             const sliceCanvas = document.createElement('canvas');
@@ -2455,20 +2517,25 @@ function NoodiMeisterCore({ icons }) {
           const imgData = contentCanvas.toDataURL('image/png');
           const imgW = pageW;
           const imgH = (contentCanvas.height * imgW) / contentCanvas.width;
-          let heightLeft = imgH;
+          const numPages = Math.max(1, Math.ceil(imgH / pageH));
           let position = 0;
           pdf.addImage(imgData, 'PNG', 0, position, imgW, imgH);
-          heightLeft -= pageH;
-          while (heightLeft > 0) {
+          for (let p = 1; p < numPages; p++) {
             pdf.addPage(paperSize, pdfOrientation);
-            position = -(pageH * (pdf.internal.getNumberOfPages() - 1));
+            position = -p * pageH;
             pdf.addImage(imgData, 'PNG', 0, position, imgW, imgH);
-            heightLeft -= pageH;
           }
         }
       }
       const filename = ((songTitle || t('common.untitled')).replace(/\s+/g, '-').replace(/[^\w\-.]/g, '') || 'score') + '.pdf';
-      pdf.save(filename);
+      if (fileHandle && typeof fileHandle.createWritable === 'function') {
+        const blob = pdf.output('blob');
+        const writable = await fileHandle.createWritable();
+        await writable.write(blob);
+        await writable.close();
+      } else {
+        pdf.save(filename);
+      }
       setSaveFeedback('');
     } catch (e) {
       setSaveFeedback(t('feedback.exportFailed'));
@@ -5176,6 +5243,7 @@ function NoodiMeisterCore({ icons }) {
   const handPanRef = useRef({ active: false, startX: 0, startY: 0, startScrollLeft: 0, startScrollTop: 0 });
   const [isHandPanning, setIsHandPanning] = useState(false);
   const systemsForScoreRef = useRef([]);
+  const exportContentBoundsRef = useRef({ width: 0, height: 0 });
   const exportCursorRef = useRef(null); // { x, y, emoji, size } container-relative, for MP4 fillText
   /** Lehe laius ja suund sõltuvad ainult rakenduse valikust (Vaade → Lehe suund), mitte seadme ega brauseri ekraani suurusest (iPad, Android, MacBook, PC). */
   const getFullPageLayoutWidth = (orientation) => (orientation === 'landscape' ? LAYOUT.PAGE_WIDTH_MAX_LANDSCAPE : LAYOUT.PAGE_WIDTH_MAX);
@@ -5212,6 +5280,9 @@ function NoodiMeisterCore({ icons }) {
     const lastY = sys.length > 0 ? sys[sys.length - 1].yOffset + (systemYOffsets[sys.length - 1] ?? 0) : 0;
     return sys.length > 0 ? lastY + n * getStaffHeight() + 40 : n * getStaffHeight() + 40;
   }, [notationStyle, measures, timeSignature, pixelsPerBeat, effectiveLayoutPageWidth, pageOrientation, effectiveLayoutMeasuresPerLine, effectiveLayoutLineBreakBefore, effectiveLayoutPageBreakBefore, layoutSystemGap, layoutGlobalSpacingMultiplier, staves.length, measureStretchFactors, systemYOffsets, a4PageHeightPx, figurenotesRowHeight, figurenotesTotalRowHeight, figurenotesSize, figurenotesChordBlocks, figurenotesChordLineGap, figurenotesChordLineHeight]);
+  useEffect(() => {
+    exportContentBoundsRef.current = { width: basePageWidth, height: logicalContentHeight };
+  }, [basePageWidth, logicalContentHeight]);
   const systemsForScore = useMemo(() => {
     if (notationStyle === 'FIGURENOTES') {
       const data = { measures, timeSignature, pixelsPerBeat, staffSpacing: figurenotesTotalRowHeight + layoutSystemGap, globalSpacingMultiplier: layoutGlobalSpacingMultiplier, boxesPerRow: effectiveLayoutMeasuresPerLine || 4, pageWidth: effectiveLayoutPageWidth, pageHeight: a4PageHeightPx, lineBreakBefore: effectiveLayoutLineBreakBefore, pageBreakBefore: effectiveLayoutPageBreakBefore };
@@ -6114,6 +6185,79 @@ function NoodiMeisterCore({ icons }) {
         </div>
       )}
 
+      {/* PDF Export Preview – zoom, ruler, save location */}
+      {showPdfExportPreview && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-amber-950/60 dark:bg-black/70 backdrop-blur-sm p-4" onClick={() => { setShowPdfExportPreview(false); setPdfPreviewZoom(1); setPdfPreviewDataUrl(null); }}>
+          <div
+            className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden border-2 border-amber-200 dark:border-white/20 flex flex-col"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="bg-gradient-to-r from-slate-600 to-slate-700 text-white px-4 py-3 flex items-center justify-between">
+              <h2 className="text-lg font-bold">{t('file.exportPdf')} – {t('file.exportPdfTitle') || 'Preview'}</h2>
+              <button type="button" onClick={() => { setShowPdfExportPreview(false); setPdfPreviewZoom(1); setPdfPreviewDataUrl(null); }} className="text-white/90 hover:text-white text-2xl leading-none">&times;</button>
+            </div>
+            <div className="flex-1 p-4 overflow-y-auto space-y-4">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-sm font-medium text-amber-900 dark:text-white">Preview:</span>
+                <button type="button" onClick={() => setPdfPreviewZoom(z => Math.max(0.25, z - 0.25))} className="px-2 py-1 rounded bg-amber-100 dark:bg-amber-900/40 text-amber-900 dark:text-amber-100 text-sm font-medium">− Shrink</button>
+                <button type="button" onClick={handlePdfPreviewFit} className="px-2 py-1 rounded bg-amber-100 dark:bg-amber-900/40 text-amber-900 dark:text-amber-100 text-sm font-medium">Fit</button>
+                <button type="button" onClick={() => setPdfPreviewZoom(z => Math.min(2, z + 0.25))} className="px-2 py-1 rounded bg-amber-100 dark:bg-amber-900/40 text-amber-900 dark:text-amber-100 text-sm font-medium">+ Expand</button>
+              </div>
+              <div ref={pdfPreviewContainerRef} className="border border-amber-200 dark:border-white/20 rounded-lg overflow-auto bg-amber-50/50 dark:bg-black/50 flex items-center justify-center min-h-[200px]" style={{ maxHeight: '40vh' }}>
+                {pdfPreviewDataUrl ? (
+                  <img src={pdfPreviewDataUrl} alt="PDF preview" className="max-w-full object-contain origin-center" style={{ transform: `scale(${pdfPreviewZoom})` }} />
+                ) : (
+                  <span className="text-amber-700 dark:text-amber-300 text-sm">Loading preview…</span>
+                )}
+              </div>
+              <div>
+                <span className="text-sm font-medium text-amber-900 dark:text-white block mb-1">Scale ruler (px, max 400):</span>
+                <div className="flex items-end gap-0 border-b-2 border-amber-800 dark:border-amber-200" style={{ width: '100%', maxWidth: 400 }}>
+                  {[0, 50, 100, 150, 200, 250, 300, 350, 400].map((px) => (
+                    <div key={px} className="flex flex-col items-center flex-1">
+                      <div className="w-px bg-amber-700 dark:bg-amber-300" style={{ height: px % 100 === 0 ? 12 : 6 }} />
+                      <span className="text-xs text-amber-800 dark:text-amber-200 mt-0.5">{px}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <span className="text-sm font-medium text-amber-900 dark:text-white block mb-2">Save location:</span>
+                <label className="flex items-center gap-2 cursor-pointer mb-1">
+                  <input type="radio" name="pdfSaveLocation" checked={pdfExportSaveLocation === 'downloads'} onChange={() => { setPdfExportSaveLocation('downloads'); setPdfExportFileHandle(null); setPdfExportChosenPath(''); }} />
+                  <span className="text-sm">Downloads folder (default)</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input type="radio" name="pdfSaveLocation" checked={pdfExportSaveLocation === 'custom'} onChange={() => {}} />
+                  <span className="text-sm">Choose location…</span>
+                </label>
+                <button type="button" onClick={handlePdfExportChooseLocation} className="mt-2 px-3 py-1.5 rounded-lg bg-amber-100 dark:bg-amber-900/40 text-amber-900 dark:text-amber-100 text-sm font-medium border border-amber-300 dark:border-amber-600">
+                  {pdfExportChosenPath ? pdfExportChosenPath : 'Pick file (e.g. Desktop)…'}
+                </button>
+              </div>
+            </div>
+            <div className="p-4 border-t border-amber-200 dark:border-white/20 flex justify-end gap-2">
+              <button type="button" onClick={() => { setShowPdfExportPreview(false); setPdfPreviewZoom(1); setPdfPreviewDataUrl(null); }} className="px-4 py-2 rounded-lg border-2 border-amber-300 text-amber-800 dark:text-amber-200 font-medium hover:bg-amber-50 dark:hover:bg-amber-900/30">
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isExportingPdf}
+                onClick={async () => {
+                  const opts = pdfExportSaveLocation === 'custom' && pdfExportFileHandle ? { fileHandle: pdfExportFileHandle } : {};
+                  await exportToPdf(opts);
+                  setShowPdfExportPreview(false);
+                  setHeaderMenuOpen(null);
+                }}
+                className="px-4 py-2 rounded-lg bg-amber-600 text-white font-semibold hover:bg-amber-500 disabled:opacity-60"
+              >
+                {isExportingPdf ? 'Exporting…' : t('file.exportPdf')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Settings modal – Title, Author, Pickup (post-setup editing) */}
       {settingsOpen && (
         <div className="fixed inset-0 z-[110] flex items-center justify-center bg-amber-950/60 dark:bg-black/70 backdrop-blur-sm p-4 sm:p-6" onClick={() => setSettingsOpen(false)}>
@@ -6854,7 +6998,7 @@ function NoodiMeisterCore({ icons }) {
                     <button
                       type="button"
                       disabled={isExportingPdf}
-                      onClick={() => { exportToPdf(); setHeaderMenuOpen(null); }}
+                      onClick={() => { setShowPdfExportPreview(true); setHeaderMenuOpen(null); }}
                       className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-amber-50 hover:bg-slate-600 disabled:opacity-60"
                       title={t('file.exportPdfTitle')}
                     >
@@ -8896,7 +9040,7 @@ function NoodiMeisterCore({ icons }) {
                       getKeyColor={notationMode === 'vabanotatsioon' ? (pitch, oct) => getPedagogicalSymbol(keySignature, joClefStaffPosition, pitch, oct).color : null}
                       keySignature={keySignature}
                       keyboardPlaysPiano={pianoStripVisible && (notationStyle === 'FIGURENOTES' || notationMode === 'vabanotatsioon')}
-                      ignoreKeyboardWhenModalOpen={newWorkSetupOpen || saveCloudDialogOpen || settingsOpen || shortcutsOpen}
+                      ignoreKeyboardWhenModalOpen={newWorkSetupOpen || saveCloudDialogOpen || settingsOpen || shortcutsOpen || showPdfExportPreview}
                     />
                   </div>
                 </div>

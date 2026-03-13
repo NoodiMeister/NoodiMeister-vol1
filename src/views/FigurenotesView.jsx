@@ -230,9 +230,18 @@ export function FigurenotesView({
               <line x1={0} y1={sys.yOffset - PAGE_BREAK_GAP / 2} x2={pageWidth || 800} y2={sys.yOffset - PAGE_BREAK_GAP / 2} stroke="#c4b896" strokeWidth={1} strokeDasharray="4 4" />
             )}
 
-            {/* Taktide number – JO-võtit ei ole; skaleeritud figurenotesSize-ga, max 12px */}
+            {/* Taktinumber iga rea esimese takti juures: vasak ja ülemine nurk */}
             {showBarNumbers && sys.measureIndices.length > 0 && (
-              <text x={20} y={sys.yOffset + Math.max(10, barLineInset + 4)} fontSize={barNumberSize} fontWeight="bold" fill="#555" textAnchor="middle" fontFamily="sans-serif">
+              <text
+                x={12}
+                y={sys.yOffset + barLineInset}
+                fontSize={barNumberSize}
+                fontWeight="bold"
+                fill="#555"
+                textAnchor="start"
+                dominantBaseline="hanging"
+                fontFamily="sans-serif"
+              >
                 {sys.measureIndices[0] + 1}
               </text>
             )}
@@ -492,11 +501,24 @@ export function FigurenotesView({
                     const barLineHeight = barLineBottomY - barLineTopY;
                     const isRightBarlineOfSystem = measureIdx === sys.measureIndices[sys.measureIndices.length - 1];
                     const isLastMeasureOfScore = measureIdx === effectiveMeasures.length - 1;
+                    const showFinalBar = isLastMeasureOfScore || measure.barlineFinal;
+                    const thinW = Math.max(1, barLineWidth);
+                    const gap = Math.max(2, Math.round(4 * (figurenotesSize / NOTATION_SIZE_REF)));
+                    const thickW = Math.max(2, Math.round(barLineWidth * 1.8));
+                    const xRight = measureX + measureWidth;
+                    const thickX = xRight - thickW / 2;
+                    const thinX = xRight - thickW - gap - thinW / 2;
                     return (
                       <>
                         {j !== 0 && <line x1={measureX} y1={barLineTopY} x2={measureX} y2={barLineBottomY} stroke="#1a1a1a" strokeWidth={barLineWidth} />}
-                        {isRightBarlineOfSystem && !isLastMeasureOfScore && (
-                          <line x1={measureX + measureWidth} y1={barLineTopY} x2={measureX + measureWidth} y2={barLineBottomY} stroke="#1a1a1a" strokeWidth={barLineWidth} />
+                        {isRightBarlineOfSystem && !showFinalBar && (
+                          <line x1={xRight} y1={barLineTopY} x2={xRight} y2={barLineBottomY} stroke="#1a1a1a" strokeWidth={barLineWidth} />
+                        )}
+                        {showFinalBar && (
+                          <g>
+                            <line x1={thinX} y1={barLineTopY} x2={thinX} y2={barLineBottomY} stroke="#1a1a1a" strokeWidth={thinW} />
+                            <line x1={thickX} y1={barLineTopY} x2={thickX} y2={barLineBottomY} stroke="#1a1a1a" strokeWidth={thickW} />
+                          </g>
                         )}
                       </>
                     );
@@ -759,28 +781,27 @@ export function FigurenotesView({
                 </g>
               );
             })}
-            {/* Always draw final double bar at end of score (also when last measure is incomplete or after file creator). */}
+            {/* Fallback: draw final double bar at end of score if last measure is in this system (in case it was skipped in the loop). */}
             {Array.isArray(effectiveMeasures) && effectiveMeasures.length > 0 && (() => {
               const lastIdx = effectiveMeasures.length - 1;
               const j = sys.measureIndices.indexOf(lastIdx);
               if (j < 0) return null;
               const mw = sys.measureWidths ?? sys.measureIndices.map(() => sys.measureWidth ?? beatsPerMeasure * 80);
-              const xEnd = marginLeft + mw.slice(0, j + 1).reduce((a, b) => a + b, 0);
+              const xRight = marginLeft + mw.slice(0, j + 1).reduce((a, b) => a + b, 0);
               const barLineBottomY = chordLineHeight > 0
                 ? sys.yOffset + melodyRowHeight + chordLineGap + chordLineHeight - barLineInset
                 : sys.yOffset + melodyRowHeight - barLineInset;
               const barLineTopY = sys.yOffset + barLineInset;
-              const barLineCenterY = (barLineTopY + barLineBottomY) / 2;
-              const barLineHeight = barLineBottomY - barLineTopY;
+              const thinW = Math.max(1, barLineWidth);
+              const gap = Math.max(2, Math.round(4 * (figurenotesSize / NOTATION_SIZE_REF)));
+              const thickW = Math.max(2, Math.round(barLineWidth * 1.8));
+              const thickX = xRight - thickW / 2;
+              const thinX = xRight - thickW - gap - thinW / 2;
               return (
-                <SmuflGlyph
-                  glyph={SMUFL_GLYPH.barlineFinal}
-                  x={xEnd}
-                  y={barLineCenterY}
-                  fontSize={Math.max(12, barLineHeight * 1.2)}
-                  fill="#1a1a1a"
-                  textAnchor="start"
-                />
+                <g>
+                  <line x1={thinX} y1={barLineTopY} x2={thinX} y2={barLineBottomY} stroke="#1a1a1a" strokeWidth={thinW} />
+                  <line x1={thickX} y1={barLineTopY} x2={thickX} y2={barLineBottomY} stroke="#1a1a1a" strokeWidth={thickW} />
+                </g>
               );
             })()}
           </g>
