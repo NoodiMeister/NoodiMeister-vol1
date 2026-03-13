@@ -13,9 +13,72 @@
 }
 
 /* Põhivärvid (aktsent) */
-[data-primary-color="orange"] { --primary-color: #FF8C00; }
-[data-primary-color="blue"]  { --primary-color: #007BFF; }
-[data-primary-color="green"] { --primary-color: #28A745; }
+[data-primary-color="orange"] { --primary-color: #FF8C00; --primary-hover: #e67e00; }
+[data-primary-color="blue"]  { --primary-color: #007BFF; --primary-hover: #0056b3; }
+[data-primary-color="green"] { --primary-color: #28A745; --primary-hover: #1e7e34; }
+
+/* Aktsendi ülekirjutused: kui valitud on sinine või roheline, asendavad need amber-täpid üle kogu lehe */
+/* Taust (nupud, aktiivsed read) */
+[data-primary-color="blue"] .bg-amber-600,
+[data-primary-color="blue"] .bg-amber-500,
+[data-primary-color="blue"] .bg-amber-700 { background-color: #007BFF !important; }
+[data-primary-color="blue"] .hover\:bg-amber-500:hover,
+[data-primary-color="blue"] .hover\:bg-amber-600:hover,
+[data-primary-color="blue"] .hover\:bg-amber-700:hover { background-color: #0056b3 !important; }
+[data-primary-color="green"] .bg-amber-600,
+[data-primary-color="green"] .bg-amber-500,
+[data-primary-color="green"] .bg-amber-700 { background-color: #28A745 !important; }
+[data-primary-color="green"] .hover\:bg-amber-500:hover,
+[data-primary-color="green"] .hover\:bg-amber-600:hover,
+[data-primary-color="green"] .hover\:bg-amber-700:hover { background-color: #1e7e34 !important; }
+
+/* Gradiendid (peanupud, päis) */
+[data-primary-color="blue"] .from-amber-600,
+[data-primary-color="blue"] .from-amber-700,
+[data-primary-color="blue"] .from-amber-900 { --tw-gradient-from: #007BFF; --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to, rgb(0 123 255 / 0)); }
+[data-primary-color="blue"] .to-orange-600,
+[data-primary-color="blue"] .to-amber-600,
+[data-primary-color="blue"] .to-amber-700,
+[data-primary-color="blue"] .via-orange-800 { --tw-gradient-to: #0056b3; --tw-gradient-stops: var(--tw-gradient-from), #0056b3, var(--tw-gradient-to, rgb(0 86 179 / 0)); }
+[data-primary-color="blue"] .hover\:from-amber-500:hover,
+[data-primary-color="blue"] .hover\:to-orange-500:hover { --tw-gradient-from: #0056b3; --tw-gradient-to: #004494; }
+[data-primary-color="green"] .from-amber-600,
+[data-primary-color="green"] .from-amber-700,
+[data-primary-color="green"] .from-amber-900 { --tw-gradient-from: #28A745; --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to, rgb(40 167 69 / 0)); }
+[data-primary-color="green"] .to-orange-600,
+[data-primary-color="green"] .to-amber-600,
+[data-primary-color="green"] .to-amber-700,
+[data-primary-color="green"] .via-orange-800 { --tw-gradient-to: #1e7e34; --tw-gradient-stops: var(--tw-gradient-from), #1e7e34, var(--tw-gradient-to, rgb(30 126 52 / 0)); }
+[data-primary-color="green"] .hover\:from-amber-500:hover,
+[data-primary-color="green"] .hover\:to-orange-500:hover { --tw-gradient-from: #1e7e34; --tw-gradient-to: #176329; }
+
+/* Piirid ja rõngad (fookus, aktiivne) */
+[data-primary-color="blue"] .border-amber-700,
+[data-primary-color="blue"] .border-amber-600,
+[data-primary-color="blue"] .border-amber-500 { border-color: #007BFF !important; }
+[data-primary-color="blue"] .ring-amber-600,
+[data-primary-color="blue"] .ring-2.ring-amber-600 { --tw-ring-color: #007BFF !important; }
+[data-primary-color="blue"] .focus\:ring-amber-500:focus,
+[data-primary-color="blue"] .focus\:ring-amber-600:focus,
+[data-primary-color="blue"] .focus\:border-amber-500:focus,
+[data-primary-color="blue"] .focus\:border-amber-600:focus { --tw-ring-color: #007BFF !important; border-color: #007BFF !important; }
+[data-primary-color="green"] .border-amber-700,
+[data-primary-color="green"] .border-amber-600,
+[data-primary-color="green"] .border-amber-500 { border-color: #28A745 !important; }
+[data-primary-color="green"] .ring-amber-600,
+[data-primary-color="green"] .ring-2.ring-amber-600 { --tw-ring-color: #28A745 !important; }
+[data-primary-color="green"] .focus\:ring-amber-500:focus,
+[data-primary-color="green"] .focus\:ring-amber-600:focus,
+[data-primary-color="green"] .focus\:border-amber-500:focus,
+[data-primary-color="green"] .focus\:border-amber-600:focus { --tw-ring-color: #28A745 !important; border-color: #28A745 !important; }
+
+/* Tekst ja ikoonid (aktsendivärv) */
+[data-primary-color="blue"] .text-amber-600,
+[data-primary-color="blue"] .text-amber-500 { color: #007BFF !important; }
+[data-primary-color="blue"] .accent-amber-600 { accent-color: #007BFF !important; }
+[data-primary-color="green"] .text-amber-600,
+[data-primary-color="green"] .text-amber-500 { color: #28A745 !important; }
+[data-primary-color="green"] .accent-amber-600 { accent-color: #28A745 !important; }
 
 /* Tume režiim: must taust, valge tekst ja sümbolid */
 [data-theme="dark"] {

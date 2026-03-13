@@ -1340,7 +1340,7 @@ function NoodiMeisterCore({ icons }) {
   const [tuningReferenceOctave, setTuningReferenceOctave] = useState(3);
   const [tuningReferenceHz, setTuningReferenceHz] = useState(440);
   const [playNoteOnInsert, setPlayNoteOnInsert] = useState(true);
-  const [figurenotesSize, setFigurenotesSize] = useState(75); // Noodigraafika suurus (figuurid ja noodid), 12–500 px (vaikimisi 75)
+  const [figurenotesSize, setFigurenotesSize] = useState(105); // Noodigraafika suurus (figuurid ja noodid), 12–500 px (vaikimisi 105)
   const [figurenotesStems, setFigurenotesStems] = useState(false); // Figuurnotatsioonis rütmi näitamine noodivartega (vaikimisi välja)
   const [figurenotesChordLineGap, setFigurenotesChordLineGap] = useState(6); // Akordirida figuurnotatsioonis: vahe meloodiareal ja akordirea vahel 0–20 px
   const [figurenotesChordBlocks, setFigurenotesChordBlocks] = useState(false); // Akordirežiim figuurnotatsioonis: värvilised akordiplokid akordireal

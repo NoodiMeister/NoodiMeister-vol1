@@ -5,7 +5,7 @@
  * RhythmToolbox valikud → NotationContext (selectedRhythm, isDotted, isRest) → NoteSymbols.
  */
 
-import React, { useMemo, useCallback, useState, useEffect } from 'react';
+import React, { useMemo, useCallback, useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 
 // —— Store & context ——
@@ -311,6 +311,9 @@ function NotationOrchestratorInner({ showPiano = true, t = (k) => k }) {
 
   const onNotePlay = usePianoToNotationHandler();
 
+  // Pausirežiimi modifikaator: 0 → järgmine rütmivõti (1–5) rakendub pausina.
+  const restModifierRef = useRef(false);
+
   // Klaviatuuri kiirklahvid: 1–5 rütm, A–G noodi sisestus.
   useEffect(() => {
     const isTypingTarget = (el) => {
@@ -322,6 +325,15 @@ function NotationOrchestratorInner({ showPiano = true, t = (k) => k }) {
       if (e.repeat) return;
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       if (isTypingTarget(e.target)) return;
+
+      // Pausirežiim: 0 → märgi, et järgmine rütmivõti sisestab pausi.
+      if (e.key === '0') {
+        e.preventDefault();
+        e.stopPropagation();
+        restModifierRef.current = true;
+        setIsRest(true);
+        return;
+      }
 
       // Rhythm: 1..5
       const rhythmByDigit = {
@@ -335,7 +347,14 @@ function NotationOrchestratorInner({ showPiano = true, t = (k) => k }) {
         e.preventDefault();
         e.stopPropagation();
         setSelectedRhythm(rhythmByDigit[e.key]);
-        setIsRest(false);
+        if (restModifierRef.current) {
+          // 0 + (1–5): sama vältus, kuid paus (isRest = true).
+          setIsRest(true);
+          restModifierRef.current = false;
+        } else {
+          // Ainult 1–5: noodirežiim (isRest = false).
+          setIsRest(false);
+        }
         return;
       }
 
