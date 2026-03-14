@@ -24,7 +24,7 @@ export function getFigureShape(octave) {
   return 'triangleDown';
 }
 
-/** Värv noodinime (pitch) järgi. */
+/** Värv noodinime (pitch) järgi. Üks allikas nii figuurnootide kui akordiplokkide värvide jaoks (FigureNotesLibrary.FIGURE_NOTE_COLORS). */
 export function getFigureColor(pitch) {
   return getShapeData(pitch).color;
 }

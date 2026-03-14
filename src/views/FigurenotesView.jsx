@@ -23,25 +23,18 @@ function getFigurenoteTextColor(pitch) {
   return (p === 'A' || p === 'E' || p === 'B') ? '#000000' : '#ffffff';
 }
 
-const CHORD_ROOT_COLORS = {
-  C: '#ef4444', // red
-  D: '#92400e', // brown
-  E: '#f97316', // orange
-  F: '#22c55e', // green
-  G: '#3b82f6', // blue
-  A: '#a855f7', // purple
-  B: '#6b7280'  // gray
-};
-
-const PITCH_CLASS_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
-
+/** Akordi taustavärv = noodinime värv (üks allikas: getFigureColor). C=punane, D=pruun, E=hall, F=sinine, G=must, A=kollane, B=roheline. */
 function getChordColor(chordSymbol) {
   if (!chordSymbol) return '#e5e7eb';
   const s = String(chordSymbol).trim();
   if (!s) return '#e5e7eb';
   const rootChar = s.charAt(0).toUpperCase();
-  return CHORD_ROOT_COLORS[rootChar] || '#e5e7eb';
+  const root = rootChar === 'H' ? 'B' : rootChar;
+  if (!['C', 'D', 'E', 'F', 'G', 'A', 'B'].includes(root)) return '#e5e7eb';
+  return getFigureColor(root);
 }
+
+const PITCH_CLASS_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 
 function getChordToneNames(chordSymbol) {
   try {
@@ -54,6 +47,31 @@ function getChordToneNames(chordSymbol) {
   } catch (_) {
     return [];
   }
+}
+
+const CHORD_NAME_WIDTH_PER_CHAR = 0.55;
+
+/** Akordi juurtäht (C, D, E, F, G, A, B). */
+function getChordRootLetter(chordSymbol) {
+  const c = String(chordSymbol || '').trim().charAt(0).toUpperCase();
+  return c === 'H' ? 'B' : c;
+}
+
+/** Kujund akordi tooni jaoks: kuni E = kõik ruut; F,G = bass X, 3. X, kvint ruut; A,B = bass X, 3. ruut (C#/D#), kvint ruut. */
+function getChordToneShape(chordRootLetter, toneIndex) {
+  const root = chordRootLetter.toUpperCase();
+  if (root <= 'E') return 'square';
+  if (root === 'F' || root === 'G') return toneIndex <= 1 ? 'cross' : 'square';
+  if (root === 'A' || root === 'B') return toneIndex === 0 ? 'cross' : 'square';
+  return toneIndex === 0 ? 'cross' : 'square';
+}
+
+/** Tooni nimi → { baseName, isSharp } (nt C# → { baseName: 'C', isSharp: true }). */
+function parseToneName(toneName) {
+  const s = String(toneName || '').trim();
+  if (s.endsWith('#')) return { baseName: s.slice(0, -1).toUpperCase(), isSharp: true };
+  if (s.endsWith('b')) return { baseName: (s.slice(0, -1).toUpperCase() || 'C').replace('H', 'B'), isSharp: false };
+  return { baseName: s.toUpperCase().replace('H', 'B'), isSharp: false };
 }
 
 /** Reference size used when design was at 16px; scale = size/16. */
@@ -115,6 +133,7 @@ export function FigurenotesView({
   chordLineGap = 0,
   chordLineHeight = 0,
   chordBlocksEnabled = false,
+  chordBlocksShowTones = true,
   pageWidth,
   timeSignature,
   timeSignatureMode,
@@ -619,7 +638,7 @@ export function FigurenotesView({
                       });
                     }
 
-                    // Akordiplokid: iga takti kohta üks ristkülik (täislaius), akordi nimega ja nimega seotud värvi taustaga.
+                    // Akordiplokid: iga takti kohta üks ristkülik; akordi nimi ja noodinimed kõrvuti (2 px vahe), alla värvifiguurid (X/ruut).
                     const measureChord = chordsInMeasure[0];
                     if (!measureChord) return null;
                     const rectGap = 2;
@@ -632,6 +651,14 @@ export function FigurenotesView({
                     const textX = rectX + 6;
                     const mainTextY = chordRowTop + chordLineHeight * 0.45;
                     const tonesFontSize = Math.max(8, Math.round(chordFontSize * 0.6));
+                    const chordNameWidth = measureChord.chord.length * chordFontSize * CHORD_NAME_WIDTH_PER_CHAR;
+                    const gapPx = 2;
+                    const tonesTextX = textX + chordNameWidth + gapPx;
+                    const chordRoot = getChordRootLetter(measureChord.chord);
+                    const figSize = Math.min(chordFontSize * 0.9, Math.max(6, rectH * 0.38));
+                    const figGap = 2;
+                    const figuresStartX = tonesTextX;
+                    const figuresY = chordRowTop + chordLineHeight * 0.72;
 
                     return (
                       <g key={`chord-block-${measureIdx}-${measure.startBeat}`}>
@@ -657,12 +684,12 @@ export function FigurenotesView({
                         >
                           {measureChord.chord}
                         </text>
-                        {tones.length > 0 && (
+                        {chordBlocksShowTones && tones.length > 0 && (
                           <text
-                            x={textX}
-                            y={mainTextY + tonesFontSize}
+                            x={tonesTextX}
+                            y={mainTextY}
                             textAnchor="start"
-                            dominantBaseline="hanging"
+                            dominantBaseline="middle"
                             fontSize={tonesFontSize}
                             fill="#f9fafb"
                             fontFamily="monospace"
@@ -670,6 +697,38 @@ export function FigurenotesView({
                             {tones.join(' ')}
                           </text>
                         )}
+                        {chordBlocksShowTones && tones.length > 0 && tones.map((toneName, ti) => {
+                          const { baseName, isSharp } = parseToneName(toneName);
+                          const shape = getChordToneShape(chordRoot, ti);
+                          const toneColor = getFigureColor(baseName);
+                          const style = getFigureStyle(baseName, shape === 'cross' ? 2 : 3);
+                          const cx = figuresStartX + ti * (figSize + figGap) + figSize / 2;
+                          const paths = getShapePathsByOctave(shape === 'cross' ? 2 : 3);
+                          const viewScale = figSize / 100;
+                          const arrowLen = figSize * 0.4;
+                          const head = Math.max(2, figSize * 0.15);
+                          return (
+                            <g key={`fig-${ti}-${toneName}`}>
+                              {paths.map((d, pi) => (
+                                <path
+                                  key={pi}
+                                  d={d}
+                                  fill={style.fill}
+                                  stroke={style.stroke || 'none'}
+                                  strokeWidth={(style.strokeWidth || 0) * viewScale}
+                                  transform={`translate(${cx - figSize / 2}, ${figuresY - figSize / 2}) scale(${viewScale})`}
+                                  vectorEffect="non-scaling-stroke"
+                                />
+                              ))}
+                              {isSharp && (
+                                <g stroke="#1a1a1a" fill="none" strokeWidth={Math.max(1, figSize * 0.08)} strokeLinecap="round" strokeLinejoin="round">
+                                  <line x1={cx - arrowLen / 2} y1={figuresY + arrowLen / 2} x2={cx + arrowLen / 2} y2={figuresY - arrowLen / 2} />
+                                  <path d={`M ${cx + arrowLen / 2} ${figuresY - arrowLen / 2} L ${cx + arrowLen / 2 - head} ${figuresY - arrowLen / 2 + head * 0.6} M ${cx + arrowLen / 2} ${figuresY - arrowLen / 2} L ${cx + arrowLen / 2 - head * 0.6} ${figuresY - arrowLen / 2 + head}`} />
+                                </g>
+                              )}
+                            </g>
+                          );
+                        })}
                         {measureChord.figuredBass && (
                           <text
                             x={rectX + rectWidth - 6}
