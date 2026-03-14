@@ -867,6 +867,7 @@ function getToolboxes(t, instrumentConfig, shortcutLabels = {}) {
       options: [
         { id: 'chord-C', label: 'C', value: 'C' },
         { id: 'chord-Dm', label: 'Dm', value: 'Dm' },
+        { id: 'chord-E', label: 'E', value: 'E' },
         { id: 'chord-Em', label: 'Em', value: 'Em' },
         { id: 'chord-F', label: 'F', value: 'F' },
         { id: 'chord-G', label: 'G', value: 'G' },
@@ -2823,6 +2824,8 @@ function NoodiMeisterCore({ icons }) {
     figurenotesSize,
     figurenotesStems,
     figurenotesChordLineGap,
+    figurenotesChordBlocks,
+    figurenotesChordBlocksShowTones,
     timeSignatureSize,
     showBarNumbers,
     barNumberSize,
@@ -2870,7 +2873,7 @@ function NoodiMeisterCore({ icons }) {
     pageDesignCrop,
     visibleStaves: visibleStaves.length === staves.length ? visibleStaves : staves.map(() => true),
     intermissionLabels
-  }), [songTitle, author, notationStyle, notationMode, isPedagogicalProject, timeSignature, timeSignatureMode, keySignature, staffLines, pixelsPerBeat, instrumentNotationVariant, pickupEnabled, pickupQuantity, pickupDuration, setupCompleted, cursorPosition, addedMeasures, pageOrientation, paperSize, layoutMeasuresPerLine, layoutLineBreakBefore, layoutPageBreakBefore, layoutSystemGap, layoutPartsGap, layoutConnectedBarlines, layoutGlobalSpacingMultiplier, viewMode, partLayoutMeasuresPerLine, partLayoutLineBreakBefore, partLayoutPageBreakBefore, showPageNavigator, pageFlowDirection, viewFitPage, viewSmartPage, visibleToolIds, tuningReferenceNote, tuningReferenceOctave, tuningReferenceHz, playNoteOnInsert, figurenotesSize, figurenotesStems, figurenotesChordLineGap, timeSignatureSize, showBarNumbers, barNumberSize, showRhythmSyllables, showAllNoteLabels, enableEmojiOverlays, joClefStaffPosition, relativeNotationShowKeySignature, relativeNotationShowTraditionalClef, pedagogicalAudioBpm, pedagogicalAudioPlaybackRate, pedagogicalPlayheadStyle, pedagogicalPlayheadEmoji, pedagogicalPlayheadEmojiSize, cursorLineStrokeWidth, pedagogicalPlayheadMovement, staves, activeStaffIndex, staffYOffsets, measureStretchFactors, systemYOffsets, visibleStaves, intermissionLabels, chords, textBoxes, documentFontFamily, lyricFontFamily, titleFontSize, authorFontSize, titleFontFamily, authorFontFamily, titleBold, titleItalic, authorBold, authorItalic, titleAlignment, authorAlignment, staffRowAlignment, pageDesignDataUrl, pageDesignOpacity, pageDesignFit, pageDesignLayer, pageDesignPositionX, pageDesignPositionY, pageDesignCrop]);
+  }), [songTitle, author, notationStyle, notationMode, isPedagogicalProject, timeSignature, timeSignatureMode, keySignature, staffLines, pixelsPerBeat, instrumentNotationVariant, pickupEnabled, pickupQuantity, pickupDuration, setupCompleted, cursorPosition, addedMeasures, pageOrientation, paperSize, layoutMeasuresPerLine, layoutLineBreakBefore, layoutPageBreakBefore, layoutSystemGap, layoutPartsGap, layoutConnectedBarlines, layoutGlobalSpacingMultiplier, viewMode, partLayoutMeasuresPerLine, partLayoutLineBreakBefore, partLayoutPageBreakBefore, showPageNavigator, pageFlowDirection, viewFitPage, viewSmartPage, visibleToolIds, tuningReferenceNote, tuningReferenceOctave, tuningReferenceHz, playNoteOnInsert, figurenotesSize, figurenotesStems, figurenotesChordLineGap, figurenotesChordBlocks, figurenotesChordBlocksShowTones, timeSignatureSize, showBarNumbers, barNumberSize, showRhythmSyllables, showAllNoteLabels, enableEmojiOverlays, joClefStaffPosition, relativeNotationShowKeySignature, relativeNotationShowTraditionalClef, pedagogicalAudioBpm, pedagogicalAudioPlaybackRate, pedagogicalPlayheadStyle, pedagogicalPlayheadEmoji, pedagogicalPlayheadEmojiSize, cursorLineStrokeWidth, pedagogicalPlayheadMovement, staves, activeStaffIndex, staffYOffsets, measureStretchFactors, systemYOffsets, visibleStaves, intermissionLabels, chords, textBoxes, documentFontFamily, lyricFontFamily, titleFontSize, authorFontSize, titleFontFamily, authorFontFamily, titleBold, titleItalic, authorBold, authorItalic, titleAlignment, authorAlignment, staffRowAlignment, pageDesignDataUrl, pageDesignOpacity, pageDesignFit, pageDesignLayer, pageDesignPositionX, pageDesignPositionY, pageDesignCrop]);
 
   // Download project file (future: replace with upload to Google Drive / OneDrive)
   const downloadProject = useCallback(() => {
@@ -4761,6 +4764,14 @@ function NoodiMeisterCore({ icons }) {
       // N-mode Backspace/Delete: kui kursor asub taktis akordireal, võimaldame Backspace/Delete kustutada selle akordi; muul juhul noot või (ainult Backspace) tühi takt / taktikordus
       if (noteInputMode && (e.key === 'Backspace' || e.code === 'Backspace' || e.key === 'Delete' || e.code === 'Delete')) {
         e.preventDefault();
+        if (hasChordRow && cursorSubRow === 1) {
+          const chordAtCursor = getChordAtCursor();
+          if (chordAtCursor) {
+            setChords((prev) => prev.filter((c) => c.id !== chordAtCursor.id));
+            dirtyRef.current = true;
+          }
+          return;
+        }
         const indexAtCursor = getNoteIndexAtCursor();
         if (indexAtCursor >= 0 && notes.length > 0) {
           let beat = 0;
@@ -4986,8 +4997,19 @@ function NoodiMeisterCore({ icons }) {
           setCursorPosition(Math.min(maxCursor, end > 0 ? end - 0.25 : 0));
           return;
         }
-        // Cursor on a note: Arrow Up/Down = one note up/down (pitch class); Shift+Arrow = octave change
+        // Cursor on a note: Arrow Up/Down = one note up/down (pitch class); Shift+Arrow = octave change. Akordireal (cursorSubRow === 1) mõjutame ainult akordi.
         if (e.code === 'ArrowUp' || e.code === 'ArrowDown') {
+          if (hasChordRow && cursorSubRow === 1) {
+            const chordAtCursor = getChordAtCursor();
+            if (chordAtCursor && !e.shiftKey && !modKey) {
+              e.preventDefault();
+              const dir = e.code === 'ArrowUp' ? 1 : -1;
+              const newChordSymbol = transposeChordSymbol(chordAtCursor.chord, dir);
+              setChords((prev) => prev.map((c) => c.id === chordAtCursor.id ? { ...c, chord: newChordSymbol } : c));
+              dirtyRef.current = true;
+            }
+            return;
+          }
           const noteIdx = getNoteIndexAtCursor();
           if (noteIdx >= 0) {
             e.preventDefault();
@@ -5011,7 +5033,7 @@ function NoodiMeisterCore({ icons }) {
             }
             return;
           }
-          // Akord kursori taktis: nool üles/alla muudab akordi nime (ja värvi) – töötab nii meloodia kui akordirea seadete juures
+          // Akord kursori taktis (meloodiareal): nool üles/alla muudab akordi nime
           if (!e.shiftKey && !modKey) {
             const chordAtCursor = getChordAtCursor();
             if (chordAtCursor) {
