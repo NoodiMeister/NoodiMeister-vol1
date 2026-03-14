@@ -652,7 +652,7 @@ export function FigurenotesView({
                     const mainTextY = chordRowTop + chordLineHeight * 0.45;
                     const tonesFontSize = Math.max(8, Math.round(chordFontSize * 0.6));
                     const chordNameWidth = measureChord.chord.length * chordFontSize * CHORD_NAME_WIDTH_PER_CHAR;
-                    const gapPx = 2;
+                    const gapPx = 4;
                     const tonesTextX = textX + chordNameWidth + gapPx;
                     const chordRoot = getChordRootLetter(measureChord.chord);
                     const figSize = Math.min(chordFontSize * 0.9, Math.max(6, rectH * 0.38));

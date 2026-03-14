@@ -3779,6 +3779,17 @@ function NoodiMeisterCore({ icons }) {
     return 1 + measuresAfterFirst;
   }, [staves, timeSignature, pickupEnabled, pickupQuantity, pickupDuration]);
 
+  // Taktimõõdu muutumisel kohanda taktide arvu nii, et taktinumbrid vastaksid uuele taktimõõdule
+  // (nt 2/4 → 4/4: sama noodistik = vähem takte, rea esimene taktinumber väheneb).
+  useEffect(() => {
+    const needed = minMeasuresFromNotes;
+    setAddedMeasures((prev) => {
+      const currentTotal = 1 + (prev || 0);
+      if (currentTotal > needed) return Math.max(0, needed - 1);
+      return prev;
+    });
+  }, [timeSignature?.beats, timeSignature?.beatUnit]);
+
   // Calculate measures (with optional pickup / eeltakt – exact rhythmic value). Pikkus = max kõigi ridade pikkus.
   const calculateMeasures = useCallback(() => {
     const beatsPerMeasure = timeSignature.beats;
@@ -4153,6 +4164,23 @@ function NoodiMeisterCore({ icons }) {
     setChords(prev => [...prev, newChord].sort((a, b) => a.beatPosition - b.beatPosition));
   }, [normalizeChordHotkey]);
 
+  const ROOT_ORDER = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
+  const transposeChordSymbol = useCallback((chordSymbol, step) => {
+    const s = String(chordSymbol || '').trim();
+    if (!s) return s;
+    const root = s.charAt(0).toUpperCase();
+    const idx = ROOT_ORDER.indexOf(root);
+    if (idx === -1) return s;
+    const newIdx = (idx + step + 7) % 7;
+    return ROOT_ORDER[newIdx] + s.slice(1);
+  }, []);
+
+  const getChordAtCursor = useCallback(() => {
+    const beatsPerMeasure = timeSignature?.beats ?? 4;
+    const cursorMeasureIdx = Math.floor(cursorPosition / beatsPerMeasure);
+    return chords.find((c) => Math.floor(c.beatPosition / beatsPerMeasure) === cursorMeasureIdx);
+  }, [chords, cursorPosition, timeSignature?.beats]);
+
   const handleToolboxSelection = useCallback((clickedIndex) => {
     if (!activeToolbox) return;
     const toolbox = toolboxes[activeToolbox];
@@ -4329,24 +4357,66 @@ function NoodiMeisterCore({ icons }) {
     setSelectedOptionIndex(0);
   }, [activeToolbox, selectedOptionIndex, noteInputMode, addNoteAtCursor, ghostOctave, instrumentNotationVariant, addChordAt, getChordInsertBeat, getSelectedNotes, notes, keySignature, setNotes, saveToHistory, selectedNoteIndex, selectionStart, selectionEnd, durations, insertPatternAtCursor, addStaff, addPianoStaff, instrumentConfig, setNotationMode, setClefType, staves.length, notationStyle, notationMode, cursorPosition, timeSignature]);
 
+  // Noot kursori all (rütmi järgi); meloodiareal = kursor lugemisel meloodiareal (mitte akordireal)
+  const hasChordRow = notationStyle === 'FIGURENOTES' && figurenotesChordBlocks;
+  const cursorOnMelodyRow = !hasChordRow || cursorSubRow === 0;
+  const noteIndexAtCursor = useMemo(() => {
+    let beat = 0;
+    const candidates = [];
+    for (let i = 0; i < notes.length; i++) {
+      const n = notes[i];
+      const noteBeat = typeof n.beat === 'number' ? n.beat : beat;
+      if (cursorPosition >= noteBeat && cursorPosition <= noteBeat + n.duration) {
+        candidates.push({ index: i, note: n, noteBeat });
+      }
+      beat = noteBeat + n.duration;
+    }
+    if (candidates.length === 0) return -1;
+    if (candidates.length === 1) return candidates[0].index;
+    const midi = (n) => (n.octave + 1) * 12 + (PITCH_TO_SEMI[n.pitch] ?? 0);
+    let best = candidates[0];
+    for (let k = 1; k < candidates.length; k++) {
+      if (midi(candidates[k].note) > midi(best.note)) best = candidates[k];
+    }
+    return best.index;
+  }, [notes, cursorPosition]);
+
   // Keyboard handler
   useEffect(() => {
     const handleKeyDown = (e) => {
       const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
       const modKey = isMac ? e.metaKey : e.ctrlKey;
 
+      // SEL-mode: brauseri ja süsteemiga seotud võtmed on avatud (kasutaja saab vajadusel teha brauseri/süsteemi toimetusi).
+      // N-mode: kursor loeb ainult noodi / laulusõnade / akordi ridu; kõik klahvid blokeeritakse – keskendutakse noodi sisestusele, parandamisele, kustutamisele.
+      if (noteInputMode) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+
       // Ära püüa klahve, kui kasutaja kirjutab input/textarea väljale (nt pealkiri, autor) – v.a. Ctrl+L laulusõna väljal
       const active = document.activeElement;
       const tag = active?.tagName?.toLowerCase();
       const isTypingInInput = tag === 'input' || tag === 'textarea' || (active?.getAttribute?.('contenteditable') === 'true');
-      // Ctrl+L (Cmd+L) or L alone: start lyric entry from selected note – focus lyric field and enable chain (L only when not typing in another input)
-      if (e.code === 'KeyL' && selectedNoteIndex >= 0 && (modKey || !isTypingInInput)) {
+      // Ctrl+L (Cmd+L): SEL-režiimis püüa ainult siis, kui käivitame laulusõna (meloodiareal, noot kursori all); muul juhul lastakse brauserile (aadressiriba jms)
+      if (e.code === 'KeyL' && modKey) {
+        if (cursorOnMelodyRow && noteIndexAtCursor >= 0) {
+          e.preventDefault();
+          setSelectedNoteIndex(noteIndexAtCursor);
+          setLyricChainStart(noteIndexAtCursor);
+          setLyricChainEnd(noteIndexAtCursor);
+          setLyricChainIndex(noteIndexAtCursor);
+          setTimeout(() => lyricInputRef.current?.focus(), 0);
+        }
+        return;
+      }
+      // L (ilma modifikaatorita): laulusõna kursori asukohast, kui kursor meloodiareal ja ei kirjuta teises väljas
+      if (e.code === 'KeyL' && !isTypingInInput && cursorOnMelodyRow && noteIndexAtCursor >= 0) {
         e.preventDefault();
-        const start = selectionStart >= 0 && selectionEnd >= 0 ? Math.min(selectionStart, selectionEnd) : selectedNoteIndex;
-        const end = selectionStart >= 0 && selectionEnd >= 0 ? Math.max(selectionStart, selectionEnd) : selectedNoteIndex;
-        setLyricChainStart(start);
-        setLyricChainEnd(end);
-        setLyricChainIndex(start);
+        setSelectedNoteIndex(noteIndexAtCursor);
+        setLyricChainStart(noteIndexAtCursor);
+        setLyricChainEnd(noteIndexAtCursor);
+        setLyricChainIndex(noteIndexAtCursor);
         setTimeout(() => lyricInputRef.current?.focus(), 0);
         return;
       }
@@ -4670,8 +4740,8 @@ function NoodiMeisterCore({ icons }) {
         return;
       }
 
-      // N-mode Backspace: delete note at cursor (or empty bar) first – so it always works instead of converting selection to rest
-      if (noteInputMode && (e.key === 'Backspace' || e.code === 'Backspace')) {
+      // N-mode Backspace/Delete: kui kursor asub taktis akordireal, võimaldame Backspace/Delete kustutada selle akordi; muul juhul noot või (ainult Backspace) tühi takt / taktikordus
+      if (noteInputMode && (e.key === 'Backspace' || e.code === 'Backspace' || e.key === 'Delete' || e.code === 'Delete')) {
         e.preventDefault();
         const indexAtCursor = getNoteIndexAtCursor();
         if (indexAtCursor >= 0 && notes.length > 0) {
@@ -4711,9 +4781,16 @@ function NoodiMeisterCore({ icons }) {
           }
           return;
         }
+        const chordAtCursor = getChordAtCursor();
+        if (chordAtCursor) {
+          setChords((prev) => prev.filter((c) => c.id !== chordAtCursor.id));
+          dirtyRef.current = true;
+          return;
+        }
+        const isBackspace = e.key === 'Backspace' || e.code === 'Backspace';
         const ms = measuresRef.current;
         let removedExcessBar = false;
-        if (ms && ms.length > 1) {
+        if (isBackspace && ms && ms.length > 1) {
           const cursorMeasureIndex = ms.findIndex((m) => cursorPosition >= m.startBeat && cursorPosition < m.endBeat);
           if (cursorMeasureIndex >= 1) {
             const m = ms[cursorMeasureIndex];
@@ -4734,7 +4811,7 @@ function NoodiMeisterCore({ icons }) {
             }
           }
         }
-        if (!removedExcessBar && ms && ms.length > 0) {
+        if (isBackspace && !removedExcessBar && ms && ms.length > 0) {
           const cursorMeasureIndex = ms.findIndex((m) => cursorPosition >= m.startBeat && cursorPosition < m.endBeat);
           if (cursorMeasureIndex >= 0 && measureRepeatMarks[cursorMeasureIndex] && Object.keys(measureRepeatMarks[cursorMeasureIndex]).length > 0) {
             setMeasureRepeatMarks((prev) => {
@@ -4915,6 +4992,18 @@ function NoodiMeisterCore({ icons }) {
               if (playNoteOnInsert) playPianoNote(updated.pitch, updated.octave, updated.accidental ?? 0);
             }
             return;
+          }
+          // Akord kursori taktis: nool üles/alla muudab akordi nime (ja värvi) – töötab nii meloodia kui akordirea seadete juures
+          if (!e.shiftKey && !modKey) {
+            const chordAtCursor = getChordAtCursor();
+            if (chordAtCursor) {
+              e.preventDefault();
+              const dir = e.code === 'ArrowUp' ? 1 : -1;
+              const newChordSymbol = transposeChordSymbol(chordAtCursor.chord, dir);
+              setChords((prev) => prev.map((c) => c.id === chordAtCursor.id ? { ...c, chord: newChordSymbol } : c));
+              dirtyRef.current = true;
+              return;
+            }
           }
         }
         // Shift+Arrow Up/Down – oktavi muutmine (ghost note); töötab ka Figuurnotatsioonis ja kui tööriistakast on avatud
@@ -5373,7 +5462,8 @@ function NoodiMeisterCore({ icons }) {
     activeToolbox, selectedOptionIndex, handleToolboxSelection, noteInputMode, selectedDuration, isDotted, isRest, notes,
     getEffectiveDuration, selectedNoteIndex, selectionStart, selectionEnd, clipboard, undo, saveToHistory, getSelectedNotes,
     shiftPitchClassSameOctave, shiftOctave, addMeasure, ghostPitch, ghostOctave, ghostAccidental, playNoteOnInsert, playPianoNote,
-    cursorPosition, cursorSubRow, notationStyle, figurenotesChordBlocks, addChordAt, getChordInsertBeat,
+    cursorPosition, cursorSubRow, notationStyle, figurenotesChordBlocks, addChordAt, getChordInsertBeat, getChordAtCursor, transposeChordSymbol,
+    cursorOnMelodyRow, noteIndexAtCursor,
     joClefFocused, joClefStaffPosition, keySignature, setNotes, setKeySignature, notationMode, addNoteOnTopOfCursor,
     handleSaveShortcut, handlePrint, addedMeasures, timeSignature, setAddedMeasures, setCursorPosition, measureRepeatMarks, setMeasureRepeatMarks,
     maxCursor, setScoreZoomLevel, durationToBeats, hasFullAccess, pickupEnabled, pickupQuantity, pickupDuration
@@ -7520,35 +7610,40 @@ function NoodiMeisterCore({ icons }) {
             {saveFeedback && (
               <span className="text-sm font-medium text-amber-200 animate-pulse">{saveFeedback}</span>
             )}
-            {!noteInputMode && selectedNoteIndex >= 0 && (
+            {!noteInputMode && (selectedNoteIndex >= 0 || (cursorOnMelodyRow && noteIndexAtCursor >= 0)) && (
               <>
-                <div className="flex items-center gap-2 bg-blue-600 px-3 py-1 rounded text-xs">
-                  <span className="uppercase tracking-wider">{t('toolbar.selected')}:</span>
-                  <span className="font-bold">
-                    {selectionStart >= 0 && selectionEnd >= 0 
-                      ? `${Math.abs(selectionEnd - selectionStart) + 1} ${t('toolbar.notesCount')}`
-                      : t('toolbar.oneNote')}
-                  </span>
-                </div>
-                {notationMode === 'vabanotatsioon' && enableEmojiOverlays && (
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <label className="text-xs font-medium text-amber-100 whitespace-nowrap">{t('teacher.noteLabel')}:</label>
-                    <input
-                      type="text"
-                      value={notes[selectedNoteIndex]?.teacherLabel ?? ''}
-                      onChange={(e) => updateNoteTeacherLabel(selectedNoteIndex, e.target.value)}
-                      onBlur={(e) => { const v = e.target.value; if (v && v.includes(':')) updateNoteTeacherLabel(selectedNoteIndex, expandEmojiShortcuts(v)); }}
-                      placeholder=":star: :joy: või vabatekst"
-                      className="px-2 py-1 rounded text-sm bg-amber-100 text-amber-900 border border-amber-300 w-32 focus:ring-1 focus:ring-amber-500"
-                      title={t('teacher.noteLabelHint')}
-                    />
-                    {['😊', '⭐', '❤️', '🎵', '✅', '❓', '⬜'].map((emo) => (
-                      <button key={emo} type="button" onClick={() => updateNoteTeacherLabel(selectedNoteIndex, (notes[selectedNoteIndex]?.teacherLabel ?? '') + emo)} className="text-lg leading-none p-0.5 rounded hover:bg-amber-200" title={emo}>{emo}</button>
-                    ))}
-                    <button type="button" onClick={() => updateNoteTeacherLabel(selectedNoteIndex, (notes[selectedNoteIndex]?.teacherLabel ?? '') + '?')} className="text-sm font-bold text-amber-900 px-1.5 py-0.5 rounded hover:bg-amber-200" title={t('teacher.symbolQuestion')}>?</button>
-                    <button type="button" onClick={() => updateNoteTeacherLabel(selectedNoteIndex, (notes[selectedNoteIndex]?.teacherLabel ?? '') + '□')} className="text-sm font-bold text-amber-900 px-1 py-0.5 rounded hover:bg-amber-200" title={t('teacher.symbolBox')}>□</button>
-                  </div>
+                {selectedNoteIndex >= 0 && (
+                  <>
+                    <div className="flex items-center gap-2 bg-blue-600 px-3 py-1 rounded text-xs">
+                      <span className="uppercase tracking-wider">{t('toolbar.selected')}:</span>
+                      <span className="font-bold">
+                        {selectionStart >= 0 && selectionEnd >= 0 
+                          ? `${Math.abs(selectionEnd - selectionStart) + 1} ${t('toolbar.notesCount')}`
+                          : t('toolbar.oneNote')}
+                      </span>
+                    </div>
+                    {notationMode === 'vabanotatsioon' && enableEmojiOverlays && (
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <label className="text-xs font-medium text-amber-100 whitespace-nowrap">{t('teacher.noteLabel')}:</label>
+                        <input
+                          type="text"
+                          value={notes[selectedNoteIndex]?.teacherLabel ?? ''}
+                          onChange={(e) => updateNoteTeacherLabel(selectedNoteIndex, e.target.value)}
+                          onBlur={(e) => { const v = e.target.value; if (v && v.includes(':')) updateNoteTeacherLabel(selectedNoteIndex, expandEmojiShortcuts(v)); }}
+                          placeholder=":star: :joy: või vabatekst"
+                          className="px-2 py-1 rounded text-sm bg-amber-100 text-amber-900 border border-amber-300 w-32 focus:ring-1 focus:ring-amber-500"
+                          title={t('teacher.noteLabelHint')}
+                        />
+                        {['😊', '⭐', '❤️', '🎵', '✅', '❓', '⬜'].map((emo) => (
+                          <button key={emo} type="button" onClick={() => updateNoteTeacherLabel(selectedNoteIndex, (notes[selectedNoteIndex]?.teacherLabel ?? '') + emo)} className="text-lg leading-none p-0.5 rounded hover:bg-amber-200" title={emo}>{emo}</button>
+                        ))}
+                        <button type="button" onClick={() => updateNoteTeacherLabel(selectedNoteIndex, (notes[selectedNoteIndex]?.teacherLabel ?? '') + '?')} className="text-sm font-bold text-amber-900 px-1.5 py-0.5 rounded hover:bg-amber-200" title={t('teacher.symbolQuestion')}>?</button>
+                        <button type="button" onClick={() => updateNoteTeacherLabel(selectedNoteIndex, (notes[selectedNoteIndex]?.teacherLabel ?? '') + '□')} className="text-sm font-bold text-amber-900 px-1 py-0.5 rounded hover:bg-amber-200" title={t('teacher.symbolBox')}>□</button>
+                      </div>
+                    )}
+                  </>
                 )}
+                {cursorOnMelodyRow && (noteIndexAtCursor >= 0 || selectedNoteIndex >= 0) && (
                 <div className="flex items-center gap-2 flex-wrap">
                   <label className="text-xs font-medium text-amber-100 whitespace-nowrap">{t('toolbar.lyricLabel')}:</label>
                   <div className="flex gap-1">
@@ -7561,7 +7656,7 @@ function NoodiMeisterCore({ icons }) {
                     value={lyricChainIndex !== null
                       ? (lyricLineIndex === 0 ? (notes[lyricChainIndex]?.lyric ?? '') : (notes[lyricChainIndex]?.lyric2 ?? ''))
                       : (() => {
-                          const idx = selectionStart >= 0 && selectionEnd >= 0 ? Math.min(selectionStart, selectionEnd) : selectedNoteIndex;
+                          const idx = lyricChainIndex ?? (selectionStart >= 0 && selectionEnd >= 0 ? Math.min(selectionStart, selectionEnd) : (selectedNoteIndex >= 0 ? selectedNoteIndex : noteIndexAtCursor));
                           const n = notes[idx];
                           if (!n) return '';
                           return lyricLineIndex === 0 ? (n.lyric ?? '') : (n.lyric2 ?? '');
@@ -7573,15 +7668,15 @@ function NoodiMeisterCore({ icons }) {
                         saveToHistory(notes);
                         setNotes(prev => prev.map((n, i) => i === lyricChainIndex ? { ...n, [key]: val } : n));
                       } else {
-                        const start = selectionStart >= 0 && selectionEnd >= 0 ? Math.min(selectionStart, selectionEnd) : selectedNoteIndex;
-                        const end = selectionStart >= 0 && selectionEnd >= 0 ? Math.max(selectionStart, selectionEnd) : selectedNoteIndex;
+                        const start = selectionStart >= 0 && selectionEnd >= 0 ? Math.min(selectionStart, selectionEnd) : (selectedNoteIndex >= 0 ? selectedNoteIndex : noteIndexAtCursor);
+                        const end = selectionStart >= 0 && selectionEnd >= 0 ? Math.max(selectionStart, selectionEnd) : (selectedNoteIndex >= 0 ? selectedNoteIndex : noteIndexAtCursor);
                         saveToHistory(notes);
                         setNotes(prev => prev.map((n, i) => (i >= start && i <= end) ? { ...n, [key]: val } : n));
                       }
                     }}
                     onKeyDown={(e) => {
-                      const start = selectionStart >= 0 && selectionEnd >= 0 ? Math.min(selectionStart, selectionEnd) : selectedNoteIndex;
-                      const end = selectionStart >= 0 && selectionEnd >= 0 ? Math.max(selectionStart, selectionEnd) : selectedNoteIndex;
+                      const start = selectionStart >= 0 && selectionEnd >= 0 ? Math.min(selectionStart, selectionEnd) : (selectedNoteIndex >= 0 ? selectedNoteIndex : noteIndexAtCursor);
+                      const end = selectionStart >= 0 && selectionEnd >= 0 ? Math.max(selectionStart, selectionEnd) : (selectedNoteIndex >= 0 ? selectedNoteIndex : noteIndexAtCursor);
                       const idx = lyricChainIndex !== null ? lyricChainIndex : start;
                       const key = lyricLineIndex === 0 ? 'lyric' : 'lyric2';
                       const getVal = (n) => (key === 'lyric' ? (n?.lyric ?? '') : (n?.lyric2 ?? ''));
@@ -7635,13 +7730,14 @@ function NoodiMeisterCore({ icons }) {
                   />
                   <span className="text-amber-600 text-xs">+</span>
                   <div className="flex gap-0.5" role="group" aria-label={t('toolbar.lyricExprMelisma')}>
-                    <button type="button" onClick={() => { const idx = lyricChainIndex !== null ? lyricChainIndex : (selectionStart >= 0 && selectionEnd >= 0 ? Math.min(selectionStart, selectionEnd) : selectedNoteIndex); const key = lyricLineIndex === 0 ? 'lyric' : 'lyric2'; const cur = key === 'lyric' ? (notes[idx]?.lyric ?? '') : (notes[idx]?.lyric2 ?? ''); saveToHistory(notes); setNotes(prev => prev.map((n, i) => i === idx ? { ...n, [key]: cur + '_' } : n)); lyricInputRef.current?.focus(); }} className="px-1.5 py-0.5 rounded text-sm bg-amber-800/50 text-amber-100 hover:bg-amber-700/60 border border-amber-600/50" title={t('toolbar.lyricExprMelisma')}>_</button>
-                    <button type="button" onClick={() => { const idx = lyricChainIndex !== null ? lyricChainIndex : (selectionStart >= 0 && selectionEnd >= 0 ? Math.min(selectionStart, selectionEnd) : selectedNoteIndex); const key = lyricLineIndex === 0 ? 'lyric' : 'lyric2'; const cur = key === 'lyric' ? (notes[idx]?.lyric ?? '') : (notes[idx]?.lyric2 ?? ''); saveToHistory(notes); setNotes(prev => prev.map((n, i) => i === idx ? { ...n, [key]: cur + '\u2014' } : n)); lyricInputRef.current?.focus(); }} className="px-1.5 py-0.5 rounded text-sm bg-amber-800/50 text-amber-100 hover:bg-amber-700/60 border border-amber-600/50" title={t('toolbar.lyricExprDash')}>—</button>
-                    <button type="button" onClick={() => { const idx = lyricChainIndex !== null ? lyricChainIndex : (selectionStart >= 0 && selectionEnd >= 0 ? Math.min(selectionStart, selectionEnd) : selectedNoteIndex); const key = lyricLineIndex === 0 ? 'lyric' : 'lyric2'; const cur = key === 'lyric' ? (notes[idx]?.lyric ?? '') : (notes[idx]?.lyric2 ?? ''); saveToHistory(notes); setNotes(prev => prev.map((n, i) => i === idx ? { ...n, [key]: cur + '\u00B7' } : n)); lyricInputRef.current?.focus(); }} className="px-1.5 py-0.5 rounded text-sm bg-amber-800/50 text-amber-100 hover:bg-amber-700/60 border border-amber-600/50" title={t('toolbar.lyricExprDot')}>·</button>
+                    <button type="button" onClick={() => { const idx = lyricChainIndex !== null ? lyricChainIndex : (selectionStart >= 0 && selectionEnd >= 0 ? Math.min(selectionStart, selectionEnd) : (selectedNoteIndex >= 0 ? selectedNoteIndex : noteIndexAtCursor)); const key = lyricLineIndex === 0 ? 'lyric' : 'lyric2'; const cur = key === 'lyric' ? (notes[idx]?.lyric ?? '') : (notes[idx]?.lyric2 ?? ''); saveToHistory(notes); setNotes(prev => prev.map((n, i) => i === idx ? { ...n, [key]: cur + '_' } : n)); lyricInputRef.current?.focus(); }} className="px-1.5 py-0.5 rounded text-sm bg-amber-800/50 text-amber-100 hover:bg-amber-700/60 border border-amber-600/50" title={t('toolbar.lyricExprMelisma')}>_</button>
+                    <button type="button" onClick={() => { const idx = lyricChainIndex !== null ? lyricChainIndex : (selectionStart >= 0 && selectionEnd >= 0 ? Math.min(selectionStart, selectionEnd) : (selectedNoteIndex >= 0 ? selectedNoteIndex : noteIndexAtCursor)); const key = lyricLineIndex === 0 ? 'lyric' : 'lyric2'; const cur = key === 'lyric' ? (notes[idx]?.lyric ?? '') : (notes[idx]?.lyric2 ?? ''); saveToHistory(notes); setNotes(prev => prev.map((n, i) => i === idx ? { ...n, [key]: cur + '\u2014' } : n)); lyricInputRef.current?.focus(); }} className="px-1.5 py-0.5 rounded text-sm bg-amber-800/50 text-amber-100 hover:bg-amber-700/60 border border-amber-600/50" title={t('toolbar.lyricExprDash')}>—</button>
+                    <button type="button" onClick={() => { const idx = lyricChainIndex !== null ? lyricChainIndex : (selectionStart >= 0 && selectionEnd >= 0 ? Math.min(selectionStart, selectionEnd) : (selectedNoteIndex >= 0 ? selectedNoteIndex : noteIndexAtCursor)); const key = lyricLineIndex === 0 ? 'lyric' : 'lyric2'; const cur = key === 'lyric' ? (notes[idx]?.lyric ?? '') : (notes[idx]?.lyric2 ?? ''); saveToHistory(notes); setNotes(prev => prev.map((n, i) => i === idx ? { ...n, [key]: cur + '\u00B7' } : n)); lyricInputRef.current?.focus(); }} className="px-1.5 py-0.5 rounded text-sm bg-amber-800/50 text-amber-100 hover:bg-amber-700/60 border border-amber-600/50" title={t('toolbar.lyricExprDot')}>·</button>
                   </div>
                   <label className="text-xs font-medium text-amber-100 whitespace-nowrap">{t('toolbar.lyricLineOffset')}:</label>
                   <input type="number" min={-40} max={40} step={2} value={lyricLineYOffset} onChange={(e) => { const v = parseInt(e.target.value, 10); if (!Number.isNaN(v)) setLyricLineYOffset(Math.max(-40, Math.min(40, v))); dirtyRef.current = true; }} className="w-14 px-1.5 py-0.5 rounded text-sm bg-amber-100 text-amber-900 border border-amber-300 focus:ring-1 focus:ring-amber-500" title={t('toolbar.lyricLineOffset')} />
                 </div>
+                )}
               </>
             )}
             {/* Global Notation Style: Staff vs Grid (Ctrl+7 / Ctrl+8) */}
@@ -9237,12 +9333,13 @@ function NoodiMeisterCore({ icons }) {
             const activePresetId = PIANO_RANGE_PRESETS.find((p) => p.first === firstNote && p.last === lastNote)?.id ?? null;
             const rangeLabel = activePresetId ?? `${midiToRangeLabel(firstNote)}–${midiToRangeLabel(lastNote)}`;
             const handleNotePlay = (midiNumber) => {
+              /* N-režiim: MIDI klaviatuur reageerib noodi sisestusele (noot lisatakse kursori juurde). SEL-režiim: mitte. */
+              if (!noteInputMode) return;
               const { pitch, octave } = midiToPitchOctave(midiNumber);
               const accidental = getAccidentalForPianoKey(midiNumber, keySignature);
               setGhostPitch(pitch);
               setGhostOctave(octave);
-              if (noteInputMode) addNoteAtCursor(pitch, octave, accidental, { skipPlay: true });
-              /* Heli teeb InteractivePiano (Oscillator); noot lisatakse massiivi ja joonestik uuendub */
+              addNoteAtCursor(pitch, octave, accidental, { skipPlay: true });
             };
             return (
               <div className="fixed bottom-0 left-0 right-0 z-[100] min-h-[140px] bg-gradient-to-t from-amber-100 to-amber-50 border-t-2 border-amber-300 shadow-[0_-4px_12px_rgba(0,0,0,0.12)] py-3 px-4" style={{ isolation: 'isolate' }}>
