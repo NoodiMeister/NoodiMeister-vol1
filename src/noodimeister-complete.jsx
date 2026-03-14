@@ -1654,6 +1654,7 @@ function NoodiMeisterCore({ icons }) {
   const [wizardPickupEnabled, setWizardPickupEnabled] = useState(false);
   const [wizardPickupQuantity, setWizardPickupQuantity] = useState(1);
   const [wizardPickupDuration, setWizardPickupDuration] = useState('1/4');
+  const [wizardKeySignature, setWizardKeySignature] = useState('C');
 
   useEffect(() => {
     if (typeof document === 'undefined') return;
@@ -1762,6 +1763,7 @@ function NoodiMeisterCore({ icons }) {
     }
     setNotationStyle(wizardNotationMethod === 'figurenotes' ? 'FIGURENOTES' : 'TRADITIONAL');
     setTimeSignature({ beats: wizardTimeSignature[0], beatUnit: wizardTimeSignature[1] });
+    setKeySignature(wizardKeySignature);
     setSongTitle(wizardSongTitle.trim());
     setAuthor(wizardAuthor.trim());
     setInstrument(wizardInstrument);
@@ -1796,6 +1798,19 @@ function NoodiMeisterCore({ icons }) {
     setNotes(initialNotes);
     setCursorPosition(0);
     setAddedMeasures(0);
+    setChords([]);
+    setFigurenotesChordBlocks(false);
+    setFigurenotesChordBlocksShowTones(true);
+    setFigurenotesChordLineGap(6);
+    setTextBoxes([]);
+    setMeasureRepeatMarks({});
+    setPageDesignDataUrl(null);
+    setPageDesignOpacity(0.25);
+    setPageDesignFit('cover');
+    setPageDesignLayer('behind');
+    setPageDesignPositionX(50);
+    setPageDesignPositionY(50);
+    setPageDesignCrop({ top: 0, right: 0, bottom: 0, left: 0 });
     setHistory([]);
     setHistoryIndex(-1);
     setSetupCompleted(true);
@@ -1803,7 +1818,7 @@ function NoodiMeisterCore({ icons }) {
     // Stay on /app (openLocal=1) so AppOrRedirect does not send user back to /tood
     setSearchParams({ local: '1' });
     dirtyRef.current = true;
-  }, [wizardNotationMethod, wizardTimeSignature, wizardSongTitle, wizardAuthor, wizardInstrument, wizardPickupEnabled, wizardPickupQuantity, wizardPickupDuration, instrumentConfig]);
+  }, [wizardNotationMethod, wizardTimeSignature, wizardSongTitle, wizardAuthor, wizardInstrument, wizardPickupEnabled, wizardPickupQuantity, wizardPickupDuration, wizardKeySignature, instrumentConfig]);
 
   const isLoggedIn = () => authStorage.isLoggedIn();
 
@@ -2824,8 +2839,8 @@ function NoodiMeisterCore({ icons }) {
     figurenotesSize,
     figurenotesStems,
     figurenotesChordLineGap,
-    figurenotesChordBlocks,
-    figurenotesChordBlocksShowTones,
+    figurenotesChordBlocks: !!figurenotesChordBlocks,
+    figurenotesChordBlocksShowTones: !!figurenotesChordBlocksShowTones,
     timeSignatureSize,
     showBarNumbers,
     barNumberSize,
@@ -2936,8 +2951,8 @@ function NoodiMeisterCore({ icons }) {
       if (data.figurenotesSize != null) setFigurenotesSize(Math.max(12, Math.min(500, data.figurenotesSize)));
       if (data.figurenotesStems != null) setFigurenotesStems(!!data.figurenotesStems);
       if (data.figurenotesChordLineGap != null) setFigurenotesChordLineGap(Math.max(0, Math.min(20, Number(data.figurenotesChordLineGap))));
-      if (data.figurenotesChordBlocks != null) setFigurenotesChordBlocks(!!data.figurenotesChordBlocks);
-      if (data.figurenotesChordBlocksShowTones != null) setFigurenotesChordBlocksShowTones(!!data.figurenotesChordBlocksShowTones);
+      if ('figurenotesChordBlocks' in data) setFigurenotesChordBlocks(!!data.figurenotesChordBlocks);
+      if ('figurenotesChordBlocksShowTones' in data) setFigurenotesChordBlocksShowTones(!!data.figurenotesChordBlocksShowTones);
       if (data.timeSignatureSize != null) setTimeSignatureSize(Math.max(12, Math.min(48, data.timeSignatureSize)));
       if (data.isPedagogicalProject != null) setIsPedagogicalProject(!!data.isPedagogicalProject);
       if (data.pedagogicalAudioBpm != null) setPedagogicalAudioBpm(Math.max(20, Math.min(300, data.pedagogicalAudioBpm)));
@@ -3212,16 +3227,16 @@ function NoodiMeisterCore({ icons }) {
         if (data.pixelsPerBeat != null) setPixelsPerBeat(data.pixelsPerBeat);
         if (data.figurenotesSize != null) setFigurenotesSize(Math.max(12, Math.min(500, data.figurenotesSize)));
         if (data.figurenotesStems != null) setFigurenotesStems(!!data.figurenotesStems);
-        if (data.figurenotesChordLineGap != null) setFigurenotesChordLineGap(Math.max(0, Math.min(20, Number(data.figurenotesChordLineGap))));
-        if (data.figurenotesChordBlocks != null) setFigurenotesChordBlocks(!!data.figurenotesChordBlocks);
-        if (data.figurenotesChordBlocksShowTones != null) setFigurenotesChordBlocksShowTones(!!data.figurenotesChordBlocksShowTones);
-        if (data.timeSignatureSize != null) setTimeSignatureSize(Math.max(12, Math.min(48, data.timeSignatureSize)));
-        if (data.notationMode) setNotationMode(data.notationMode);
-        if (data.noteheadShape) setNoteheadShape(data.noteheadShape);
-        if (data.noteheadEmoji != null) setNoteheadEmoji(data.noteheadEmoji);
-        if (data.instrumentNotationVariant) setInstrumentNotationVariant(data.instrumentNotationVariant);
-        if (data.isPedagogicalProject != null) setIsPedagogicalProject(!!data.isPedagogicalProject);
-        if (data.cursorPosition != null) setCursorPosition(data.cursorPosition);
+      if (data.figurenotesChordLineGap != null) setFigurenotesChordLineGap(Math.max(0, Math.min(20, Number(data.figurenotesChordLineGap))));
+      if ('figurenotesChordBlocks' in data) setFigurenotesChordBlocks(!!data.figurenotesChordBlocks);
+      if ('figurenotesChordBlocksShowTones' in data) setFigurenotesChordBlocksShowTones(!!data.figurenotesChordBlocksShowTones);
+      if (data.timeSignatureSize != null) setTimeSignatureSize(Math.max(12, Math.min(48, data.timeSignatureSize)));
+      if (data.notationMode) setNotationMode(data.notationMode);
+      if (data.noteheadShape) setNoteheadShape(data.noteheadShape);
+      if (data.noteheadEmoji != null) setNoteheadEmoji(data.noteheadEmoji);
+      if (data.instrumentNotationVariant) setInstrumentNotationVariant(data.instrumentNotationVariant);
+      if (data.isPedagogicalProject != null) setIsPedagogicalProject(!!data.isPedagogicalProject);
+      if (data.cursorPosition != null) setCursorPosition(data.cursorPosition);
         if (data.addedMeasures != null) setAddedMeasures(data.addedMeasures);
         if (data.measureRepeatMarks != null && typeof data.measureRepeatMarks === 'object') setMeasureRepeatMarks(data.measureRepeatMarks);
         if (data.setupCompleted != null) setSetupCompleted(data.setupCompleted);
@@ -3626,6 +3641,13 @@ function NoodiMeisterCore({ icons }) {
     else loadFromGoogle();
     return () => { cancelled = true; };
   }, [driveFileId, isOneDrive, importProject]);
+
+  // Kohene salvestamine localStorage'i, kui akordiplokkide seaded muutuvad – vältib seadete kaotust kiire värskenduse korral
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(getPersistedState()));
+    } catch (_) { /* ignore */ }
+  }, [figurenotesChordBlocks, figurenotesChordBlocksShowTones, figurenotesChordLineGap, getPersistedState]);
 
   // Auto-save to localStorage when relevant state changes
   useEffect(() => {
@@ -6335,6 +6357,24 @@ function NoodiMeisterCore({ icons }) {
               </div>
 
               <div>
+                <label className="block text-sm font-semibold text-amber-900 mb-1">Helistik</label>
+                <p className="text-xs text-amber-700 mb-2">
+                  {wizardNotationMethod === 'traditional' && 'Traditsioonilisel noodijoonestikul kuvatakse võtmemärgid (♯ diees, ♭ bemoll).'}
+                  {wizardNotationMethod === 'figurenotes' && 'Figuurnotatsioonis noodi sisestus reageerib helistikule: dieesiga toonid (nt D-duur F♯, C♯) = diagonaal paremale üles, bemoliga toonid (nt B-duur E♭, B♭) = diagonaal vasakule üles.'}
+                  {(wizardNotationMethod === 'pedagogical' || wizardNotationMethod === 'vabanotatsioon') && 'Pedagoogilises režiimis JO-võti asetatakse noodijoonestikul vastavalt helistiku toonika asukohale.'}
+                </p>
+                <select
+                  value={wizardKeySignature}
+                  onChange={(e) => setWizardKeySignature(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border-2 border-amber-200 bg-amber-50 text-amber-900"
+                >
+                  {['C', 'G', 'D', 'A', 'E', 'B', 'F', 'Bb', 'Eb'].map((keyVal) => (
+                    <option key={keyVal} value={keyVal}>{t('key.' + keyVal)}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
                 <label className="block text-sm font-semibold text-amber-900 mb-2">Taktimõõt</label>
                 <div className="flex flex-wrap gap-2 mb-2">
                   {[[4, 4], [3, 4], [2, 4], [6, 8], [5, 4], [7, 8], [12, 8]].map(([beats, unit]) => {
@@ -7310,6 +7350,16 @@ function NoodiMeisterCore({ icons }) {
                     >
                       <Layout className="w-4 h-4" /> Import: Lehe disain (PNG/SVG)
                     </button>
+                    {pageDesignDataUrl && (
+                      <button
+                        type="button"
+                        onClick={() => { dirtyRef.current = true; setPageDesignDataUrl(null); setHeaderMenuOpen(null); }}
+                        className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-amber-50 hover:bg-slate-600"
+                        title={t('layout.pageDesignRemoveHint')}
+                      >
+                        <Layout className="w-4 h-4" /> {t('layout.pageDesignRemove')}
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={() => { musicXmlInputRef.current?.click(); setHeaderMenuOpen(null); }}
