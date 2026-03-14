@@ -4923,6 +4923,12 @@ function NoodiMeisterCore({ icons }) {
         const noteLetter = e.key?.toLowerCase();
         if (['c', 'd', 'e', 'f', 'g', 'a', 'b'].includes(noteLetter)) {
           e.preventDefault();
+          // Kursori asukoht loeb: akordireal (cursorSubRow === 1) → akord; meloodiareal → figuurnoot. Akorditööriistakast avatud → akord.
+          const onChordRow = notationStyle === 'FIGURENOTES' && figurenotesChordBlocks && cursorSubRow === 1;
+          if (onChordRow || activeToolbox === 'chords') {
+            addChordAt(getChordInsertBeat(), noteLetter.toUpperCase(), '');
+            return;
+          }
           addNoteAtCursor(noteLetter.toUpperCase(), ghostOctave);
           return;
         }
@@ -5363,7 +5369,8 @@ function NoodiMeisterCore({ icons }) {
     activeToolbox, selectedOptionIndex, handleToolboxSelection, noteInputMode, selectedDuration, isDotted, isRest, notes,
     getEffectiveDuration, selectedNoteIndex, selectionStart, selectionEnd, clipboard, undo, saveToHistory, getSelectedNotes,
     shiftPitchClassSameOctave, shiftOctave, addMeasure, ghostPitch, ghostOctave, ghostAccidental, playNoteOnInsert, playPianoNote,
-    cursorPosition, joClefFocused, joClefStaffPosition, keySignature, setNotes, setKeySignature, notationMode, addNoteOnTopOfCursor,
+    cursorPosition, cursorSubRow, notationStyle, figurenotesChordBlocks, addChordAt, getChordInsertBeat,
+    joClefFocused, joClefStaffPosition, keySignature, setNotes, setKeySignature, notationMode, addNoteOnTopOfCursor,
     handleSaveShortcut, handlePrint, addedMeasures, timeSignature, setAddedMeasures, setCursorPosition, measureRepeatMarks, setMeasureRepeatMarks,
     maxCursor, setScoreZoomLevel, durationToBeats, hasFullAccess, pickupEnabled, pickupQuantity, pickupDuration
   ]);
