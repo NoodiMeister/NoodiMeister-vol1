@@ -369,6 +369,37 @@ export async function getFileContent(token, fileId) {
 }
 
 /**
+ * Uuenda olemasoleva OneDrive'i faili sisu (kirjuta sama fail üle). Cmd/Ctrl+S avatud faili puhul.
+ * @param {string} token
+ * @param {string} fileId
+ * @param {string} content
+ * @param {string} [contentType='application/json']
+ * @returns {Promise<object>} driveItem
+ */
+export async function updateFileContent(token, fileId, content, contentType = 'application/json') {
+  if (!token) throw new Error('Microsofti token puudub.');
+  const res = await fetch(`${GRAPH_ROOT}/me/drive/items/${encodeURIComponent(fileId)}/content`, {
+    method: 'PUT',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': contentType,
+    },
+    body: typeof content === 'string' ? content : JSON.stringify(content),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const msg =
+      body?.error?.message ||
+      body?.message ||
+      (res.status === 403
+        ? 'Õigused OneDrive\'i salvestamiseks puuduvad (võib vajada Files.ReadWrite või uut sisselogimist).'
+        : `HTTP ${res.status}`);
+    throw new Error(msg);
+  }
+  return body;
+}
+
+/**
  * Loe salvestuskaustade nimekiri OneDrive'ist (sünkroonimiseks teise seadmega). Fail juurkaustas.
  * @param {string} token
  * @returns {Promise<Array<{ id: string, name: string }>>}

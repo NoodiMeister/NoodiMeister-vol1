@@ -3429,7 +3429,7 @@ function NoodiMeisterCore({ icons }) {
     }
   }, [exportScoreToJSON, saveCloudNewFolderName]);
 
-  // Salvesta OneDrive'i (Microsoft): kasuta seadistatud salvestuskausta või juurkausta.
+  // Salvesta OneDrive'i (Microsoft): kui fail on avatud pilvest, kirjuta sama fileId üle; muidu uus fail kausta/juurkausta.
   const saveToOneDrive = useCallback(async () => {
     const token = authStorage.getStoredMicrosoftTokenFromAuth();
     if (!token) {
@@ -3437,10 +3437,27 @@ function NoodiMeisterCore({ icons }) {
       setTimeout(() => setSaveFeedback(''), 3000);
       return;
     }
+    const data = exportScoreToJSON();
+    const json = JSON.stringify(data, null, 2);
+    if (!json || json.length < 50 || !Array.isArray(data?.staves) || data.staves.length === 0) {
+      setSaveFeedback('Projektisisu puudub või on vigane – salvestamine peatatud');
+      setTimeout(() => setSaveFeedback(''), 4000);
+      return;
+    }
+    if (openedCloudFile?.provider === 'onedrive' && openedCloudFile.fileId) {
+      try {
+        setSaveFeedback('Salvestan…');
+        await oneDrive.updateFileContent(token, openedCloudFile.fileId, json, 'application/json');
+        setSaveFeedback(t('feedback.savedToCloud') || 'Salvestatud pilve (sama fail)!');
+        setTimeout(() => setSaveFeedback(''), 2500);
+      } catch (e) {
+        setSaveFeedback(e?.message || 'Pilve salvestamine ebaõnnestus');
+        setTimeout(() => setSaveFeedback(''), 3000);
+      }
+      return;
+    }
     try {
       setSaveFeedback('Salvestan…');
-      const data = exportScoreToJSON();
-      const json = JSON.stringify(data, null, 2);
       const fileName = ((data.songTitle || t('common.untitled')).replace(/\s+/g, '-').replace(/[^\w\-.]/g, '') || t('common.untitled')) + '.nm';
       const folderId = (sessionSaveFolderId?.cloud === 'onedrive' ? sessionSaveFolderId.folderId : null) || authStorage.getOneDriveSaveFolderId();
       if (folderId) {
@@ -3454,12 +3471,13 @@ function NoodiMeisterCore({ icons }) {
       setSaveFeedback(e?.message || 'Pilve salvestamine ebaõnnestus');
       setTimeout(() => setSaveFeedback(''), 3000);
     }
-  }, [exportScoreToJSON, sessionSaveFolderId]);
+  }, [exportScoreToJSON, sessionSaveFolderId, openedCloudFile]);
 
-  /** Cmd/Ctrl+S: save to browser if not logged in; otherwise save to the provider's cloud (Google Drive, OneDrive, or browser for Apple). */
+  /** Cmd/Ctrl+S: alati uuenda localStorage (brauser); kui sisse logitud, salvesta ka pilve. Avatud pilve fail uuendatakse sama fileId-ga (mitte uut koopiat). */
   const handleSaveShortcut = useCallback(() => {
+    saveToStorageSync(); // alati brauseri salvestus üle, et kohalik ja pilv oleks sünkroonis
     if (!isLoggedIn()) {
-      saveToStorage();
+      saveToStorage(); // tagasiside
       return;
     }
     const user = authStorage.getLoggedInUser();
@@ -3473,13 +3491,13 @@ function NoodiMeisterCore({ icons }) {
       return;
     }
     if (provider === 'apple') {
-      saveToStorage();
       setSaveFeedback(t('feedback.saved') || 'Salvestatud!');
       setTimeout(() => setSaveFeedback(''), 1800);
       return;
     }
-    saveToStorage();
-  }, [isLoggedIn, saveToStorage, saveToCloud, saveToOneDrive]);
+    setSaveFeedback(t('feedback.saved') || 'Salvestatud!');
+    setTimeout(() => setSaveFeedback(''), 1800);
+  }, [isLoggedIn, saveToStorageSync, saveToStorage, saveToCloud, saveToOneDrive]);
 
   // Laadi pilvest (Google Drive): vali fail, lae sisu.
   const loadFromCloud = useCallback(async () => {
