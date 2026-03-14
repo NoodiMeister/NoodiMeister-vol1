@@ -1026,6 +1026,8 @@ function NoodiMeisterCore({ icons }) {
   const [timeSignature, setTimeSignature] = useState({ beats: 4, beatUnit: 4 });
   const [pixelsPerBeat, setPixelsPerBeat] = useState(92); // laius löögi kohta (px), vaikimisi 92 (vastab noodigraafika vaikimisi suurusele)
   const [cursorPosition, setCursorPosition] = useState(3);
+  /** Cursor row: 0 = melody/top (noodirida), 1 = chord/bottom (akordirida või lugeri rida). Cmd/Ctrl+↑/↓ vahetab; partituuris sama loogika partii vahetamiseks. */
+  const [cursorSubRow, setCursorSubRow] = useState(0);
   const [keySignature, setKeySignature] = useState('C');
   const [staffLines, setStaffLines] = useState(5);
   const [notationStyle, setNotationStyle] = useState('TRADITIONAL'); // 'TRADITIONAL' | 'FIGURENOTES' – staff vs grid
@@ -4421,6 +4423,33 @@ function NoodiMeisterCore({ icons }) {
       }
       if (e.key === 'Escape') setSelectedTextboxId(null);
 
+      // Cmd/Ctrl+↑ = kursor meloodiareale (või eelmine partii); Cmd/Ctrl+↓ = kursor akordireale (või järgmine partii). Kehtib nii N- kui SEL-režiimis.
+      if (modKey && (e.code === 'ArrowUp' || e.code === 'ArrowDown') && !e.shiftKey && !e.altKey) {
+        const hasChordRow = notationStyle === 'FIGURENOTES' && figurenotesChordBlocks;
+        if (e.code === 'ArrowUp') {
+          if (hasChordRow && cursorSubRow === 1) {
+            e.preventDefault();
+            setCursorSubRow(0);
+          } else if (activeStaffIndex > 0) {
+            e.preventDefault();
+            setActiveStaffIndex(activeStaffIndex - 1);
+            setCursorSubRow(0);
+          }
+          return;
+        }
+        if (e.code === 'ArrowDown') {
+          if (hasChordRow && cursorSubRow === 0) {
+            e.preventDefault();
+            setCursorSubRow(1);
+          } else if (activeStaffIndex < staves.length - 1) {
+            e.preventDefault();
+            setActiveStaffIndex(activeStaffIndex + 1);
+            setCursorSubRow(0);
+          }
+          return;
+        }
+      }
+
       // JO-võti valitud: nooltega ↑↓ võtme nihutamine; noodid transponeeritakse sünkroonis kõigil joonestikel (sh Grand Staff)
       if (joClefFocused) {
         if (e.code === 'Escape') {
@@ -4840,6 +4869,22 @@ function NoodiMeisterCore({ icons }) {
         if (e.code === 'ArrowRight') {
           e.preventDefault();
           setCursorPosition(prev => Math.min(maxCursor, prev + cursorStep));
+          return;
+        }
+        if (e.code === 'Home') {
+          e.preventDefault();
+          const ms = measuresRef.current;
+          const idx = ms && ms.length ? ms.findIndex((m) => cursorPosition >= m.startBeat && cursorPosition < m.endBeat) : -1;
+          const start = idx >= 0 ? ms[idx].startBeat : 0;
+          setCursorPosition(Math.max(0, start));
+          return;
+        }
+        if (e.code === 'End') {
+          e.preventDefault();
+          const ms = measuresRef.current;
+          const idx = ms && ms.length ? ms.findIndex((m) => cursorPosition >= m.startBeat && cursorPosition < m.endBeat) : -1;
+          const end = idx >= 0 ? ms[idx].endBeat : (timeSignature?.beats ?? 4);
+          setCursorPosition(Math.min(maxCursor, end > 0 ? end - 0.25 : 0));
           return;
         }
         // Cursor on a note: Arrow Up/Down = one note up/down (pitch class); Shift+Arrow = octave change
@@ -8012,6 +8057,7 @@ function NoodiMeisterCore({ icons }) {
                         </label>
                       </div>
                       <p className="text-[10px] text-amber-600">{t('cursor.rulerHint')}</p>
+                      <p className="text-[10px] text-amber-600 mt-1">{t('cursor.nModeKeys')}</p>
                     </div>
                   )}
                   {activeToolbox === 'clefs' && toolboxes.clefs?.options && (
@@ -8893,7 +8939,7 @@ function NoodiMeisterCore({ icons }) {
                       setLyricChainIndex(index);
                       setTimeout(() => lyricInputRef.current?.focus(), 0);
                     }
-                  } : () => setActiveStaffIndex(staffIdx)}
+                  } : () => { setActiveStaffIndex(staffIdx); setCursorSubRow(0); }}
                   onNoteMouseDown={staffIdx === activeStaffIndex ? beginSelectionDrag : undefined}
                   onNoteMouseEnter={staffIdx === activeStaffIndex ? updateSelectionDragHover : undefined}
                   onNotePitchChange={staffIdx === activeStaffIndex ? onNotePitchChange : undefined}
@@ -8904,6 +8950,7 @@ function NoodiMeisterCore({ icons }) {
                   onFigureBeatClick={notationStyle === 'FIGURENOTES' && staffIdx === activeStaffIndex && mousePitchInputEnabled
                     ? (beatPosition) => {
                         if (!noteInputModeRef.current) return;
+                        setCursorSubRow(0);
                         const draft = mouseInsertDraftRef.current;
                         // First click: pick up a draft note (no insertion yet).
                         if (!draft || !draft.startBeat) {
@@ -8939,7 +8986,8 @@ function NoodiMeisterCore({ icons }) {
                         setMouseInsertDraft(null);
                       }
                     : undefined}
-                  onChordLineMouseMove={notationStyle === 'FIGURENOTES' && figurenotesChordBlocks && staffIdx === activeStaffIndex ? setCursorPosition : undefined}
+                  onChordLineMouseMove={notationStyle === 'FIGURENOTES' && figurenotesChordBlocks && staffIdx === activeStaffIndex ? (beat) => { setCursorPosition(beat); setCursorSubRow(1); } : undefined}
+                  onChordLineClick={notationStyle === 'FIGURENOTES' && figurenotesChordBlocks && staffIdx === activeStaffIndex ? (beat) => { setCursorPosition(Math.max(0, beat)); setCursorSubRow(1); } : undefined}
                   notationStyle={notationStyle}
                   layoutMeasuresPerLine={effectiveLayoutMeasuresPerLine}
                   layoutLineBreakBefore={effectiveLayoutLineBreakBefore}
@@ -9000,6 +9048,7 @@ function NoodiMeisterCore({ icons }) {
                   pedagogicalPlayheadEmojiSize={pedagogicalPlayheadEmojiSize}
                   cursorSizePx={cursorSizePx}
                   cursorLineStrokeWidth={cursorLineStrokeWidth}
+                  cursorSubRow={cursorSubRow}
                   pedagogicalPlayheadMovement={pedagogicalPlayheadMovement}
                   isPedagogicalAudioPlaying={isPedagogicalAudioPlaying}
                   isExportingAnimation={isExportingAnimation}
@@ -9304,7 +9353,7 @@ function getFingeringForNote(pitch, octave, instrumentId) {
 }
 
 // Timeline Component – multi-system layout (VexFlow loogika). (PAGE_BREAK_GAP on defineeritud üleval.)
-function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, pageWidth, cursorPosition, notationMode, staffLines, clefType, keySignature = 'C', relativeNotationShowKeySignature = false, relativeNotationShowTraditionalClef = false, onJoClefPositionChange, joClefFocused = false, onJoClefFocus, instrument = 'single-staff-treble', instrumentNotationVariant = 'standard', instrumentConfig = {}, showBarNumbers = true, barNumberSize = 11, showRhythmSyllables = false, joClefStaffPosition: joClefStaffPositionProp, showAllNoteLabels = false, enableEmojiOverlays = true, noteheadShape = 'oval', noteheadEmoji = '♪', onNoteTeacherLabelChange, onNoteLabelClick, chords = [], isDotted, isRest, selectedDuration, noteInputMode, selectedNoteIndex, isNoteSelected, notes: allNotes, onStaffAddNote, onNoteClick, onNoteMouseDown, onNoteMouseEnter, onNotePitchChange, onNoteBeatChange, canHandDragNotes = false, ghostPitch, ghostOctave, onFigureBeatClick, onChordLineMouseMove, notationStyle, layoutMeasuresPerLine = 4, layoutLineBreakBefore = [], layoutPageBreakBefore = [], layoutSystemGap = 120, layoutPartsGap, layoutConnectedBarlines = false, staffRowAlignment = 'center', staffIndexInScore = 0, systemTotalHeight, layoutGlobalSpacingMultiplier = 1, systems: systemsProp, baseYOffset = 0, isActiveStaff = true, staffCount = 1, staffHeight: staffHeightProp, figurenotesSize = 16, figurenotesStems = false, figurenotesChordLineGap = 6, figurenotesChordBlocks = false, figurenotesRowHeight: figurenotesRowHeightProp, figurenotesChordLineHeight: figurenotesChordLineHeightProp, timeSignatureSize = 16, themeColors: themeColorsProp, pedagogicalPlayheadStyle = 'line', pedagogicalPlayheadEmoji = '🎵', pedagogicalPlayheadEmojiSize = 32, cursorSizePx, cursorLineStrokeWidth = 4, pedagogicalPlayheadMovement = 'arch', isPedagogicalAudioPlaying = false, isExportingAnimation = false, exportCursorRef, scoreContainerRef, pageFlowDirection = 'vertical', pageOrientation = 'portrait', isFirstInBraceGroup = false, braceGroupSize = 0, lyricFontFamily = 'sans-serif', lyricLineYOffset = 0, translateLabel, showLayoutBreakIcons = false, showStaffSpacerHandles = false, onSystemYOffsetChange, onToggleLineBreakAfter }) {
+function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, pageWidth, cursorPosition, notationMode, staffLines, clefType, keySignature = 'C', relativeNotationShowKeySignature = false, relativeNotationShowTraditionalClef = false, onJoClefPositionChange, joClefFocused = false, onJoClefFocus, instrument = 'single-staff-treble', instrumentNotationVariant = 'standard', instrumentConfig = {}, showBarNumbers = true, barNumberSize = 11, showRhythmSyllables = false, joClefStaffPosition: joClefStaffPositionProp, showAllNoteLabels = false, enableEmojiOverlays = true, noteheadShape = 'oval', noteheadEmoji = '♪', onNoteTeacherLabelChange, onNoteLabelClick, chords = [], isDotted, isRest, selectedDuration, noteInputMode, selectedNoteIndex, isNoteSelected, notes: allNotes, onStaffAddNote, onNoteClick, onNoteMouseDown, onNoteMouseEnter, onNotePitchChange, onNoteBeatChange, canHandDragNotes = false, ghostPitch, ghostOctave, onFigureBeatClick, onChordLineMouseMove, onChordLineClick, notationStyle, layoutMeasuresPerLine = 4, layoutLineBreakBefore = [], layoutPageBreakBefore = [], layoutSystemGap = 120, layoutPartsGap, layoutConnectedBarlines = false, staffRowAlignment = 'center', staffIndexInScore = 0, systemTotalHeight, layoutGlobalSpacingMultiplier = 1, systems: systemsProp, baseYOffset = 0, isActiveStaff = true, staffCount = 1, staffHeight: staffHeightProp, figurenotesSize = 16, figurenotesStems = false, figurenotesChordLineGap = 6, figurenotesChordBlocks = false, figurenotesRowHeight: figurenotesRowHeightProp, figurenotesChordLineHeight: figurenotesChordLineHeightProp, timeSignatureSize = 16, themeColors: themeColorsProp, pedagogicalPlayheadStyle = 'line', pedagogicalPlayheadEmoji = '🎵', pedagogicalPlayheadEmojiSize = 32, cursorSizePx, cursorLineStrokeWidth = 4, cursorSubRow = 0, pedagogicalPlayheadMovement = 'arch', isPedagogicalAudioPlaying = false, isExportingAnimation = false, exportCursorRef, scoreContainerRef, pageFlowDirection = 'vertical', pageOrientation = 'portrait', isFirstInBraceGroup = false, braceGroupSize = 0, lyricFontFamily = 'sans-serif', lyricLineYOffset = 0, translateLabel, showLayoutBreakIcons = false, showStaffSpacerHandles = false, onSystemYOffsetChange, onToggleLineBreakAfter }) {
   if (typeof GLOBAL_NOTATION_CONFIG === 'undefined' || !GLOBAL_NOTATION_CONFIG || GLOBAL_NOTATION_CONFIG.EMOJIS === false) return null;
   const themeColors = themeColorsProp || { staffLineColor: '#000', noteFill: '#1a1a1a', textColor: '#1a1a1a', scoreBg: '#fffbf0', isDark: false };
   const safeKey = keySignature ?? 'C';
@@ -9320,14 +9369,26 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
   const timelineHeight = staffHeightProp ?? getStaffHeight();
   const barLineWidth = isFigurenotesMode ? Math.max(2, Math.round(5 * figurenotesSize / 75)) : 2;
   /** Cursor/playhead line inset so it aligns with beat-box (scaled with Noodigraafika suurus in figurenotes). */
-  // Keep cursor line strictly between staff/beat-box lines (no overlap on top or bottom). In figurenotes use melody row only (not chord line).
+  // In figurenotes with chord blocks: cursor line spans melody + chord row so it’s visible on both; otherwise melody/staff only.
   const cursorRowHeight = isFigurenotesMode && (figurenotesRowHeightProp != null && figurenotesRowHeightProp > 0)
     ? figurenotesRowHeightProp
     : timelineHeight;
   const cursorInset = isFigurenotesMode
     ? Math.max(8, Math.min(20, Math.round(cursorRowHeight * 0.1)))
     : 5;
-  const cursorY2 = cursorRowHeight - cursorInset;
+  const chordExtension = isFigurenotesMode && figurenotesChordBlocks && (figurenotesChordLineHeightProp ?? 0) > 0
+    ? figurenotesChordLineGap + figurenotesChordLineHeightProp
+    : 0;
+  const cursorBottomInset = isFigurenotesMode && chordExtension > 0 ? Math.max(2, Math.round(cursorRowHeight * 0.05)) : cursorInset;
+  const chordRowInset = Math.max(2, Math.round((figurenotesChordLineHeightProp ?? 0) * 0.1));
+  // cursorSubRow: 0 = meloodiarida, 1 = akordirida (lugeri/kuulaja rida). Cmd/Ctrl+↑/↓ vahetab.
+  const useChordRowCursor = isFigurenotesMode && figurenotesChordBlocks && chordExtension > 0 && cursorSubRow === 1;
+  const cursorY1 = useChordRowCursor
+    ? cursorRowHeight + figurenotesChordLineGap + chordRowInset
+    : cursorInset;
+  const cursorY2 = useChordRowCursor
+    ? cursorRowHeight + figurenotesChordLineGap + (figurenotesChordLineHeightProp ?? 0) - chordRowInset
+    : (chordExtension > 0 ? cursorRowHeight - cursorInset : cursorRowHeight + chordExtension - cursorBottomInset);
   const BEAT_BOX_STROKE = '#b0b0b0';
   const layoutOptions = {
     measuresPerLine: layoutMeasuresPerLine,
@@ -9859,14 +9920,14 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
         if (localStart <= 0 && localEnd <= 0) break;
       }
       const yTop = sys.yOffset + cursorInset;
-      const height = cursorRowHeight - cursorInset * 2;
+      const selHeight = cursorRowHeight + chordExtension - cursorInset - cursorBottomInset;
       return (
         <rect
           key={`sel-${s}`}
           x={xStart}
           y={yTop}
           width={Math.max(2, xEnd - xStart)}
-          height={Math.max(4, height)}
+          height={Math.max(4, selHeight)}
           fill="#bfdbfe"
           opacity="0.35"
           rx="4"
@@ -9927,6 +9988,7 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
           timelineSvgRef={timelineSvgRef}
           onBeatSlotClick={onFigureBeatClick}
           onChordLineMouseMove={onChordLineMouseMove}
+          onChordLineClick={onChordLineClick}
           showRhythmSyllables={showRhythmSyllables}
           lyricFontFamily={lyricFontFamily}
           lyricLineYOffset={lyricLineYOffset}
@@ -10046,7 +10108,7 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
           {showLine ? (
             <line
               x1={cursorX}
-              y1={cursorInfo.system.yOffset + cursorInset}
+              y1={cursorInfo.system.yOffset + cursorY1}
               x2={cursorX}
               y2={cursorInfo.system.yOffset + cursorY2}
               stroke="#2563eb"
@@ -10059,7 +10121,7 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
             <>
               <line
                 x1={cursorX}
-                y1={cursorInfo.system.yOffset + cursorInset}
+                y1={cursorInfo.system.yOffset + cursorY1}
                 x2={cursorX}
                 y2={cursorInfo.system.yOffset + cursorY2}
                 stroke="#2563eb"

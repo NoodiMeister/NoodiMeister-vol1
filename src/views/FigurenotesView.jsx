@@ -138,6 +138,7 @@ export function FigurenotesView({
   timelineSvgRef,
   onBeatSlotClick,
   onChordLineMouseMove,
+  onChordLineClick,
   showRhythmSyllables = false,
   lyricFontFamily = 'sans-serif',
   lyricLineYOffset = 0,
@@ -537,7 +538,7 @@ export function FigurenotesView({
                         strokeWidth={1}
                         rx={2}
                       />
-                      {typeof onChordLineMouseMove === 'function' && timelineSvgRef?.current && (
+                      {(typeof onChordLineMouseMove === 'function' || typeof onChordLineClick === 'function') && timelineSvgRef?.current && (
                         <rect
                           x={marginLeft}
                           y={sys.yOffset + melodyRowHeight + chordLineGap}
@@ -545,7 +546,7 @@ export function FigurenotesView({
                           height={chordLineHeight}
                           fill="transparent"
                           style={{ cursor: 'pointer' }}
-                          onMouseMove={(e) => {
+                          onMouseMove={typeof onChordLineMouseMove === 'function' ? (e) => {
                             const svg = timelineSvgRef.current;
                             if (!svg) return;
                             const pt = svg.createSVGPoint();
@@ -554,24 +555,38 @@ export function FigurenotesView({
                             const local = pt.matrixTransform(svg.getScreenCTM().inverse());
                             const beat = getBeatFromX(local.x);
                             onChordLineMouseMove(beat);
-                          }}
+                          } : undefined}
+                          onClick={typeof onChordLineClick === 'function' ? (e) => {
+                            e.stopPropagation();
+                            const svg = timelineSvgRef.current;
+                            if (!svg) return;
+                            const pt = svg.createSVGPoint();
+                            pt.x = e.clientX;
+                            pt.y = 0;
+                            const local = pt.matrixTransform(svg.getScreenCTM().inverse());
+                            const beat = getBeatFromX(local.x);
+                            onChordLineClick(beat);
+                          } : undefined}
                         />
                       )}
                     </>
                   )}
-                  {chords
-                    .filter((c) => c.beatPosition >= measure.startBeat && c.beatPosition < measure.endBeat)
-                    .map((chord) => {
-                      const chordX = measureX + (chord.beatPosition - measure.startBeat) * beatWidth;
-                      const chordY = chordLineHeight > 0
-                        ? sys.yOffset + melodyRowHeight + chordLineGap + chordLineHeight / 2
-                        : sys.yOffset + padVertical + 4;
-                      const chordFontSizeBase = Math.round(14 * (figurenotesSize / 16));
-                      const chordFontSize = chordLineHeight > 0
-                        ? Math.min(chordLineHeight * 0.6, chordFontSizeBase)
-                        : chordFontSizeBase;
+                  {(() => {
+                    const chordsInMeasure = chords
+                      .filter((c) => c.beatPosition >= measure.startBeat && c.beatPosition < measure.endBeat)
+                      .sort((a, b) => a.beatPosition - b.beatPosition);
+                    const chordFontSizeBase = Math.round(14 * (figurenotesSize / 16));
+                    const chordFontSize = chordLineHeight > 0
+                      ? Math.min(chordLineHeight * 0.6, chordFontSizeBase)
+                      : chordFontSizeBase;
+                    const chordRowTop = sys.yOffset + melodyRowHeight + chordLineGap;
+                    const chordY = chordLineHeight > 0
+                      ? chordRowTop + chordLineHeight / 2
+                      : sys.yOffset + padVertical + 4;
 
-                      if (!chordBlocksEnabled || chordLineHeight <= 0) {
+                    if (!chordBlocksEnabled || chordLineHeight <= 0) {
+                      return chordsInMeasure.map((chord) => {
+                        const chordX = measureX + (chord.beatPosition - measure.startBeat) * beatWidth;
                         return (
                           <g key={chord.id}>
                             <text
@@ -601,73 +616,75 @@ export function FigurenotesView({
                             )}
                           </g>
                         );
-                      }
+                      });
+                    }
 
-                      // Chord blocks mode: one-beat colored rectangle with chord name and tone spelling.
-                      const rectGap = 2;
-                      const rectWidth = Math.max(0, beatWidth - rectGap);
-                      const rectX = chordX;
-                      const chordRowTop = sys.yOffset + melodyRowHeight + chordLineGap;
-                      const rectY = chordRowTop + 2;
-                      const rectH = Math.max(0, chordLineHeight - 4);
-                      const fill = getChordColor(chord.chord);
-                      const tones = getChordToneNames(chord.chord);
-                      const textX = rectX + 4;
-                      const mainTextY = chordRowTop + chordLineHeight * 0.45;
-                      const tonesFontSize = Math.max(8, Math.round(chordFontSize * 0.6));
+                    // Akordiplokid: iga takti kohta üks ristkülik (täislaius), akordi nimega ja nimega seotud värvi taustaga.
+                    const measureChord = chordsInMeasure[0];
+                    if (!measureChord) return null;
+                    const rectGap = 2;
+                    const rectWidth = Math.max(0, measureWidth - rectGap);
+                    const rectX = measureX + rectGap / 2;
+                    const rectY = chordRowTop + 2;
+                    const rectH = Math.max(0, chordLineHeight - 4);
+                    const fill = getChordColor(measureChord.chord);
+                    const tones = getChordToneNames(measureChord.chord);
+                    const textX = rectX + 6;
+                    const mainTextY = chordRowTop + chordLineHeight * 0.45;
+                    const tonesFontSize = Math.max(8, Math.round(chordFontSize * 0.6));
 
-                      return (
-                        <g key={chord.id}>
-                          <rect
-                            x={rectX}
-                            y={rectY}
-                            width={rectWidth}
-                            height={rectH}
-                            fill={fill}
-                            stroke="#111827"
-                            strokeWidth={0.8}
-                            rx={3}
-                          />
+                    return (
+                      <g key={`chord-block-${measureIdx}-${measure.startBeat}`}>
+                        <rect
+                          x={rectX}
+                          y={rectY}
+                          width={rectWidth}
+                          height={rectH}
+                          fill={fill}
+                          stroke="#111827"
+                          strokeWidth={0.8}
+                          rx={3}
+                        />
+                        <text
+                          x={textX}
+                          y={mainTextY}
+                          textAnchor="start"
+                          dominantBaseline="middle"
+                          fontSize={chordFontSize}
+                          fontWeight="bold"
+                          fill="#ffffff"
+                          fontFamily="sans-serif"
+                        >
+                          {measureChord.chord}
+                        </text>
+                        {tones.length > 0 && (
                           <text
                             x={textX}
-                            y={mainTextY}
+                            y={mainTextY + tonesFontSize}
                             textAnchor="start"
-                            dominantBaseline="middle"
-                            fontSize={chordFontSize}
-                            fontWeight="bold"
-                            fill="#ffffff"
-                            fontFamily="sans-serif"
+                            dominantBaseline="hanging"
+                            fontSize={tonesFontSize}
+                            fill="#f9fafb"
+                            fontFamily="monospace"
                           >
-                            {chord.chord}
+                            {tones.join(' ')}
                           </text>
-                          {tones.length > 0 && (
-                            <text
-                              x={textX}
-                              y={mainTextY + tonesFontSize}
-                              textAnchor="start"
-                              dominantBaseline="hanging"
-                              fontSize={tonesFontSize}
-                              fill="#f9fafb"
-                              fontFamily="monospace"
-                            >
-                              {tones.join(' ')}
-                            </text>
-                          )}
-                          {chord.figuredBass && (
-                            <text
-                              x={rectX + rectWidth - 4}
-                              y={rectY + rectH - 3}
-                              textAnchor="end"
-                              fontSize={Math.max(8, Math.round(chordFontSize * 0.6))}
-                              fill="#111827"
-                              fontFamily="serif"
-                            >
-                              {chord.figuredBass}
-                            </text>
-                          )}
-                        </g>
-                      );
-                    })}
+                        )}
+                        {measureChord.figuredBass && (
+                          <text
+                            x={rectX + rectWidth - 6}
+                            y={rectY + rectH - 3}
+                            textAnchor="end"
+                            fontSize={Math.max(8, Math.round(chordFontSize * 0.6))}
+                            fill="#111827"
+                            fontFamily="serif"
+                          >
+                            {measureChord.figuredBass}
+                          </text>
+                        )}
+                      </g>
+                    );
+                  })()}
                   {(() => {
                     // Shorter-than-quarter notes in the same beat: place so that
                     // right edge of one shape + 1px gap + left edge of next shape (repeated for every short note).
