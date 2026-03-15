@@ -3889,10 +3889,16 @@ function NoodiMeisterCore({ icons }) {
   }, [maxCursor]);
 
   const playPianoNote = useCallback((pitch, octave, semitonesOffset = 0) => {
-    const semi = semitonesOffset === true || semitonesOffset === 1 ? 1 : semitonesOffset === -1 ? -1 : 0;
+    // accidental: -2 = double flat, -1 = flat, 0 = natural, 1 = sharp, 2 = double sharp. Võtab arvud ja stringid (salvestatud andmed).
+    const raw = typeof semitonesOffset === 'number' && Number.isFinite(semitonesOffset)
+      ? semitonesOffset
+      : (semitonesOffset === true || semitonesOffset === 1 ? 1 : semitonesOffset === -1 ? -1 : Number(semitonesOffset));
+    const semi = Number.isFinite(raw) ? Math.max(-2, Math.min(2, Math.round(raw))) : 0;
     const oct = octave ?? 4;
+    const baseMidi = pitchOctaveToMidi(pitch, oct);
+    if (!Number.isFinite(baseMidi)) return; // vigane pitch/octave – ära mängi, et helimängija ei satuks segadusse
+    const midiNote = Math.max(0, Math.min(127, Math.round(baseMidi + semi)));
     const freq = getNoteFrequency(tuningReferenceNote, tuningReferenceOctave, tuningReferenceHz, pitch, oct, semi);
-    const midiNote = Math.max(0, Math.min(127, pitchOctaveToMidi(pitch, oct) + semi));
     const soundfontName = INSTRUMENT_TO_SOUNDFONT_NAME[instrument] || 'acoustic_grand_piano';
     let ctx = audioContextRef.current;
     if (!ctx) {
