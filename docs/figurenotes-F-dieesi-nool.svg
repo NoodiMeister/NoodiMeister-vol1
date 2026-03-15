@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 90" width="80" height="90">
-  <title>F# figurenotes (koodi järgi: arrowLen=28/sqrt2, head=5, 90 deg kolmnurk)</title>
+  <title>F# figurenotes, varre diagonaal 17px (lühendatud -11px kokku)</title>
   <rect width="80" height="90" fill="#fff"/>
-  <!-- F-ring: oktaav 4 -->
+  <!-- F-ring: cx=40 cy=52 r=18, size=36 -->
   <circle cx="40" cy="52" r="18" fill="#2563eb" stroke="#1a1a1a" stroke-width="2"/>
   <text x="40" y="52" text-anchor="middle" dominant-baseline="central" fill="#fff" font-size="14" font-weight="bold">F</text>
-  <!-- Nool: koodis arrowLen=28/sqrt2, head=max(3, size*0.14), tip (tipX,tipY), polygon 90 deg -->
+  <!-- Nool: varre 17px, nool 1px üles (saba y=32.5). -->
   <g stroke="#1a1a1a" fill="#1a1a1a" stroke-width="2.5" stroke-linecap="butt" stroke-linejoin="miter">
-    <line x1="30.1" y1="35.5" x2="49.9" y2="15.7"/>
-    <polygon points="49.9,15.7 44.86,15.7 49.9,20.74"/>
+    <line x1="33.99" y1="32.5" x2="46.01" y2="20.49"/>
+    <polygon points="46.01,20.49 40.97,20.49 46.01,25.53"/>
   </g>
 </svg>

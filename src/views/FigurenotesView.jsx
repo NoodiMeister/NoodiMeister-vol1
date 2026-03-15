@@ -470,7 +470,7 @@ export function FigurenotesView({
                       const arrowLen = 28 / Math.SQRT2; // diagonaal ~28px (varre pikkus)
                       const head = Math.max(3, size * 0.14);
                       const strokeW2 = Math.max(2.5, size * 0.07);
-                      const gap = 0.5;
+                      const gap = 0; // figuuri ja noole vahe (0,5px vähendatud)
                       const arrowY = y - size / 2 - gap - arrowLen / 2;
                       const stroke = '#1a1a1a';
                       if (effectiveAccidental === 1) {

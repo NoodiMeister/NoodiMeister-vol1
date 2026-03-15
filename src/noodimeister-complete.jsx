@@ -1136,6 +1136,8 @@ function NoodiMeisterCore({ icons }) {
   const noteInputModeRef = useRef(noteInputMode);
   // Mouse-insert must also be readable in keyboard handler.
   const mouseInsertDraftRef = useRef(mouseInsertDraft);
+  /** Esimese käivitusega ei mängi nooti (vältimaks mängimist lehe laadimisel); pärast seda mängib alati, kui kursor liigub ja all on noot. */
+  const cursorPlaySkipFirstRunRef = useRef(true);
   useEffect(() => {
     noteInputModeRef.current = noteInputMode;
   }, [noteInputMode]);
@@ -4432,6 +4434,17 @@ function NoodiMeisterCore({ icons }) {
     }
     return best.index;
   }, [notes, cursorPosition]);
+
+  // Kursor nooti loeb ja mängib alati, kui kasutaja kursorit liigutab (N-režiim, meloodiareal, noot kursori all; järgib playNoteOnInsert)
+  useEffect(() => {
+    if (!playNoteOnInsert || !noteInputMode || !cursorOnMelodyRow || noteIndexAtCursor < 0) return;
+    if (cursorPlaySkipFirstRunRef.current) {
+      cursorPlaySkipFirstRunRef.current = false;
+      return;
+    }
+    const note = notes[noteIndexAtCursor];
+    if (note && !note.isRest) playPianoNote(note.pitch, note.octave ?? 4, note.accidental ?? 0);
+  }, [cursorPosition, cursorSubRow, noteInputMode, noteIndexAtCursor, cursorOnMelodyRow, playNoteOnInsert, notes, playPianoNote]);
 
   // Keyboard handler
   useEffect(() => {
@@ -10029,7 +10042,7 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
           const arrowLen = 28 / Math.SQRT2;
           const head = Math.max(3, size * 0.14);
           const strokeW = Math.max(2.5, size * 0.07);
-          const gap = 0.5;
+          const gap = 0;
           const arrowY = y - size / 2 - gap - arrowLen / 2;
           const stroke = '#1a1a1a';
           if (note.accidental === 1) {
