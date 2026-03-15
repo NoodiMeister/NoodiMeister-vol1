@@ -4,18 +4,16 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Traditional notation: Leland (symbols) + Leland Text (text glyphs). */
+/* Traditional notation: Leland (symbols) + Leland Text (text glyphs). Only woff2 in repo; .otf would 404. */
 @font-face {
   font-family: 'Leland';
-  src: url('/fonts/Leland.otf') format('opentype'),
-       url('/fonts/Leland.woff2') format('woff2');
+  src: url('/fonts/Leland.woff2') format('woff2');
   font-display: swap;
 }
 
 @font-face {
   font-family: 'LelandText';
-  src: url('/fonts/LelandText.otf') format('opentype'),
-       url('/fonts/LelandText.woff2') format('woff2');
+  src: url('/fonts/LelandText.woff2') format('woff2');
   font-display: swap;
 }
 

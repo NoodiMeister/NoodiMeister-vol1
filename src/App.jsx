@@ -1,20 +1,21 @@
-import React, { Suspense, lazy, useEffect } from 'react';
+import React, { Suspense, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation, useSearchParams, useNavigate } from 'react-router-dom';
 import { NoodimeisterProvider, useNoodimeisterOptional } from './store/NoodimeisterContext';
+import { lazyWithRetry } from './utils/lazyWithRetry';
 import LandingPage from './pages/LandingPage';
-// Lazy load, et vältida TDZ-viga ühes suures bundle'is
-const RegisterPage = lazy(() => import('./pages/RegisterPage'));
-const LoginPage = lazy(() => import('./pages/LoginPage'));
-const HinnakiriPage = lazy(() => import('./pages/HinnakiriPage'));
-const ToetaPage = lazy(() => import('./pages/ToetaPage'));
-const AdminGrantSupportPage = lazy(() => import('./pages/AdminGrantSupportPage'));
-const AdminRegistrationPage = lazy(() => import('./pages/AdminRegistrationPage'));
-const UserDashboard = lazy(() => import('./components/UserDashboard'));
-const AccountPage = lazy(() => import('./pages/AccountPage'));
-const NoodiMeister = lazy(() => import('./noodimeister-complete'));
-const PianoDemoPage = lazy(() => import('./pages/PianoDemoPage'));
-const SymbolGalleryPage = lazy(() => import('./pages/SymbolGalleryPage'));
-const FigurenotesSymbolGalleryPage = lazy(() => import('./pages/FigurenotesSymbolGalleryPage'));
+// Lazy load, et vältida TDZ-viga ühes suures bundle'is; chunk load error → üks taaskoormus
+const RegisterPage = lazyWithRetry(() => import('./pages/RegisterPage'));
+const LoginPage = lazyWithRetry(() => import('./pages/LoginPage'));
+const HinnakiriPage = lazyWithRetry(() => import('./pages/HinnakiriPage'));
+const ToetaPage = lazyWithRetry(() => import('./pages/ToetaPage'));
+const AdminGrantSupportPage = lazyWithRetry(() => import('./pages/AdminGrantSupportPage'));
+const AdminRegistrationPage = lazyWithRetry(() => import('./pages/AdminRegistrationPage'));
+const UserDashboard = lazyWithRetry(() => import('./components/UserDashboard'));
+const AccountPage = lazyWithRetry(() => import('./pages/AccountPage'));
+const NoodiMeister = lazyWithRetry(() => import('./noodimeister-complete'));
+const PianoDemoPage = lazyWithRetry(() => import('./pages/PianoDemoPage'));
+const SymbolGalleryPage = lazyWithRetry(() => import('./pages/SymbolGalleryPage'));
+const FigurenotesSymbolGalleryPage = lazyWithRetry(() => import('./pages/FigurenotesSymbolGalleryPage'));
 
 import * as authStorage from './services/authStorage';
 
@@ -118,15 +119,21 @@ class ErrorBoundary extends React.Component {
 
   render() {
     if (this.state.hasError) {
+      const msg = this.state.error?.message || '';
+      const isChunkError = /failed to fetch dynamically imported module|loading chunk.*failed|importing a module script failed/i.test(msg);
       return (
         <div className="error-screen" style={{ padding: 50, textAlign: 'center', fontFamily: 'sans-serif', minHeight: '100vh', boxSizing: 'border-box', background: '#fef2f2', color: '#991b1b', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
           <h1>Hups! Tehniline viga.</h1>
-          <p style={{ marginTop: 12, fontSize: 16 }}>Teade on edastatud arendajale. Viga: {this.state.error?.message || 'tundmatu'}.</p>
+          <p style={{ marginTop: 12, fontSize: 16 }}>
+            {isChunkError
+              ? 'Rakendus on uuendatud. Värskenda lehte (F5 või nupp all), et laadida uus versioon.'
+              : <>Teade on edastatud arendajale. Viga: {msg || 'tundmatu'}.</>}
+          </p>
           <div style={{ display: 'flex', gap: 12, justifyContent: 'center', marginTop: 24, flexWrap: 'wrap' }}>
-            <button type="button" onClick={() => window.history.back()} style={{ padding: '12px 24px', cursor: 'pointer', background: '#b91c1c', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600 }}>
+            <button type="button" onClick={() => window.history.back()} style={{ padding: '12px 24px', cursor: 'pointer', background: '#6b7280', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600 }}>
               Mine tagasi
             </button>
-            <button type="button" onClick={() => window.location.reload()} style={{ padding: '12px 24px', cursor: 'pointer', background: '#6b7280', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600 }}>
+            <button type="button" onClick={() => window.location.reload()} style={{ padding: '12px 24px', cursor: 'pointer', background: '#b91c1c', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600 }}>
               Värskenda lehte
             </button>
           </div>
@@ -197,6 +204,13 @@ function EnvBanner() {
 function AppRoutes() {
   const location = useLocation();
   const pathname = location.pathname || '/';
+
+  // Pärast edukat laadimist võta chunk-retry lipu maha, et järgmine deploy võiks uuesti reloadida
+  useEffect(() => {
+    try {
+      sessionStorage.removeItem('nm_chunk_reload_retry');
+    } catch (_) { /* ignore */ }
+  }, []);
 
   const needBannerSpace = import.meta.env.VITE_VERCEL_ENV === 'preview' ||
     (typeof window !== 'undefined' && /^localhost$|^127\.0\.0\.1$/.test(window.location?.hostname || ''));
