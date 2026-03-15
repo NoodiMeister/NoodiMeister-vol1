@@ -467,10 +467,11 @@ export function FigurenotesView({
                       </g>
                     )}
                     {(effectiveAccidental === 1 || effectiveAccidental === -1) && (() => {
-                      const arrowY = y - size / 2 - Math.max(6, size * 0.35);
-                      const arrowLen = Math.max(7, size * 0.425);
-                      const head = Math.max(2.5, size * 0.16);
-                      const strokeW2 = Math.max(0.75, size * 0.05);
+                      const arrowLen = Math.max(7, size * 0.425) * 0.5;
+                      const head = Math.max(2.5, size * 0.16) * 0.5;
+                      const strokeW2 = Math.max(0.75, size * 0.05) * 0.5;
+                      const gap = 0.5;
+                      const arrowY = y - size / 2 - gap - arrowLen / 2;
                       const stroke = '#1a1a1a';
                       if (effectiveAccidental === 1) {
                         // Sharp: diagonal arrow up-right (↗), half size

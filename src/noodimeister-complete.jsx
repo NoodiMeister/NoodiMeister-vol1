@@ -10024,12 +10024,13 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
             )}
           </g>
         )}
-        {/* Alteratsiooninool: ♯ = nool paremale üles (↗), ♭ = nool vasakule üles (↖). Skaleeritud figurenotesSize-ga, et oleks nähtav ka suurendatud režiimis. */}
+        {/* Alteratsiooninool: ♯ = nool paremale üles (↗), ♭ = nool vasakule üles (↖). Gap figuuri ja noole vahel 0,5 px. */}
         {(note.accidental === 1 || note.accidental === -1) && (() => {
-          const arrowY = y - size / 2 - Math.max(8, figurenotesSize * 0.4);
-          const arrowLen = Math.max(14, figurenotesSize * 0.85);
-          const head = Math.max(5, figurenotesSize * 0.32);
-          const strokeW = Math.max(1.5, figurenotesSize * 0.1);
+          const arrowLen = Math.max(7, figurenotesSize * 0.85) * 0.5;
+          const head = Math.max(5, figurenotesSize * 0.32) * 0.5;
+          const strokeW = Math.max(1.5, figurenotesSize * 0.1) * 0.5;
+          const gap = 0.5;
+          const arrowY = y - size / 2 - gap - arrowLen / 2;
           const stroke = '#1a1a1a';
           if (note.accidental === 1) {
             return (
