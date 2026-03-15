@@ -10026,24 +10026,28 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
         )}
         {/* Alteratsiooninool: ♯ = nool paremale üles (↗), ♭ = nool vasakule üles (↖). Gap figuuri ja noole vahel 0,5 px. */}
         {(note.accidental === 1 || note.accidental === -1) && (() => {
-          const arrowLen = Math.max(8.5, size * 0.4);
+          const arrowLen = 28 / Math.SQRT2;
           const head = Math.max(3, size * 0.14);
-          const strokeW = Math.max(3, size * 0.07);
+          const strokeW = Math.max(2.5, size * 0.07);
           const gap = 0.5;
           const arrowY = y - size / 2 - gap - arrowLen / 2;
           const stroke = '#1a1a1a';
           if (note.accidental === 1) {
+            const tipX = x + arrowLen / 2;
+            const tipY = arrowY - arrowLen / 2;
             return (
-              <g stroke={stroke} fill="none" strokeWidth={strokeW} strokeLinecap="round" strokeLinejoin="round">
-                <line x1={x - arrowLen / 2} y1={arrowY + arrowLen / 2} x2={x + arrowLen / 2} y2={arrowY - arrowLen / 2} />
-                <path d={`M ${x + arrowLen / 2} ${arrowY - arrowLen / 2} L ${x + arrowLen / 2 - head} ${arrowY - arrowLen / 2 + head * 0.6} M ${x + arrowLen / 2} ${arrowY - arrowLen / 2} L ${x + arrowLen / 2 - head * 0.6} ${arrowY - arrowLen / 2 + head}`} />
+              <g stroke={stroke} fill={stroke} strokeWidth={strokeW} strokeLinecap="butt" strokeLinejoin="miter">
+                <line x1={x - arrowLen / 2} y1={arrowY + arrowLen / 2} x2={tipX} y2={tipY} />
+                <polygon points={`${tipX},${tipY} ${tipX - head},${tipY} ${tipX},${tipY + head}`} />
               </g>
             );
           }
+          const tipX = x - arrowLen / 2;
+          const tipY = arrowY - arrowLen / 2;
           return (
-            <g stroke={stroke} fill="none" strokeWidth={strokeW} strokeLinecap="round" strokeLinejoin="round">
-              <line x1={x + arrowLen / 2} y1={arrowY + arrowLen / 2} x2={x - arrowLen / 2} y2={arrowY - arrowLen / 2} />
-              <path d={`M ${x - arrowLen / 2} ${arrowY - arrowLen / 2} L ${x - arrowLen / 2 + head} ${arrowY - arrowLen / 2 + head * 0.6} M ${x - arrowLen / 2} ${arrowY - arrowLen / 2} L ${x - arrowLen / 2 + head * 0.6} ${arrowY - arrowLen / 2 + head}`} />
+            <g stroke={stroke} fill={stroke} strokeWidth={strokeW} strokeLinecap="butt" strokeLinejoin="miter">
+              <line x1={x + arrowLen / 2} y1={arrowY + arrowLen / 2} x2={tipX} y2={tipY} />
+              <polygon points={`${tipX},${tipY} ${tipX + head},${tipY} ${tipX},${tipY + head}`} />
             </g>
           );
         })()}
