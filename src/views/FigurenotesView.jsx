@@ -8,10 +8,11 @@ import { RhythmSyllableLabel } from '../components/RhythmSyllableLabel';
 import { getRhythmSyllableForNote } from '../notation/rhythmSyllables';
 import { getFigureNoteWidth, FIGURE_BASE_WIDTH } from '../layout/LayoutEngine';
 import { SmuflGlyph } from '../notation/smufl/SmuflGlyph';
-import { smuflNoteheadForType, SMUFL_GLYPH } from '../notation/smufl/glyphs';
+import { smuflNoteheadForType, smuflTimeSigDigitsForNumber, SMUFL_GLYPH } from '../notation/smufl/glyphs';
 import { getShapePathsByOctave, getFigureStyle } from '../constants/FigureNotesLibrary';
 import { getChordMidiNotes } from '../musical/chordPlayback';
 import { getAccidentalForPitchInKey } from '../utils/notationConstants';
+import { TIME_SIG_LAYOUT } from '../notation/TimeSignatureLayout';
 
 const LAYOUT = { MARGIN_LEFT: 60, MEASURE_MIN_WIDTH: 28 };
 const FIGURE_START_PADDING = 8;
@@ -78,50 +79,69 @@ function parseToneName(toneName) {
 /** Reference size used when design was at 16px; scale = size/16. */
 const TIME_SIG_REF = 16;
 
+/** Leland SMuFL time signature digits centered at (x, y). Multi-digit (e.g. 12) laid out horizontally. */
+function TimeSigDigits({ x, y, fontSize, number, fill }) {
+  const digits = smuflTimeSigDigitsForNumber(number);
+  if (digits.length === 0) return null;
+  const spacing = fontSize * 0.5;
+  const startX = x - (digits.length - 1) * spacing / 2;
+  return (
+    <g>
+      {digits.map((glyph, i) => (
+        <SmuflGlyph key={i} x={startX + i * spacing} y={y} glyph={glyph} fontSize={fontSize} fill={fill} />
+      ))}
+    </g>
+  );
+}
+
 function renderTimeSignature(timeSignature, timeSignatureMode, centerY, notationSize = TIME_SIG_REF, textColor = '#333', noteFill = '#333') {
   const scale = notationSize / TIME_SIG_REF;
+  const L = TIME_SIG_LAYOUT;
   const x = 45;
   const y = centerY;
   const fNum = Math.round(18 * scale);
   const fDen = Math.round(18 * scale);
   const fDenFallback = Math.round(16 * scale);
-  const lineHalf = 10 * scale;
-  const yNum = y - 8 * scale;
-  const yLine = y + 2 * scale;
-  const yDen = y + 20 * scale;
-  const stemOff = 4 * scale;
-  const noteY = y + 18 * scale;
-  const stemLen = 20 * scale;
+  const lineHalf = L.LINE_HALF * scale;
+  const yNum = y + L.Y_NUM * scale;
+  const yLine = y + L.Y_LINE * scale;
+  const yDen = y + L.Y_DEN * scale;
+  const noteX = x + L.NOTE_X_OFFSET * scale;
+  const noteY = y + L.NOTE_Y * scale;
+  const stemY1 = y + L.STEM_Y1 * scale;
+  const stemY2 = y + L.STEM_Y2 * scale;
   const strokeW = Math.max(1, 1.5 * scale);
+  const numeratorDigits = (
+    <TimeSigDigits x={x} y={yNum} fontSize={fNum} number={timeSignature.beats} fill={textColor} />
+  );
   if (timeSignatureMode === 'pedagogical') {
-    const stemX = x - stemOff;
+    const stemX = x + L.STEM_X_OFFSET * scale;
     const getNoteSymbolForDenominator = () => {
-      const noteX = x;
-      const r1 = 5 * scale; const r1y = 3 * scale;
-      const r2 = 4 * scale; const r2y = 2.5 * scale;
+      const r1 = L.WHOLE_RX * scale; const r1y = L.WHOLE_RY * scale;
+      const r2 = L.ELLIPSE_RX * scale; const r2y = L.ELLIPSE_RY * scale;
       const q = 6 * scale;
       switch (timeSignature.beatUnit) {
         case 1:
           return <ellipse cx={noteX} cy={noteY} rx={r1} ry={r1y} fill="none" stroke={textColor} strokeWidth={strokeW} />;
         case 2:
-          return (<><ellipse cx={noteX} cy={noteY} rx={r2} ry={r2y} fill="none" stroke={textColor} strokeWidth={strokeW} /><line x1={stemX} y1={noteY} x2={stemX} y2={noteY + stemLen} stroke={textColor} strokeWidth={strokeW} /></>);
+          return (<><ellipse cx={noteX} cy={noteY} rx={r2} ry={r2y} fill="none" stroke={textColor} strokeWidth={strokeW} /><line x1={stemX} y1={stemY1} x2={stemX} y2={stemY2} stroke={textColor} strokeWidth={strokeW} /></>);
         case 4:
-          return (<><ellipse cx={noteX} cy={noteY} rx={r2} ry={r2y} fill={noteFill} /><line x1={stemX} y1={noteY} x2={stemX} y2={noteY + stemLen} stroke={textColor} strokeWidth={strokeW} /></>);
+          return (<><ellipse cx={noteX} cy={noteY} rx={r2} ry={r2y} fill={noteFill} /><line x1={stemX} y1={stemY1} x2={stemX} y2={stemY2} stroke={textColor} strokeWidth={strokeW} /></>);
         case 8:
-          return (<><ellipse cx={noteX} cy={noteY} rx={r2} ry={r2y} fill={noteFill} /><line x1={stemX} y1={noteY} x2={stemX} y2={noteY + stemLen} stroke={textColor} strokeWidth={strokeW} /><path d={`M ${stemX} ${noteY + stemLen} Q ${stemX - q} ${noteY + stemLen - 2} ${stemX} ${noteY + stemLen - 5}`} fill={noteFill} /></>);
+          return (<><ellipse cx={noteX} cy={noteY} rx={r2} ry={r2y} fill={noteFill} /><line x1={stemX} y1={stemY1} x2={stemX} y2={stemY2} stroke={textColor} strokeWidth={strokeW} /><path d={`M ${stemX} ${stemY2} Q ${stemX - q} ${stemY2 - 2 * scale} ${stemX} ${stemY2 - 5 * scale}`} fill={noteFill} /></>);
         case 16:
-          return (<><ellipse cx={noteX} cy={noteY} rx={r2} ry={r2y} fill={noteFill} /><line x1={stemX} y1={noteY} x2={stemX} y2={noteY + stemLen} stroke={textColor} strokeWidth={strokeW} /><path d={`M ${stemX} ${noteY + stemLen} Q ${stemX - q} ${noteY + stemLen - 2} ${stemX} ${noteY + stemLen - 5} M ${stemX} ${noteY + stemLen - 3} Q ${stemX - q} ${noteY + stemLen - 5} ${stemX} ${noteY + stemLen - 8}`} fill={noteFill} /></>);
+          return (<><ellipse cx={noteX} cy={noteY} rx={r2} ry={r2y} fill={noteFill} /><line x1={stemX} y1={stemY1} x2={stemX} y2={stemY2} stroke={textColor} strokeWidth={strokeW} /><path d={`M ${stemX} ${stemY2} Q ${stemX - q} ${stemY2 - 2 * scale} ${stemX} ${stemY2 - 5 * scale} M ${stemX} ${stemY2 - 3 * scale} Q ${stemX - q} ${stemY2 - 5 * scale} ${stemX} ${stemY2 - 8 * scale}`} fill={noteFill} /></>);
         default:
-          return <text x={noteX} y={noteY + stemLen} textAnchor="middle" fontSize={fDenFallback} fontWeight="bold" fill={textColor}>{timeSignature.beatUnit}</text>;
+          return <TimeSigDigits x={noteX} y={stemY2} fontSize={fDenFallback} number={timeSignature.beatUnit} fill={textColor} />;
       }
     };
-    return (<g><text x={x} y={yNum} textAnchor="middle" fontSize={fNum} fontWeight="bold" fill={textColor}>{timeSignature.beats}</text><line x1={x - lineHalf} y1={yLine} x2={x + lineHalf} y2={yLine} stroke={textColor} strokeWidth={strokeW} />{getNoteSymbolForDenominator()}</g>);
+    return (<g>{numeratorDigits}<line x1={x - lineHalf} y1={yLine} x2={x + lineHalf} y2={yLine} stroke={textColor} strokeWidth={strokeW} />{getNoteSymbolForDenominator()}</g>);
   }
   return (
     <g>
-      <text x={x} y={yNum} textAnchor="middle" fontSize={fNum} fontWeight="bold" fill={textColor}>{timeSignature.beats}</text>
+      {numeratorDigits}
       <line x1={x - lineHalf} y1={yLine} x2={x + lineHalf} y2={yLine} stroke={textColor} strokeWidth={strokeW} />
-      <text x={x} y={yDen} textAnchor="middle" fontSize={fDen} fontWeight="bold" fill={textColor}>{timeSignature.beatUnit}</text>
+      <TimeSigDigits x={x} y={yDen} fontSize={fDen} number={timeSignature.beatUnit} fill={textColor} />
     </g>
   );
 }

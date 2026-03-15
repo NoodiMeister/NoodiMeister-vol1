@@ -10265,7 +10265,7 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
           effectiveMeasures={effectiveMeasures}
           marginLeft={marginLeft}
           timelineHeight={figurenotesRowHeightProp ?? timelineHeight}
-          chordLineGap={figurenotesChordBlocks ? effectiveChordLineGap : 0}
+          chordLineGap={figurenotesChordBlocks ? figurenotesChordLineGap : 0}
           chordLineHeight={figurenotesChordBlocks ? (figurenotesChordLineHeightProp ?? Math.round((figurenotesRowHeightProp ?? timelineHeight) / 2)) : 0}
           chordBlocksEnabled={figurenotesChordBlocks}
           chordBlocksShowTones={figurenotesChordBlocksShowTones}

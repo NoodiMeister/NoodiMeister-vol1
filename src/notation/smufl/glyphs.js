@@ -56,7 +56,32 @@ export const SMUFL_GLYPH = Object.freeze({
 
   // Barlines (Leland / SMuFL)
   barlineFinal: '\uE032',    // final/ending barline (thin + thick double bar)
+
+  // Time signatures (U+E080–U+E089) – Leland/SMuFL
+  timeSig0: '\uE080',
+  timeSig1: '\uE081',
+  timeSig2: '\uE082',
+  timeSig3: '\uE083',
+  timeSig4: '\uE084',
+  timeSig5: '\uE085',
+  timeSig6: '\uE086',
+  timeSig7: '\uE087',
+  timeSig8: '\uE088',
+  timeSig9: '\uE089',
 });
+
+/** Leland time signature digit glyph for 0–9. */
+export function smuflTimeSigDigit(digit) {
+  const n = Math.floor(Number(digit));
+  if (n < 0 || n > 9) return null;
+  return String.fromCharCode(0xE080 + n);
+}
+
+/** Array of Leland timeSig glyphs for a number (e.g. 4 → [4], 16 → [1,6]). */
+export function smuflTimeSigDigitsForNumber(num) {
+  const s = String(Math.max(0, Math.floor(Number(num))));
+  return s.split('').map((c) => smuflTimeSigDigit(parseInt(c, 10))).filter(Boolean);
+}
 
 /** Shape key for notehead (oval, x, square, triangle). Used by toolbox and rendering. */
 export const NOTEHEAD_SHAPE_GLYPH = {
