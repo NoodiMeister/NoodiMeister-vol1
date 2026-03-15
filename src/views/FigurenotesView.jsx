@@ -467,9 +467,9 @@ export function FigurenotesView({
                       </g>
                     )}
                     {(effectiveAccidental === 1 || effectiveAccidental === -1) && (() => {
-                      const arrowLen = 8.5;
-                      const head = 3;
-                      const strokeW2 = 3;
+                      const arrowLen = Math.max(8.5, size * 0.4);
+                      const head = Math.max(3, size * 0.14);
+                      const strokeW2 = Math.max(3, size * 0.07);
                       const gap = 0.5;
                       const arrowY = y - size / 2 - gap - arrowLen / 2;
                       const stroke = '#1a1a1a';

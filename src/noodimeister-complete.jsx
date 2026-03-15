@@ -10026,9 +10026,9 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
         )}
         {/* Alteratsiooninool: ♯ = nool paremale üles (↗), ♭ = nool vasakule üles (↖). Gap figuuri ja noole vahel 0,5 px. */}
         {(note.accidental === 1 || note.accidental === -1) && (() => {
-          const arrowLen = 8.5;
-          const head = 3;
-          const strokeW = 3;
+          const arrowLen = Math.max(8.5, size * 0.4);
+          const head = Math.max(3, size * 0.14);
+          const strokeW = Math.max(3, size * 0.07);
           const gap = 0.5;
           const arrowY = y - size / 2 - gap - arrowLen / 2;
           const stroke = '#1a1a1a';
