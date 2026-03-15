@@ -467,7 +467,7 @@ export function FigurenotesView({
                       </g>
                     )}
                     {(effectiveAccidental === 1 || effectiveAccidental === -1) && (() => {
-                      const arrowLen = 28 / Math.SQRT2; // diagonaal ~28px (varre pikkus)
+                      const arrowLen = 28 / Math.SQRT2; // diagonaal 28px (SVG näidis on 17px; siin pikem, et rakenduses ei tunduks vars lühikeseks)
                       const head = Math.max(3, size * 0.14);
                       const strokeW2 = Math.max(2.5, size * 0.07);
                       const gap = 0; // figuuri ja noole vahe (0,5px vähendatud)
