@@ -467,18 +467,32 @@ export function FigurenotesView({
                       </g>
                     )}
                     {(effectiveAccidental === 1 || effectiveAccidental === -1) && (() => {
-                      const arrowLen = Math.max(8.5, size * 0.4);
+                      const arrowLen = 20 / Math.SQRT2;
                       const head = Math.max(3, size * 0.14);
-                      const strokeW2 = Math.max(3, size * 0.07);
+                      const strokeW2 = Math.max(2.5, size * 0.07);
                       const gap = 0.5;
                       const arrowY = y - size / 2 - gap - arrowLen / 2;
                       const stroke = '#1a1a1a';
                       if (effectiveAccidental === 1) {
-                        // Sharp: diagonal arrow up-right (↗), half size
-                        return (<g stroke={stroke} fill="none" strokeWidth={strokeW2} strokeLinecap="round" strokeLinejoin="round"><line x1={figureCenterX - arrowLen / 2} y1={arrowY + arrowLen / 2} x2={figureCenterX + arrowLen / 2} y2={arrowY - arrowLen / 2} /><path d={`M ${figureCenterX + arrowLen / 2} ${arrowY - arrowLen / 2} L ${figureCenterX + arrowLen / 2 - head} ${arrowY - arrowLen / 2 + head * 0.6} M ${figureCenterX + arrowLen / 2} ${arrowY - arrowLen / 2} L ${figureCenterX + arrowLen / 2 - head * 0.6} ${arrowY - arrowLen / 2 + head}`} /></g>);
+                        // Sharp: diagonal arrow up-right (↗), 90° täidetud noolepea, terav tipp
+                        const tipX = figureCenterX + arrowLen / 2;
+                        const tipY = arrowY - arrowLen / 2;
+                        return (
+                          <g stroke={stroke} fill={stroke} strokeWidth={strokeW2} strokeLinecap="butt" strokeLinejoin="miter">
+                            <line x1={figureCenterX - arrowLen / 2} y1={arrowY + arrowLen / 2} x2={tipX} y2={tipY} />
+                            <polygon points={`${tipX},${tipY} ${tipX - head},${tipY} ${tipX},${tipY + head}`} />
+                          </g>
+                        );
                       }
-                      // Flat: diagonal arrow up-left (↖), half size
-                      return (<g stroke={stroke} fill="none" strokeWidth={strokeW2} strokeLinecap="round" strokeLinejoin="round"><line x1={figureCenterX + arrowLen / 2} y1={arrowY + arrowLen / 2} x2={figureCenterX - arrowLen / 2} y2={arrowY - arrowLen / 2} /><path d={`M ${figureCenterX - arrowLen / 2} ${arrowY - arrowLen / 2} L ${figureCenterX - arrowLen / 2 + head} ${arrowY - arrowLen / 2 + head * 0.6} M ${figureCenterX - arrowLen / 2} ${arrowY - arrowLen / 2} L ${figureCenterX - arrowLen / 2 + head * 0.6} ${arrowY - arrowLen / 2 + head}`} /></g>);
+                      // Flat: diagonal arrow up-left (↖), 90° täidetud noolepea, terav tipp
+                      const tipX = figureCenterX - arrowLen / 2;
+                      const tipY = arrowY - arrowLen / 2;
+                      return (
+                        <g stroke={stroke} fill={stroke} strokeWidth={strokeW2} strokeLinecap="butt" strokeLinejoin="miter">
+                          <line x1={figureCenterX + arrowLen / 2} y1={arrowY + arrowLen / 2} x2={tipX} y2={tipY} />
+                          <polygon points={`${tipX},${tipY} ${tipX + head},${tipY} ${tipX},${tipY + head}`} />
+                        </g>
+                      );
                     })()}
                     {isSelected && <circle cx={figureCenterX} cy={y} r={size / 2 + 4} fill="none" stroke="#2563eb" strokeWidth="2" opacity="0.5" />}
                   </g>
@@ -729,12 +743,18 @@ export function FigurenotesView({
                                   vectorEffect="non-scaling-stroke"
                                 />
                               ))}
-                              {isSharp && (
-                                <g stroke="#1a1a1a" fill="none" strokeWidth={Math.max(1, figSize * 0.08)} strokeLinecap="round" strokeLinejoin="round">
-                                  <line x1={cx - arrowLen / 2} y1={figuresY + arrowLen / 2} x2={cx + arrowLen / 2} y2={figuresY - arrowLen / 2} />
-                                  <path d={`M ${cx + arrowLen / 2} ${figuresY - arrowLen / 2} L ${cx + arrowLen / 2 - head} ${figuresY - arrowLen / 2 + head * 0.6} M ${cx + arrowLen / 2} ${figuresY - arrowLen / 2} L ${cx + arrowLen / 2 - head * 0.6} ${figuresY - arrowLen / 2 + head}`} />
-                                </g>
-                              )}
+                              {isSharp && (() => {
+                                const tipX = cx + arrowLen / 2;
+                                const tipY = figuresY - arrowLen / 2;
+                                const stroke = '#1a1a1a';
+                                const strokeW = Math.max(1.5, figSize * 0.08);
+                                return (
+                                  <g stroke={stroke} fill={stroke} strokeWidth={strokeW} strokeLinecap="butt" strokeLinejoin="miter">
+                                    <line x1={cx - arrowLen / 2} y1={figuresY + arrowLen / 2} x2={tipX} y2={tipY} />
+                                    <polygon points={`${tipX},${tipY} ${tipX - head},${tipY} ${tipX},${tipY + head}`} />
+                                  </g>
+                                );
+                              })()}
                             </g>
                           );
                         })}

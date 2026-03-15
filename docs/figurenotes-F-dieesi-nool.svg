@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 90" width="80" height="90">
+  <title>F-ring figurenotes, dieesi nool (oktaav 4)</title>
+  <rect width="80" height="90" fill="#fff"/>
+  <!-- F-ring: oktaav 4, F = #2563eb -->
+  <circle cx="40" cy="52" r="18" fill="#2563eb" stroke="#1a1a1a" stroke-width="2"/>
+  <text x="40" y="52" text-anchor="middle" dominant-baseline="central" fill="#fff" font-size="14" font-weight="bold">F</text>
+  <!-- Nool: varre 20px, arrowhead 90 deg taitud kolmnurk (terav tipp valja) -->
+  <g stroke="#1a1a1a" fill="#1a1a1a" stroke-width="2.5" stroke-linejoin="miter">
+    <line x1="32.93" y1="33.5" x2="47.07" y2="19.36"/>
+    <polygon points="47.07,19.36 43.07,19.36 47.07,23.36"/>
+  </g>
+</svg>
