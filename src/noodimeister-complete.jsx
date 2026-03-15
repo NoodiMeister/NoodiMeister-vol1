@@ -39,6 +39,7 @@ import {
   getSemitonesFromKey,
   getDiatonicScaleForKey,
   getPitchSemitone,
+  getAccidentalForPitchInKey,
 } from './utils/notationConstants';
 import { FIGURENOTES_COLORS, getFigureSymbol } from './utils/figurenotes';
 import { getOctave2CrossStyle } from './constants/FigureNotesLibrary';
@@ -1376,6 +1377,7 @@ function NoodiMeisterCore({ icons }) {
   const [figurenotesChordLineGap, setFigurenotesChordLineGap] = useState(6); // Akordirida figuurnotatsioonis: vahe meloodiareal ja akordirea vahel 0–20 px
   const [figurenotesChordBlocks, setFigurenotesChordBlocks] = useState(false); // Akordirežiim figuurnotatsioonis: värvilised akordiplokid akordireal
   const [figurenotesChordBlocksShowTones, setFigurenotesChordBlocksShowTones] = useState(true); // Akordiplokis: näita lisanoote (noodinimed + värvifiguurid)
+  const [figurenotesMelodyShowNoteNames, setFigurenotesMelodyShowNoteNames] = useState(true); // Figuurnotatsioonis meloodiarea nootide peal noodinimed (C, D, E)
 
   // Hoia rütmiboksi (pixelsPerBeat) laius kooskõlas noodigraafika suurusega – magneetiline seos
   useEffect(() => {
@@ -2722,6 +2724,7 @@ function NoodiMeisterCore({ icons }) {
     figurenotesChordLineGap,
     figurenotesChordBlocks,
     figurenotesChordBlocksShowTones,
+    figurenotesMelodyShowNoteNames,
     timeSignatureSize,
     showBarNumbers,
     barNumberSize,
@@ -2769,7 +2772,7 @@ function NoodiMeisterCore({ icons }) {
     lyricLineYOffset,
     noteheadShape,
     noteheadEmoji
-  }), [staves, activeStaffIndex, staffYOffsets, measureStretchFactors, systemYOffsets, visibleStaves, intermissionLabels, timeSignature, timeSignatureMode, keySignature, staffLines, notationStyle, pixelsPerBeat, notationMode, instrumentNotationVariant, cursorPosition, addedMeasures, measureRepeatMarks, setupCompleted, songTitle, author, pickupEnabled, pickupQuantity, pickupDuration, pageOrientation, paperSize, layoutMeasuresPerLine, layoutLineBreakBefore, layoutPageBreakBefore, layoutSystemGap, layoutPartsGap, layoutConnectedBarlines, layoutGlobalSpacingMultiplier, viewMode, partLayoutMeasuresPerLine, partLayoutLineBreakBefore, partLayoutPageBreakBefore, showPageNavigator, pageFlowDirection, viewFitPage, viewSmartPage, visibleToolIds, tuningReferenceNote, tuningReferenceOctave, tuningReferenceHz, playNoteOnInsert, figurenotesSize, figurenotesStems, figurenotesChordLineGap, figurenotesChordBlocks, figurenotesChordBlocksShowTones, timeSignatureSize, showBarNumbers, barNumberSize, showRhythmSyllables, showAllNoteLabels, enableEmojiOverlays, joClefStaffPosition, relativeNotationShowKeySignature, relativeNotationShowTraditionalClef, isPedagogicalProject, pedagogicalAudioBpm, pedagogicalAudioPlaybackRate, pedagogicalPlayheadStyle, pedagogicalPlayheadEmoji, pedagogicalPlayheadEmojiSize, cursorLineStrokeWidth, pedagogicalPlayheadMovement, chords, textBoxes, documentFontFamily, lyricFontFamily, titleFontSize, authorFontSize, titleFontFamily, authorFontFamily, titleBold, titleItalic, authorBold, authorItalic, titleAlignment, authorAlignment, staffRowAlignment, pageDesignDataUrl, pageDesignOpacity, pageDesignFit, pageDesignLayer, pageDesignPositionX, pageDesignPositionY, pageDesignCrop, lyricLineIndex, lyricLineYOffset, noteheadShape, noteheadEmoji]);
+  }), [staves, activeStaffIndex, staffYOffsets, measureStretchFactors, systemYOffsets, visibleStaves, intermissionLabels, timeSignature, timeSignatureMode, keySignature, staffLines, notationStyle, pixelsPerBeat, notationMode, instrumentNotationVariant, cursorPosition, addedMeasures, measureRepeatMarks, setupCompleted, songTitle, author, pickupEnabled, pickupQuantity, pickupDuration, pageOrientation, paperSize, layoutMeasuresPerLine, layoutLineBreakBefore, layoutPageBreakBefore, layoutSystemGap, layoutPartsGap, layoutConnectedBarlines, layoutGlobalSpacingMultiplier, viewMode, partLayoutMeasuresPerLine, partLayoutLineBreakBefore, partLayoutPageBreakBefore, showPageNavigator, pageFlowDirection, viewFitPage, viewSmartPage, visibleToolIds, tuningReferenceNote, tuningReferenceOctave, tuningReferenceHz, playNoteOnInsert, figurenotesSize, figurenotesStems, figurenotesChordLineGap, figurenotesChordBlocks, figurenotesChordBlocksShowTones, figurenotesMelodyShowNoteNames, timeSignatureSize, showBarNumbers, barNumberSize, showRhythmSyllables, showAllNoteLabels, enableEmojiOverlays, joClefStaffPosition, relativeNotationShowKeySignature, relativeNotationShowTraditionalClef, isPedagogicalProject, pedagogicalAudioBpm, pedagogicalAudioPlaybackRate, pedagogicalPlayheadStyle, pedagogicalPlayheadEmoji, pedagogicalPlayheadEmojiSize, cursorLineStrokeWidth, pedagogicalPlayheadMovement, chords, textBoxes, documentFontFamily, lyricFontFamily, titleFontSize, authorFontSize, titleFontFamily, authorFontFamily, titleBold, titleItalic, authorBold, authorItalic, titleAlignment, authorAlignment, staffRowAlignment, pageDesignDataUrl, pageDesignOpacity, pageDesignFit, pageDesignLayer, pageDesignPositionX, pageDesignPositionY, pageDesignCrop, lyricLineIndex, lyricLineYOffset, noteheadShape, noteheadEmoji]);
 
   const saveToStorageSync = useCallback(() => {
     try {
@@ -2841,6 +2844,7 @@ function NoodiMeisterCore({ icons }) {
     figurenotesChordLineGap,
     figurenotesChordBlocks: !!figurenotesChordBlocks,
     figurenotesChordBlocksShowTones: !!figurenotesChordBlocksShowTones,
+    figurenotesMelodyShowNoteNames: !!figurenotesMelodyShowNoteNames,
     timeSignatureSize,
     showBarNumbers,
     barNumberSize,
@@ -2888,7 +2892,7 @@ function NoodiMeisterCore({ icons }) {
     pageDesignCrop,
     visibleStaves: visibleStaves.length === staves.length ? visibleStaves : staves.map(() => true),
     intermissionLabels
-  }), [songTitle, author, notationStyle, notationMode, isPedagogicalProject, timeSignature, timeSignatureMode, keySignature, staffLines, pixelsPerBeat, instrumentNotationVariant, pickupEnabled, pickupQuantity, pickupDuration, setupCompleted, cursorPosition, addedMeasures, pageOrientation, paperSize, layoutMeasuresPerLine, layoutLineBreakBefore, layoutPageBreakBefore, layoutSystemGap, layoutPartsGap, layoutConnectedBarlines, layoutGlobalSpacingMultiplier, viewMode, partLayoutMeasuresPerLine, partLayoutLineBreakBefore, partLayoutPageBreakBefore, showPageNavigator, pageFlowDirection, viewFitPage, viewSmartPage, visibleToolIds, tuningReferenceNote, tuningReferenceOctave, tuningReferenceHz, playNoteOnInsert, figurenotesSize, figurenotesStems, figurenotesChordLineGap, figurenotesChordBlocks, figurenotesChordBlocksShowTones, timeSignatureSize, showBarNumbers, barNumberSize, showRhythmSyllables, showAllNoteLabels, enableEmojiOverlays, joClefStaffPosition, relativeNotationShowKeySignature, relativeNotationShowTraditionalClef, pedagogicalAudioBpm, pedagogicalAudioPlaybackRate, pedagogicalPlayheadStyle, pedagogicalPlayheadEmoji, pedagogicalPlayheadEmojiSize, cursorLineStrokeWidth, pedagogicalPlayheadMovement, staves, activeStaffIndex, staffYOffsets, measureStretchFactors, systemYOffsets, visibleStaves, intermissionLabels, chords, textBoxes, documentFontFamily, lyricFontFamily, titleFontSize, authorFontSize, titleFontFamily, authorFontFamily, titleBold, titleItalic, authorBold, authorItalic, titleAlignment, authorAlignment, staffRowAlignment, pageDesignDataUrl, pageDesignOpacity, pageDesignFit, pageDesignLayer, pageDesignPositionX, pageDesignPositionY, pageDesignCrop]);
+  }), [songTitle, author, notationStyle, notationMode, isPedagogicalProject, timeSignature, timeSignatureMode, keySignature, staffLines, pixelsPerBeat, instrumentNotationVariant, pickupEnabled, pickupQuantity, pickupDuration, setupCompleted, cursorPosition, addedMeasures, pageOrientation, paperSize, layoutMeasuresPerLine, layoutLineBreakBefore, layoutPageBreakBefore, layoutSystemGap, layoutPartsGap, layoutConnectedBarlines, layoutGlobalSpacingMultiplier, viewMode, partLayoutMeasuresPerLine, partLayoutLineBreakBefore, partLayoutPageBreakBefore, showPageNavigator, pageFlowDirection, viewFitPage, viewSmartPage, visibleToolIds, tuningReferenceNote, tuningReferenceOctave, tuningReferenceHz, playNoteOnInsert, figurenotesSize, figurenotesStems, figurenotesChordLineGap, figurenotesChordBlocks, figurenotesChordBlocksShowTones, figurenotesMelodyShowNoteNames, timeSignatureSize, showBarNumbers, barNumberSize, showRhythmSyllables, showAllNoteLabels, enableEmojiOverlays, joClefStaffPosition, relativeNotationShowKeySignature, relativeNotationShowTraditionalClef, pedagogicalAudioBpm, pedagogicalAudioPlaybackRate, pedagogicalPlayheadStyle, pedagogicalPlayheadEmoji, pedagogicalPlayheadEmojiSize, cursorLineStrokeWidth, pedagogicalPlayheadMovement, staves, activeStaffIndex, staffYOffsets, measureStretchFactors, systemYOffsets, visibleStaves, intermissionLabels, chords, textBoxes, documentFontFamily, lyricFontFamily, titleFontSize, authorFontSize, titleFontFamily, authorFontFamily, titleBold, titleItalic, authorBold, authorItalic, titleAlignment, authorAlignment, staffRowAlignment, pageDesignDataUrl, pageDesignOpacity, pageDesignFit, pageDesignLayer, pageDesignPositionX, pageDesignPositionY, pageDesignCrop]);
 
   // Download project file (future: replace with upload to Google Drive / OneDrive)
   const downloadProject = useCallback(() => {
@@ -2953,6 +2957,7 @@ function NoodiMeisterCore({ icons }) {
       if (data.figurenotesChordLineGap != null) setFigurenotesChordLineGap(Math.max(0, Math.min(20, Number(data.figurenotesChordLineGap))));
       if ('figurenotesChordBlocks' in data) setFigurenotesChordBlocks(!!data.figurenotesChordBlocks);
       if ('figurenotesChordBlocksShowTones' in data) setFigurenotesChordBlocksShowTones(!!data.figurenotesChordBlocksShowTones);
+      if ('figurenotesMelodyShowNoteNames' in data) setFigurenotesMelodyShowNoteNames(!!data.figurenotesMelodyShowNoteNames);
       if (data.timeSignatureSize != null) setTimeSignatureSize(Math.max(12, Math.min(48, data.timeSignatureSize)));
       if (data.isPedagogicalProject != null) setIsPedagogicalProject(!!data.isPedagogicalProject);
       if (data.pedagogicalAudioBpm != null) setPedagogicalAudioBpm(Math.max(20, Math.min(300, data.pedagogicalAudioBpm)));
@@ -3230,6 +3235,7 @@ function NoodiMeisterCore({ icons }) {
       if (data.figurenotesChordLineGap != null) setFigurenotesChordLineGap(Math.max(0, Math.min(20, Number(data.figurenotesChordLineGap))));
       if ('figurenotesChordBlocks' in data) setFigurenotesChordBlocks(!!data.figurenotesChordBlocks);
       if ('figurenotesChordBlocksShowTones' in data) setFigurenotesChordBlocksShowTones(!!data.figurenotesChordBlocksShowTones);
+      if ('figurenotesMelodyShowNoteNames' in data) setFigurenotesMelodyShowNoteNames(!!data.figurenotesMelodyShowNoteNames);
       if (data.timeSignatureSize != null) setTimeSignatureSize(Math.max(12, Math.min(48, data.timeSignatureSize)));
       if (data.notationMode) setNotationMode(data.notationMode);
       if (data.noteheadShape) setNoteheadShape(data.noteheadShape);
@@ -3647,7 +3653,7 @@ function NoodiMeisterCore({ icons }) {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(getPersistedState()));
     } catch (_) { /* ignore */ }
-  }, [figurenotesChordBlocks, figurenotesChordBlocksShowTones, figurenotesChordLineGap, getPersistedState]);
+  }, [figurenotesChordBlocks, figurenotesChordBlocksShowTones, figurenotesMelodyShowNoteNames, figurenotesChordLineGap, getPersistedState]);
 
   // Auto-save to localStorage when relevant state changes
   useEffect(() => {
@@ -3661,7 +3667,7 @@ function NoodiMeisterCore({ icons }) {
     return () => {
       if (autoSaveTimeoutRef.current) clearTimeout(autoSaveTimeoutRef.current);
     };
-  }, [staves, activeStaffIndex, timeSignature, timeSignatureMode, keySignature, staffLines, notationStyle, pixelsPerBeat, notationMode, cursorPosition, addedMeasures, setupCompleted, songTitle, author, pickupEnabled, pickupQuantity, pickupDuration, layoutSystemGap, tuningReferenceNote, tuningReferenceOctave, tuningReferenceHz, playNoteOnInsert, figurenotesSize, figurenotesStems, figurenotesChordLineGap, figurenotesChordBlocks, figurenotesChordBlocksShowTones, timeSignatureSize, showBarNumbers, barNumberSize, joClefStaffPosition, chords, textBoxes, getPersistedState]);
+  }, [staves, activeStaffIndex, timeSignature, timeSignatureMode, keySignature, staffLines, notationStyle, pixelsPerBeat, notationMode, cursorPosition, addedMeasures, setupCompleted, songTitle, author, pickupEnabled, pickupQuantity, pickupDuration, layoutSystemGap, tuningReferenceNote, tuningReferenceOctave, tuningReferenceHz, playNoteOnInsert, figurenotesSize, figurenotesStems, figurenotesChordLineGap, figurenotesChordBlocks, figurenotesChordBlocksShowTones, figurenotesMelodyShowNoteNames, timeSignatureSize, showBarNumbers, barNumberSize, joClefStaffPosition, chords, textBoxes, getPersistedState]);
 
   // Hoiatus ja salvestamine enne sulgemist (tab/akna sulg, värskendus, navigeerimine)
   useEffect(() => {
@@ -4011,7 +4017,10 @@ function NoodiMeisterCore({ icons }) {
   const addNoteAtCursor = useCallback((pitch, octave, accidental, options = {}) => {
     const insertBeat = typeof options.insertAtBeat === 'number' ? options.insertAtBeat : cursorPosition;
     const oct = octave ?? ghostOctave;
-    const acc = accidental !== undefined ? accidental : ghostAccidental;
+    // Figuurnotatsioonis kasutaja ei näe võtmemärke – kui accidental pole ette antud, võta helistikust (nt G-duur → F#).
+    const acc = accidental !== undefined
+      ? accidental
+      : (notationStyle === 'FIGURENOTES' ? getAccidentalForPitchInKey(pitch, keySignature) : ghostAccidental);
     const durationLabel = lastDurationRef.current ?? selectedDuration;
     let effectiveDuration = getEffectiveDuration(durationLabel);
     let tupletPayload = null;
@@ -4074,7 +4083,7 @@ function NoodiMeisterCore({ icons }) {
       const semitones = acc === 1 ? 1 : acc === -1 ? -1 : 0;
       playPianoNote(pitch, oct, semitones);
     }
-  }, [cursorPosition, selectedDuration, getEffectiveDuration, isDotted, isRest, notes, saveToHistory, ghostOctave, ghostAccidental, playPianoNote, playNoteOnInsert, tupletMode, durations, staves, activeStaffIndex, notesWithExplicitBeats]);
+  }, [cursorPosition, selectedDuration, getEffectiveDuration, isDotted, isRest, notes, saveToHistory, ghostOctave, ghostAccidental, playPianoNote, playNoteOnInsert, tupletMode, durations, staves, activeStaffIndex, notesWithExplicitBeats, notationStyle, keySignature]);
 
   // Add a note on top of the note at cursor (chord input). Traditional or Pedagogical only. Shift+Letter.
   const addNoteOnTopOfCursor = useCallback((pitch, octave, accidental, options = {}) => {
@@ -5277,17 +5286,28 @@ function NoodiMeisterCore({ icons }) {
           return;
         }
 
-        // Option/Alt+ArrowUp = sharp, Option/Alt+ArrowDown = flat (selected note(s) or ghost for next note); play changed note
+        // Option/Alt+ArrowUp = sharp, Option/Alt+ArrowDown = flat (selected note(s), note at cursor, or ghost for next note); play changed note
         if (e.altKey && !e.ctrlKey && !e.metaKey && (e.code === 'ArrowUp' || e.code === 'ArrowDown')) {
           e.preventDefault();
           const acc = e.code === 'ArrowUp' ? 1 : -1;
           const hasSelection = selectedNoteIndex >= 0 || (selectionStart >= 0 && selectionEnd >= 0);
+          const noteIdxAtCursor = getNoteIndexAtCursor();
           if (hasSelection) {
             applyToSelectedNotes((n) => ({ ...n, accidental: acc }));
             const idx = selectedNoteIndex >= 0 ? selectedNoteIndex : Math.min(selectionStart, selectionEnd);
             const note = notes[idx];
             if (note && !note.isRest && playNoteOnInsert) {
               playPianoNote(note.pitch, note.octave, acc);
+            }
+          } else if (noteIdxAtCursor >= 0 && noteIdxAtCursor < notes.length) {
+            const note = notes[noteIdxAtCursor];
+            if (!note.isRest) {
+              saveToHistory(notes);
+              setNotes((prev) => prev.map((n, i) => (i === noteIdxAtCursor ? { ...n, accidental: acc } : n)));
+              if (playNoteOnInsert) playPianoNote(note.pitch, note.octave, acc);
+            } else {
+              setGhostAccidental(acc);
+              if (playNoteOnInsert) playPianoNote(ghostPitch, ghostOctave, acc);
             }
           } else {
             setGhostAccidental(acc);
@@ -7011,6 +7031,16 @@ function NoodiMeisterCore({ icons }) {
                   <span className="text-sm font-semibold text-amber-900">Noodivarte režiim (näita rütmi vartega – vars, vibu)</span>
                 </label>
                 <p className="text-xs text-amber-600 mt-1">Kui see on sisse lülitatud, kuvatakse figuurnoodidel noodivars ja vibu (kaheksandik, kuueteistkümnendik), et rütm oleks selgem. Vaikimisi väljas.</p>
+                <label className="flex items-center gap-2 cursor-pointer mt-2">
+                  <input
+                    type="checkbox"
+                    checked={figurenotesMelodyShowNoteNames}
+                    onChange={(e) => { dirtyRef.current = true; setFigurenotesMelodyShowNoteNames(e.target.checked); }}
+                    className="w-4 h-4 rounded border-amber-300 text-amber-600"
+                  />
+                  <span className="text-sm font-semibold text-amber-900">{t('figurenotes.melodyShowNoteNames')}</span>
+                </label>
+                <p className="text-xs text-amber-600 mt-1">{t('figurenotes.melodyShowNoteNamesHint')}</p>
               </div>
               {/* Pedagoogiline notatsioon (Kodály relatiivnotatsioon): Do (Jo) võti on alati nähtav; võtmemärk ja traditsiooniline võti valikulised */}
               <div className="border-t border-amber-200 pt-4 mt-4">
@@ -9251,6 +9281,7 @@ function NoodiMeisterCore({ icons }) {
                   figurenotesChordLineGap={figurenotesChordBlocks ? figurenotesChordLineGap : 0}
                   figurenotesChordBlocks={figurenotesChordBlocks}
                   figurenotesChordBlocksShowTones={figurenotesChordBlocksShowTones}
+                  figurenotesMelodyShowNoteNames={figurenotesMelodyShowNoteNames}
                   figurenotesRowHeight={figurenotesRowHeight}
                   figurenotesChordLineHeight={figurenotesChordBlocks ? figurenotesChordLineHeight : 0}
                   timeSignatureSize={timeSignatureSize}
@@ -9566,7 +9597,7 @@ function getFingeringForNote(pitch, octave, instrumentId) {
 }
 
 // Timeline Component – multi-system layout (VexFlow loogika). (PAGE_BREAK_GAP on defineeritud üleval.)
-function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, pageWidth, cursorPosition, notationMode, staffLines, clefType, keySignature = 'C', relativeNotationShowKeySignature = false, relativeNotationShowTraditionalClef = false, onJoClefPositionChange, joClefFocused = false, onJoClefFocus, instrument = 'single-staff-treble', instrumentNotationVariant = 'standard', instrumentConfig = {}, showBarNumbers = true, barNumberSize = 11, showRhythmSyllables = false, joClefStaffPosition: joClefStaffPositionProp, showAllNoteLabels = false, enableEmojiOverlays = true, noteheadShape = 'oval', noteheadEmoji = '♪', onNoteTeacherLabelChange, onNoteLabelClick, chords = [], isDotted, isRest, selectedDuration, noteInputMode, selectedNoteIndex, isNoteSelected, notes: allNotes, onStaffAddNote, onNoteClick, onNoteMouseDown, onNoteMouseEnter, onNotePitchChange, onNoteBeatChange, canHandDragNotes = false, ghostPitch, ghostOctave, onFigureBeatClick, onChordLineMouseMove, onChordLineClick, notationStyle, layoutMeasuresPerLine = 4, layoutLineBreakBefore = [], layoutPageBreakBefore = [], layoutSystemGap = 120, layoutPartsGap, layoutConnectedBarlines = false, staffRowAlignment = 'center', staffIndexInScore = 0, systemTotalHeight, layoutGlobalSpacingMultiplier = 1, systems: systemsProp, baseYOffset = 0, isActiveStaff = true, staffCount = 1, staffHeight: staffHeightProp, figurenotesSize = 16, figurenotesStems = false, figurenotesChordLineGap = 6, figurenotesChordBlocks = false, figurenotesChordBlocksShowTones = true, figurenotesRowHeight: figurenotesRowHeightProp, figurenotesChordLineHeight: figurenotesChordLineHeightProp, timeSignatureSize = 16, themeColors: themeColorsProp, pedagogicalPlayheadStyle = 'line', pedagogicalPlayheadEmoji = '🎵', pedagogicalPlayheadEmojiSize = 32, cursorSizePx, cursorLineStrokeWidth = 4, cursorSubRow = 0, pedagogicalPlayheadMovement = 'arch', isPedagogicalAudioPlaying = false, isExportingAnimation = false, exportCursorRef, scoreContainerRef, pageFlowDirection = 'vertical', pageOrientation = 'portrait', isFirstInBraceGroup = false, braceGroupSize = 0, lyricFontFamily = 'sans-serif', lyricLineYOffset = 0, translateLabel, showLayoutBreakIcons = false, showStaffSpacerHandles = false, onSystemYOffsetChange, onToggleLineBreakAfter }) {
+function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, pageWidth, cursorPosition, notationMode, staffLines, clefType, keySignature = 'C', relativeNotationShowKeySignature = false, relativeNotationShowTraditionalClef = false, onJoClefPositionChange, joClefFocused = false, onJoClefFocus, instrument = 'single-staff-treble', instrumentNotationVariant = 'standard', instrumentConfig = {}, showBarNumbers = true, barNumberSize = 11, showRhythmSyllables = false, joClefStaffPosition: joClefStaffPositionProp, showAllNoteLabels = false, enableEmojiOverlays = true, noteheadShape = 'oval', noteheadEmoji = '♪', onNoteTeacherLabelChange, onNoteLabelClick, chords = [], isDotted, isRest, selectedDuration, noteInputMode, selectedNoteIndex, isNoteSelected, notes: allNotes, onStaffAddNote, onNoteClick, onNoteMouseDown, onNoteMouseEnter, onNotePitchChange, onNoteBeatChange, canHandDragNotes = false, ghostPitch, ghostOctave, onFigureBeatClick, onChordLineMouseMove, onChordLineClick, notationStyle, layoutMeasuresPerLine = 4, layoutLineBreakBefore = [], layoutPageBreakBefore = [], layoutSystemGap = 120, layoutPartsGap, layoutConnectedBarlines = false, staffRowAlignment = 'center', staffIndexInScore = 0, systemTotalHeight, layoutGlobalSpacingMultiplier = 1, systems: systemsProp, baseYOffset = 0, isActiveStaff = true, staffCount = 1, staffHeight: staffHeightProp, figurenotesSize = 16, figurenotesStems = false, figurenotesChordLineGap = 6, figurenotesChordBlocks = false, figurenotesChordBlocksShowTones = true, figurenotesMelodyShowNoteNames = true, figurenotesRowHeight: figurenotesRowHeightProp, figurenotesChordLineHeight: figurenotesChordLineHeightProp, timeSignatureSize = 16, themeColors: themeColorsProp, pedagogicalPlayheadStyle = 'line', pedagogicalPlayheadEmoji = '🎵', pedagogicalPlayheadEmojiSize = 32, cursorSizePx, cursorLineStrokeWidth = 4, cursorSubRow = 0, pedagogicalPlayheadMovement = 'arch', isPedagogicalAudioPlaying = false, isExportingAnimation = false, exportCursorRef, scoreContainerRef, pageFlowDirection = 'vertical', pageOrientation = 'portrait', isFirstInBraceGroup = false, braceGroupSize = 0, lyricFontFamily = 'sans-serif', lyricLineYOffset = 0, translateLabel, showLayoutBreakIcons = false, showStaffSpacerHandles = false, onSystemYOffsetChange, onToggleLineBreakAfter }) {
   if (typeof GLOBAL_NOTATION_CONFIG === 'undefined' || !GLOBAL_NOTATION_CONFIG || GLOBAL_NOTATION_CONFIG.EMOJIS === false) return null;
   const themeColors = themeColorsProp || { staffLineColor: '#000', noteFill: '#1a1a1a', textColor: '#1a1a1a', scoreBg: '#fffbf0', isDark: false };
   const safeKey = keySignature ?? 'C';
@@ -10179,6 +10210,7 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
           chordLineHeight={figurenotesChordBlocks ? (figurenotesChordLineHeightProp ?? Math.round((figurenotesRowHeightProp ?? timelineHeight) / 2)) : 0}
           chordBlocksEnabled={figurenotesChordBlocks}
           chordBlocksShowTones={figurenotesChordBlocksShowTones}
+          showMelodyNoteNames={figurenotesMelodyShowNoteNames}
           pageWidth={pageWidth || LAYOUT.PAGE_WIDTH_MIN}
           timeSignature={timeSignature}
           timeSignatureMode={timeSignatureMode}

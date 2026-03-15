@@ -69,6 +69,20 @@ export function getDiatonicScaleForKey(keyName) {
 }
 
 /**
+ * Helistiku järgi nooditähe alteratsioon (0, 1 või -1). Kasutada noodi lisamisel, kui kasutaja ei näe võtmemärke (nt figuurnotatsioon).
+ * @param {string} pitch - C, D, E, F, G, A, B
+ * @param {string} keySignature - nt 'C', 'G', 'D', 'F', 'Bb'
+ * @returns {number} 0 = looduslik, 1 = diees, -1 = bemoll
+ */
+export function getAccidentalForPitchInKey(pitch, keySignature) {
+  if (!pitch || typeof pitch !== 'string') return 0;
+  const letter = pitch.trim().slice(0, 1).toUpperCase();
+  const scale = getDiatonicScaleForKey(keySignature);
+  const degree = scale.find((d) => d.letter === letter);
+  return degree ? degree.accidental : 0;
+}
+
+/**
  * Semitones from C for any key name (rule-based).
  * Key = letter + optional accidental: "C", "G", "Bb", "F#", "Ab", "C#", etc.
  */

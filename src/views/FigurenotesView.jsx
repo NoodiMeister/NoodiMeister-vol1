@@ -11,6 +11,7 @@ import { SmuflGlyph } from '../notation/smufl/SmuflGlyph';
 import { smuflNoteheadForType, SMUFL_GLYPH } from '../notation/smufl/glyphs';
 import { getShapePathsByOctave, getFigureStyle } from '../constants/FigureNotesLibrary';
 import { getChordMidiNotes } from '../musical/chordPlayback';
+import { getAccidentalForPitchInKey } from '../utils/notationConstants';
 
 const LAYOUT = { MARGIN_LEFT: 60, MEASURE_MIN_WIDTH: 28 };
 const FIGURE_START_PADDING = 8;
@@ -134,6 +135,7 @@ export function FigurenotesView({
   chordLineHeight = 0,
   chordBlocksEnabled = false,
   chordBlocksShowTones = true,
+  showMelodyNoteNames = true,
   pageWidth,
   timeSignature,
   timeSignatureMode,
@@ -346,6 +348,10 @@ export function FigurenotesView({
 
               const renderFigurenote = (note, x, y, noteIndex, noteWidth, figureSize, longRectEndX = null) => {
                 const pitch = String(note.pitch || '').toUpperCase().replace('H', 'B');
+                // Figuurnotatsioonis võtmemärke ei kuvata – kui noodil pole alteratsiooni, võta helistikust (nt D-duur → F#, C#; Bb-duur → B♭, E♭).
+                const effectiveAccidental = (note.accidental !== undefined && note.accidental !== null)
+                  ? note.accidental
+                  : getAccidentalForPitchInKey(note.pitch, keySignature);
                 const style = getFigureStyle(note.pitch, note.octave);
                 const shapePaths = getShapePathsByOctave(note.octave);
                 const size = figureSize ?? figureSizeBase;
@@ -447,9 +453,11 @@ export function FigurenotesView({
                     />
                     {haloEl}
                     {shapeEl}
-                    <text x={figureCenterX} y={y} textAnchor="middle" dominantBaseline="central" fill={textColor} fontSize={Math.max(8, size * 0.5)} fontWeight="bold">
-                      {String(note.pitch || '').toUpperCase().replace('H', 'B')}
-                    </text>
+                    {showMelodyNoteNames && (
+                      <text x={figureCenterX} y={y} textAnchor="middle" dominantBaseline="central" fill={textColor} fontSize={Math.max(8, size * 0.5)} fontWeight="bold">
+                        {String(note.pitch || '').toUpperCase().replace('H', 'B')}
+                      </text>
+                    )}
                     {figurenotesStems && dur !== '1/1' && (
                       <g stroke="#1a1a1a" fill="#1a1a1a" strokeWidth="1.8">
                         <line x1={stemX} y1={stemY1} x2={stemX} y2={stemY2} />
@@ -458,17 +466,17 @@ export function FigurenotesView({
                         {dur === '1/32' && (<><path d={`M ${stemX} ${stemY2} Q ${stemX + 8} ${stemY2 + 4} ${stemX} ${stemY2 + 8}`} fill="#1a1a1a" /><path d={`M ${stemX} ${stemY2 + 6} Q ${stemX + 8} ${stemY2 + 10} ${stemX} ${stemY2 + 14}`} fill="#1a1a1a" /><path d={`M ${stemX} ${stemY2 + 12} Q ${stemX + 8} ${stemY2 + 16} ${stemX} ${stemY2 + 20}`} fill="#1a1a1a" /></>)}
                       </g>
                     )}
-                    {(note.accidental === 1 || note.accidental === -1) && (() => {
-                      const arrowY = y - size / 2 - Math.max(8, size * 0.4);
-                      const arrowLen = Math.max(14, size * 0.85);
-                      const head = Math.max(5, size * 0.32);
-                      const strokeW2 = Math.max(1.5, size * 0.1);
+                    {(effectiveAccidental === 1 || effectiveAccidental === -1) && (() => {
+                      const arrowY = y - size / 2 - Math.max(6, size * 0.35);
+                      const arrowLen = Math.max(7, size * 0.425);
+                      const head = Math.max(2.5, size * 0.16);
+                      const strokeW2 = Math.max(0.75, size * 0.05);
                       const stroke = '#1a1a1a';
-                      if (note.accidental === 1) {
-                        // Sharp: diagonal arrow up-right (↗)
+                      if (effectiveAccidental === 1) {
+                        // Sharp: diagonal arrow up-right (↗), half size
                         return (<g stroke={stroke} fill="none" strokeWidth={strokeW2} strokeLinecap="round" strokeLinejoin="round"><line x1={figureCenterX - arrowLen / 2} y1={arrowY + arrowLen / 2} x2={figureCenterX + arrowLen / 2} y2={arrowY - arrowLen / 2} /><path d={`M ${figureCenterX + arrowLen / 2} ${arrowY - arrowLen / 2} L ${figureCenterX + arrowLen / 2 - head} ${arrowY - arrowLen / 2 + head * 0.6} M ${figureCenterX + arrowLen / 2} ${arrowY - arrowLen / 2} L ${figureCenterX + arrowLen / 2 - head * 0.6} ${arrowY - arrowLen / 2 + head}`} /></g>);
                       }
-                      // Flat: diagonal arrow to the left (↖)
+                      // Flat: diagonal arrow up-left (↖), half size
                       return (<g stroke={stroke} fill="none" strokeWidth={strokeW2} strokeLinecap="round" strokeLinejoin="round"><line x1={figureCenterX + arrowLen / 2} y1={arrowY + arrowLen / 2} x2={figureCenterX - arrowLen / 2} y2={arrowY - arrowLen / 2} /><path d={`M ${figureCenterX - arrowLen / 2} ${arrowY - arrowLen / 2} L ${figureCenterX - arrowLen / 2 + head} ${arrowY - arrowLen / 2 + head * 0.6} M ${figureCenterX - arrowLen / 2} ${arrowY - arrowLen / 2} L ${figureCenterX - arrowLen / 2 + head * 0.6} ${arrowY - arrowLen / 2 + head}`} /></g>);
                     })()}
                     {isSelected && <circle cx={figureCenterX} cy={y} r={size / 2 + 4} fill="none" stroke="#2563eb" strokeWidth="2" opacity="0.5" />}
@@ -819,8 +827,6 @@ export function FigurenotesView({
                         }
                         return (<g key={noteIdx} {...noteGroupProps}>{restSyllable && <RhythmSyllableLabel x={figureCenterX} y={restLabelY} text={restSyllable} staffSpace={10} />}</g>);
                       }
-                      const accidentalNudge = (note.accidental === 1 || note.accidental === -1) ? (note.accidental === 1 ? 1 : -1) * Math.max(2, figureSize * 0.2) : 0;
-                      const figureX = figureCenterX + accidentalNudge;
                       const labelFontSize = Math.max(8, Math.round(figureSize * 0.625));
                       const labelY = noteY + figureSize * 0.5 + labelFontSize;
                       const bandLeft = figureCenterX - noteWidth / 2;
@@ -844,12 +850,12 @@ export function FigurenotesView({
                           {showBand && (
                             <rect x={bandLeft} y={bandY} width={noteWidth} height={bandH} fill={bandColor} opacity="0.2" rx="2" />
                           )}
-                          {renderFigurenote(note, figureX, noteY, globalNoteIndex, noteWidth, figureSize, longRectEndX)}
+                          {renderFigurenote(note, figureCenterX, noteY, globalNoteIndex, noteWidth, figureSize, longRectEndX)}
                           {(note.lyric != null && String(note.lyric).trim() !== '') && (
-                            <text x={figureX} y={labelY + Math.round(14 * (figurenotesSize / 16)) + (lyricLineYOffset || 0)} textAnchor="middle" fontSize={Math.round(11 * (figurenotesSize / 16))} fill="#333" fontFamily={lyricFontFamily}>{note.lyric}</text>
+                            <text x={figureCenterX} y={labelY + Math.round(14 * (figurenotesSize / 16)) + (lyricLineYOffset || 0)} textAnchor="middle" fontSize={Math.round(11 * (figurenotesSize / 16))} fill="#333" fontFamily={lyricFontFamily}>{note.lyric}</text>
                           )}
                           {(note.lyric2 != null && String(note.lyric2).trim() !== '') && (
-                            <text x={figureX} y={labelY + Math.round(28 * (figurenotesSize / 16)) + (lyricLineYOffset || 0)} textAnchor="middle" fontSize={Math.round(11 * (figurenotesSize / 16))} fill="#555" fontFamily={lyricFontFamily}>{note.lyric2}</text>
+                            <text x={figureCenterX} y={labelY + Math.round(28 * (figurenotesSize / 16)) + (lyricLineYOffset || 0)} textAnchor="middle" fontSize={Math.round(11 * (figurenotesSize / 16))} fill="#555" fontFamily={lyricFontFamily}>{note.lyric2}</text>
                           )}
                         </g>
                       );
