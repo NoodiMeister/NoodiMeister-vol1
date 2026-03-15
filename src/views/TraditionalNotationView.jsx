@@ -215,6 +215,7 @@ export function TraditionalNotationView({
   isFirstInBraceGroup = false,
   braceGroupSize = 0,
   lyricFontFamily = TEXT_FONT_FAMILY,
+  lyricFontSize = 12,
   lyricLineYOffset = 0,
   isHorizontal = false,
   a4PageHeight = 400,
@@ -939,10 +940,10 @@ export function TraditionalNotationView({
                             return <g>{beams}</g>;
                           })()}
                           {(note.lyric != null && String(note.lyric).trim() !== '') && (
-                            <text x={noteX} y={staffY + lastLineY + 18 + (lyricLineYOffset || 0)} textAnchor="middle" fontSize="12" fill="#333" fontFamily={lyricFontFamily}>{note.lyric}</text>
+                            <text x={noteX} y={staffY + lastLineY + (Math.max(1, Number(lyricFontSize)) || 12) * 1.5 + (lyricLineYOffset || 0)} textAnchor="middle" fontSize={Math.max(1, Number(lyricFontSize)) || 12} fill="#333" fontFamily={lyricFontFamily}>{note.lyric}</text>
                           )}
                           {(note.lyric2 != null && String(note.lyric2).trim() !== '') && (
-                            <text x={noteX} y={staffY + lastLineY + 34 + (lyricLineYOffset || 0)} textAnchor="middle" fontSize="12" fill="#555" fontFamily={lyricFontFamily}>{note.lyric2}</text>
+                            <text x={noteX} y={staffY + lastLineY + (Math.max(1, Number(lyricFontSize)) || 12) * 2.8 + (lyricLineYOffset || 0)} textAnchor="middle" fontSize={Math.max(1, Number(lyricFontSize)) || 12} fill="#555" fontFamily={lyricFontFamily}>{note.lyric2}</text>
                           )}
                           {showRhythmSyllables && (() => {
                             const labelY = staffY + lastLineY + spacing * 1.8;

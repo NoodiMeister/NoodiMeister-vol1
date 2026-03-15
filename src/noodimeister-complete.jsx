@@ -867,6 +867,7 @@ function getToolboxes(t, instrumentConfig, shortcutLabels = {}) {
       id: 'chords', name: t('toolbox.chords'), icon: 'Music2', shortcut: shortcutLabels['toolbox.chords'] || 'Ctrl/Cmd+A',
       options: [
         { id: 'chord-C', label: 'C', value: 'C' },
+        { id: 'chord-D', label: 'D', value: 'D' },
         { id: 'chord-Dm', label: 'Dm', value: 'Dm' },
         { id: 'chord-E', label: 'E', value: 'E' },
         { id: 'chord-Em', label: 'Em', value: 'Em' },
@@ -1409,6 +1410,7 @@ function NoodiMeisterCore({ icons }) {
   // Fondid: dokumendi font (pealkiri, autor, teksti kastid) ja laulutekstide font (noodi all)
   const [documentFontFamily, setDocumentFontFamily] = useState('Georgia, serif');
   const [lyricFontFamily, setLyricFontFamily] = useState('sans-serif');
+  const [lyricFontSize, setLyricFontSize] = useState(12); // Lauluteksti fondi suurus (px); määrab ka laulusõnade rea vahe Cmd/Ctrl+L korral
   // Active text line for floating text tool: 'title' | 'author' | 'textbox' | null (textbox uses selectedTextboxId)
   const [activeTextLineType, setActiveTextLineType] = useState(null);
   // Per-line font: title and author (only applied to chosen line)
@@ -2772,9 +2774,10 @@ function NoodiMeisterCore({ icons }) {
     intermissionLabels,
     lyricLineIndex,
     lyricLineYOffset,
+    lyricFontSize,
     noteheadShape,
     noteheadEmoji
-  }), [staves, activeStaffIndex, staffYOffsets, measureStretchFactors, systemYOffsets, visibleStaves, intermissionLabels, timeSignature, timeSignatureMode, keySignature, staffLines, notationStyle, pixelsPerBeat, notationMode, instrumentNotationVariant, cursorPosition, addedMeasures, measureRepeatMarks, setupCompleted, songTitle, author, pickupEnabled, pickupQuantity, pickupDuration, pageOrientation, paperSize, layoutMeasuresPerLine, layoutLineBreakBefore, layoutPageBreakBefore, layoutSystemGap, layoutPartsGap, layoutConnectedBarlines, layoutGlobalSpacingMultiplier, viewMode, partLayoutMeasuresPerLine, partLayoutLineBreakBefore, partLayoutPageBreakBefore, showPageNavigator, pageFlowDirection, viewFitPage, viewSmartPage, visibleToolIds, tuningReferenceNote, tuningReferenceOctave, tuningReferenceHz, playNoteOnInsert, figurenotesSize, figurenotesStems, figurenotesChordLineGap, figurenotesChordBlocks, figurenotesChordBlocksShowTones, figurenotesMelodyShowNoteNames, timeSignatureSize, showBarNumbers, barNumberSize, showRhythmSyllables, showAllNoteLabels, enableEmojiOverlays, joClefStaffPosition, relativeNotationShowKeySignature, relativeNotationShowTraditionalClef, isPedagogicalProject, pedagogicalAudioBpm, pedagogicalAudioPlaybackRate, pedagogicalPlayheadStyle, pedagogicalPlayheadEmoji, pedagogicalPlayheadEmojiSize, cursorLineStrokeWidth, pedagogicalPlayheadMovement, chords, textBoxes, documentFontFamily, lyricFontFamily, titleFontSize, authorFontSize, titleFontFamily, authorFontFamily, titleBold, titleItalic, authorBold, authorItalic, titleAlignment, authorAlignment, staffRowAlignment, pageDesignDataUrl, pageDesignOpacity, pageDesignFit, pageDesignLayer, pageDesignPositionX, pageDesignPositionY, pageDesignCrop, lyricLineIndex, lyricLineYOffset, noteheadShape, noteheadEmoji]);
+  }), [staves, activeStaffIndex, staffYOffsets, measureStretchFactors, systemYOffsets, visibleStaves, intermissionLabels, timeSignature, timeSignatureMode, keySignature, staffLines, notationStyle, pixelsPerBeat, notationMode, instrumentNotationVariant, cursorPosition, addedMeasures, measureRepeatMarks, setupCompleted, songTitle, author, pickupEnabled, pickupQuantity, pickupDuration, pageOrientation, paperSize, layoutMeasuresPerLine, layoutLineBreakBefore, layoutPageBreakBefore, layoutSystemGap, layoutPartsGap, layoutConnectedBarlines, layoutGlobalSpacingMultiplier, viewMode, partLayoutMeasuresPerLine, partLayoutLineBreakBefore, partLayoutPageBreakBefore, showPageNavigator, pageFlowDirection, viewFitPage, viewSmartPage, visibleToolIds, tuningReferenceNote, tuningReferenceOctave, tuningReferenceHz, playNoteOnInsert, figurenotesSize, figurenotesStems, figurenotesChordLineGap, figurenotesChordBlocks, figurenotesChordBlocksShowTones, figurenotesMelodyShowNoteNames, timeSignatureSize, showBarNumbers, barNumberSize, showRhythmSyllables, showAllNoteLabels, enableEmojiOverlays, joClefStaffPosition, relativeNotationShowKeySignature, relativeNotationShowTraditionalClef, isPedagogicalProject, pedagogicalAudioBpm, pedagogicalAudioPlaybackRate, pedagogicalPlayheadStyle, pedagogicalPlayheadEmoji, pedagogicalPlayheadEmojiSize, cursorLineStrokeWidth, pedagogicalPlayheadMovement, chords, textBoxes, documentFontFamily, lyricFontFamily, titleFontSize, authorFontSize, titleFontFamily, authorFontFamily, titleBold, titleItalic, authorBold, authorItalic, titleAlignment, authorAlignment, staffRowAlignment, pageDesignDataUrl, pageDesignOpacity, pageDesignFit, pageDesignLayer, pageDesignPositionX, pageDesignPositionY, pageDesignCrop, lyricLineIndex, lyricLineYOffset, lyricFontSize, noteheadShape, noteheadEmoji]);
 
   const saveToStorageSync = useCallback(() => {
     try {
@@ -2874,6 +2877,9 @@ function NoodiMeisterCore({ icons }) {
     textBoxes,
     documentFontFamily,
     lyricFontFamily,
+    lyricFontSize,
+    lyricLineIndex,
+    lyricLineYOffset,
     titleFontSize,
     authorFontSize,
     titleFontFamily: titleFontFamily || undefined,
@@ -2894,7 +2900,7 @@ function NoodiMeisterCore({ icons }) {
     pageDesignCrop,
     visibleStaves: visibleStaves.length === staves.length ? visibleStaves : staves.map(() => true),
     intermissionLabels
-  }), [songTitle, author, notationStyle, notationMode, isPedagogicalProject, timeSignature, timeSignatureMode, keySignature, staffLines, pixelsPerBeat, instrumentNotationVariant, pickupEnabled, pickupQuantity, pickupDuration, setupCompleted, cursorPosition, addedMeasures, pageOrientation, paperSize, layoutMeasuresPerLine, layoutLineBreakBefore, layoutPageBreakBefore, layoutSystemGap, layoutPartsGap, layoutConnectedBarlines, layoutGlobalSpacingMultiplier, viewMode, partLayoutMeasuresPerLine, partLayoutLineBreakBefore, partLayoutPageBreakBefore, showPageNavigator, pageFlowDirection, viewFitPage, viewSmartPage, visibleToolIds, tuningReferenceNote, tuningReferenceOctave, tuningReferenceHz, playNoteOnInsert, figurenotesSize, figurenotesStems, figurenotesChordLineGap, figurenotesChordBlocks, figurenotesChordBlocksShowTones, figurenotesMelodyShowNoteNames, timeSignatureSize, showBarNumbers, barNumberSize, showRhythmSyllables, showAllNoteLabels, enableEmojiOverlays, joClefStaffPosition, relativeNotationShowKeySignature, relativeNotationShowTraditionalClef, pedagogicalAudioBpm, pedagogicalAudioPlaybackRate, pedagogicalPlayheadStyle, pedagogicalPlayheadEmoji, pedagogicalPlayheadEmojiSize, cursorLineStrokeWidth, pedagogicalPlayheadMovement, staves, activeStaffIndex, staffYOffsets, measureStretchFactors, systemYOffsets, visibleStaves, intermissionLabels, chords, textBoxes, documentFontFamily, lyricFontFamily, titleFontSize, authorFontSize, titleFontFamily, authorFontFamily, titleBold, titleItalic, authorBold, authorItalic, titleAlignment, authorAlignment, staffRowAlignment, pageDesignDataUrl, pageDesignOpacity, pageDesignFit, pageDesignLayer, pageDesignPositionX, pageDesignPositionY, pageDesignCrop]);
+  }), [songTitle, author, notationStyle, notationMode, isPedagogicalProject, timeSignature, timeSignatureMode, keySignature, staffLines, pixelsPerBeat, instrumentNotationVariant, pickupEnabled, pickupQuantity, pickupDuration, setupCompleted, cursorPosition, addedMeasures, pageOrientation, paperSize, layoutMeasuresPerLine, layoutLineBreakBefore, layoutPageBreakBefore, layoutSystemGap, layoutPartsGap, layoutConnectedBarlines, layoutGlobalSpacingMultiplier, viewMode, partLayoutMeasuresPerLine, partLayoutLineBreakBefore, partLayoutPageBreakBefore, showPageNavigator, pageFlowDirection, viewFitPage, viewSmartPage, visibleToolIds, tuningReferenceNote, tuningReferenceOctave, tuningReferenceHz, playNoteOnInsert, figurenotesSize, figurenotesStems, figurenotesChordLineGap, figurenotesChordBlocks, figurenotesChordBlocksShowTones, figurenotesMelodyShowNoteNames, timeSignatureSize, showBarNumbers, barNumberSize, showRhythmSyllables, showAllNoteLabels, enableEmojiOverlays, joClefStaffPosition, relativeNotationShowKeySignature, relativeNotationShowTraditionalClef, pedagogicalAudioBpm, pedagogicalAudioPlaybackRate, pedagogicalPlayheadStyle, pedagogicalPlayheadEmoji, pedagogicalPlayheadEmojiSize, cursorLineStrokeWidth, pedagogicalPlayheadMovement, staves, activeStaffIndex, staffYOffsets, measureStretchFactors, systemYOffsets, visibleStaves, intermissionLabels, chords, textBoxes, documentFontFamily, lyricFontFamily, lyricFontSize, lyricLineIndex, lyricLineYOffset, titleFontSize, authorFontSize, titleFontFamily, authorFontFamily, titleBold, titleItalic, authorBold, authorItalic, titleAlignment, authorAlignment, staffRowAlignment, pageDesignDataUrl, pageDesignOpacity, pageDesignFit, pageDesignLayer, pageDesignPositionX, pageDesignPositionY, pageDesignCrop]);
 
   // Download project file (future: replace with upload to Google Drive / OneDrive)
   const downloadProject = useCallback(() => {
@@ -3080,6 +3086,7 @@ function NoodiMeisterCore({ icons }) {
       if (Array.isArray(data.intermissionLabels)) setIntermissionLabels(data.intermissionLabels);
       if (data.documentFontFamily) setDocumentFontFamily(data.documentFontFamily);
       if (data.lyricFontFamily) setLyricFontFamily(data.lyricFontFamily);
+      if (typeof data.lyricFontSize === 'number' && data.lyricFontSize >= 1) setLyricFontSize(data.lyricFontSize);
       if (typeof data.titleFontSize === 'number' && data.titleFontSize >= 10 && data.titleFontSize <= 72) setTitleFontSize(data.titleFontSize);
       if (typeof data.authorFontSize === 'number' && data.authorFontSize >= 8 && data.authorFontSize <= 48) setAuthorFontSize(data.authorFontSize);
       if (data.titleFontFamily != null) setTitleFontFamily(data.titleFontFamily || '');
@@ -3329,6 +3336,7 @@ function NoodiMeisterCore({ icons }) {
         if (Array.isArray(data.intermissionLabels)) setIntermissionLabels(data.intermissionLabels);
         if (data.documentFontFamily) setDocumentFontFamily(data.documentFontFamily);
         if (data.lyricFontFamily) setLyricFontFamily(data.lyricFontFamily);
+        if (typeof data.lyricFontSize === 'number' && data.lyricFontSize >= 1) setLyricFontSize(data.lyricFontSize);
         if (typeof data.titleFontSize === 'number' && data.titleFontSize >= 10 && data.titleFontSize <= 72) setTitleFontSize(data.titleFontSize);
         if (typeof data.authorFontSize === 'number' && data.authorFontSize >= 8 && data.authorFontSize <= 48) setAuthorFontSize(data.authorFontSize);
         if (data.titleFontFamily != null) setTitleFontFamily(data.titleFontFamily || '');
@@ -4237,9 +4245,19 @@ function NoodiMeisterCore({ icons }) {
 
   const getChordAtCursor = useCallback(() => {
     const beatsPerMeasure = timeSignature?.beats ?? 4;
+    const beatUnit = timeSignature?.beatUnit ?? 4;
     const cursorMeasureIdx = Math.floor(cursorPosition / beatsPerMeasure);
+    const is44 = beatsPerMeasure === 4 && beatUnit === 4;
+    if (is44) {
+      const cursorSlot = Math.floor((cursorPosition % beatsPerMeasure) / 2);
+      return chords.find((c) => {
+        if (Math.floor(c.beatPosition / beatsPerMeasure) !== cursorMeasureIdx) return false;
+        const chordSlot = Math.floor((c.beatPosition % beatsPerMeasure) / 2);
+        return chordSlot === cursorSlot;
+      });
+    }
     return chords.find((c) => Math.floor(c.beatPosition / beatsPerMeasure) === cursorMeasureIdx);
-  }, [chords, cursorPosition, timeSignature?.beats]);
+  }, [chords, cursorPosition, timeSignature?.beats, timeSignature?.beatUnit]);
 
   const handleToolboxSelection = useCallback((clickedIndex) => {
     if (!activeToolbox) return;
@@ -5617,8 +5635,8 @@ function NoodiMeisterCore({ icons }) {
   const a4PageHeightPx = effectiveLayoutPageWidth * a4HeightRatio;
   /** Figurenotes row height (beat-box / line) scales with Noodigraafika suurus so barlines and box match note size. */
   const figurenotesRowHeight = Math.max(FIGURE_ROW_HEIGHT, Math.round(FIGURE_ROW_HEIGHT * figurenotesSize / 75));
-  /** Chord line in figurenotes: only when user has enabled it in chord toolbox; half height of beat-box, below melody row; gap 0–20 px. */
-  const figurenotesChordLineHeight = Math.round(figurenotesRowHeight / 2);
+  /** Chord line in figurenotes: only when user has enabled it in chord toolbox; half height of beat-box + 5px, below melody row; gap 0–20 px. */
+  const figurenotesChordLineHeight = Math.round(figurenotesRowHeight / 2) + 5;
   const figurenotesTotalRowHeight = figurenotesChordBlocks
     ? figurenotesRowHeight + figurenotesChordLineGap + figurenotesChordLineHeight
     : figurenotesRowHeight;
@@ -8179,6 +8197,16 @@ function NoodiMeisterCore({ icons }) {
                       >
                         {getFontOptionElements(t)}
                       </select>
+                      <label className="block text-xs font-semibold text-amber-900 mt-2 mb-0.5">{t('textBox.lyricFontSize')}</label>
+                      <input
+                        type="number"
+                        min={1}
+                        step={1}
+                        value={lyricFontSize}
+                        onChange={(e) => { const v = parseInt(e.target.value, 10); if (!Number.isNaN(v) && v >= 1) { dirtyRef.current = true; setLyricFontSize(v); } }}
+                        className="w-full px-2 py-1.5 rounded border border-amber-300 text-sm bg-white text-amber-900"
+                        title={t('textBox.lyricFontSizeHint')}
+                      />
                     </div>
                     {selectedTextboxId && (
                       <>
@@ -9318,6 +9346,7 @@ function NoodiMeisterCore({ icons }) {
                   scoreContainerRef={isFirstVisible ? scoreContainerRef : undefined}
                   pageFlowDirection={pageFlowDirection}
                   lyricFontFamily={lyricFontFamily}
+                  lyricFontSize={lyricFontSize}
                   lyricLineYOffset={lyricLineYOffset}
                 />
               );
@@ -10261,6 +10290,7 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
           onChordLineClick={onChordLineClick}
           showRhythmSyllables={showRhythmSyllables}
           lyricFontFamily={lyricFontFamily}
+          lyricFontSize={lyricFontSize}
           lyricLineYOffset={lyricLineYOffset}
           isHorizontal={isHorizontal}
           a4PageHeight={a4PageHeight}
@@ -10314,6 +10344,7 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
           isFirstInBraceGroup={isFirstInBraceGroup}
           braceGroupSize={braceGroupSize}
           lyricFontFamily={lyricFontFamily}
+          lyricFontSize={lyricFontSize}
           lyricLineYOffset={lyricLineYOffset}
           isHorizontal={isHorizontal}
           a4PageHeight={a4PageHeight}

@@ -162,6 +162,7 @@ export function FigurenotesView({
   onChordLineClick,
   showRhythmSyllables = false,
   lyricFontFamily = 'sans-serif',
+  lyricFontSize = 12,
   lyricLineYOffset = 0,
   isHorizontal = false,
   a4PageHeight = 400,
@@ -661,115 +662,134 @@ export function FigurenotesView({
                       });
                     }
 
-                    // Akordiplokid: iga takti kohta üks ristkülik; akordi nimi ja noodinimed kõrvuti (2 px vahe), alla värvifiguurid (X/ruut).
-                    const measureChord = chordsInMeasure[0];
-                    if (!measureChord) return null;
+                    // Akordiplokid: 4/4 korral kaks võrdset ristkülikut takti kohta, muul taktimõõdul üks ristkülik takti kohta.
+                    const is44 = timeSignature?.beats === 4 && timeSignature?.beatUnit === 4;
+                    const slotsPerMeasure = is44 ? 2 : 1;
+                    const slotBeats = beatsPerMeasure / slotsPerMeasure;
                     const rectGap = 2;
-                    const rectWidth = Math.max(0, measureWidth - rectGap);
-                    const rectX = measureX + rectGap / 2;
+                    const slotGap = is44 ? 2 : 0;
+                    const rectWidth = Math.max(0, (measureWidth - rectGap - (slotsPerMeasure - 1) * slotGap) / slotsPerMeasure);
                     const rectY = chordRowTop + 2;
                     const rectH = Math.max(0, chordLineHeight - 4);
-                    const fill = getChordColor(measureChord.chord);
-                    const tones = getChordToneNames(measureChord.chord);
-                    const textX = rectX + 6;
                     const mainTextY = chordRowTop + chordLineHeight * 0.45;
                     const tonesFontSize = Math.max(8, Math.round(chordFontSize * 0.6));
-                    const chordNameWidth = measureChord.chord.length * chordFontSize * CHORD_NAME_WIDTH_PER_CHAR;
-                    const gapPx = 4;
-                    const tonesTextX = textX + chordNameWidth + gapPx;
-                    const chordRoot = getChordRootLetter(measureChord.chord);
                     const figSize = Math.min(chordFontSize * 0.9, Math.max(6, rectH * 0.38));
                     const figGap = 2;
-                    const figuresStartX = tonesTextX;
                     const figuresY = chordRowTop + chordLineHeight * 0.72;
 
                     return (
-                      <g key={`chord-block-${measureIdx}-${measure.startBeat}`}>
-                        <rect
-                          x={rectX}
-                          y={rectY}
-                          width={rectWidth}
-                          height={rectH}
-                          fill={fill}
-                          stroke="#111827"
-                          strokeWidth={0.8}
-                          rx={3}
-                        />
-                        <text
-                          x={textX}
-                          y={mainTextY}
-                          textAnchor="start"
-                          dominantBaseline="middle"
-                          fontSize={chordFontSize}
-                          fontWeight="bold"
-                          fill="#ffffff"
-                          fontFamily="sans-serif"
-                        >
-                          {measureChord.chord}
-                        </text>
-                        {chordBlocksShowTones && tones.length > 0 && (
-                          <text
-                            x={tonesTextX}
-                            y={mainTextY}
-                            textAnchor="start"
-                            dominantBaseline="middle"
-                            fontSize={tonesFontSize}
-                            fill="#f9fafb"
-                            fontFamily="monospace"
-                          >
-                            {tones.join(' ')}
-                          </text>
-                        )}
-                        {chordBlocksShowTones && tones.length > 0 && tones.map((toneName, ti) => {
-                          const { baseName, isSharp } = parseToneName(toneName);
-                          const shape = getChordToneShape(chordRoot, ti);
-                          const toneColor = getFigureColor(baseName);
-                          const style = getFigureStyle(baseName, shape === 'cross' ? 2 : 3);
-                          const cx = figuresStartX + ti * (figSize + figGap) + figSize / 2;
-                          const paths = getShapePathsByOctave(shape === 'cross' ? 2 : 3);
-                          const viewScale = figSize / 100;
-                          const arrowLen = figSize * 0.4;
-                          const head = Math.max(2, figSize * 0.15);
+                      <g key={`chord-blocks-${measureIdx}-${measure.startBeat}`}>
+                        {Array.from({ length: slotsPerMeasure }, (_, slotIndex) => {
+                          const slotStart = measure.startBeat + slotIndex * slotBeats;
+                          const slotEnd = measure.startBeat + (slotIndex + 1) * slotBeats;
+                          const slotChord = chordsInMeasure.find((c) => c.beatPosition >= slotStart && c.beatPosition < slotEnd);
+                          const rectX = measureX + rectGap / 2 + slotIndex * (rectWidth + slotGap);
+                          const fill = slotChord ? getChordColor(slotChord.chord) : '#e5e7eb';
+                          const textX = rectX + 6;
                           return (
-                            <g key={`fig-${ti}-${toneName}`}>
-                              {paths.map((d, pi) => (
-                                <path
-                                  key={pi}
-                                  d={d}
-                                  fill={style.fill}
-                                  stroke={style.stroke || 'none'}
-                                  strokeWidth={(style.strokeWidth || 0) * viewScale}
-                                  transform={`translate(${cx - figSize / 2}, ${figuresY - figSize / 2}) scale(${viewScale})`}
-                                  vectorEffect="non-scaling-stroke"
-                                />
-                              ))}
-                              {isSharp && (() => {
-                                const tipX = cx + arrowLen / 2;
-                                const tipY = figuresY - arrowLen / 2;
-                                const stroke = '#1a1a1a';
-                                const strokeW = Math.max(1.5, figSize * 0.08);
-                                return (
-                                  <g stroke={stroke} fill={stroke} strokeWidth={strokeW} strokeLinecap="butt" strokeLinejoin="miter">
-                                    <line x1={cx - arrowLen / 2} y1={figuresY + arrowLen / 2} x2={tipX} y2={tipY} />
-                                    <polygon points={`${tipX},${tipY} ${tipX - head},${tipY} ${tipX},${tipY + head}`} />
-                                  </g>
-                                );
-                              })()}
+                            <g key={`chord-block-${measureIdx}-${slotIndex}`}>
+                              <rect
+                                x={rectX}
+                                y={rectY}
+                                width={rectWidth}
+                                height={rectH}
+                                fill={fill}
+                                stroke="#111827"
+                                strokeWidth={0.8}
+                                rx={3}
+                              />
+                              {slotChord && (
+                                <>
+                                  <text
+                                    x={textX}
+                                    y={mainTextY}
+                                    textAnchor="start"
+                                    dominantBaseline="middle"
+                                    fontSize={chordFontSize}
+                                    fontWeight="bold"
+                                    fill="#ffffff"
+                                    fontFamily="sans-serif"
+                                  >
+                                    {slotChord.chord}
+                                  </text>
+                                  {chordBlocksShowTones && (() => {
+                                    const tones = getChordToneNames(slotChord.chord);
+                                    if (tones.length === 0) return null;
+                                    const chordNameWidth = slotChord.chord.length * chordFontSize * CHORD_NAME_WIDTH_PER_CHAR;
+                                    const gapPx = 3;
+                                    const tonesTextX = textX + chordNameWidth + gapPx;
+                                    const chordRoot = getChordRootLetter(slotChord.chord);
+                                    const figuresStartX = tonesTextX;
+                                    return (
+                                      <>
+                                        <text
+                                          x={tonesTextX}
+                                          y={mainTextY}
+                                          textAnchor="start"
+                                          dominantBaseline="middle"
+                                          fontSize={tonesFontSize}
+                                          fill="#f9fafb"
+                                          fontFamily="monospace"
+                                        >
+                                          {tones.join(' ')}
+                                        </text>
+                                        {tones.map((toneName, ti) => {
+                                          const { baseName, isSharp } = parseToneName(toneName);
+                                          const shape = getChordToneShape(chordRoot, ti);
+                                          const style = getFigureStyle(baseName, shape === 'cross' ? 2 : 3);
+                                          const cx = figuresStartX + ti * (figSize + figGap) + figSize / 2;
+                                          const paths = getShapePathsByOctave(shape === 'cross' ? 2 : 3);
+                                          const viewScale = figSize / 100;
+                                          const arrowLen = figSize * 0.4;
+                                          const head = Math.max(2, figSize * 0.15);
+                                          return (
+                                            <g key={`fig-${ti}-${toneName}`}>
+                                              {paths.map((d, pi) => (
+                                                <path
+                                                  key={pi}
+                                                  d={d}
+                                                  fill={style.fill}
+                                                  stroke={style.stroke || 'none'}
+                                                  strokeWidth={(style.strokeWidth || 0) * viewScale}
+                                                  transform={`translate(${cx - figSize / 2}, ${figuresY - figSize / 2}) scale(${viewScale})`}
+                                                  vectorEffect="non-scaling-stroke"
+                                                />
+                                              ))}
+                                              {isSharp && (() => {
+                                                const tipX = cx + arrowLen / 2;
+                                                const tipY = figuresY - arrowLen / 2;
+                                                const stroke = '#1a1a1a';
+                                                const strokeW = Math.max(1.5, figSize * 0.08);
+                                                return (
+                                                  <g stroke={stroke} fill={stroke} strokeWidth={strokeW} strokeLinecap="butt" strokeLinejoin="miter">
+                                                    <line x1={cx - arrowLen / 2} y1={figuresY + arrowLen / 2} x2={tipX} y2={tipY} />
+                                                    <polygon points={`${tipX},${tipY} ${tipX - head},${tipY} ${tipX},${tipY + head}`} />
+                                                  </g>
+                                                );
+                                              })()}
+                                            </g>
+                                          );
+                                        })}
+                                      </>
+                                    );
+                                  })()}
+                                  {slotChord.figuredBass && (
+                                    <text
+                                      x={rectX + rectWidth - 6}
+                                      y={rectY + rectH - 3}
+                                      textAnchor="end"
+                                      fontSize={Math.max(8, Math.round(chordFontSize * 0.6))}
+                                      fill="#111827"
+                                      fontFamily="serif"
+                                    >
+                                      {slotChord.figuredBass}
+                                    </text>
+                                  )}
+                                </>
+                              )}
                             </g>
                           );
                         })}
-                        {measureChord.figuredBass && (
-                          <text
-                            x={rectX + rectWidth - 6}
-                            y={rectY + rectH - 3}
-                            textAnchor="end"
-                            fontSize={Math.max(8, Math.round(chordFontSize * 0.6))}
-                            fill="#111827"
-                            fontFamily="serif"
-                          >
-                            {measureChord.figuredBass}
-                          </text>
-                        )}
                       </g>
                     );
                   })()}
@@ -866,6 +886,17 @@ export function FigurenotesView({
                       const longRectEndX = (durLabel === '1/2' || durLabel === '1/1')
                         ? Math.min(measureX + measureWidth, measureX + (endBeat - measure.startBeat) * beatWidth)
                         : null;
+                      /* Laulusõnad: vahe (gap) = lauluteksti fondi suurus (lyricFontSize); Cmd/Ctrl+L režiim loeb seda seadest. */
+                      const lyricGapTop = sys.yOffset + melodyRowHeight;
+                      const hasChordRow = chordLineHeight > 0;
+                      const hasLyricGap = hasChordRow && chordLineGap > 0;
+                      const fs = Math.max(1, Number(lyricFontSize)) || 12;
+                      const lyric1Y = hasChordRow
+                        ? lyricGapTop + fs * 0.5 + (lyricLineYOffset || 0)
+                        : labelY + Math.round(14 * (figurenotesSize / 16)) + (lyricLineYOffset || 0);
+                      const lyric2Y = hasChordRow
+                        ? lyricGapTop + fs * 1.5 + (lyricLineYOffset || 0)
+                        : labelY + Math.round(28 * (figurenotesSize / 16)) + (lyricLineYOffset || 0);
                       return (
                         <g key={noteIdx} {...noteGroupProps}>
                           {showBand && (
@@ -873,10 +904,10 @@ export function FigurenotesView({
                           )}
                           {renderFigurenote(note, figureCenterX, noteY, globalNoteIndex, noteWidth, figureSize, longRectEndX)}
                           {(note.lyric != null && String(note.lyric).trim() !== '') && (
-                            <text x={figureCenterX} y={labelY + Math.round(14 * (figurenotesSize / 16)) + (lyricLineYOffset || 0)} textAnchor="middle" fontSize={Math.round(11 * (figurenotesSize / 16))} fill="#333" fontFamily={lyricFontFamily}>{note.lyric}</text>
+                            <text x={figureCenterX} y={lyric1Y} textAnchor="middle" fontSize={fs} fill="#333" fontFamily={lyricFontFamily}>{note.lyric}</text>
                           )}
                           {(note.lyric2 != null && String(note.lyric2).trim() !== '') && (
-                            <text x={figureCenterX} y={labelY + Math.round(28 * (figurenotesSize / 16)) + (lyricLineYOffset || 0)} textAnchor="middle" fontSize={Math.round(11 * (figurenotesSize / 16))} fill="#555" fontFamily={lyricFontFamily}>{note.lyric2}</text>
+                            <text x={figureCenterX} y={lyric2Y} textAnchor="middle" fontSize={fs} fill="#555" fontFamily={lyricFontFamily}>{note.lyric2}</text>
                           )}
                         </g>
                       );
