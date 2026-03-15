@@ -716,23 +716,29 @@ export function FigurenotesView({
                                     const tones = getChordToneNames(slotChord.chord);
                                     if (tones.length === 0) return null;
                                     const chordNameWidth = slotChord.chord.length * chordFontSize * CHORD_NAME_WIDTH_PER_CHAR;
-                                    const gapPx = 3;
+                                    const gapPx = 10;
                                     const tonesTextX = textX + chordNameWidth + gapPx;
                                     const chordRoot = getChordRootLetter(slotChord.chord);
                                     const figuresStartX = tonesTextX;
                                     return (
                                       <>
-                                        <text
-                                          x={tonesTextX}
-                                          y={mainTextY}
-                                          textAnchor="start"
-                                          dominantBaseline="middle"
-                                          fontSize={tonesFontSize}
-                                          fill="#f9fafb"
-                                          fontFamily="monospace"
-                                        >
-                                          {tones.join(' ')}
-                                        </text>
+                                        {tones.map((toneName, ti) => {
+                                          const toneCenterX = figuresStartX + ti * (figSize + figGap) + figSize / 2;
+                                          return (
+                                            <text
+                                              key={`tone-${ti}-${toneName}`}
+                                              x={toneCenterX}
+                                              y={mainTextY}
+                                              textAnchor="middle"
+                                              dominantBaseline="middle"
+                                              fontSize={tonesFontSize}
+                                              fill="#f9fafb"
+                                              fontFamily="monospace"
+                                            >
+                                              {toneName}
+                                            </text>
+                                          );
+                                        })}
                                         {tones.map((toneName, ti) => {
                                           const { baseName, isSharp } = parseToneName(toneName);
                                           const shape = getChordToneShape(chordRoot, ti);

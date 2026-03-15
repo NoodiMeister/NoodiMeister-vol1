@@ -5637,8 +5637,12 @@ function NoodiMeisterCore({ icons }) {
   const figurenotesRowHeight = Math.max(FIGURE_ROW_HEIGHT, Math.round(FIGURE_ROW_HEIGHT * figurenotesSize / 75));
   /** Chord line in figurenotes: only when user has enabled it in chord toolbox; half height of beat-box + 5px, below melody row; gap 0–20 px. */
   const figurenotesChordLineHeight = Math.round(figurenotesRowHeight / 2) + 5;
+  /** Vahe meloodia ja akordirea vahel: kasutaja seade (0–20 px) või vähemalt lauluteksti fondi suuruse suhtes (et tekstid ei jookse kokku). */
+  const effectiveChordLineGap = figurenotesChordBlocks
+    ? Math.max(figurenotesChordLineGap, Math.min(100, Math.round((lyricFontSize || 12) * 1.8)))
+    : 0;
   const figurenotesTotalRowHeight = figurenotesChordBlocks
-    ? figurenotesRowHeight + figurenotesChordLineGap + figurenotesChordLineHeight
+    ? figurenotesRowHeight + effectiveChordLineGap + figurenotesChordLineHeight
     : figurenotesRowHeight;
   const logicalContentHeight = useMemo(() => {
     if (notationStyle === 'FIGURENOTES') {
@@ -7882,7 +7886,8 @@ function NoodiMeisterCore({ icons }) {
                     }}
                     onBlur={() => setLyricChainIndex(null)}
                     placeholder={t('toolbar.lyricPlaceholder')}
-                    className="px-2 py-1 rounded text-sm bg-amber-100 text-amber-900 border border-amber-300 w-28 focus:ring-1 focus:ring-amber-500 focus:border-amber-500"
+                    className="px-2 py-1 rounded bg-amber-100 text-amber-900 border border-amber-300 w-28 focus:ring-1 focus:ring-amber-500 focus:border-amber-500"
+                    style={{ fontSize: `${Math.max(12, Math.min(72, Number(lyricFontSize) || 12))}px` }}
                     title={t('toolbar.lyricTitle')}
                   />
                   <span className="text-amber-600 text-xs">+</span>
@@ -9221,6 +9226,7 @@ function NoodiMeisterCore({ icons }) {
                     setSelectionStart(-1);
                     setSelectionEnd(-1);
                     setNoteInputMode(false);
+                    setCursorSubRow(0); // Laulusõnade režiim: kursor alati meloodiareal, et toolbaar ja sisestus töötaks (sh esimene noot)
                     if (cursorTool === 'type') {
                       setLyricChainStart(index);
                       setLyricChainEnd(index);
@@ -9325,7 +9331,7 @@ function NoodiMeisterCore({ icons }) {
                   chords={chords}
                   figurenotesSize={figurenotesSize}
                   figurenotesStems={figurenotesStems}
-                  figurenotesChordLineGap={figurenotesChordBlocks ? figurenotesChordLineGap : 0}
+                  figurenotesChordLineGap={figurenotesChordBlocks ? effectiveChordLineGap : 0}
                   figurenotesChordBlocks={figurenotesChordBlocks}
                   figurenotesChordBlocksShowTones={figurenotesChordBlocksShowTones}
                   figurenotesMelodyShowNoteNames={figurenotesMelodyShowNoteNames}
@@ -10259,7 +10265,7 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
           effectiveMeasures={effectiveMeasures}
           marginLeft={marginLeft}
           timelineHeight={figurenotesRowHeightProp ?? timelineHeight}
-          chordLineGap={figurenotesChordBlocks ? figurenotesChordLineGap : 0}
+          chordLineGap={figurenotesChordBlocks ? effectiveChordLineGap : 0}
           chordLineHeight={figurenotesChordBlocks ? (figurenotesChordLineHeightProp ?? Math.round((figurenotesRowHeightProp ?? timelineHeight) / 2)) : 0}
           chordBlocksEnabled={figurenotesChordBlocks}
           chordBlocksShowTones={figurenotesChordBlocksShowTones}

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 65" width="200" height="65">
+  <title>D-duur akordiplokk (D F# A)</title>
+  <rect width="200" height="65" fill="#fff"/>
+  <rect x="2" y="2" width="196" height="50" rx="3" fill="#89512E" stroke="#111827" stroke-width="0.8"/>
+  <text x="10" y="28" text-anchor="start" dominant-baseline="central" fill="#ffffff" font-size="16" font-weight="bold">D</text>
+  <text x="45" y="28" text-anchor="middle" dominant-baseline="central" fill="#f9fafb" font-size="11">D</text>
+  <text x="71" y="28" text-anchor="middle" dominant-baseline="central" fill="#f9fafb" font-size="11">F#</text>
+  <text x="97" y="28" text-anchor="middle" dominant-baseline="central" fill="#f9fafb" font-size="11">A</text>
+  <rect x="34" y="38" width="22" height="22" fill="#89512E" stroke="#1a1a1a" stroke-width="1.5"/>
+  <rect x="60" y="38" width="22" height="22" fill="#2563eb" stroke="#1a1a1a" stroke-width="1.5"/>
+  <g stroke="#1a1a1a" fill="#1a1a1a" stroke-width="1.5" stroke-linecap="butt" stroke-linejoin="miter">
+    <line x1="66" y1="56" x2="76" y2="46"/>
+    <polygon points="76,46 73,46 76,49"/>
+  </g>
+  <rect x="86" y="38" width="22" height="22" fill="#eab308" stroke="#1a1a1a" stroke-width="1.5"/>
+</svg>
