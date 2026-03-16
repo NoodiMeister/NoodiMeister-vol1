@@ -4453,6 +4453,19 @@ function NoodiMeisterCore({ icons }) {
     if (note && !note.isRest) playPianoNote(note.pitch, note.octave ?? 4, note.accidental ?? 0);
   }, [playNoteOnInsert, getNoteAtBeat, playPianoNote]);
 
+  // Tekstirežiimis (laulutekst) ära luba kursoril "ära joosta": kui kursor satub nootide vahele nii,
+  // et noteIndexAtCursor === -1, siis põrka tagasi viimasele teadaolevale noodi beat'ile.
+  useEffect(() => {
+    if (isPedagogicalAudioPlaying || isExportingAnimation) return;
+    if (!cursorOnMelodyRow) return;
+    if (!(cursorTool === 'type' || lyricChainIndex !== null)) return;
+    if (noteIndexAtCursor >= 0) return; // kursor on noodil – kõik korras
+    const safeBeat = lastCursorOnNoteBeatRef.current;
+    if (!Number.isFinite(safeBeat)) return;
+    if (cursorPosition === safeBeat) return;
+    setCursorPosition(safeBeat);
+  }, [cursorPosition, cursorTool, lyricChainIndex, noteIndexAtCursor, cursorOnMelodyRow, isPedagogicalAudioPlaying, isExportingAnimation, setCursorPosition]);
+
   /** Noodi alguse löök antud indeksi järgi (SEL-režiimis kursori joondamine klõpsatud nootiga). */
   const getBeatAtNoteIndex = useCallback((noteList, index) => {
     if (index < 0 || index >= (noteList?.length ?? 0)) return 0;
