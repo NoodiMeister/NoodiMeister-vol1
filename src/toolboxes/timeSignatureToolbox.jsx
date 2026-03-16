@@ -72,7 +72,7 @@ export function PedagogicalMeterIcon({ beats, beatUnit }) {
   }
   return (
     <svg viewBox="0 0 24 24" className="w-5 h-5">
-      <text x={C} y={yNum} textAnchor="middle" fontSize="10" fontWeight="bold" fill="currentColor">{beats}</text>
+      <g stroke="none"><text x={C} y={yNum} textAnchor="middle" fontSize="10" fontWeight="bold" fill="currentColor">{beats}</text></g>
       <line x1={lineLeft} y1={yLine} x2={lineRight} y2={yLine} stroke="currentColor" strokeWidth="1.5"/>
       {getNoteSymbol()}
     </svg>

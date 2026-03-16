@@ -135,7 +135,7 @@ function renderTimeSignature(timeSignature, timeSignatureMode, centerY, notation
           return <TimeSigDigits x={noteX} y={stemY2} fontSize={fDenFallback} number={timeSignature.beatUnit} fill={textColor} />;
       }
     };
-    return (<g>{numeratorDigits}<line x1={x - lineHalf} y1={yLine} x2={x + lineHalf} y2={yLine} stroke={textColor} strokeWidth={strokeW} />{getNoteSymbolForDenominator()}</g>);
+    return (<g><g stroke="none">{numeratorDigits}</g><line x1={x - lineHalf} y1={yLine} x2={x + lineHalf} y2={yLine} stroke={textColor} strokeWidth={strokeW} />{getNoteSymbolForDenominator()}</g>);
   }
   return (
     <g>

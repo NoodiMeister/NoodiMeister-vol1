@@ -44,7 +44,7 @@ import {
 import { FIGURENOTES_COLORS, getFigureSymbol } from './utils/figurenotes';
 import { getOctave2CrossStyle } from './constants/FigureNotesLibrary';
 import { getPedagogicalSymbol } from './notation/PedagogicalLogic';
-import { FigurenotesBlockIcon, RhythmIcon, RhythmPatternIcon } from './toolboxes';
+import { FigurenotesBlockIcon, RhythmIcon, RhythmPatternIcon, MeterIcon, PedagogicalMeterIcon } from './toolboxes';
 import { SmuflGlyph } from './notation/smufl/SmuflGlyph';
 import { SMUFL_GLYPH, NOTEHEAD_SHAPE_GLYPH } from './notation/smufl/glyphs';
 import { FigurenotesView } from './views/FigurenotesView';
@@ -401,67 +401,7 @@ function LoggedInUser({ icons, t }) {
 // RhythmIcon, RhythmPatternIcon from ./toolboxes (same symbols as symbol gallery)
 
 // VALID_DENOMINATORS, MAX_NUMERATOR on faili alguses var'iga
-function MeterIcon(props) {
-  var beats = props.beats, beatUnit = props.beatUnit;
-  return (
-  <svg viewBox="0 0 24 24" className="w-5 h-5">
-    <text x="12" y="10" textAnchor="middle" fontSize="10" fontWeight="bold" fill="currentColor">{beats}</text>
-    <line x1="4" y1="12" x2="20" y2="12" stroke="currentColor" strokeWidth="1.5"/>
-    <text x="12" y="21" textAnchor="middle" fontSize="10" fontWeight="bold" fill="currentColor">{beatUnit}</text>
-  </svg>
-  );
-}
-
-// Pedagogical Time Signature Component - shows note symbol for denominator
-function PedagogicalMeterIcon(props) {
-  var beats = props.beats, beatUnit = props.beatUnit;
-  function getNoteSymbol() {
-    switch(beatUnit) {
-      case 1: // Whole note
-        return <ellipse cx="12" cy="18" rx="4" ry="2.5" fill="none" stroke="currentColor" strokeWidth="1"/>;
-      case 2: // Half note
-        return (
-          <>
-            <ellipse cx="12" cy="18" rx="3" ry="2" fill="none" stroke="currentColor" strokeWidth="1"/>
-            <line x1="15" y1="18" x2="15" y2="24" stroke="currentColor" strokeWidth="1"/>
-          </>
-        );
-      case 4: // Quarter note (most common)
-        return (
-          <>
-            <ellipse cx="12" cy="18" rx="3" ry="2" fill="currentColor"/>
-            <line x1="15" y1="18" x2="15" y2="24" stroke="currentColor" strokeWidth="1"/>
-          </>
-        );
-      case 8: // Eighth note
-        return (
-          <>
-            <ellipse cx="12" cy="18" rx="3" ry="2" fill="currentColor"/>
-            <line x1="15" y1="18" x2="15" y2="24" stroke="currentColor" strokeWidth="1"/>
-            <path d="M15 24 Q18 23 15 21" fill="currentColor"/>
-          </>
-        );
-      case 16: // Sixteenth note
-        return (
-          <>
-            <ellipse cx="12" cy="18" rx="3" ry="2" fill="currentColor"/>
-            <line x1="15" y1="18" x2="15" y2="24" stroke="currentColor" strokeWidth="1"/>
-            <path d="M15 24 Q18 23 15 21 M15 22 Q18 21 15 19" fill="currentColor"/>
-          </>
-        );
-      default:
-        return <text x="12" y="21" textAnchor="middle" fontSize="10" fontWeight="bold" fill="currentColor">{beatUnit}</text>;
-    }
-  };
-
-  return (
-    <svg viewBox="0 0 24 24" className="w-5 h-5">
-      <text x="12" y="10" textAnchor="middle" fontSize="10" fontWeight="bold" fill="currentColor">{beats}</text>
-      <line x1="4" y1="12" x2="20" y2="12" stroke="currentColor" strokeWidth="1.5"/>
-      {getNoteSymbol()}
-    </svg>
-  );
-}
+// MeterIcon, PedagogicalMeterIcon imporditud ./toolboxes (TimeSignatureLayout – ühine pedagoogiline variant)
 
 // TREBLE_CLEF_PATH, BASS_CLEF_PATH, ALTO_TENOR_CLEF_PATH on faili alguses var'iga
 function ClefIcon(props) {
@@ -9241,10 +9181,11 @@ function NoodiMeisterCore({ icons }) {
                   canHandDragNotes={cursorTool === 'hand'}
                   ghostPitch={ghostPitch}
                   ghostOctave={ghostOctave}
-                  onFigureBeatClick={notationStyle === 'FIGURENOTES' && staffIdx === activeStaffIndex && mousePitchInputEnabled
+                  onFigureBeatClick={notationStyle === 'FIGURENOTES' && staffIdx === activeStaffIndex
                     ? (beatPosition) => {
-                        if (!noteInputModeRef.current) return;
+                        setCursorPosition(beatPosition);
                         setCursorSubRow(0);
+                        if (!mousePitchInputEnabled || !noteInputModeRef.current) return;
                         const draft = mouseInsertDraftRef.current;
                         // First click: pick up a draft note (no insertion yet).
                         if (!draft || !draft.startBeat) {
@@ -9257,7 +9198,6 @@ function NoodiMeisterCore({ icons }) {
                             octave,
                             durationLabel: selectedDuration || '1/4'
                           });
-                          setCursorPosition(beatPosition);
                           setGhostPitch(pitch);
                           setGhostOctave(octave);
                           return;
