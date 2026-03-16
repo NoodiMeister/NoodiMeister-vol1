@@ -1061,6 +1061,8 @@ function NoodiMeisterCore({ icons }) {
   /** Vertical offset (px) for lyrics line – drag or adjust to move lyrics up/down. */
   const [lyricLineYOffset, setLyricLineYOffset] = useState(0);
   const lyricInputRef = useRef(null);
+  /** Viimase figuurnotatsiooni löögikliku beat + aeg, et Cmd+L kasutaks õiget nooti enne Reacti state uuendust. */
+  const lastBeatClickForLyricRef = useRef({ beat: null, at: 0 });
   const [history, setHistory] = useState([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
   const saveToHistoryRef = useRef(null);
@@ -4427,27 +4429,66 @@ function NoodiMeisterCore({ icons }) {
       const active = document.activeElement;
       const tag = active?.tagName?.toLowerCase();
       const isTypingInInput = tag === 'input' || tag === 'textarea' || (active?.getAttribute?.('contenteditable') === 'true');
+      // Abistaja: noodi indeks antud löögil (vajalik, kui kasutaja klõpsas just löögil ja React ei ole veel cursorPosition uuendanud)
+      const getNoteIndexForBeat = (beat) => {
+        let b = 0;
+        const candidates = [];
+        for (let i = 0; i < notes.length; i++) {
+          const n = notes[i];
+          const noteBeat = typeof n.beat === 'number' ? n.beat : b;
+          if (beat >= noteBeat && beat <= noteBeat + n.duration) candidates.push({ index: i, note: n });
+          b = noteBeat + n.duration;
+        }
+        if (candidates.length === 0) return -1;
+        if (candidates.length === 1) return candidates[0].index;
+        const midi = (n) => (n.octave + 1) * 12 + (PITCH_TO_SEMI[n.pitch] ?? 0);
+        let best = candidates[0];
+        for (let k = 1; k < candidates.length; k++) { if (midi(candidates[k].note) > midi(best.note)) best = candidates[k]; }
+        return best.index;
+      };
+      const applyLyricChainAt = (index) => {
+        if (index < 0) return;
+        setSelectedNoteIndex(index);
+        setLyricChainStart(index);
+        setLyricChainEnd(index);
+        setLyricChainIndex(index);
+        setTimeout(() => lyricInputRef.current?.focus(), 0);
+      };
       // Ctrl+L (Cmd+L): SEL-režiimis püüa ainult siis, kui käivitame laulusõna (meloodiareal, noot kursori all); muul juhul lastakse brauserile (aadressiriba jms)
       if (e.code === 'KeyL' && modKey) {
-        if (cursorOnMelodyRow && noteIndexAtCursor >= 0) {
+        const recent = lastBeatClickForLyricRef.current;
+        const useClickBeat = recent.beat != null && (Date.now() - recent.at) < 400;
+        if (useClickBeat) {
+          const idx = getNoteIndexForBeat(recent.beat);
+          lastBeatClickForLyricRef.current = { beat: null, at: 0 };
+          if (idx >= 0) {
+            e.preventDefault();
+            applyLyricChainAt(idx);
+          }
+        } else if (cursorOnMelodyRow && noteIndexAtCursor >= 0) {
           e.preventDefault();
-          setSelectedNoteIndex(noteIndexAtCursor);
-          setLyricChainStart(noteIndexAtCursor);
-          setLyricChainEnd(noteIndexAtCursor);
-          setLyricChainIndex(noteIndexAtCursor);
-          setTimeout(() => lyricInputRef.current?.focus(), 0);
+          applyLyricChainAt(noteIndexAtCursor);
         }
         return;
       }
       // L (ilma modifikaatorita): laulusõna kursori asukohast, kui kursor meloodiareal ja ei kirjuta teises väljas
-      if (e.code === 'KeyL' && !isTypingInInput && cursorOnMelodyRow && noteIndexAtCursor >= 0) {
-        e.preventDefault();
-        setSelectedNoteIndex(noteIndexAtCursor);
-        setLyricChainStart(noteIndexAtCursor);
-        setLyricChainEnd(noteIndexAtCursor);
-        setLyricChainIndex(noteIndexAtCursor);
-        setTimeout(() => lyricInputRef.current?.focus(), 0);
-        return;
+      if (e.code === 'KeyL' && !isTypingInInput && cursorOnMelodyRow) {
+        const recent = lastBeatClickForLyricRef.current;
+        const useClickBeat = recent.beat != null && (Date.now() - recent.at) < 400;
+        if (useClickBeat) {
+          const idx = getNoteIndexForBeat(recent.beat);
+          lastBeatClickForLyricRef.current = { beat: null, at: 0 };
+          if (idx >= 0) {
+            e.preventDefault();
+            applyLyricChainAt(idx);
+            return;
+          }
+        }
+        if (noteIndexAtCursor >= 0) {
+          e.preventDefault();
+          applyLyricChainAt(noteIndexAtCursor);
+          return;
+        }
       }
       if (isTypingInInput) return;
       if (shortcutsOpen) return;
@@ -9185,6 +9226,7 @@ function NoodiMeisterCore({ icons }) {
                     ? (beatPosition) => {
                         setCursorPosition(beatPosition);
                         setCursorSubRow(0);
+                        lastBeatClickForLyricRef.current = { beat: beatPosition, at: Date.now() };
                         if (!mousePitchInputEnabled || !noteInputModeRef.current) return;
                         const draft = mouseInsertDraftRef.current;
                         // First click: pick up a draft note (no insertion yet).
