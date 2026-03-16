@@ -1172,8 +1172,11 @@ function NoodiMeisterCore({ icons }) {
   const notes = activeStaff?.notes ?? [];
 
   // SEL-režiimis vahemiku valikul: näita kleepimiskohta (kursor valiku lõppu). Üksiku noodi klõpsul kursor seatakse juba onNoteClick-is.
+  // Tekstirežiimis (cursorTool === 'type') ja lauluteksti ahelas ei liiguta kursorit siin – fookust juhib teksti sisestamine.
   useEffect(() => {
     if (noteInputMode) return;
+    if (cursorTool === 'type') return;
+    if (lyricChainIndex !== null) return;
     if (selectionStart < 0 || selectionEnd < 0) return; // ainult vahemiku valikul liiguta kursor
     const lastSelectedIndex = Math.max(selectionStart, selectionEnd);
     if (lastSelectedIndex < 0 || lastSelectedIndex >= notes.length) return;
@@ -1185,7 +1188,7 @@ function NoodiMeisterCore({ icons }) {
       beat = noteBeat + dur;
     }
     setCursorPosition(beat);
-  }, [noteInputMode, selectionStart, selectionEnd, notes]);
+  }, [noteInputMode, cursorTool, lyricChainIndex, selectionStart, selectionEnd, notes]);
 
   const setNotes = useCallback((updater) => {
     setStaves((prev) => {
@@ -4401,9 +4404,11 @@ function NoodiMeisterCore({ icons }) {
   }, [notes, cursorPosition]);
 
   // Hoia valitud noot (helesinine kast) ja kursor samal noodil:
-  // kui pole vahemiku valikut ega pedagoogilist taasesitust/eksporti, seame selectedNoteIndex = noteIndexAtCursor.
+  // kui pole vahemiku valikut ega pedagoogilist taasesitust/eksporti ega tekstirežiimi, seame selectedNoteIndex = noteIndexAtCursor.
   useEffect(() => {
     if (noteInputMode) return;
+    // Tekstirežiimis (laulutekst) ja lauluteksti ahelas juhib fookust tekstikursor, mitte luger.
+    if (cursorTool === 'type') return;
     if (isPedagogicalAudioPlaying || isExportingAnimation) return;
     // Lauluteksti ahelrežiimis (lyricChain) juhib fookust tekstikursor – ära kirjuta seda üle kursorPosition'i põhjal.
     if (lyricChainIndex !== null) return;
@@ -4411,7 +4416,7 @@ function NoodiMeisterCore({ icons }) {
     if (noteIndexAtCursor < 0) return;
     if (selectedNoteIndex === noteIndexAtCursor) return;
     setSelectedNoteIndex(noteIndexAtCursor);
-  }, [noteInputMode, isPedagogicalAudioPlaying, isExportingAnimation, lyricChainIndex, selectionStart, selectionEnd, noteIndexAtCursor, selectedNoteIndex]);
+  }, [noteInputMode, cursorTool, isPedagogicalAudioPlaying, isExportingAnimation, lyricChainIndex, selectionStart, selectionEnd, noteIndexAtCursor, selectedNoteIndex]);
 
   /** Noot antud löögil (akordi puhul kõrgeim noteToMidi järgi). Kasutatakse mängimiseks pärast kursori liigutamist. */
   const getNoteAtBeat = useCallback((beat) => {
