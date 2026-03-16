@@ -1171,6 +1171,9 @@ function NoodiMeisterCore({ icons }) {
   const activeStaff = staves[activeStaffIndex];
   const notes = activeStaff?.notes ?? [];
 
+  // Viimane "turvaline" kursorinoot (beat), mida kasutame tekstirežiimis, kui kursor üritab sattuda suvalisse kohta.
+  const lastCursorOnNoteBeatRef = useRef(0);
+
   // SEL-režiimis vahemiku valikul: näita kleepimiskohta (kursor valiku lõppu). Üksiku noodi klõpsul kursor seatakse juba onNoteClick-is.
   // Tekstirežiimis (cursorTool === 'type') ja lauluteksti ahelas ei liiguta kursorit siin – fookust juhib teksti sisestamine.
   useEffect(() => {
@@ -4402,6 +4405,12 @@ function NoodiMeisterCore({ icons }) {
     }
     return best.index;
   }, [notes, cursorPosition]);
+
+  // Hoia meeles viimane noot, mille peal kursor oli (beat). Kasutatakse tekstirežiimis "tagasipõikamiseks", kui kursor kipub suvalisse kohta.
+  useEffect(() => {
+    if (noteIndexAtCursor < 0) return;
+    lastCursorOnNoteBeatRef.current = getBeatAtNoteIndex(notes, noteIndexAtCursor);
+  }, [noteIndexAtCursor, notes, getBeatAtNoteIndex]);
 
   // Hoia valitud noot (helesinine kast) ja kursor samal noodil:
   // kui pole vahemiku valikut ega pedagoogilist taasesitust/eksporti ega tekstirežiimi, seame selectedNoteIndex = noteIndexAtCursor.
@@ -7873,16 +7882,12 @@ function NoodiMeisterCore({ icons }) {
                       }
                     }}
                     onKeyDown={(e) => {
-                      const hasSelection = selectionStart >= 0 && selectionEnd >= 0;
-                      const baseStart = hasSelection ? Math.min(selectionStart, selectionEnd) : (selectedNoteIndex >= 0 ? selectedNoteIndex : noteIndexAtCursor);
-                      const baseEnd = hasSelection
-                        ? Math.max(selectionStart, selectionEnd)
-                        : (notes.length > 0 ? notes.length - 1 : (selectedNoteIndex >= 0 ? selectedNoteIndex : noteIndexAtCursor));
-                      const chainStart = lyricChainStart >= 0 ? lyricChainStart : baseStart;
-                      const chainEnd = lyricChainEnd >= 0 ? lyricChainEnd : baseEnd;
-                      const start = Math.max(0, chainStart);
-                      const end = chainEnd >= 0 ? chainEnd : (notes.length > 0 ? notes.length - 1 : -1);
-                      const idx = lyricChainIndex !== null ? lyricChainIndex : start;
+                      const baseIdx = lyricChainIndex != null
+                        ? lyricChainIndex
+                        : (selectedNoteIndex >= 0 ? selectedNoteIndex : noteIndexAtCursor);
+                      if (baseIdx == null || baseIdx < 0 || baseIdx >= notes.length) return;
+                      const idx = baseIdx;
+                      const lastIdx = notes.length > 0 ? notes.length - 1 : 0;
                       const key = lyricLineIndex === 0 ? 'lyric' : 'lyric2';
                       const getVal = (n) => (key === 'lyric' ? (n?.lyric ?? '') : (n?.lyric2 ?? ''));
                       const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
@@ -7900,12 +7905,13 @@ function NoodiMeisterCore({ icons }) {
                         saveToHistory(notes);
                         setNotes(prev => prev.map((n, i) => {
                           if (i === idx) return { ...n, [key]: currentVal + '-' };
-                          if (i === idx + 1 && idx < end) return { ...n, [key]: '' };
+                          if (i === idx + 1 && idx < lastIdx) return { ...n, [key]: '' };
                           return n;
                         }));
-                        if (idx < end) {
-                          if (lyricChainIndex === null) { setLyricChainStart(start); setLyricChainEnd(end); }
+                        if (idx < lastIdx) {
                           const nextIdx = idx + 1;
+                          setLyricChainStart(idx);
+                          setLyricChainEnd(lastIdx);
                           setLyricChainIndex(nextIdx);
                           setSelectedNoteIndex(nextIdx);
                           setCursorPosition(getBeatAtNoteIndex(notes, nextIdx));
@@ -7916,17 +7922,18 @@ function NoodiMeisterCore({ icons }) {
                         saveToHistory(notes);
                         setNotes(prev => prev.map((n, i) => {
                           if (i === idx) return { ...n, [key]: currentVal + ' ' };
-                          if (i === idx + 1 && idx < end) return { ...n, [key]: '' };
+                          if (i === idx + 1 && idx < lastIdx) return { ...n, [key]: '' };
                           return n;
                         }));
-                        if (idx < end) {
-                          if (lyricChainIndex === null) { setLyricChainStart(start); setLyricChainEnd(end); }
+                        if (idx < lastIdx) {
                           const nextIdx = idx + 1;
+                          setLyricChainStart(idx);
+                          setLyricChainEnd(lastIdx);
                           setLyricChainIndex(nextIdx);
                           setSelectedNoteIndex(nextIdx);
                           setCursorPosition(getBeatAtNoteIndex(notes, nextIdx));
                         }
-                      } else if (e.key === 'ArrowRight' && start <= end && idx < end) {
+                      } else if (e.key === 'ArrowRight' && idx < lastIdx) {
                         e.preventDefault();
                         const nextIdx = lyricChainIndex !== null
                           ? Math.min(lyricChainIndex + 1, notes.length - 1)
