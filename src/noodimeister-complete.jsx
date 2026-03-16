@@ -4400,6 +4400,17 @@ function NoodiMeisterCore({ icons }) {
     return best.index;
   }, [notes, cursorPosition]);
 
+  // Hoia valitud noot (helesinine kast) ja kursor samal noodil:
+  // kui pole vahemiku valikut ega pedagoogilist taasesitust/eksporti, seame selectedNoteIndex = noteIndexAtCursor.
+  useEffect(() => {
+    if (noteInputMode) return;
+    if (isPedagogicalAudioPlaying || isExportingAnimation) return;
+    if (selectionStart >= 0 || selectionEnd >= 0) return; // range selection hoiab oma loogikat
+    if (noteIndexAtCursor < 0) return;
+    if (selectedNoteIndex === noteIndexAtCursor) return;
+    setSelectedNoteIndex(noteIndexAtCursor);
+  }, [noteInputMode, isPedagogicalAudioPlaying, isExportingAnimation, selectionStart, selectionEnd, noteIndexAtCursor, selectedNoteIndex]);
+
   /** Noot antud löögil (akordi puhul kõrgeim noteToMidi järgi). Kasutatakse mängimiseks pärast kursori liigutamist. */
   const getNoteAtBeat = useCallback((beat) => {
     let b = 0;
@@ -7880,8 +7891,10 @@ function NoodiMeisterCore({ icons }) {
                         setNotes(prev => prev.map((n, i) => i === idx ? { ...n, [key]: currentVal + '-' } : n));
                         if (idx < end) {
                           if (lyricChainIndex === null) { setLyricChainStart(start); setLyricChainEnd(end); }
-                          setLyricChainIndex(idx + 1);
-                          setSelectedNoteIndex(idx + 1);
+          const nextIdx = idx + 1;
+          setLyricChainIndex(nextIdx);
+          setSelectedNoteIndex(nextIdx);
+          setCursorPosition(getBeatAtNoteIndex(notes, nextIdx));
                         }
                       } else if (e.key === ' ') {
                         const currentVal = getVal(notes[idx]);
@@ -7890,20 +7903,24 @@ function NoodiMeisterCore({ icons }) {
                         setNotes(prev => prev.map((n, i) => i === idx ? { ...n, [key]: currentVal + ' ' } : n));
                         if (idx < end) {
                           if (lyricChainIndex === null) { setLyricChainStart(start); setLyricChainEnd(end); }
-                          setLyricChainIndex(idx + 1);
-                          setSelectedNoteIndex(idx + 1);
+          const nextIdx = idx + 1;
+          setLyricChainIndex(nextIdx);
+          setSelectedNoteIndex(nextIdx);
+          setCursorPosition(getBeatAtNoteIndex(notes, nextIdx));
                         }
                       } else if (e.key === 'ArrowRight' && (lyricChainIndex !== null || (start <= end && idx < end))) {
                         e.preventDefault();
-                        const nextIdx = lyricChainIndex !== null ? Math.min(lyricChainIndex + 1, notes.length - 1) : Math.min(idx + 1, end, notes.length - 1);
-                        setLyricChainIndex(nextIdx);
-                        setSelectedNoteIndex(nextIdx);
+        const nextIdx = lyricChainIndex !== null ? Math.min(lyricChainIndex + 1, notes.length - 1) : Math.min(idx + 1, end, notes.length - 1);
+        setLyricChainIndex(nextIdx);
+        setSelectedNoteIndex(nextIdx);
+        setCursorPosition(getBeatAtNoteIndex(notes, nextIdx));
                         if (lyricChainStart < 0) { setLyricChainStart(start); setLyricChainEnd(end); }
                       } else if (e.key === 'ArrowLeft' && (lyricChainIndex !== null || (start <= end && idx > start))) {
                         e.preventDefault();
-                        const prevIdx = lyricChainIndex !== null ? Math.max(lyricChainIndex - 1, 0) : Math.max(idx - 1, start, 0);
-                        setLyricChainIndex(prevIdx);
-                        setSelectedNoteIndex(prevIdx);
+        const prevIdx = lyricChainIndex !== null ? Math.max(lyricChainIndex - 1, 0) : Math.max(idx - 1, start, 0);
+        setLyricChainIndex(prevIdx);
+        setSelectedNoteIndex(prevIdx);
+        setCursorPosition(getBeatAtNoteIndex(notes, prevIdx));
                         if (lyricChainStart < 0) { setLyricChainStart(start); setLyricChainEnd(end); }
                       }
                     }}
