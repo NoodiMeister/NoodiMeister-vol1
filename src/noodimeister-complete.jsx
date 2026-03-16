@@ -7866,8 +7866,11 @@ function NoodiMeisterCore({ icons }) {
                       }
                     }}
                     onKeyDown={(e) => {
-                      const baseStart = selectionStart >= 0 && selectionEnd >= 0 ? Math.min(selectionStart, selectionEnd) : (selectedNoteIndex >= 0 ? selectedNoteIndex : noteIndexAtCursor);
-                      const baseEnd = selectionStart >= 0 && selectionEnd >= 0 ? Math.max(selectionStart, selectionEnd) : (selectedNoteIndex >= 0 ? selectedNoteIndex : noteIndexAtCursor);
+                      const hasSelection = selectionStart >= 0 && selectionEnd >= 0;
+                      const baseStart = hasSelection ? Math.min(selectionStart, selectionEnd) : (selectedNoteIndex >= 0 ? selectedNoteIndex : noteIndexAtCursor);
+                      const baseEnd = hasSelection
+                        ? Math.max(selectionStart, selectionEnd)
+                        : (notes.length > 0 ? notes.length - 1 : (selectedNoteIndex >= 0 ? selectedNoteIndex : noteIndexAtCursor));
                       const chainStart = lyricChainStart >= 0 ? lyricChainStart : baseStart;
                       const chainEnd = lyricChainEnd >= 0 ? lyricChainEnd : baseEnd;
                       const start = Math.max(0, chainStart);
