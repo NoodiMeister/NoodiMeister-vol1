@@ -4056,7 +4056,7 @@ function NoodiMeisterCore({ icons }) {
     for (let i = 0; i < notes.length; i++) {
       const n = notes[i];
       const noteBeat = typeof n.beat === 'number' ? n.beat : beat;
-      if (cursorPosition >= noteBeat && cursorPosition <= noteBeat + n.duration && !n.isRest) {
+      if (cursorPosition >= noteBeat && cursorPosition < noteBeat + n.duration && !n.isRest) {
         anchorIndex = i;
         anchorBeat = noteBeat;
         break;
@@ -4389,7 +4389,7 @@ function NoodiMeisterCore({ icons }) {
     for (let i = 0; i < notes.length; i++) {
       const n = notes[i];
       const noteBeat = typeof n.beat === 'number' ? n.beat : beat;
-      if (cursorPosition >= noteBeat && cursorPosition <= noteBeat + n.duration) {
+      if (cursorPosition >= noteBeat && cursorPosition < noteBeat + n.duration) {
         candidates.push({ index: i, note: n, noteBeat });
       }
       beat = noteBeat + n.duration;
@@ -4425,7 +4425,7 @@ function NoodiMeisterCore({ icons }) {
     for (let i = 0; i < notes.length; i++) {
       const n = notes[i];
       const noteBeat = typeof n.beat === 'number' ? n.beat : b;
-      if (beat >= noteBeat && beat <= noteBeat + n.duration) candidates.push({ index: i, note: n });
+      if (beat >= noteBeat && beat < noteBeat + n.duration) candidates.push({ index: i, note: n });
       b = noteBeat + n.duration;
     }
     if (candidates.length === 0) return null;
@@ -4481,7 +4481,7 @@ function NoodiMeisterCore({ icons }) {
         for (let i = 0; i < notes.length; i++) {
           const n = notes[i];
           const noteBeat = typeof n.beat === 'number' ? n.beat : b;
-          if (beat >= noteBeat && beat <= noteBeat + n.duration) candidates.push({ index: i, note: n });
+          if (beat >= noteBeat && beat < noteBeat + n.duration) candidates.push({ index: i, note: n });
           b = noteBeat + n.duration;
         }
         if (candidates.length === 0) return -1;
@@ -4592,7 +4592,7 @@ function NoodiMeisterCore({ icons }) {
         for (let i = 0; i < notes.length; i++) {
           const n = notes[i];
           const noteBeat = typeof n.beat === 'number' ? n.beat : beat;
-          if (cursorPosition >= noteBeat && cursorPosition <= noteBeat + n.duration) {
+          if (cursorPosition >= noteBeat && cursorPosition < noteBeat + n.duration) {
             candidates.push({ index: i, note: n, noteBeat });
           }
           beat = noteBeat + n.duration;
@@ -4897,7 +4897,7 @@ function NoodiMeisterCore({ icons }) {
             for (let i = 0; i < remaining.length; i++) {
               const n = remaining[i];
               const noteBeat = typeof n.beat === 'number' ? n.beat : beat;
-              if (newCursor >= noteBeat && newCursor <= noteBeat + n.duration) atCursor.push(n);
+              if (newCursor >= noteBeat && newCursor < noteBeat + n.duration) atCursor.push(n);
               beat = noteBeat + n.duration;
             }
             const prevNote = atCursor.length === 0 ? null : atCursor.length === 1 ? atCursor[0] : atCursor.reduce((a, b) => (noteToMidi(a) >= noteToMidi(b) ? a : b));
