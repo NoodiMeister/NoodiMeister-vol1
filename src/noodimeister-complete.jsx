@@ -1171,24 +1171,21 @@ function NoodiMeisterCore({ icons }) {
   const activeStaff = staves[activeStaffIndex];
   const notes = activeStaff?.notes ?? [];
 
-  // SEL-režiimis näita kleepimiskohta: liigu kursori positsiooniga valiku lõppu (pärast valitud noote).
+  // SEL-režiimis vahemiku valikul: näita kleepimiskohta (kursor valiku lõppu). Üksiku noodi klõpsul kursor seatakse juba onNoteClick-is.
   useEffect(() => {
     if (noteInputMode) return;
-    let lastSelectedIndex = -1;
-    if (selectionStart >= 0 && selectionEnd >= 0) {
-      lastSelectedIndex = Math.max(selectionStart, selectionEnd);
-    } else if (selectedNoteIndex >= 0) {
-      lastSelectedIndex = selectedNoteIndex;
-    }
+    if (selectionStart < 0 || selectionEnd < 0) return; // ainult vahemiku valikul liiguta kursor
+    const lastSelectedIndex = Math.max(selectionStart, selectionEnd);
     if (lastSelectedIndex < 0 || lastSelectedIndex >= notes.length) return;
     let beat = 0;
-    for (let i = 0; i <= lastSelectedIndex; i += 1) {
+    for (let i = 0; i <= lastSelectedIndex; i++) {
       const n = notes[i];
+      const noteBeat = typeof n.beat === 'number' ? n.beat : beat;
       const dur = Number(n?.duration) || 1;
-      beat += dur;
+      beat = noteBeat + dur;
     }
     setCursorPosition(beat);
-  }, [noteInputMode, selectedNoteIndex, selectionStart, selectionEnd, notes]);
+  }, [noteInputMode, selectionStart, selectionEnd, notes]);
 
   const setNotes = useCallback((updater) => {
     setStaves((prev) => {
@@ -4429,6 +4426,19 @@ function NoodiMeisterCore({ icons }) {
     if (note && !note.isRest) playPianoNote(note.pitch, note.octave ?? 4, note.accidental ?? 0);
   }, [playNoteOnInsert, getNoteAtBeat, playPianoNote]);
 
+  /** Noodi alguse löök antud indeksi järgi (SEL-režiimis kursori joondamine klõpsatud nootiga). */
+  const getBeatAtNoteIndex = useCallback((noteList, index) => {
+    if (index < 0 || index >= (noteList?.length ?? 0)) return 0;
+    let beat = 0;
+    for (let i = 0; i < noteList.length; i++) {
+      const n = noteList[i];
+      const noteBeat = typeof n.beat === 'number' ? n.beat : beat;
+      if (i === index) return noteBeat;
+      beat = noteBeat + (n.duration ?? 1);
+    }
+    return beat;
+  }, []);
+
   // Keyboard handler
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -4462,8 +4472,12 @@ function NoodiMeisterCore({ icons }) {
         for (let k = 1; k < candidates.length; k++) { if (noteToMidi(candidates[k].note) > noteToMidi(best.note)) best = candidates[k]; }
         return best.index;
       };
-      const applyLyricChainAt = (index) => {
+      const applyLyricChainAt = (index, beatForCursor = null) => {
         if (index < 0) return;
+        if (beatForCursor != null) {
+          setCursorPosition(beatForCursor);
+          setCursorSubRow(0);
+        }
         setSelectedNoteIndex(index);
         setLyricChainStart(index);
         setLyricChainEnd(index);
@@ -4473,15 +4487,17 @@ function NoodiMeisterCore({ icons }) {
       // Ctrl+L (Cmd+L): SEL-režiimis püüa ainult siis, kui käivitame laulusõna (meloodiareal, noot kursori all); muul juhul lastakse brauserile (aadressiriba jms)
       if (e.code === 'KeyL' && modKey) {
         const recent = lastBeatClickForLyricRef.current;
-        const useClickBeat = recent.beat != null && (Date.now() - recent.at) < 400;
+        const useClickBeat = recent.beat != null && (Date.now() - recent.at) < 600;
         if (useClickBeat) {
           const idx = getNoteIndexForBeat(recent.beat);
           lastBeatClickForLyricRef.current = { beat: null, at: 0 };
           if (idx >= 0) {
             e.preventDefault();
-            applyLyricChainAt(idx);
+            applyLyricChainAt(idx, recent.beat);
+            return;
           }
-        } else if (cursorOnMelodyRow && noteIndexAtCursor >= 0) {
+        }
+        if (cursorOnMelodyRow && noteIndexAtCursor >= 0) {
           e.preventDefault();
           applyLyricChainAt(noteIndexAtCursor);
         }
@@ -4490,13 +4506,13 @@ function NoodiMeisterCore({ icons }) {
       // L (ilma modifikaatorita): laulusõna kursori asukohast, kui kursor meloodiareal ja ei kirjuta teises väljas
       if (e.code === 'KeyL' && !isTypingInInput && cursorOnMelodyRow) {
         const recent = lastBeatClickForLyricRef.current;
-        const useClickBeat = recent.beat != null && (Date.now() - recent.at) < 400;
+        const useClickBeat = recent.beat != null && (Date.now() - recent.at) < 600;
         if (useClickBeat) {
           const idx = getNoteIndexForBeat(recent.beat);
           lastBeatClickForLyricRef.current = { beat: null, at: 0 };
           if (idx >= 0) {
             e.preventDefault();
-            applyLyricChainAt(idx);
+            applyLyricChainAt(idx, recent.beat);
             return;
           }
         }
@@ -9225,11 +9241,14 @@ function NoodiMeisterCore({ icons }) {
                   notes={staff.notes}
                   onStaffAddNote={staffIdx === activeStaffIndex && mousePitchInputEnabled ? addNoteAtCursor : undefined}
                   onNoteClick={staffIdx === activeStaffIndex ? (index) => {
+                    const beat = getBeatAtNoteIndex(notes, index);
+                    lastBeatClickForLyricRef.current = { beat, at: Date.now() }; // Cmd+L kasutab seda enne Reacti cursorPosition uuendust
                     setSelectedNoteIndex(index);
                     setSelectionStart(-1);
                     setSelectionEnd(-1);
                     setNoteInputMode(false);
-                    setCursorSubRow(0); // Laulusõnade režiim: kursor alati meloodiareal, et toolbaar ja sisestus töötaks (sh esimene noot)
+                    setCursorSubRow(0); // Laulusõnade režiim: kursor alati meloodiareal
+                    setCursorPosition(beat); // Üks kursor: kursor joondatud klõpsatud noodi algusega
                     if (cursorTool === 'type') {
                       setLyricChainStart(index);
                       setLyricChainEnd(index);
