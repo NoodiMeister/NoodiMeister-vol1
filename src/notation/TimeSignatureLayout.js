@@ -10,8 +10,8 @@
  * Kasutus: TraditionalNotationView, FigurenotesView, timeSignatureToolbox (PedagogicalMeterIcon), noodimeister-complete.jsx (importib toolboxist).
  */
 export const TIME_SIG_LAYOUT = {
-  /** Lugeja baseline y (tsentrist) – esimene variant */
-  Y_NUM: -8,
+  /** Lugeja baseline y (tsentrist) – 3 ühikut kriipsust üles */
+  Y_NUM: -11,
   /** Kriipsu y – piisavalt all, et kriips ei läbiks Leland-numbrit */
   Y_LINE: -2,
   /** Nimetaja baseline y (klassikaline 4/4 – esimene variant) */

@@ -10,15 +10,15 @@ Kõik y-koordinaadid on antud grupi **lokaalses** süsteemis (`<g transform="tra
 
 | Element | Koordinaadid | Selgitus |
 |--------|---------------|----------|
-| **Lugeja "4"** | `x=0`, `y=-8` | Teksti baseline (numbri põhjajoone y). `text-anchor="middle"` → number on tsentreeritud. |
+| **Lugeja "4"** | `x=0`, `y=-11` | Teksti baseline (numbri põhjajoone y). 3 ühikut kriipsust üles. `text-anchor="middle"` → number on tsentreeritud. |
 | **Kriips** | `x1=-10`, `y1=-2`, `x2=10`, `y2=-2` | Horisontaalne joon, pikkus 20, keskel y=-2 (Leland-numbri alla). `stroke-width="1.5"`. |
 | **Nimetaja "4"** | `x=0`, `y=5` | Teksti baseline. |
 
 ### Vahed (gap) – klassikaline
 
 - **Lugeja "4" → kriips:**  
-  - Numbri 4 baseline on y=-8. Kriips on y=-2.  
-  - **Vahe (baseline → kriips):** `-2 - (-8) = 6` (kriips ei läbi Leland-numbrit).
+  - Numbri 4 baseline on y=-11. Kriips on y=-2.  
+  - **Vahe (baseline → kriips):** `-2 - (-11) = 9` (lugeja 3 ühikut kriipsust üleval).
 
 - **Kriips → nimetaja "4":**  
   - Kriips y=-2. Nimetaja baseline y=5.  
@@ -30,7 +30,7 @@ Kõik y-koordinaadid on antud grupi **lokaalses** süsteemis (`<g transform="tra
 
 | Element | Koordinaadid | Selgitus |
 |--------|---------------|----------|
-| **Lugeja "4"** | `x=0`, `y=-8` | Sama mis klassikalises. |
+| **Lugeja "4"** | `x=0`, `y=-11` | Sama mis klassikalises. |
 | **Kriips** | `x1=-10`, `y1=-2`, `x2=10`, `y2=-2` | Sama joon. |
 | **Veerandnoot (pea)** | `cx=1`, `cy=2.5`, `rx=4`, `ry=2.5` | Ellipsi keskpunkt (1, 2.5), laius 8, kõrgus 5. |
 | **Veerandnoot (varras)** | `x1=-3`, `y1=3`, `x2=-3`, `y2=23` | Vertikaalne joon, pikkus 20. |
@@ -42,7 +42,7 @@ Kõik y-koordinaadid on antud grupi **lokaalses** süsteemis (`<g transform="tra
 
 ### Vahed (gap) – pedagoogiline
 
-- **Lugeja "4" → kriips:** `-2 - (-8) = 6`.
+- **Lugeja "4" → kriips:** `-2 - (-11) = 9`.
 - **Kriips → veerandnoot (ellipsi ülaäär):** `0 - (-2) = 2`.
 - **Kriips → veerandnoot (ellipsi kesk):** `2.5 - (-2) = 4.5`.
 
@@ -52,9 +52,9 @@ Kõik y-koordinaadid on antud grupi **lokaalses** süsteemis (`<g transform="tra
 
 | Suurus | Väärtus |
 |--------|--------|
-| Lugeja "4" y (baseline) | -8 |
+| Lugeja "4" y (baseline) | -11 |
 | Kriips y | -2 |
-| **Gap: lugeja baseline → kriips** | **6** |
+| **Gap: lugeja baseline → kriips** | **9** |
 | Nimetaja "4" y (baseline) | 5 |
 | **Gap: kriips → nimetaja baseline** | **7** |
 | Kriips pikkus (x) | 20 (x -10 … +10) |

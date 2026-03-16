@@ -4,7 +4,7 @@
   <desc>Paigutus vastab rakenduse TimeSignatureLayout. Rakenduses on Leland SMuFL number; Lelandi vaatamiseks ava taktimoot-4-4-leland.html</desc>
   <rect width="60" height="55" fill="#fff"/>
   <g transform="translate(30, 25)" fill="#333" stroke="#333" stroke-width="1.5">
-    <text x="0" y="-8" text-anchor="middle" font-family="sans-serif" font-size="18" font-weight="bold" dominant-baseline="alphabetic" fill="#333" stroke="none">4</text>
+    <text x="0" y="-11" text-anchor="middle" font-family="sans-serif" font-size="18" font-weight="bold" dominant-baseline="alphabetic" fill="#333" stroke="none">4</text>
     <line x1="-10" y1="-2" x2="10" y2="-2" stroke="#333" stroke-width="1.5"/>
     <ellipse cx="1" cy="2.5" rx="4" ry="2.5" fill="#333"/>
     <line x1="-3" y1="3" x2="-3" y2="23" stroke="#333" stroke-width="1.5"/>

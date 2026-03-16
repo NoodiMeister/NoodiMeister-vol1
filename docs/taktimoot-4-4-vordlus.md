@@ -15,7 +15,7 @@
 
 **Ühine paigutus (mõlemal) = `TimeSignatureLayout.js`:**
 
-- Lugeja: y = -8 (baseline)
+- Lugeja: y = -11 (baseline, 3 ühikut kriipsust üles)
 - Kriips: y = -2, x = -10 … +10
 - Nimetaja (klassikaline): y = 5
 - Pedagoogiline noot: ellips (1, 2.5), rx=4, ry=2.5; varras (-3, 3)–(-3, 23)
