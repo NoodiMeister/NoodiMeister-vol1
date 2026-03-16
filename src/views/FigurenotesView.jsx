@@ -191,6 +191,7 @@ export function FigurenotesView({
   showStaffSpacerHandles = false,
   onStaffSpacerMouseDown,
   themeColors,
+  activeLyricNoteIndex = null,
 }) {
   /** Melody row height (beat-box); chord line sits below with chordLineGap and height chordLineHeight (half of melody when in chord mode). */
   const melodyRowHeight = timelineHeight;
@@ -923,8 +924,21 @@ export function FigurenotesView({
                       const lyric2Y = hasChordRow
                         ? lyricGapTop + fs * 1.5 + (lyricLineYOffset || 0)
                         : labelY + Math.round(28 * (figurenotesSize / 16)) + (lyricLineYOffset || 0);
+                      const isLyricActive = typeof activeLyricNoteIndex === 'number' && activeLyricNoteIndex === globalNoteIndex;
                       return (
                         <g key={noteIdx} {...noteGroupProps}>
+                          {isLyricActive && (
+                            <rect
+                              x={figureCenterX - noteWidth * 0.6}
+                              y={lyric1Y - fs * 1.2}
+                              width={noteWidth * 1.2}
+                              height={fs * 1.8}
+                              rx={4}
+                              fill="rgba(59,130,246,0.12)"
+                              stroke="#2563eb"
+                              strokeWidth={1}
+                            />
+                          )}
                           {showBand && (
                             <rect x={bandLeft} y={bandY} width={noteWidth} height={bandH} fill={bandColor} opacity="0.2" rx="2" />
                           )}

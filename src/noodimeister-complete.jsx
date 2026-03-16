@@ -7893,25 +7893,33 @@ function NoodiMeisterCore({ icons }) {
                         const currentVal = getVal(notes[idx]);
                         e.preventDefault();
                         saveToHistory(notes);
-                        setNotes(prev => prev.map((n, i) => i === idx ? { ...n, [key]: currentVal + '-' } : n));
+                        setNotes(prev => prev.map((n, i) => {
+                          if (i === idx) return { ...n, [key]: currentVal + '-' };
+                          if (i === idx + 1 && idx < end) return { ...n, [key]: '' };
+                          return n;
+                        }));
                         if (idx < end) {
                           if (lyricChainIndex === null) { setLyricChainStart(start); setLyricChainEnd(end); }
-          const nextIdx = idx + 1;
-          setLyricChainIndex(nextIdx);
-          setSelectedNoteIndex(nextIdx);
-          setCursorPosition(getBeatAtNoteIndex(notes, nextIdx));
+                          const nextIdx = idx + 1;
+                          setLyricChainIndex(nextIdx);
+                          setSelectedNoteIndex(nextIdx);
+                          setCursorPosition(getBeatAtNoteIndex(notes, nextIdx));
                         }
                       } else if (e.key === ' ') {
                         const currentVal = getVal(notes[idx]);
                         e.preventDefault();
                         saveToHistory(notes);
-                        setNotes(prev => prev.map((n, i) => i === idx ? { ...n, [key]: currentVal + ' ' } : n));
+                        setNotes(prev => prev.map((n, i) => {
+                          if (i === idx) return { ...n, [key]: currentVal + ' ' };
+                          if (i === idx + 1 && idx < end) return { ...n, [key]: '' };
+                          return n;
+                        }));
                         if (idx < end) {
                           if (lyricChainIndex === null) { setLyricChainStart(start); setLyricChainEnd(end); }
-          const nextIdx = idx + 1;
-          setLyricChainIndex(nextIdx);
-          setSelectedNoteIndex(nextIdx);
-          setCursorPosition(getBeatAtNoteIndex(notes, nextIdx));
+                          const nextIdx = idx + 1;
+                          setLyricChainIndex(nextIdx);
+                          setSelectedNoteIndex(nextIdx);
+                          setCursorPosition(getBeatAtNoteIndex(notes, nextIdx));
                         }
                       } else if (e.key === 'ArrowRight' && (lyricChainIndex !== null || (start <= end && idx < end))) {
                         e.preventDefault();
@@ -9215,6 +9223,10 @@ function NoodiMeisterCore({ icons }) {
             const staffEntries = visibleStaffList.length > 0
               ? visibleStaffList
               : staves.map((staff, i) => ({ staff, staffIdx: i, visibleIndex: i }));
+            // Aktiivne laulusõnade noot: kui ahel on käimas, kasutame lyricChainIndex; muidu valitud nooti või kursorit.
+            const lyricActiveNoteIndex = cursorOnMelodyRow
+              ? (lyricChainIndex ?? (selectedNoteIndex >= 0 ? selectedNoteIndex : noteIndexAtCursor))
+              : null;
             return staffEntries.map(({ staff, staffIdx, visibleIndex }) => {
               const isFirstInBraceGroup = staff.braceGroupId && staves[staffIdx + 1]?.braceGroupId === staff.braceGroupId;
               const braceGroupSize = isFirstInBraceGroup ? 2 : 0;
@@ -9333,6 +9345,7 @@ function NoodiMeisterCore({ icons }) {
                     : undefined}
                   onChordLineMouseMove={notationStyle === 'FIGURENOTES' && figurenotesChordBlocks && staffIdx === activeStaffIndex ? (beat) => { setCursorPosition(beat); setCursorSubRow(1); } : undefined}
                   onChordLineClick={notationStyle === 'FIGURENOTES' && figurenotesChordBlocks && staffIdx === activeStaffIndex ? (beat) => { const b = Math.max(0, beat); setCursorPosition(b); setCursorSubRow(1); playNoteAtBeatIfEnabled(b); } : undefined}
+                  activeLyricNoteIndex={staffIdx === activeStaffIndex ? lyricActiveNoteIndex : null}
                   notationStyle={notationStyle}
                   layoutMeasuresPerLine={effectiveLayoutMeasuresPerLine}
                   layoutLineBreakBefore={effectiveLayoutLineBreakBefore}
@@ -9702,7 +9715,7 @@ function getFingeringForNote(pitch, octave, instrumentId) {
 }
 
 // Timeline Component – multi-system layout (VexFlow loogika). (PAGE_BREAK_GAP on defineeritud üleval.)
-function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, pageWidth, cursorPosition, notationMode, staffLines, clefType, keySignature = 'C', relativeNotationShowKeySignature = false, relativeNotationShowTraditionalClef = false, onJoClefPositionChange, joClefFocused = false, onJoClefFocus, instrument = 'single-staff-treble', instrumentNotationVariant = 'standard', instrumentConfig = {}, showBarNumbers = true, barNumberSize = 11, showRhythmSyllables = false, joClefStaffPosition: joClefStaffPositionProp, showAllNoteLabels = false, enableEmojiOverlays = true, noteheadShape = 'oval', noteheadEmoji = '♪', onNoteTeacherLabelChange, onNoteLabelClick, chords = [], isDotted, isRest, selectedDuration, noteInputMode, selectedNoteIndex, isNoteSelected, notes: allNotes, onStaffAddNote, onNoteClick, onNoteMouseDown, onNoteMouseEnter, onNotePitchChange, onNoteBeatChange, canHandDragNotes = false, ghostPitch, ghostOctave, onFigureBeatClick, onChordLineMouseMove, onChordLineClick, notationStyle, layoutMeasuresPerLine = 4, layoutLineBreakBefore = [], layoutPageBreakBefore = [], layoutSystemGap = 120, layoutPartsGap, layoutConnectedBarlines = false, staffRowAlignment = 'center', staffIndexInScore = 0, systemTotalHeight, layoutGlobalSpacingMultiplier = 1, systems: systemsProp, baseYOffset = 0, isActiveStaff = true, staffCount = 1, staffHeight: staffHeightProp, figurenotesSize = 16, figurenotesStems = false, figurenotesChordLineGap = 6, figurenotesChordBlocks = false, figurenotesChordBlocksShowTones = true, figurenotesMelodyShowNoteNames = true, figurenotesRowHeight: figurenotesRowHeightProp, figurenotesChordLineHeight: figurenotesChordLineHeightProp, timeSignatureSize = 16, themeColors: themeColorsProp, pedagogicalPlayheadStyle = 'line', pedagogicalPlayheadEmoji = '🎵', pedagogicalPlayheadEmojiSize = 32, cursorSizePx, cursorLineStrokeWidth = 4, cursorSubRow = 0, pedagogicalPlayheadMovement = 'arch', isPedagogicalAudioPlaying = false, isExportingAnimation = false, exportCursorRef, scoreContainerRef, pageFlowDirection = 'vertical', pageOrientation = 'portrait', isFirstInBraceGroup = false, braceGroupSize = 0, lyricFontFamily = 'sans-serif', lyricFontSize = 12, lyricLineYOffset = 0, translateLabel, showLayoutBreakIcons = false, showStaffSpacerHandles = false, onSystemYOffsetChange, onToggleLineBreakAfter }) {
+function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, pageWidth, cursorPosition, notationMode, staffLines, clefType, keySignature = 'C', relativeNotationShowKeySignature = false, relativeNotationShowTraditionalClef = false, onJoClefPositionChange, joClefFocused = false, onJoClefFocus, instrument = 'single-staff-treble', instrumentNotationVariant = 'standard', instrumentConfig = {}, showBarNumbers = true, barNumberSize = 11, showRhythmSyllables = false, joClefStaffPosition: joClefStaffPositionProp, showAllNoteLabels = false, enableEmojiOverlays = true, noteheadShape = 'oval', noteheadEmoji = '♪', onNoteTeacherLabelChange, onNoteLabelClick, chords = [], isDotted, isRest, selectedDuration, noteInputMode, selectedNoteIndex, isNoteSelected, notes: allNotes, onStaffAddNote, onNoteClick, onNoteMouseDown, onNoteMouseEnter, onNotePitchChange, onNoteBeatChange, canHandDragNotes = false, ghostPitch, ghostOctave, onFigureBeatClick, onChordLineMouseMove, onChordLineClick, notationStyle, layoutMeasuresPerLine = 4, layoutLineBreakBefore = [], layoutPageBreakBefore = [], layoutSystemGap = 120, layoutPartsGap, layoutConnectedBarlines = false, staffRowAlignment = 'center', staffIndexInScore = 0, systemTotalHeight, layoutGlobalSpacingMultiplier = 1, systems: systemsProp, baseYOffset = 0, isActiveStaff = true, staffCount = 1, staffHeight: staffHeightProp, figurenotesSize = 16, figurenotesStems = false, figurenotesChordLineGap = 6, figurenotesChordBlocks = false, figurenotesChordBlocksShowTones = true, figurenotesMelodyShowNoteNames = true, figurenotesRowHeight: figurenotesRowHeightProp, figurenotesChordLineHeight: figurenotesChordLineHeightProp, timeSignatureSize = 16, themeColors: themeColorsProp, pedagogicalPlayheadStyle = 'line', pedagogicalPlayheadEmoji = '🎵', pedagogicalPlayheadEmojiSize = 32, cursorSizePx, cursorLineStrokeWidth = 4, cursorSubRow = 0, pedagogicalPlayheadMovement = 'arch', isPedagogicalAudioPlaying = false, isExportingAnimation = false, exportCursorRef, scoreContainerRef, pageFlowDirection = 'vertical', pageOrientation = 'portrait', isFirstInBraceGroup = false, braceGroupSize = 0, lyricFontFamily = 'sans-serif', lyricFontSize = 12, lyricLineYOffset = 0, translateLabel, showLayoutBreakIcons = false, showStaffSpacerHandles = false, onSystemYOffsetChange, onToggleLineBreakAfter, activeLyricNoteIndex = null }) {
   if (typeof GLOBAL_NOTATION_CONFIG === 'undefined' || !GLOBAL_NOTATION_CONFIG || GLOBAL_NOTATION_CONFIG.EMOJIS === false) return null;
   const themeColors = themeColorsProp || { staffLineColor: '#000', noteFill: '#1a1a1a', textColor: '#1a1a1a', scoreBg: '#fffbf0', isDark: false };
   const safeKey = keySignature ?? 'C';
