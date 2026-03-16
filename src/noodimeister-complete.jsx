@@ -7926,19 +7926,23 @@ function NoodiMeisterCore({ icons }) {
                           setSelectedNoteIndex(nextIdx);
                           setCursorPosition(getBeatAtNoteIndex(notes, nextIdx));
                         }
-                      } else if (e.key === 'ArrowRight' && (lyricChainIndex !== null || (start <= end && idx < end))) {
+                      } else if (e.key === 'ArrowRight' && start <= end && idx < end) {
                         e.preventDefault();
-        const nextIdx = lyricChainIndex !== null ? Math.min(lyricChainIndex + 1, notes.length - 1) : Math.min(idx + 1, end, notes.length - 1);
-        setLyricChainIndex(nextIdx);
-        setSelectedNoteIndex(nextIdx);
-        setCursorPosition(getBeatAtNoteIndex(notes, nextIdx));
+                        const nextIdx = lyricChainIndex !== null
+                          ? Math.min(lyricChainIndex + 1, notes.length - 1)
+                          : Math.min(idx + 1, end, notes.length - 1);
+                        setLyricChainIndex(nextIdx);
+                        setSelectedNoteIndex(nextIdx);
+                        setCursorPosition(getBeatAtNoteIndex(notes, nextIdx));
                         if (lyricChainStart < 0) { setLyricChainStart(start); setLyricChainEnd(end); }
-                      } else if (e.key === 'ArrowLeft' && (lyricChainIndex !== null || (start <= end && idx > start))) {
+                      } else if (e.key === 'ArrowLeft' && start <= end && idx > start) {
                         e.preventDefault();
-        const prevIdx = lyricChainIndex !== null ? Math.max(lyricChainIndex - 1, 0) : Math.max(idx - 1, start, 0);
-        setLyricChainIndex(prevIdx);
-        setSelectedNoteIndex(prevIdx);
-        setCursorPosition(getBeatAtNoteIndex(notes, prevIdx));
+                        const prevIdx = lyricChainIndex !== null
+                          ? Math.max(lyricChainIndex - 1, 0)
+                          : Math.max(idx - 1, start, 0);
+                        setLyricChainIndex(prevIdx);
+                        setSelectedNoteIndex(prevIdx);
+                        setCursorPosition(getBeatAtNoteIndex(notes, prevIdx));
                         if (lyricChainStart < 0) { setLyricChainStart(start); setLyricChainEnd(end); }
                       }
                     }}
