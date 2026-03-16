@@ -138,6 +138,11 @@ var VALID_DENOMINATORS = [1, 2, 4, 8, 16, 32, 64, 128];
 var MAX_NUMERATOR = 99;
 var TOOLBOX_ORDER = ['rhythm', 'timeSignature', 'clefs', 'keySignatures', 'transpose', 'pitchInput', 'pianoKeyboard', 'notehead', 'instruments', 'repeatsJumps', 'layout', 'textBox', 'chords'];
 var PITCH_TO_SEMI = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
+/** Noodi täis MIDI väärtus (pitch + oktav + accidental), akordi „kõrgeima“ noodi võrdlemiseks. */
+function noteToMidi(n) {
+  if (!n || n.isRest) return -1;
+  return (n.octave + 1) * 12 + (PITCH_TO_SEMI[n.pitch] ?? 0) + (n.accidental ?? 0);
+}
 var PITCH_NAME_TO_NATURAL = { C: 'C', 'C#': 'C', Db: 'C', D: 'D', 'D#': 'D', Eb: 'D', E: 'E', F: 'F', 'F#': 'F', Gb: 'F', G: 'G', 'G#': 'G', Ab: 'G', A: 'A', 'A#': 'A', Bb: 'A', B: 'B' };
 
 // Joonestiku/instrumentide konstandid var'iga faili alguses
@@ -1079,8 +1084,6 @@ function NoodiMeisterCore({ icons }) {
   const noteInputModeRef = useRef(noteInputMode);
   // Mouse-insert must also be readable in keyboard handler.
   const mouseInsertDraftRef = useRef(mouseInsertDraft);
-  /** Esimese käivitusega ei mängi nooti (vältimaks mängimist lehe laadimisel); pärast seda mängib alati, kui kursor liigub ja all on noot. */
-  const cursorPlaySkipFirstRunRef = useRef(true);
   useEffect(() => {
     noteInputModeRef.current = noteInputMode;
   }, [noteInputMode]);
@@ -4393,24 +4396,38 @@ function NoodiMeisterCore({ icons }) {
     }
     if (candidates.length === 0) return -1;
     if (candidates.length === 1) return candidates[0].index;
-    const midi = (n) => (n.octave + 1) * 12 + (PITCH_TO_SEMI[n.pitch] ?? 0);
     let best = candidates[0];
     for (let k = 1; k < candidates.length; k++) {
-      if (midi(candidates[k].note) > midi(best.note)) best = candidates[k];
+      if (noteToMidi(candidates[k].note) > noteToMidi(best.note)) best = candidates[k];
     }
     return best.index;
   }, [notes, cursorPosition]);
 
-  // Kursor nooti loeb ja mängib alati, kui kasutaja kursorit liigutab (N-režiim, meloodiareal, noot kursori all; järgib playNoteOnInsert)
-  useEffect(() => {
-    if (!playNoteOnInsert || !noteInputMode || !cursorOnMelodyRow || noteIndexAtCursor < 0) return;
-    if (cursorPlaySkipFirstRunRef.current) {
-      cursorPlaySkipFirstRunRef.current = false;
-      return;
+  /** Noot antud löögil (akordi puhul kõrgeim noteToMidi järgi). Kasutatakse mängimiseks pärast kursori liigutamist. */
+  const getNoteAtBeat = useCallback((beat) => {
+    let b = 0;
+    const candidates = [];
+    for (let i = 0; i < notes.length; i++) {
+      const n = notes[i];
+      const noteBeat = typeof n.beat === 'number' ? n.beat : b;
+      if (beat >= noteBeat && beat <= noteBeat + n.duration) candidates.push({ index: i, note: n });
+      b = noteBeat + n.duration;
     }
-    const note = notes[noteIndexAtCursor];
+    if (candidates.length === 0) return null;
+    if (candidates.length === 1) return candidates[0].note;
+    let best = candidates[0];
+    for (let k = 1; k < candidates.length; k++) {
+      if (noteToMidi(candidates[k].note) > noteToMidi(best.note)) best = candidates[k];
+    }
+    return best.note;
+  }, [notes]);
+
+  /** Mängib nooti antud löögil, kui seal on noot ja playNoteOnInsert on sisse lülitatud. N- ja SEL-režiim: kursor esitab õige helikõrgust. */
+  const playNoteAtBeatIfEnabled = useCallback((beat) => {
+    if (!playNoteOnInsert) return;
+    const note = getNoteAtBeat(beat);
     if (note && !note.isRest) playPianoNote(note.pitch, note.octave ?? 4, note.accidental ?? 0);
-  }, [cursorPosition, cursorSubRow, noteInputMode, noteIndexAtCursor, cursorOnMelodyRow, playNoteOnInsert, notes, playPianoNote]);
+  }, [playNoteOnInsert, getNoteAtBeat, playPianoNote]);
 
   // Keyboard handler
   useEffect(() => {
@@ -4441,9 +4458,8 @@ function NoodiMeisterCore({ icons }) {
         }
         if (candidates.length === 0) return -1;
         if (candidates.length === 1) return candidates[0].index;
-        const midi = (n) => (n.octave + 1) * 12 + (PITCH_TO_SEMI[n.pitch] ?? 0);
         let best = candidates[0];
-        for (let k = 1; k < candidates.length; k++) { if (midi(candidates[k].note) > midi(best.note)) best = candidates[k]; }
+        for (let k = 1; k < candidates.length; k++) { if (noteToMidi(candidates[k].note) > noteToMidi(best.note)) best = candidates[k]; }
         return best.index;
       };
       const applyLyricChainAt = (index) => {
@@ -4549,10 +4565,9 @@ function NoodiMeisterCore({ icons }) {
         }
         if (candidates.length === 0) return -1;
         if (candidates.length === 1) return candidates[0].index;
-        const midi = (n) => (n.octave + 1) * 12 + (PITCH_TO_SEMI[n.pitch] ?? 0);
         let best = candidates[0];
         for (let k = 1; k < candidates.length; k++) {
-          if (midi(candidates[k].note) > midi(best.note)) best = candidates[k];
+          if (noteToMidi(candidates[k].note) > noteToMidi(best.note)) best = candidates[k];
         }
         return best.index;
       };
@@ -4851,7 +4866,7 @@ function NoodiMeisterCore({ icons }) {
               if (newCursor >= noteBeat && newCursor <= noteBeat + n.duration) atCursor.push(n);
               beat = noteBeat + n.duration;
             }
-            const prevNote = atCursor.length === 0 ? null : atCursor.length === 1 ? atCursor[0] : atCursor.reduce((a, b) => ((a.octave + 1) * 12 + (PITCH_TO_SEMI[a.pitch] ?? 0)) >= ((b.octave + 1) * 12 + (PITCH_TO_SEMI[b.pitch] ?? 0)) ? a : b);
+            const prevNote = atCursor.length === 0 ? null : atCursor.length === 1 ? atCursor[0] : atCursor.reduce((a, b) => (noteToMidi(a) >= noteToMidi(b) ? a : b));
             if (prevNote) {
               setGhostPitch(prevNote.pitch);
               setGhostOctave(prevNote.octave);
@@ -5017,17 +5032,21 @@ function NoodiMeisterCore({ icons }) {
       }
 
       // Noodi sisestusrežiim (N-mode): nooltega kursor, tähtedega noot (ka tööriistakast avatud).
-      // Kehtib nüüd ühtemoodi nii traditsioonilises kui ka figuurnotatsioonis.
+      // Mängib nooti alati pärast lugemist/sisestust (sama voog, mitte useEffect), et helikõrgus oleks õige.
       if (noteInputMode) {
         const cursorStep = e.shiftKey ? 0.25 : 1;
         if (e.code === 'ArrowLeft') {
           e.preventDefault();
+          const newBeat = Math.max(0, cursorPosition - cursorStep);
           setCursorPosition(prev => Math.max(0, prev - cursorStep));
+          playNoteAtBeatIfEnabled(newBeat);
           return;
         }
         if (e.code === 'ArrowRight') {
           e.preventDefault();
+          const newBeat = Math.min(maxCursor, cursorPosition + cursorStep);
           setCursorPosition(prev => Math.min(maxCursor, prev + cursorStep));
+          playNoteAtBeatIfEnabled(newBeat);
           return;
         }
         if (e.code === 'Home') {
@@ -5036,6 +5055,7 @@ function NoodiMeisterCore({ icons }) {
           const idx = ms && ms.length ? ms.findIndex((m) => cursorPosition >= m.startBeat && cursorPosition < m.endBeat) : -1;
           const start = idx >= 0 ? ms[idx].startBeat : 0;
           setCursorPosition(Math.max(0, start));
+          playNoteAtBeatIfEnabled(start);
           return;
         }
         if (e.code === 'End') {
@@ -5043,7 +5063,9 @@ function NoodiMeisterCore({ icons }) {
           const ms = measuresRef.current;
           const idx = ms && ms.length ? ms.findIndex((m) => cursorPosition >= m.startBeat && cursorPosition < m.endBeat) : -1;
           const end = idx >= 0 ? ms[idx].endBeat : (timeSignature?.beats ?? 4);
-          setCursorPosition(Math.min(maxCursor, end > 0 ? end - 0.25 : 0));
+          const endBeat = Math.min(maxCursor, end > 0 ? end - 0.25 : 0);
+          setCursorPosition(endBeat);
+          playNoteAtBeatIfEnabled(endBeat);
           return;
         }
         // Cursor on a note: Arrow Up/Down = one note up/down (pitch class); Shift+Arrow = octave change. Akordireal (cursorSubRow === 1) mõjutame ainult akordi.
@@ -5563,7 +5585,7 @@ function NoodiMeisterCore({ icons }) {
     getEffectiveDuration, selectedNoteIndex, selectionStart, selectionEnd, clipboard, undo, saveToHistory, getSelectedNotes,
     shiftPitchClassSameOctave, shiftOctave, addMeasure, ghostPitch, ghostOctave, ghostAccidental, playNoteOnInsert, playPianoNote,
     cursorPosition, cursorSubRow, notationStyle, figurenotesChordBlocks, addChordAt, getChordInsertBeat, getChordAtCursor, transposeChordSymbol,
-    cursorOnMelodyRow, noteIndexAtCursor,
+    cursorOnMelodyRow, noteIndexAtCursor, playNoteAtBeatIfEnabled,
     joClefFocused, joClefStaffPosition, keySignature, setNotes, setKeySignature, notationMode, addNoteOnTopOfCursor,
     handleSaveShortcut, handlePrint, addedMeasures, timeSignature, setAddedMeasures, setCursorPosition, measureRepeatMarks, setMeasureRepeatMarks,
     maxCursor, setScoreZoomLevel, durationToBeats, hasFullAccess, pickupEnabled, pickupQuantity, pickupDuration
@@ -9227,8 +9249,10 @@ function NoodiMeisterCore({ icons }) {
                         setCursorPosition(beatPosition);
                         setCursorSubRow(0);
                         lastBeatClickForLyricRef.current = { beat: beatPosition, at: Date.now() };
-                        if (!mousePitchInputEnabled || !noteInputModeRef.current) return;
                         const draft = mouseInsertDraftRef.current;
+                        // Mängi noot kursori kohal (N- ja SEL-režiim), kui liigutame ainult kursorit (mitte teise klõpsuga noodit).
+                        if (!draft || !draft.startBeat) playNoteAtBeatIfEnabled(beatPosition);
+                        if (!mousePitchInputEnabled || !noteInputModeRef.current) return;
                         // First click: pick up a draft note (no insertion yet).
                         if (!draft || !draft.startBeat) {
                           const pitch = ghostPitch || 'C';
@@ -9263,7 +9287,7 @@ function NoodiMeisterCore({ icons }) {
                       }
                     : undefined}
                   onChordLineMouseMove={notationStyle === 'FIGURENOTES' && figurenotesChordBlocks && staffIdx === activeStaffIndex ? (beat) => { setCursorPosition(beat); setCursorSubRow(1); } : undefined}
-                  onChordLineClick={notationStyle === 'FIGURENOTES' && figurenotesChordBlocks && staffIdx === activeStaffIndex ? (beat) => { setCursorPosition(Math.max(0, beat)); setCursorSubRow(1); } : undefined}
+                  onChordLineClick={notationStyle === 'FIGURENOTES' && figurenotesChordBlocks && staffIdx === activeStaffIndex ? (beat) => { const b = Math.max(0, beat); setCursorPosition(b); setCursorSubRow(1); playNoteAtBeatIfEnabled(b); } : undefined}
                   notationStyle={notationStyle}
                   layoutMeasuresPerLine={effectiveLayoutMeasuresPerLine}
                   layoutLineBreakBefore={effectiveLayoutLineBreakBefore}
