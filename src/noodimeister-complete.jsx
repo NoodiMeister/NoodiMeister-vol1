@@ -4405,11 +4405,13 @@ function NoodiMeisterCore({ icons }) {
   useEffect(() => {
     if (noteInputMode) return;
     if (isPedagogicalAudioPlaying || isExportingAnimation) return;
+    // Lauluteksti ahelrežiimis (lyricChain) juhib fookust tekstikursor – ära kirjuta seda üle kursorPosition'i põhjal.
+    if (lyricChainIndex !== null) return;
     if (selectionStart >= 0 || selectionEnd >= 0) return; // range selection hoiab oma loogikat
     if (noteIndexAtCursor < 0) return;
     if (selectedNoteIndex === noteIndexAtCursor) return;
     setSelectedNoteIndex(noteIndexAtCursor);
-  }, [noteInputMode, isPedagogicalAudioPlaying, isExportingAnimation, selectionStart, selectionEnd, noteIndexAtCursor, selectedNoteIndex]);
+  }, [noteInputMode, isPedagogicalAudioPlaying, isExportingAnimation, lyricChainIndex, selectionStart, selectionEnd, noteIndexAtCursor, selectedNoteIndex]);
 
   /** Noot antud löögil (akordi puhul kõrgeim noteToMidi järgi). Kasutatakse mängimiseks pärast kursori liigutamist. */
   const getNoteAtBeat = useCallback((beat) => {
