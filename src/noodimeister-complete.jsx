@@ -1342,7 +1342,7 @@ function NoodiMeisterCore({ icons }) {
   const [showRhythmSyllables, setShowRhythmSyllables] = useState(DEFAULT_SHOW_RHYTHM_SYLLABLES);
   const [showAllNoteLabels, setShowAllNoteLabels] = useState(DEFAULT_SHOW_ALL_NOTE_LABELS);
   const [enableEmojiOverlays, setEnableEmojiOverlays] = useState(DEFAULT_SHOW_EMOJI_OVERLAYS);
-  // Relatiivnotatsioon (Kodály): võtmemärk ja traditsiooniline noodivõti on valikulised; Do (Jo) võti on kohustuslik.
+  // Relatiivnotatsioon (Kodály): võtmemärk ja traditsiooniline noodivõti on valikulised; JO võti on kohustuslik.
   const [relativeNotationShowKeySignature, setRelativeNotationShowKeySignature] = useState(false);
   const [relativeNotationShowTraditionalClef, setRelativeNotationShowTraditionalClef] = useState(false);
   const [chords, setChords] = useState([]); // { id, beatPosition, chord, figuredBass? } – traditsiooniline ja figuurnotatsioon
@@ -1707,7 +1707,7 @@ function NoodiMeisterCore({ icons }) {
   const applyNewWorkSetup = useCallback(() => {
     const pedagogical = wizardNotationMethod === 'pedagogical';
     setIsPedagogicalProject(pedagogical);
-    // Pedagoogiline notatsioon kasutab JO/Do võtit (vabanotatsioon) ja võib näidata võtmemärki ning traditsioonilist võtit
+    // Pedagoogiline notatsioon kasutab JO võtit (vabanotatsioon) ja võib näidata võtmemärki ning traditsioonilist võtit
     if (pedagogical) {
       setNotationMode('vabanotatsioon');
       setRelativeNotationShowKeySignature(true);
@@ -4222,6 +4222,7 @@ function NoodiMeisterCore({ icons }) {
         const hasSelection = selected.length > 0;
         const patternKeys = ['2/8', '4/16', '8/16', '1/8+2/16', '2/16+1/8', 'triplet-8', 'triplet-4'];
         if (patternKeys.includes(option.value)) {
+          if (!noteInputMode) return; // Rütmipatterni sisestus ainult N-režiimis
           insertPatternAtCursor(option.value);
           setActiveToolbox(null);
           setSelectedOptionIndex(0);
@@ -4371,6 +4372,7 @@ function NoodiMeisterCore({ icons }) {
         break;
       }
       case 'chords':
+        if (!noteInputMode) return; // Akordi sisestus ainult N-režiimis
         if (option.value !== 'custom') {
           addChordAt(getChordInsertBeat(), option.value, '');
           setActiveToolbox(null);
@@ -4406,6 +4408,19 @@ function NoodiMeisterCore({ icons }) {
     return best.index;
   }, [notes, cursorPosition]);
 
+  /** Noodi alguse löök antud indeksi järgi (SEL-režiimis kursori joondamine klõpsatud nootiga). */
+  const getBeatAtNoteIndex = useCallback((noteList, index) => {
+    if (index < 0 || index >= (noteList?.length ?? 0)) return 0;
+    let beat = 0;
+    for (let i = 0; i < noteList.length; i++) {
+      const n = noteList[i];
+      const noteBeat = typeof n.beat === 'number' ? n.beat : beat;
+      if (i === index) return noteBeat;
+      beat = noteBeat + (n.duration ?? 1);
+    }
+    return beat;
+  }, []);
+
   // Hoia meeles viimane noot, mille peal kursor oli (beat). Kasutatakse tekstirežiimis "tagasipõikamiseks", kui kursor kipub suvalisse kohta.
   useEffect(() => {
     if (noteIndexAtCursor < 0) return;
@@ -4413,7 +4428,7 @@ function NoodiMeisterCore({ icons }) {
   }, [noteIndexAtCursor, notes, getBeatAtNoteIndex]);
 
   // Hoia valitud noot (helesinine kast) ja kursor samal noodil:
-  // kui pole vahemiku valikut ega pedagoogilist taasesitust/eksporti ega tekstirežiimi, seame selectedNoteIndex = noteIndexAtCursor.
+  // kui pole vahemiku valikut ega pedagoogilist taasesitust/eksporti ega tekstirežiimi ega akordireal, seame selectedNoteIndex = noteIndexAtCursor.
   useEffect(() => {
     if (noteInputMode) return;
     // Tekstirežiimis (laulutekst) ja lauluteksti ahelas juhib fookust tekstikursor, mitte luger.
@@ -4421,11 +4436,13 @@ function NoodiMeisterCore({ icons }) {
     if (isPedagogicalAudioPlaying || isExportingAnimation) return;
     // Lauluteksti ahelrežiimis (lyricChain) juhib fookust tekstikursor – ära kirjuta seda üle kursorPosition'i põhjal.
     if (lyricChainIndex !== null) return;
+    // Akordireal ära kirjuta valikut üle – kasutaja töötab akordidega, mitte meloodia nootide valikuga.
+    if (hasChordRow && cursorSubRow === 1) return;
     if (selectionStart >= 0 || selectionEnd >= 0) return; // range selection hoiab oma loogikat
     if (noteIndexAtCursor < 0) return;
     if (selectedNoteIndex === noteIndexAtCursor) return;
     setSelectedNoteIndex(noteIndexAtCursor);
-  }, [noteInputMode, cursorTool, isPedagogicalAudioPlaying, isExportingAnimation, lyricChainIndex, selectionStart, selectionEnd, noteIndexAtCursor, selectedNoteIndex]);
+  }, [noteInputMode, cursorTool, isPedagogicalAudioPlaying, isExportingAnimation, lyricChainIndex, hasChordRow, cursorSubRow, selectionStart, selectionEnd, noteIndexAtCursor, selectedNoteIndex]);
 
   /** Noot antud löögil (akordi puhul kõrgeim noteToMidi järgi). Kasutatakse mängimiseks pärast kursori liigutamist. */
   const getNoteAtBeat = useCallback((beat) => {
@@ -4453,31 +4470,19 @@ function NoodiMeisterCore({ icons }) {
     if (note && !note.isRest) playPianoNote(note.pitch, note.octave ?? 4, note.accidental ?? 0);
   }, [playNoteOnInsert, getNoteAtBeat, playPianoNote]);
 
-  // Tekstirežiimis (laulutekst) ära luba kursoril "ära joosta": kui kursor satub nootide vahele nii,
-  // et noteIndexAtCursor === -1, siis põrka tagasi viimasele teadaolevale noodi beat'ile.
+  // N-režiim ja laulutekst: ära luba kursoril jääda nootide vahele – põrka tagasi viimasele kehtivale noodi beat'ile (vältib hüppeid).
   useEffect(() => {
     if (isPedagogicalAudioPlaying || isExportingAnimation) return;
     if (!cursorOnMelodyRow) return;
-    if (!(cursorTool === 'type' || lyricChainIndex !== null)) return;
+    const inTextMode = cursorTool === 'type' || lyricChainIndex !== null;
+    const inNMode = noteInputMode;
+    if (!inTextMode && !inNMode) return;
     if (noteIndexAtCursor >= 0) return; // kursor on noodil – kõik korras
     const safeBeat = lastCursorOnNoteBeatRef.current;
     if (!Number.isFinite(safeBeat)) return;
     if (cursorPosition === safeBeat) return;
     setCursorPosition(safeBeat);
-  }, [cursorPosition, cursorTool, lyricChainIndex, noteIndexAtCursor, cursorOnMelodyRow, isPedagogicalAudioPlaying, isExportingAnimation, setCursorPosition]);
-
-  /** Noodi alguse löök antud indeksi järgi (SEL-režiimis kursori joondamine klõpsatud nootiga). */
-  const getBeatAtNoteIndex = useCallback((noteList, index) => {
-    if (index < 0 || index >= (noteList?.length ?? 0)) return 0;
-    let beat = 0;
-    for (let i = 0; i < noteList.length; i++) {
-      const n = noteList[i];
-      const noteBeat = typeof n.beat === 'number' ? n.beat : beat;
-      if (i === index) return noteBeat;
-      beat = noteBeat + (n.duration ?? 1);
-    }
-    return beat;
-  }, []);
+  }, [cursorPosition, cursorTool, lyricChainIndex, noteInputMode, noteIndexAtCursor, cursorOnMelodyRow, isPedagogicalAudioPlaying, isExportingAnimation, setCursorPosition]);
 
   // Keyboard handler
   useEffect(() => {
@@ -7142,7 +7147,7 @@ function NoodiMeisterCore({ icons }) {
                 </label>
                 <p className="text-xs text-amber-600 mt-1">{t('figurenotes.melodyShowNoteNamesHint')}</p>
               </div>
-              {/* Pedagoogiline notatsioon (Kodály relatiivnotatsioon): Do (Jo) võti on alati nähtav; võtmemärk ja traditsiooniline võti valikulised */}
+              {/* Pedagoogiline notatsioon (Kodály relatiivnotatsioon): JO võti on alati nähtav; võtmemärk ja traditsiooniline võti valikulised */}
               <div className="border-t border-amber-200 pt-4 mt-4">
                 <h3 className="text-sm font-bold text-amber-900 mb-2">{t('settings.relativeNotation')}</h3>
                 <p className="text-xs text-amber-700 mb-3">{t('settings.relativeNotationHint')}</p>
@@ -8164,6 +8169,7 @@ function NoodiMeisterCore({ icons }) {
                     <button
                       type="button"
                       onClick={() => {
+                        if (!noteInputMode) return;
                         const raw = customChordInput.trim();
                         if (!raw) return;
                         const chord = normalizeChordHotkey(raw);

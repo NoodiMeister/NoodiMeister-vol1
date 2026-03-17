@@ -1,11 +1,11 @@
 # JO-clef (Estonian music pedagogical method)
 
-The **JO-clef** (JO-võti) is used in the Estonian pedagogical notation system (Pedagoogiline notatsioon / movable Do). The clef marks the position of **Do (JO)** on the staff.
+The **JO-clef** (JO-võti) is used in the Estonian pedagogical notation system (Pedagoogiline notatsioon). The clef marks the position of **JO** (relatiivne toonika, I aste) on the staff. In traditional notation the name Do is fixed; the movable note name is JO.
 
 ## Official shape (4 black stripes)
 
 - **2 vertical stripes** with a gap between them equal to **the space between staff lines**.
-- **2 horizontal stripes** in the **middle of the 2nd (right) vertical stripe**, with the same **space between them** as between staff lines. The Do notehead sits in that gap.
+- **2 horizontal stripes** in the **middle of the 2nd (right) vertical stripe**, with the same **space between them** as between staff lines. The JO notehead sits in that gap.
 - All four elements are black stripes (no filled boxes).
 
 ## How to share your JO-clef understanding with the AI

@@ -52,7 +52,7 @@ Each method is a **mode** the user can select. It determines **which view is sho
 
 | What | Spec |
 |------|------|
-| **User intent** | Movable “JO” (Do) clef; colors and shapes **relative to JO**, not absolute pitch. Same staff as traditional, but notehead color/shape from `PedagogicalLogic.js` (JO-relative). |
+| **User intent** | JO clef (relatiivne toonika); colors and shapes **relative to JO**, not absolute pitch. Same staff as traditional, but notehead color/shape from `PedagogicalLogic.js` (JO-relative). In traditional notation Do is fixed; the movable note name is JO. |
 | **View** | **Same view as Traditional:** `TraditionalNotationView`, with JO clef and pedagogical coloring. Not a third view component. |
 | **Symbols** | Clef: JO clef from `ClefSymbols.jsx` (`JoClefSymbol`). Note appearance: staff position + color/shape from `getPedagogicalSymbol()` (JO-relative). Notehead/rest glyphs still SMuFL; color/shape overlay is pedagogical-only. |
 | **Function keys / toolbox** | Same as Traditional (rhythm toolbox with `RhythmIcon`, clef toolbox, time signature). JO clef position is adjustable (e.g. joClefStaffPosition). |

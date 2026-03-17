@@ -1211,7 +1211,7 @@ const translations = {
     'settings.storageHint': 'Save or load project from cloud (user-selected folder).',
     'settings.comingSoon': 'Coming soon',
     'settings.relativeNotation': 'Relative notation (Kodály)',
-    'settings.relativeNotationHint': 'The Do (JO) clef is always shown and marks the tonic (degree I). Choose the key from the „Key signatures” toolbox – the JO clef position on the staff matches the tonic of the selected key (e.g. G major → JO = G). You can optionally show key signature and traditional clef in settings for pedagogical use.',
+    'settings.relativeNotationHint': 'The JO clef is always shown and marks the tonic (degree I, JO). Choose the key from the „Key signatures” toolbox – the JO clef position on the staff matches the tonic of the selected key (e.g. G major → JO = G). You can optionally show key signature and traditional clef in settings for pedagogical use.',
     'settings.relativeNotationShowKeySignature': 'Show key signature (relative notation)',
     'settings.relativeNotationShowTraditionalClef': 'Show traditional clef (treble or bass)',
     'settings.cursorCharacter': 'Cursor character',

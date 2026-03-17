@@ -5,7 +5,7 @@
  * Paigutuse tööriistad (Staff Spacer, taktide laiendamine { }) rakenduvad siin.
  */
 import React, { useState, useEffect, useRef } from 'react';
-import { JoClefSymbol, TrebleClefSymbol, BassClefSymbol, getJoClefPixelWidth, getJoClefDoStripeBounds } from '../components/ClefSymbols';
+import { JoClefSymbol, TrebleClefSymbol, BassClefSymbol, getJoClefPixelWidth, getJoClefJoStripeBounds } from '../components/ClefSymbols';
 import { RhythmSyllableLabel } from '../components/RhythmSyllableLabel';
 import { getJoName } from '../notation/joNames';
 import { getRhythmSyllableForNote } from '../notation/rhythmSyllables';

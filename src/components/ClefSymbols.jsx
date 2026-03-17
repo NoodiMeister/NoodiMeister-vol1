@@ -7,7 +7,7 @@ import { SMUFL_GLYPH } from '../notation/smufl/glyphs';
 /**
  * JO-võtme sümbol (Pedagoogiline notatsioon) – Eesti pedagoogiline meetod.
  * Ehitus: 4 musta triipu – 2 vertikaalset (vahe = noodijoonte vahe), 2 horisontaalset
- * teise vertikaali keskel (vahe = noodijoonte vahe). Do-noot asub horisontaalsete vahel.
+ * teise vertikaali keskel (vahe = noodijoonte vahe). JO-noot asub horisontaalsete vahel.
  *
  * API: kas (x, y, height, fill) või tagasiühilduvus (x, centerY, staffSpacing, stroke).
  * Valikuline: ledgerLinesAbove, ledgerLinesBelow, firstLineY, lastLineY.
@@ -25,20 +25,20 @@ const JO_CLEF_WIDTH = JO_CLEF_VERTICALS_WIDTH + JO_CLEF_HORIZONTAL_LENGTH; // 53
 /** Opposite of default note fill: white on light theme, black on dark (for inverted JO-clef). */
 const JO_CLEF_INVERTED_FILL = 'var(--jo-clef-inverted, #ffffff)';
 
-/** Pixel width of JO-clef when drawn with given staffSpace (for drawing staff/Do lines on top). */
+/** Pixel width of JO-clef when drawn with given staffSpace (for drawing staff/JO lines on top). */
 export function getJoClefPixelWidth(staffSpace) {
   return JO_CLEF_WIDTH * (staffSpace * 4 / JO_CLEF_HEIGHT);
 }
 
-/** Extra Do (C) stripe: short stripe, NOT a full staff line. In clef local coords: start x=50, length 25. */
-export const JO_CLEF_DO_STRIPE_START_X = 50;
-export const JO_CLEF_DO_STRIPE_LENGTH = 25;
+/** Extra JO stripe: short stripe, NOT a full staff line. In clef local coords: start x=50, length 25. */
+export const JO_CLEF_JO_STRIPE_START_X = 50;
+export const JO_CLEF_JO_STRIPE_LENGTH = 25;
 
-/** Pixel start X and length for the extra Do stripe (clef left + start*scale, length*scale). */
-export function getJoClefDoStripeBounds(clefX, staffSpace) {
+/** Pixel start X and length for the extra JO stripe (clef left + start*scale, length*scale). */
+export function getJoClefJoStripeBounds(clefX, staffSpace) {
   const scale = (staffSpace * 4) / JO_CLEF_HEIGHT;
-  const startPx = clefX + JO_CLEF_DO_STRIPE_START_X * scale;
-  const lengthPx = JO_CLEF_DO_STRIPE_LENGTH * scale;
+  const startPx = clefX + JO_CLEF_JO_STRIPE_START_X * scale;
+  const lengthPx = JO_CLEF_JO_STRIPE_LENGTH * scale;
   return { startX: startPx, endX: startPx + lengthPx };
 }
 
