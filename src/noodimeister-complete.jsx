@@ -3221,6 +3221,7 @@ function NoodiMeisterCore({ icons }) {
         if (data.layoutMeasuresPerLine != null) setLayoutMeasuresPerLine(data.layoutMeasuresPerLine);
         if (Array.isArray(data.layoutLineBreakBefore)) setLayoutLineBreakBefore(data.layoutLineBreakBefore);
         if (Array.isArray(data.layoutPageBreakBefore)) setLayoutPageBreakBefore(data.layoutPageBreakBefore);
+        if (data.layoutExtraPages != null) setLayoutExtraPages(Math.max(0, Math.round(Number(data.layoutExtraPages) || 0)));
         if (data.layoutSystemGap != null) setLayoutSystemGap(Math.max(5, Math.min(250, Number(data.layoutSystemGap))));
         if (data.layoutPartsGap != null) setLayoutPartsGap(Math.max(2, Math.min(80, Number(data.layoutPartsGap))));
         if (data.layoutConnectedBarlines != null) setLayoutConnectedBarlines(!!data.layoutConnectedBarlines);
@@ -3229,6 +3230,7 @@ function NoodiMeisterCore({ icons }) {
         if (data.partLayoutMeasuresPerLine != null) setPartLayoutMeasuresPerLine(data.partLayoutMeasuresPerLine);
         if (Array.isArray(data.partLayoutLineBreakBefore)) setPartLayoutLineBreakBefore(data.partLayoutLineBreakBefore);
         if (Array.isArray(data.partLayoutPageBreakBefore)) setPartLayoutPageBreakBefore(data.partLayoutPageBreakBefore);
+        if (data.partLayoutExtraPages != null) setPartLayoutExtraPages(Math.max(0, Math.round(Number(data.partLayoutExtraPages) || 0)));
         if (data.showPageNavigator != null) setShowPageNavigator(!!data.showPageNavigator);
         if (data.pageFlowDirection === 'vertical' || data.pageFlowDirection === 'horizontal') setPageFlowDirection(data.pageFlowDirection);
         if (data.viewFitPage != null) setViewFitPage(!!data.viewFitPage);
@@ -5196,7 +5198,8 @@ function NoodiMeisterCore({ icons }) {
         if (['c', 'd', 'e', 'f', 'g', 'a', 'b'].includes(noteLetter)) {
           e.preventDefault();
           // Kursori asukoht loeb: akordireal (cursorSubRow === 1) → akord; meloodiareal → figuurnoot. Akorditööriistakast avatud → akord.
-          const onChordRow = notationStyle === 'FIGURENOTES' && figurenotesChordBlocks && cursorSubRow === 1;
+          // Kasuta cursorSubRow prioriteedina (kui kasutaja on akordirea valinud, ei tohi sisestus minna meloodianoodiks).
+          const onChordRow = notationStyle === 'FIGURENOTES' && cursorSubRow === 1;
           if (onChordRow || activeToolbox === 'chords') {
             addChordAt(getChordInsertBeat(), noteLetter.toUpperCase(), '');
             return;
@@ -8643,11 +8646,38 @@ function NoodiMeisterCore({ icons }) {
                         </div>
                       </div>
                       <p className="text-xs text-amber-700 mt-2 mb-1">{t('layout.measureWidthHint')}</p>
+                      <div className="mb-2 pt-2 border-t border-amber-200">
+                        <h4 className="text-xs font-bold text-amber-900 uppercase mb-1">Leheküljed</h4>
+                        <p className="text-xs text-amber-700 mb-2">Lisa või eemalda lõppu tühje lehekülgi (sobib tööleheks / tekstikastideks).</p>
+                        <div className="grid grid-cols-2 gap-1 text-xs">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              dirtyRef.current = true;
+                              (viewMode === 'score' ? setLayoutExtraPages : setPartLayoutExtraPages)((prev) => Math.max(0, (Number(prev) || 0) + 1));
+                            }}
+                            className="py-1.5 px-2 rounded bg-slate-100 text-slate-800 hover:bg-slate-200 font-medium"
+                          >
+                            + Lisa lehekülg
+                          </button>
+                          <button
+                            type="button"
+                            disabled={(viewMode === 'score' ? layoutExtraPages : partLayoutExtraPages) <= 0}
+                            onClick={() => {
+                              dirtyRef.current = true;
+                              (viewMode === 'score' ? setLayoutExtraPages : setPartLayoutExtraPages)((prev) => Math.max(0, (Number(prev) || 0) - 1));
+                            }}
+                            className="py-1.5 px-2 rounded bg-amber-100 text-amber-800 hover:bg-amber-200 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            − Eemalda lehekülg
+                          </button>
+                        </div>
+                      </div>
                       <div className="grid grid-cols-2 gap-1 text-xs">
                         <button type="button" title={t('layout.compressMeasureShortcut')} onClick={() => { dirtyRef.current = true; setMeasureStretchFactors((prev) => { const next = [...(prev || [])]; while (next.length <= cursorMeasureIndex) next.push(1); next[cursorMeasureIndex] = Math.max(0.25, (next[cursorMeasureIndex] ?? 1) - 0.1); return next; }); }} className="py-1.5 px-2 rounded bg-slate-100 text-slate-800 hover:bg-slate-200 font-medium">{t('layout.compressMeasure')}</button>
                         <button type="button" title={t('layout.stretchMeasureShortcut')} onClick={() => { dirtyRef.current = true; setMeasureStretchFactors((prev) => { const next = [...(prev || [])]; while (next.length <= cursorMeasureIndex) next.push(1); next[cursorMeasureIndex] = Math.min(4, (next[cursorMeasureIndex] ?? 1) + 0.1); return next; }); }} className="py-1.5 px-2 rounded bg-slate-100 text-slate-800 hover:bg-slate-200 font-medium">{t('layout.stretchMeasure')}</button>
                       </div>
-                      <button type="button" onClick={() => { dirtyRef.current = true; (viewMode === 'score' ? setLayoutLineBreakBefore : setPartLayoutLineBreakBefore)([]); (viewMode === 'score' ? setLayoutPageBreakBefore : setPartLayoutPageBreakBefore)([]); (viewMode === 'score' ? setLayoutMeasuresPerLine : setPartLayoutMeasuresPerLine)(0); setMeasureStretchFactors([]); setSystemYOffsets([]); setLayoutSystemGap(15); setLayoutPartsGap(10); setLayoutConnectedBarlines(true); setLayoutGlobalSpacingMultiplier(1); setPixelsPerBeat(92); setFigurenotesSize(92); }} className="mt-3 w-full py-2 px-3 rounded-lg bg-slate-100 text-slate-800 text-sm font-semibold hover:bg-slate-200 border border-slate-300" title={t('layout.resetLayoutHint')}>{t('layout.resetLayout')}</button>
+                      <button type="button" onClick={() => { dirtyRef.current = true; (viewMode === 'score' ? setLayoutLineBreakBefore : setPartLayoutLineBreakBefore)([]); (viewMode === 'score' ? setLayoutPageBreakBefore : setPartLayoutPageBreakBefore)([]); (viewMode === 'score' ? setLayoutMeasuresPerLine : setPartLayoutMeasuresPerLine)(0); (viewMode === 'score' ? setLayoutExtraPages : setPartLayoutExtraPages)(0); setMeasureStretchFactors([]); setSystemYOffsets([]); setLayoutSystemGap(15); setLayoutPartsGap(10); setLayoutConnectedBarlines(true); setLayoutGlobalSpacingMultiplier(1); setPixelsPerBeat(92); setFigurenotesSize(92); }} className="mt-3 w-full py-2 px-3 rounded-lg bg-slate-100 text-slate-800 text-sm font-semibold hover:bg-slate-200 border border-slate-300" title={t('layout.resetLayoutHint')}>{t('layout.resetLayout')}</button>
                     </div>
                     {pageDesignDataUrl && (
                       <>
@@ -8956,13 +8986,15 @@ function NoodiMeisterCore({ icons }) {
           )}
           {(() => {
             const contentHeightForPages = pageFlowDirection === 'horizontal' ? (lastVerticalContentHeightRef.current || logicalContentHeight) : mainContentHeight;
-            const totalPagesVal = Math.max(1, Math.ceil((contentHeightForPages || logicalContentHeight) / a4PageHeightVal));
+            const extraPages = Math.max(0, Number(effectiveLayoutExtraPages) || 0);
+            const totalPagesVal = Math.max(1, Math.ceil((contentHeightForPages || logicalContentHeight) / a4PageHeightVal) + extraPages);
             const isHorizontalFlow = pageFlowDirection === 'horizontal';
             const pw = effectiveLayoutPageWidth;
             // Terve leht või tark: kas loogiline kõrgus või tegelik scroll kõrgus
             const contentH = viewFitOrSmart ? (logicalContentHeight || 800) : (mainContentHeight || logicalContentHeight || 800);
+            const contentHWithExtraPages = isHorizontalFlow ? contentH : Math.max(contentH, totalPagesVal * a4PageHeightVal);
             const baseW = isHorizontalFlow ? totalPagesVal * pw : (viewFitOrSmart ? pw * fitPageScale : pw);
-            const baseH = isHorizontalFlow ? a4PageHeightVal : contentH;
+            const baseH = isHorizontalFlow ? a4PageHeightVal : contentHWithExtraPages;
             const handleFitToWidth = () => {
               const viewW = mainRef.current?.clientWidth ?? 800;
               const padding = 32;
@@ -8998,10 +9030,10 @@ function NoodiMeisterCore({ icons }) {
           {/* Terve leht: A4 täidab vaateakna (scale=1). Tark lehe vaade: skaleerib noteeritud ala. */}
           <div
             ref={viewFitOrSmart ? mainAreaRef : undefined}
-            style={viewFitOrSmart ? { position: 'relative', width: pw * fitPageScale, minHeight: contentH * fitPageScale } : undefined}
+            style={viewFitOrSmart ? { position: 'relative', width: pw * fitPageScale, minHeight: contentHWithExtraPages * fitPageScale } : undefined}
           >
             <div
-              style={viewFitOrSmart ? { position: 'absolute', left: 0, top: 0, width: pw, height: contentH, transform: `scale(${fitPageScale})`, transformOrigin: 'top left' } : undefined}
+              style={viewFitOrSmart ? { position: 'absolute', left: 0, top: 0, width: pw, height: contentHWithExtraPages, transform: `scale(${fitPageScale})`, transformOrigin: 'top left' } : undefined}
             >
           <div
             ref={scoreContainerRef}
@@ -9012,7 +9044,7 @@ function NoodiMeisterCore({ icons }) {
               /* Fikseeritud lehe laius: ei sõltu seadme/brauseri laiusest (iPad, tahvel, MacBook, PC). */
               ...(viewFitPage && !viewSmartPage ? {} : { width: basePageWidth, maxWidth: basePageWidth }),
               /* Portrait: minHeight ≥ ühe lehe kõrgus (a4PageHeightVal), et kast oleks püstine, mitte laiune. */
-              minHeight: isHorizontalFlow ? a4PageHeightVal : Math.max(a4PageHeightVal, 500, getStaffHeight() + LAYOUT.SYSTEM_GAP + getStaffHeight() + 120),
+              minHeight: isHorizontalFlow ? a4PageHeightVal : Math.max(a4PageHeightVal * totalPagesVal, 500, getStaffHeight() + LAYOUT.SYSTEM_GAP + getStaffHeight() + 120),
               ...(viewFitPage && !viewSmartPage ? { width: pw, boxSizing: 'border-box' } : { boxSizing: 'border-box' }),
               ...(isHorizontalFlow ? { width: totalPagesVal * pw, height: a4PageHeightVal } : {})
             }}
@@ -9032,6 +9064,30 @@ function NoodiMeisterCore({ icons }) {
               <span className="absolute bottom-2 right-2 px-2 py-1 rounded text-xs font-medium bg-amber-100/90 dark:bg-amber-900/50 text-amber-800 dark:text-amber-200 border border-amber-300 dark:border-amber-700 pointer-events-none select-none print:hidden" aria-hidden="true" title="Trükkimise ja PDF ekspordi piir = A4 (210×297 mm)">
                 A4 {pageOrientation === 'landscape' ? '297×210' : '210×297'} mm
               </span>
+              {/* Lehekülje nurganupud: lisa/eemalda lõppu tühi lehekülg */}
+              <div className="absolute inset-0 print:hidden pointer-events-none" aria-hidden="true">
+                {(() => {
+                  const extra = Math.max(0, Number(effectiveLayoutExtraPages) || 0);
+                  const canRemove = extra > 0;
+                  const onAdd = () => {
+                    dirtyRef.current = true;
+                    (viewMode === 'score' ? setLayoutExtraPages : setPartLayoutExtraPages)((prev) => Math.max(0, (Number(prev) || 0) + 1));
+                  };
+                  const onRemove = () => {
+                    dirtyRef.current = true;
+                    (viewMode === 'score' ? setLayoutExtraPages : setPartLayoutExtraPages)((prev) => Math.max(0, (Number(prev) || 0) - 1));
+                  };
+                  const pageIndex = Math.max(0, (Number(totalPagesVal) || 1) - 1);
+                  const left = (isHorizontalFlow ? pageIndex * pw : 0) + pw - 58;
+                  const top = (isHorizontalFlow ? 0 : pageIndex * a4PageHeightVal) + 10;
+                  return (
+                    <div style={{ position: 'absolute', left, top, display: 'flex', gap: 6, pointerEvents: 'auto' }}>
+                      <button type="button" onClick={onAdd} className="w-6 h-6 rounded-full bg-amber-100 text-amber-900 border border-amber-300 shadow-sm hover:bg-amber-200 font-bold leading-none" title="Lisa lehekülg">+</button>
+                      <button type="button" onClick={onRemove} disabled={!canRemove} className="w-6 h-6 rounded-full bg-amber-100 text-amber-900 border border-amber-300 shadow-sm hover:bg-amber-200 disabled:opacity-50 disabled:cursor-not-allowed font-bold leading-none" title="Eemalda viimane lehekülg">−</button>
+                    </div>
+                  );
+                })()}
+              </div>
               <div className="noodimeister-print-scaler">
               {pageDesignDataUrl && (() => {
                 const pos = `${pageDesignPositionX}% ${pageDesignPositionY}%`;
