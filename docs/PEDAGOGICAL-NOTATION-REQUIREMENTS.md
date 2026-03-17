@@ -18,13 +18,8 @@ See dokument sõnastab pedagoogilise notatsiooni jaoks vajalikud funktsioonid, *
 
 **Detailid:**
 
-- Valik peaks kehtima **ainult pedagoogilise notatsiooni** režiimis (nt `notationMode === 'vabanotatsioon'` või vastav pedagoogiline vaade).
-- Näited: 1 joon, 3 joont, 5 joont (tavaline). Võimalikud väärtused võivad olla meetodi järgi piiratud (nt 1, 3, 5).
-- Joonte arv mõjutab:
-  - JO-võtme ja nootide asukohta joonestikul;
-  - joonestiku joonistamist (mitu joont joonistatakse);
-  - vajadusel ka noodipea/värvi paigutust, kui see on joontega seotud.
-- See on **pedagoogilise notatsiooni seade**, mitte üldine „layout” seade, mis jaguneb figuurnotatsiooniga. Figuurnotatsioonil on oma võre; traditsioonilisel vaatel võib olla oma vaike (nt 5 joont). Pedagoogilisel vaatel peab joonte arv olema eraldi valitav.
+- Valik kehtib **ainult pedagoogilise notatsiooni** režiimis (JO-LE-MI).
+- Selle funktsiooni eesmärk ei ole ainult “mitu joont joonistada”, vaid anda kasutajale võimalus **valida, milliseid astme nimetusi (JO, LE, MI, NA, SO, RA, DI) ta soovib aktiivselt kasutada**, lähtudes pedagoogilise notatsiooni **värvisüsteemist**.\n+  - Praktikas tähendab see, et kasutaja saab koostada **aktiivsete astmete komplekti** (nt ainult JO–MI–SO–RA) ning ülejäänud astmed jäävad välja (nt neid ei kuvata/ei pakuta/ei värvita vastavalt; täpne käitumine lepitakse hiljem kokku, aga valik peab olema võimalik).\n+- Noodijoonestiku joonte arvu valik peab toetama vähemalt:\n+  - **2-jooneline joonestik**\n+  - **3-jooneline joonestik**\n+  (lisaks võivad hiljem tulla 1/5-jooneline, kuid käesolev nõue rõhutab 2 ja 3 joont).\n+- **2- ja 3-joonelise joonestiku korral** peab olema võimalik kasutada nii:\n+  - **joonte pealseid alasid** (st joone “peal” asuvad positsioonid)\n+  - **joonte vahelisi alasid** (st vahed joonte vahel)\n+  See tähendab, et astmete “asendid” ei piirdu ainult joonega – lubatud on ka vahe-positsioonid, et astmete paigutus oleks piisava eraldusvõimega.\n+- Joonte arv mõjutab:\n+  - millised “tasandid/positsioonid” on kasutusel astmete kuvamiseks;\n+  - kuidas JO-võti ja muud pedagoogilised märgised (nimed, värvid, kujundid) joonestikul ankurdavad.\n+- See on **pedagoogilise notatsiooni seade**, mitte figuurnotatsiooni võre ega traditsioonilise noodikirja üldine paigutusvalik.
 
 **Ei kuulu siia:** Figuurnotatsiooni võre või traditsioonilise noodijoonestiku üldine „5 vs 1 joon” loogika tervikuna – need jäävad oma meetodite alla. Nõue kehtib **pedagoogilise notatsiooni** kontekstis.
 
@@ -43,6 +38,13 @@ See dokument sõnastab pedagoogilise notatsiooni jaoks vajalikud funktsioonid, *
 - Värvid on seotud **JO suhtes diatoonilise astmega** (I, II, … VII), mitte absoluutse tooniga. Figuurnotatsiooni absoluutsed värvid ei määra pedagoogilise notatsiooni värve.
 - Võimalikud lahendused (spetsifikatsiooni tasemel): valik eeldefineeritud palettide hulgast (nt „klassikaline”, „pehme”, „Orff”) või kohandatav palett (iga astme värv konfigureeritav). Täpne andmemudel jääb implementatsiooni faasi.
 - **Piirang:** Figuurnotatsiooni konstandid (nt `FIGURENOTES_COLORS`) ei tohi olla ainus allikas pedagoogilise notatsiooni värvide jaoks. Pedagoogiline notatsioon peab saama värvid **omast konfiguratsioonist**.
+
+### 2.1 Esmane kasutaja poolt antud värviskeem (näide / lähteväärtused)
+
+Allolev skeem peab olema toetatud pedagoogilise notatsiooni konfiguratsioonina (st mitte figuurnotatsiooni värvide tuletis).\n+
+- **JO**: must\n+- **MI**: sinine\n+- **SO**: punane\n+- **RA**: roheline\n+
+Märkused:\n+
+- Kui kõik 7 astet on aktiivsed, tuleb määrata ka ülejäänud astmete (LE, NA, DI) värvid (kas eraldi või mõne reegli abil). Hetkel on antud minimaalsed nõutud seosed (JO/MI/SO/RA).\n+- Kui kasutaja valib (punkt 1 järgi) ainult osa astmetest, siis värviskeem peab toimima vähemalt valitud astmete jaoks.
 
 ---
 
