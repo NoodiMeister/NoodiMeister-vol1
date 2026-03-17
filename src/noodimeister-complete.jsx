@@ -4387,11 +4387,24 @@ function NoodiMeisterCore({ icons }) {
         break;
       }
       case 'repeatsJumps': {
-        // Apply repeat/jump mark (Leland SMuFL) to the measure containing the cursor
+        // Apply repeat/jump mark (Leland SMuFL) to the measure containing the anchor beat.
+        // UX: if user has selected a note (or a range), anchor to that selection; otherwise anchor to the cursor.
         const ms = measuresRef.current;
         if (ms && ms.length > 0) {
-          const cursorMeasureIndex = ms.findIndex((m) => cursorPosition >= m.startBeat && cursorPosition < m.endBeat);
-          const idx = cursorMeasureIndex >= 0 ? cursorMeasureIndex : Math.min(Math.max(0, Math.floor(cursorPosition / (timeSignature?.beats || 4))), ms.length - 1);
+          const getMeasureIndexForBeat = (beat) => {
+            const b = typeof beat === 'number' && Number.isFinite(beat) ? beat : 0;
+            const i = ms.findIndex((m) => b >= m.startBeat && b < m.endBeat);
+            if (i >= 0) return i;
+            return Math.min(Math.max(0, Math.floor(b / (timeSignature?.beats || 4))), ms.length - 1);
+          };
+
+          const hasRangeSelection = selectionStart >= 0 && selectionEnd >= 0;
+          const anchorNoteIndex = hasRangeSelection ? Math.max(selectionStart, selectionEnd) : selectedNoteIndex;
+          const anchorBeat = (anchorNoteIndex >= 0 && notes[anchorNoteIndex])
+            ? getBeatAtNoteIndex(notes, anchorNoteIndex)
+            : cursorPosition;
+
+          const idx = getMeasureIndexForBeat(anchorBeat);
           setMeasureRepeatMarks((prev) => ({ ...prev, [idx]: { ...(prev[idx] || {}), [option.value]: true } }));
         }
         setActiveToolbox(null);
@@ -6037,6 +6050,9 @@ function NoodiMeisterCore({ icons }) {
     setSelectedNoteIndex(noteIndex);
     setSelectionStart(noteIndex);
     setSelectionEnd(noteIndex);
+    // Keep a single truth: selection anchor also sets cursor/playhead.
+    setCursorSubRow(0);
+    setCursorPosition(getBeatAtNoteIndex(notes, noteIndex));
   }, []);
 
   const updateSelectionDragHover = useCallback((noteIndex, e) => {
@@ -6045,6 +6061,9 @@ function NoodiMeisterCore({ icons }) {
     e?.stopPropagation?.();
     setSelectedNoteIndex(noteIndex);
     setSelectionEnd(noteIndex);
+    // Keep cursor/playhead synced to the currently hovered end of the selection.
+    setCursorSubRow(0);
+    setCursorPosition(getBeatAtNoteIndex(notes, noteIndex));
   }, []);
 
   const handleScoreContentClick = useCallback((e) => {
@@ -9628,7 +9647,13 @@ function NoodiMeisterCore({ icons }) {
                   noteheadShape={noteheadShape}
                   noteheadEmoji={noteheadEmoji}
                   onNoteTeacherLabelChange={staffIdx === activeStaffIndex ? updateNoteTeacherLabel : undefined}
-                  onNoteLabelClick={staffIdx === activeStaffIndex ? (index) => { setSelectedNoteIndex(index); setSelectionStart(-1); setSelectionEnd(-1); } : undefined}
+                  onNoteLabelClick={staffIdx === activeStaffIndex ? (index) => {
+                    setSelectedNoteIndex(index);
+                    setSelectionStart(-1);
+                    setSelectionEnd(-1);
+                    setCursorSubRow(0);
+                    setCursorPosition(getBeatAtNoteIndex(notes, index));
+                  } : undefined}
                   translateLabel={t}
                   chords={chords}
                   figurenotesSize={figurenotesSize}
