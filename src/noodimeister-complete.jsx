@@ -4180,14 +4180,32 @@ function NoodiMeisterCore({ icons }) {
     const normalized = normalizeChordHotkey(chordText);
     if (!normalized) return;
     dirtyRef.current = true;
+    const beatsPerMeasure = timeSignature?.beats ?? 4;
+    const beatUnit = timeSignature?.beatUnit ?? 4;
+    const is44 = beatsPerMeasure === 4 && beatUnit === 4;
+    // 4/4: lubame 2 akordi takti kohta (1. ja 3. löök). Snapime sisestuse sloti algusesse ja asendame olemasoleva sloti akordi.
+    const effectiveBeatPosition = is44
+      ? (Math.floor(beatPosition / beatsPerMeasure) * beatsPerMeasure + (Math.floor(((beatPosition % beatsPerMeasure) + beatsPerMeasure) % beatsPerMeasure / 2) * 2))
+      : beatPosition;
     const newChord = {
       id: Date.now() + Math.random(),
-      beatPosition,
+      beatPosition: effectiveBeatPosition,
       chord: String(normalized).trim(),
       figuredBass: figuredBass ? String(figuredBass).trim() : ''
     };
-    setChords(prev => [...prev, newChord].sort((a, b) => a.beatPosition - b.beatPosition));
-  }, [normalizeChordHotkey]);
+    setChords(prev => {
+      const next = is44
+        ? prev.filter((c) => {
+            const sameMeasure = Math.floor(c.beatPosition / beatsPerMeasure) === Math.floor(effectiveBeatPosition / beatsPerMeasure);
+            if (!sameMeasure) return true;
+            const slotA = Math.floor((c.beatPosition % beatsPerMeasure) / 2);
+            const slotB = Math.floor((effectiveBeatPosition % beatsPerMeasure) / 2);
+            return slotA !== slotB;
+          })
+        : prev;
+      return [...next, newChord].sort((a, b) => a.beatPosition - b.beatPosition);
+    });
+  }, [normalizeChordHotkey, timeSignature?.beats, timeSignature?.beatUnit]);
 
   const ROOT_ORDER = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
   const transposeChordSymbol = useCallback((chordSymbol, step) => {
@@ -4216,7 +4234,7 @@ function NoodiMeisterCore({ icons }) {
     return chords.find((c) => Math.floor(c.beatPosition / beatsPerMeasure) === cursorMeasureIdx);
   }, [chords, cursorPosition, timeSignature?.beats, timeSignature?.beatUnit]);
 
-  const handleToolboxSelection = useCallback((clickedIndex) => {
+  const handleToolboxSelection = (clickedIndex) => {
     if (!activeToolbox) return;
     const toolbox = toolboxes[activeToolbox];
     if (!toolbox?.options) return;
@@ -4392,7 +4410,7 @@ function NoodiMeisterCore({ icons }) {
     }
     setActiveToolbox(null);
     setSelectedOptionIndex(0);
-  }, [activeToolbox, selectedOptionIndex, noteInputMode, addNoteAtCursor, ghostOctave, instrumentNotationVariant, addChordAt, getChordInsertBeat, getSelectedNotes, notes, keySignature, setNotes, saveToHistory, selectedNoteIndex, selectionStart, selectionEnd, durations, insertPatternAtCursor, addStaff, addPianoStaff, instrumentConfig, setNotationMode, setClefType, staves.length, notationStyle, notationMode, cursorPosition, timeSignature]);
+  };
 
   // Noot kursori all (rütmi järgi); meloodiareal = kursor lugemisel meloodiareal (mitte akordireal)
   const hasChordRow = notationStyle === 'FIGURENOTES' && figurenotesChordBlocks;
