@@ -7935,6 +7935,49 @@ function NoodiMeisterCore({ icons }) {
                         setCursorPosition(getBeatAtNoteIndex(notes, idx));
                       }
                     }}
+                    onPaste={(e) => {
+                      // MuseScore-like "paste lyrics across notes":
+                      // split pasted text by whitespace and write tokens to consecutive notes starting from active lyric note.
+                      const raw = e.clipboardData?.getData?.('text/plain');
+                      if (!raw) return;
+                      const startIdx = lyricChainIndex != null
+                        ? lyricChainIndex
+                        : (selectedNoteIndex >= 0 ? selectedNoteIndex : noteIndexAtCursor);
+                      if (startIdx == null || startIdx < 0 || startIdx >= notes.length) return;
+                      e.preventDefault();
+                      const key = lyricLineIndex === 0 ? 'lyric' : 'lyric2';
+                      // Normalize whitespace, keep hyphens as part of token (e.g. "Tii-").
+                      const normalized = String(raw)
+                        .replace(/\r\n/g, '\n')
+                        .replace(/\r/g, '\n')
+                        .replace(/\t/g, ' ')
+                        .trim();
+                      if (!normalized) return;
+                      // Only take the first line (typical lyrics paste is one line).
+                      const firstLine = normalized.split('\n')[0]?.trim() ?? '';
+                      if (!firstLine) return;
+                      const tokens = firstLine.split(/\s+/).filter(Boolean);
+                      if (tokens.length === 0) return;
+                      const endIdx = Math.min(notes.length - 1, startIdx + tokens.length - 1);
+                      saveToHistory(notes);
+                      setNotes((prev) => prev.map((n, i) => {
+                        if (i < startIdx || i > endIdx) return n;
+                        const t = tokens[i - startIdx] ?? '';
+                        return { ...n, [key]: t };
+                      }));
+                      // Move active lyric cursor to next note after pasted range (or last).
+                      const nextIdx = Math.min(notes.length - 1, endIdx + 1);
+                      setLyricChainStart(startIdx);
+                      setLyricChainEnd(endIdx);
+                      setLyricChainIndex(nextIdx);
+                      setSelectedNoteIndex(nextIdx);
+                      setCursorSubRow(0);
+                      setCursorPosition(getBeatAtNoteIndex(notes, nextIdx));
+                      setTimeout(() => {
+                        lyricInputRef.current?.focus();
+                        lyricInputRef.current?.setSelectionRange?.(0, 0);
+                      }, 0);
+                    }}
                     value={lyricChainIndex !== null
                       ? (lyricLineIndex === 0 ? (notes[lyricChainIndex]?.lyric ?? '') : (notes[lyricChainIndex]?.lyric2 ?? ''))
                       : (() => {
@@ -7997,8 +8040,17 @@ function NoodiMeisterCore({ icons }) {
                           setCursorPosition(getBeatAtNoteIndex(notes, nextIdx));
                           setTimeout(() => { lyricInputRef.current?.setSelectionRange?.(0, 0); }, 0);
                         }
-                      } else if (e.key === 'ArrowRight' && idx < lastIdx) {
+                      } else if ((e.key === 'ArrowRight' || e.code === 'ArrowRight') && idx < lastIdx) {
+                        const input = e.currentTarget;
+                        const selStart = typeof input?.selectionStart === 'number' ? input.selectionStart : null;
+                        const selEnd = typeof input?.selectionEnd === 'number' ? input.selectionEnd : null;
+                        const hasSelection = selStart != null && selEnd != null && selStart !== selEnd;
+                        const atEnd = selEnd != null && selEnd >= (input?.value?.length ?? 0);
+                        // Kui kursor pole sõna lõpus (või on valik), las ArrowRight liigub tekstis.
+                        if (!hasSelection && selStart != null && !atEnd) return;
+
                         e.preventDefault();
+                        e.stopPropagation();
                         const nextIdx = Math.min(idx + 1, lastIdx);
                         setLyricChainStart(lyricChainStart >= 0 ? lyricChainStart : idx);
                         setLyricChainEnd(lastIdx);
@@ -8006,8 +8058,17 @@ function NoodiMeisterCore({ icons }) {
                         setSelectedNoteIndex(nextIdx);
                         setCursorPosition(getBeatAtNoteIndex(notes, nextIdx));
                         setTimeout(() => { lyricInputRef.current?.setSelectionRange?.(0, 0); }, 0);
-                      } else if (e.key === 'ArrowLeft' && idx > 0) {
+                      } else if ((e.key === 'ArrowLeft' || e.code === 'ArrowLeft') && idx > 0) {
+                        const input = e.currentTarget;
+                        const selStart = typeof input?.selectionStart === 'number' ? input.selectionStart : null;
+                        const selEnd = typeof input?.selectionEnd === 'number' ? input.selectionEnd : null;
+                        const hasSelection = selStart != null && selEnd != null && selStart !== selEnd;
+                        const atStart = selStart != null && selStart <= 0;
+                        // Kui kursor pole sõna alguses (või on valik), las ArrowLeft liigub tekstis.
+                        if (!hasSelection && selEnd != null && !atStart) return;
+
                         e.preventDefault();
+                        e.stopPropagation();
                         const prevIdx = Math.max(idx - 1, 0);
                         setLyricChainStart(lyricChainStart >= 0 ? lyricChainStart : prevIdx);
                         setLyricChainEnd(lastIdx);
