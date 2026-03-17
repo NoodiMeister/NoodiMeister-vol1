@@ -4594,6 +4594,12 @@ function NoodiMeisterCore({ icons }) {
           return;
         }
       }
+      // Undo (Cmd/Ctrl+Z) – tööta ka siis, kui fookus on inputis (nt laulusõna), et notatsiooni saaks tagasi võtta
+      if (modKey && e.code === 'KeyZ' && !e.shiftKey) {
+        e.preventDefault();
+        undo();
+        return;
+      }
       if (isTypingInInput) return;
       if (shortcutsOpen) return;
 
@@ -4758,13 +4764,6 @@ function NoodiMeisterCore({ icons }) {
         }
         // While a draft is active, let the rest of handler continue (N-mode cursor etc),
         // but mouse click is what finally "drops" the note (handled in onFigureBeatClick).
-      }
-
-      // Stage V: Undo (Ctrl+Z)
-      if (modKey && e.code === 'KeyZ' && !e.shiftKey) {
-        e.preventDefault();
-        undo();
-        return;
       }
 
       // Stage V: Copy (Ctrl+C) – always allowed in selection mode; in Figurenotes view
@@ -7948,12 +7947,10 @@ function NoodiMeisterCore({ icons }) {
                       const val = e.target.value;
                       const key = lyricLineIndex === 0 ? 'lyric' : 'lyric2';
                       if (lyricChainIndex !== null) {
-                        saveToHistory(notes);
                         setNotes(prev => prev.map((n, i) => i === lyricChainIndex ? { ...n, [key]: val } : n));
                       } else {
                         const start = selectionStart >= 0 && selectionEnd >= 0 ? Math.min(selectionStart, selectionEnd) : (selectedNoteIndex >= 0 ? selectedNoteIndex : noteIndexAtCursor);
                         const end = selectionStart >= 0 && selectionEnd >= 0 ? Math.max(selectionStart, selectionEnd) : (selectedNoteIndex >= 0 ? selectedNoteIndex : noteIndexAtCursor);
-                        saveToHistory(notes);
                         setNotes(prev => prev.map((n, i) => (i >= start && i <= end) ? { ...n, [key]: val } : n));
                       }
                     }}
@@ -7971,19 +7968,13 @@ function NoodiMeisterCore({ icons }) {
                       if (mod && e.shiftKey && e.key === '-') {
                         const currentVal = getVal(notes[idx]);
                         e.preventDefault();
-                        saveToHistory(notes);
                         setNotes(prev => prev.map((n, i) => i === idx ? { ...n, [key]: currentVal + '_' } : n));
                         return;
                       }
                       if (e.key === '-') {
                         const currentVal = getVal(notes[idx]);
                         e.preventDefault();
-                        saveToHistory(notes);
-                        setNotes(prev => prev.map((n, i) => {
-                          if (i === idx) return { ...n, [key]: currentVal + '-' };
-                          if (i === idx + 1 && idx < lastIdx) return { ...n, [key]: '' };
-                          return n;
-                        }));
+                        setNotes(prev => prev.map((n, i) => (i === idx ? { ...n, [key]: currentVal + '-' } : n)));
                         if (idx < lastIdx) {
                           const nextIdx = idx + 1;
                           setLyricChainStart(idx);
@@ -7991,16 +7982,12 @@ function NoodiMeisterCore({ icons }) {
                           setLyricChainIndex(nextIdx);
                           setSelectedNoteIndex(nextIdx);
                           setCursorPosition(getBeatAtNoteIndex(notes, nextIdx));
+                          setTimeout(() => { lyricInputRef.current?.setSelectionRange?.(0, 0); }, 0);
                         }
                       } else if (e.key === ' ') {
                         const currentVal = getVal(notes[idx]);
                         e.preventDefault();
-                        saveToHistory(notes);
-                        setNotes(prev => prev.map((n, i) => {
-                          if (i === idx) return { ...n, [key]: currentVal + ' ' };
-                          if (i === idx + 1 && idx < lastIdx) return { ...n, [key]: '' };
-                          return n;
-                        }));
+                        setNotes(prev => prev.map((n, i) => (i === idx ? { ...n, [key]: currentVal + ' ' } : n)));
                         if (idx < lastIdx) {
                           const nextIdx = idx + 1;
                           setLyricChainStart(idx);
@@ -8008,25 +7995,26 @@ function NoodiMeisterCore({ icons }) {
                           setLyricChainIndex(nextIdx);
                           setSelectedNoteIndex(nextIdx);
                           setCursorPosition(getBeatAtNoteIndex(notes, nextIdx));
+                          setTimeout(() => { lyricInputRef.current?.setSelectionRange?.(0, 0); }, 0);
                         }
                       } else if (e.key === 'ArrowRight' && idx < lastIdx) {
                         e.preventDefault();
-                        const nextIdx = lyricChainIndex !== null
-                          ? Math.min(lyricChainIndex + 1, notes.length - 1)
-                          : Math.min(idx + 1, end, notes.length - 1);
+                        const nextIdx = Math.min(idx + 1, lastIdx);
+                        setLyricChainStart(lyricChainStart >= 0 ? lyricChainStart : idx);
+                        setLyricChainEnd(lastIdx);
                         setLyricChainIndex(nextIdx);
                         setSelectedNoteIndex(nextIdx);
                         setCursorPosition(getBeatAtNoteIndex(notes, nextIdx));
-                        if (lyricChainStart < 0) { setLyricChainStart(start); setLyricChainEnd(end); }
-                      } else if (e.key === 'ArrowLeft' && start <= end && idx > start) {
+                        setTimeout(() => { lyricInputRef.current?.setSelectionRange?.(0, 0); }, 0);
+                      } else if (e.key === 'ArrowLeft' && idx > 0) {
                         e.preventDefault();
-                        const prevIdx = lyricChainIndex !== null
-                          ? Math.max(lyricChainIndex - 1, 0)
-                          : Math.max(idx - 1, start, 0);
+                        const prevIdx = Math.max(idx - 1, 0);
+                        setLyricChainStart(lyricChainStart >= 0 ? lyricChainStart : prevIdx);
+                        setLyricChainEnd(lastIdx);
                         setLyricChainIndex(prevIdx);
                         setSelectedNoteIndex(prevIdx);
                         setCursorPosition(getBeatAtNoteIndex(notes, prevIdx));
-                        if (lyricChainStart < 0) { setLyricChainStart(start); setLyricChainEnd(end); }
+                        setTimeout(() => { lyricInputRef.current?.setSelectionRange?.(0, 0); }, 0);
                       }
                     }}
                     onBlur={() => setLyricChainIndex(null)}
@@ -8037,9 +8025,9 @@ function NoodiMeisterCore({ icons }) {
                   />
                   <span className="text-amber-600 text-xs">+</span>
                   <div className="flex gap-0.5" role="group" aria-label={t('toolbar.lyricExprMelisma')}>
-                    <button type="button" onClick={() => { const idx = lyricChainIndex !== null ? lyricChainIndex : (selectionStart >= 0 && selectionEnd >= 0 ? Math.min(selectionStart, selectionEnd) : (selectedNoteIndex >= 0 ? selectedNoteIndex : noteIndexAtCursor)); const key = lyricLineIndex === 0 ? 'lyric' : 'lyric2'; const cur = key === 'lyric' ? (notes[idx]?.lyric ?? '') : (notes[idx]?.lyric2 ?? ''); saveToHistory(notes); setNotes(prev => prev.map((n, i) => i === idx ? { ...n, [key]: cur + '_' } : n)); lyricInputRef.current?.focus(); }} className="px-1.5 py-0.5 rounded text-sm bg-amber-800/50 text-amber-100 hover:bg-amber-700/60 border border-amber-600/50" title={t('toolbar.lyricExprMelisma')}>_</button>
-                    <button type="button" onClick={() => { const idx = lyricChainIndex !== null ? lyricChainIndex : (selectionStart >= 0 && selectionEnd >= 0 ? Math.min(selectionStart, selectionEnd) : (selectedNoteIndex >= 0 ? selectedNoteIndex : noteIndexAtCursor)); const key = lyricLineIndex === 0 ? 'lyric' : 'lyric2'; const cur = key === 'lyric' ? (notes[idx]?.lyric ?? '') : (notes[idx]?.lyric2 ?? ''); saveToHistory(notes); setNotes(prev => prev.map((n, i) => i === idx ? { ...n, [key]: cur + '\u2014' } : n)); lyricInputRef.current?.focus(); }} className="px-1.5 py-0.5 rounded text-sm bg-amber-800/50 text-amber-100 hover:bg-amber-700/60 border border-amber-600/50" title={t('toolbar.lyricExprDash')}>—</button>
-                    <button type="button" onClick={() => { const idx = lyricChainIndex !== null ? lyricChainIndex : (selectionStart >= 0 && selectionEnd >= 0 ? Math.min(selectionStart, selectionEnd) : (selectedNoteIndex >= 0 ? selectedNoteIndex : noteIndexAtCursor)); const key = lyricLineIndex === 0 ? 'lyric' : 'lyric2'; const cur = key === 'lyric' ? (notes[idx]?.lyric ?? '') : (notes[idx]?.lyric2 ?? ''); saveToHistory(notes); setNotes(prev => prev.map((n, i) => i === idx ? { ...n, [key]: cur + '\u00B7' } : n)); lyricInputRef.current?.focus(); }} className="px-1.5 py-0.5 rounded text-sm bg-amber-800/50 text-amber-100 hover:bg-amber-700/60 border border-amber-600/50" title={t('toolbar.lyricExprDot')}>·</button>
+                    <button type="button" onClick={() => { const idx = lyricChainIndex !== null ? lyricChainIndex : (selectionStart >= 0 && selectionEnd >= 0 ? Math.min(selectionStart, selectionEnd) : (selectedNoteIndex >= 0 ? selectedNoteIndex : noteIndexAtCursor)); const key = lyricLineIndex === 0 ? 'lyric' : 'lyric2'; const cur = key === 'lyric' ? (notes[idx]?.lyric ?? '') : (notes[idx]?.lyric2 ?? ''); setNotes(prev => prev.map((n, i) => i === idx ? { ...n, [key]: cur + '_' } : n)); lyricInputRef.current?.focus(); }} className="px-1.5 py-0.5 rounded text-sm bg-amber-800/50 text-amber-100 hover:bg-amber-700/60 border border-amber-600/50" title={t('toolbar.lyricExprMelisma')}>_</button>
+                    <button type="button" onClick={() => { const idx = lyricChainIndex !== null ? lyricChainIndex : (selectionStart >= 0 && selectionEnd >= 0 ? Math.min(selectionStart, selectionEnd) : (selectedNoteIndex >= 0 ? selectedNoteIndex : noteIndexAtCursor)); const key = lyricLineIndex === 0 ? 'lyric' : 'lyric2'; const cur = key === 'lyric' ? (notes[idx]?.lyric ?? '') : (notes[idx]?.lyric2 ?? ''); setNotes(prev => prev.map((n, i) => i === idx ? { ...n, [key]: cur + '\u2014' } : n)); lyricInputRef.current?.focus(); }} className="px-1.5 py-0.5 rounded text-sm bg-amber-800/50 text-amber-100 hover:bg-amber-700/60 border border-amber-600/50" title={t('toolbar.lyricExprDash')}>—</button>
+                    <button type="button" onClick={() => { const idx = lyricChainIndex !== null ? lyricChainIndex : (selectionStart >= 0 && selectionEnd >= 0 ? Math.min(selectionStart, selectionEnd) : (selectedNoteIndex >= 0 ? selectedNoteIndex : noteIndexAtCursor)); const key = lyricLineIndex === 0 ? 'lyric' : 'lyric2'; const cur = key === 'lyric' ? (notes[idx]?.lyric ?? '') : (notes[idx]?.lyric2 ?? ''); setNotes(prev => prev.map((n, i) => i === idx ? { ...n, [key]: cur + '\u00B7' } : n)); lyricInputRef.current?.focus(); }} className="px-1.5 py-0.5 rounded text-sm bg-amber-800/50 text-amber-100 hover:bg-amber-700/60 border border-amber-600/50" title={t('toolbar.lyricExprDot')}>·</button>
                   </div>
                   <label className="text-xs font-medium text-amber-100 whitespace-nowrap">{t('toolbar.lyricLineOffset')}:</label>
                   <input type="number" min={-40} max={40} step={2} value={lyricLineYOffset} onChange={(e) => { const v = parseInt(e.target.value, 10); if (!Number.isNaN(v)) setLyricLineYOffset(Math.max(-40, Math.min(40, v))); dirtyRef.current = true; }} className="w-14 px-1.5 py-0.5 rounded text-sm bg-amber-100 text-amber-900 border border-amber-300 focus:ring-1 focus:ring-amber-500" title={t('toolbar.lyricLineOffset')} />
