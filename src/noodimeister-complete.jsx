@@ -1105,6 +1105,8 @@ function NoodiMeisterCore({ icons }) {
   const [measureStretchFactors, setMeasureStretchFactors] = useState([]);
   const [systemYOffsets, setSystemYOffsets] = useState([]);
   const [layoutPageBreakBefore, setLayoutPageBreakBefore] = useState([]);
+  /** Extra blank pages appended after the last content page (does not change measure layout). */
+  const [layoutExtraPages, setLayoutExtraPages] = useState(0);
   const [layoutSystemGap, setLayoutSystemGap] = useState(15); // noodiridade vahe / staff lines gap (px) – vahe süsteemide vahel
   const [layoutPartsGap, setLayoutPartsGap] = useState(10); // instrumentide vahe / parts gap (px) – vahe kahe partii vahel
   const [layoutConnectedBarlines, setLayoutConnectedBarlines] = useState(true); // ühendatud taktijooned partituuris
@@ -1114,6 +1116,7 @@ function NoodiMeisterCore({ icons }) {
   const [partLayoutMeasuresPerLine, setPartLayoutMeasuresPerLine] = useState(4);
   const [partLayoutLineBreakBefore, setPartLayoutLineBreakBefore] = useState([]);
   const [partLayoutPageBreakBefore, setPartLayoutPageBreakBefore] = useState([]);
+  const [partLayoutExtraPages, setPartLayoutExtraPages] = useState(0);
   const [showPageNavigator, setShowPageNavigator] = useState(false);
   /** When true, scale the score so one A4 page fits in the visible area (whole page layout on screen). */
   const [viewFitPage, setViewFitPage] = useState(true);
@@ -2654,6 +2657,7 @@ function NoodiMeisterCore({ icons }) {
     layoutMeasuresPerLine,
     layoutLineBreakBefore,
     layoutPageBreakBefore,
+    layoutExtraPages,
     layoutSystemGap,
     layoutPartsGap,
     layoutConnectedBarlines,
@@ -2662,6 +2666,7 @@ function NoodiMeisterCore({ icons }) {
     partLayoutMeasuresPerLine,
     partLayoutLineBreakBefore,
     partLayoutPageBreakBefore,
+    partLayoutExtraPages,
     showPageNavigator,
     pageFlowDirection,
     viewFitPage,
@@ -2725,7 +2730,7 @@ function NoodiMeisterCore({ icons }) {
     lyricFontSize,
     noteheadShape,
     noteheadEmoji
-  }), [staves, activeStaffIndex, staffYOffsets, measureStretchFactors, systemYOffsets, visibleStaves, intermissionLabels, timeSignature, timeSignatureMode, keySignature, staffLines, notationStyle, pixelsPerBeat, notationMode, instrumentNotationVariant, cursorPosition, addedMeasures, measureRepeatMarks, setupCompleted, songTitle, author, pickupEnabled, pickupQuantity, pickupDuration, pageOrientation, paperSize, layoutMeasuresPerLine, layoutLineBreakBefore, layoutPageBreakBefore, layoutSystemGap, layoutPartsGap, layoutConnectedBarlines, layoutGlobalSpacingMultiplier, viewMode, partLayoutMeasuresPerLine, partLayoutLineBreakBefore, partLayoutPageBreakBefore, showPageNavigator, pageFlowDirection, viewFitPage, viewSmartPage, visibleToolIds, tuningReferenceNote, tuningReferenceOctave, tuningReferenceHz, playNoteOnInsert, figurenotesSize, figurenotesStems, figurenotesChordLineGap, figurenotesChordBlocks, figurenotesChordBlocksShowTones, figurenotesMelodyShowNoteNames, timeSignatureSize, showBarNumbers, barNumberSize, showRhythmSyllables, showAllNoteLabels, enableEmojiOverlays, joClefStaffPosition, relativeNotationShowKeySignature, relativeNotationShowTraditionalClef, isPedagogicalProject, pedagogicalAudioBpm, pedagogicalAudioPlaybackRate, pedagogicalPlayheadStyle, pedagogicalPlayheadEmoji, pedagogicalPlayheadEmojiSize, cursorLineStrokeWidth, pedagogicalPlayheadMovement, chords, textBoxes, documentFontFamily, lyricFontFamily, titleFontSize, authorFontSize, titleFontFamily, authorFontFamily, titleBold, titleItalic, authorBold, authorItalic, titleAlignment, authorAlignment, staffRowAlignment, pageDesignDataUrl, pageDesignOpacity, pageDesignFit, pageDesignLayer, pageDesignPositionX, pageDesignPositionY, pageDesignCrop, lyricLineIndex, lyricLineYOffset, lyricFontSize, noteheadShape, noteheadEmoji]);
+  }), [staves, activeStaffIndex, staffYOffsets, measureStretchFactors, systemYOffsets, visibleStaves, intermissionLabels, timeSignature, timeSignatureMode, keySignature, staffLines, notationStyle, pixelsPerBeat, notationMode, instrumentNotationVariant, cursorPosition, addedMeasures, measureRepeatMarks, setupCompleted, songTitle, author, pickupEnabled, pickupQuantity, pickupDuration, pageOrientation, paperSize, layoutMeasuresPerLine, layoutLineBreakBefore, layoutPageBreakBefore, layoutExtraPages, layoutSystemGap, layoutPartsGap, layoutConnectedBarlines, layoutGlobalSpacingMultiplier, viewMode, partLayoutMeasuresPerLine, partLayoutLineBreakBefore, partLayoutPageBreakBefore, partLayoutExtraPages, showPageNavigator, pageFlowDirection, viewFitPage, viewSmartPage, visibleToolIds, tuningReferenceNote, tuningReferenceOctave, tuningReferenceHz, playNoteOnInsert, figurenotesSize, figurenotesStems, figurenotesChordLineGap, figurenotesChordBlocks, figurenotesChordBlocksShowTones, figurenotesMelodyShowNoteNames, timeSignatureSize, showBarNumbers, barNumberSize, showRhythmSyllables, showAllNoteLabels, enableEmojiOverlays, joClefStaffPosition, relativeNotationShowKeySignature, relativeNotationShowTraditionalClef, isPedagogicalProject, pedagogicalAudioBpm, pedagogicalAudioPlaybackRate, pedagogicalPlayheadStyle, pedagogicalPlayheadEmoji, pedagogicalPlayheadEmojiSize, cursorLineStrokeWidth, pedagogicalPlayheadMovement, chords, textBoxes, documentFontFamily, lyricFontFamily, titleFontSize, authorFontSize, titleFontFamily, authorFontFamily, titleBold, titleItalic, authorBold, authorItalic, titleAlignment, authorAlignment, staffRowAlignment, pageDesignDataUrl, pageDesignOpacity, pageDesignFit, pageDesignLayer, pageDesignPositionX, pageDesignPositionY, pageDesignCrop, lyricLineIndex, lyricLineYOffset, lyricFontSize, noteheadShape, noteheadEmoji]);
 
   const saveToStorageSync = useCallback(() => {
     try {
@@ -2983,6 +2988,7 @@ function NoodiMeisterCore({ icons }) {
       if (data.layoutMeasuresPerLine != null) setLayoutMeasuresPerLine(data.layoutMeasuresPerLine);
       if (Array.isArray(data.layoutLineBreakBefore)) setLayoutLineBreakBefore(data.layoutLineBreakBefore);
       if (Array.isArray(data.layoutPageBreakBefore)) setLayoutPageBreakBefore(data.layoutPageBreakBefore);
+      if (data.layoutExtraPages != null) setLayoutExtraPages(Math.max(0, Math.round(Number(data.layoutExtraPages) || 0)));
       if (data.layoutSystemGap != null) setLayoutSystemGap(Math.max(5, Math.min(250, Number(data.layoutSystemGap))));
       if (data.layoutPartsGap != null) setLayoutPartsGap(Math.max(2, Math.min(80, Number(data.layoutPartsGap))));
       if (data.layoutConnectedBarlines != null) setLayoutConnectedBarlines(!!data.layoutConnectedBarlines);
@@ -2991,6 +2997,7 @@ function NoodiMeisterCore({ icons }) {
       if (data.partLayoutMeasuresPerLine != null) setPartLayoutMeasuresPerLine(data.partLayoutMeasuresPerLine);
       if (Array.isArray(data.partLayoutLineBreakBefore)) setPartLayoutLineBreakBefore(data.partLayoutLineBreakBefore);
       if (Array.isArray(data.partLayoutPageBreakBefore)) setPartLayoutPageBreakBefore(data.partLayoutPageBreakBefore);
+      if (data.partLayoutExtraPages != null) setPartLayoutExtraPages(Math.max(0, Math.round(Number(data.partLayoutExtraPages) || 0)));
       if (data.showPageNavigator != null) setShowPageNavigator(!!data.showPageNavigator);
       if (data.pageFlowDirection === 'vertical' || data.pageFlowDirection === 'horizontal') setPageFlowDirection(data.pageFlowDirection);
       if (data.viewFitPage != null) setViewFitPage(!!data.viewFitPage);
@@ -4470,19 +4477,19 @@ function NoodiMeisterCore({ icons }) {
     if (note && !note.isRest) playPianoNote(note.pitch, note.octave ?? 4, note.accidental ?? 0);
   }, [playNoteOnInsert, getNoteAtBeat, playPianoNote]);
 
-  // N-režiim ja laulutekst: ära luba kursoril jääda nootide vahele – põrka tagasi viimasele kehtivale noodi beat'ile (vältib hüppeid).
+  // Laulutekst: ära luba kursoril jääda nootide vahele – põrka tagasi viimasele kehtivale noodi beat'ile.
+  // NB! N-režiimis peab kursor saama liikuda ka tühjale kohale (noodi sisestus), seega seda kaitset seal ei rakenda.
   useEffect(() => {
     if (isPedagogicalAudioPlaying || isExportingAnimation) return;
     if (!cursorOnMelodyRow) return;
     const inTextMode = cursorTool === 'type' || lyricChainIndex !== null;
-    const inNMode = noteInputMode;
-    if (!inTextMode && !inNMode) return;
+    if (!inTextMode) return;
     if (noteIndexAtCursor >= 0) return; // kursor on noodil – kõik korras
     const safeBeat = lastCursorOnNoteBeatRef.current;
     if (!Number.isFinite(safeBeat)) return;
     if (cursorPosition === safeBeat) return;
     setCursorPosition(safeBeat);
-  }, [cursorPosition, cursorTool, lyricChainIndex, noteInputMode, noteIndexAtCursor, cursorOnMelodyRow, isPedagogicalAudioPlaying, isExportingAnimation, setCursorPosition]);
+  }, [cursorPosition, cursorTool, lyricChainIndex, noteIndexAtCursor, cursorOnMelodyRow, isPedagogicalAudioPlaying, isExportingAnimation, setCursorPosition]);
 
   // Keyboard handler
   useEffect(() => {
@@ -5351,13 +5358,21 @@ function NoodiMeisterCore({ icons }) {
               setSelectionEnd(prev => Math.min(prev + 1, notes.length - 1));
               setSelectedNoteIndex(prev => Math.min(prev + 1, notes.length - 1));
             }
+            const idxNow = selectionStart < 0 ? Math.min(baseIdx + 1, notes.length - 1) : Math.min(selectionEnd + 1, notes.length - 1);
+            setCursorPosition(getBeatAtNoteIndex(notes, idxNow));
+            playNoteAtBeatIfEnabled(getBeatAtNoteIndex(notes, idxNow));
           } else {
             // Single selection
             setSelectionStart(-1);
             setSelectionEnd(-1);
             const baseIdx = ensureSelectedIndex(-1);
             if (baseIdx < 0) return;
-            setSelectedNoteIndex(prev => Math.min((prev >= 0 ? prev : baseIdx) + 1, notes.length - 1));
+            setSelectedNoteIndex(prev => {
+              const nextIdx = Math.min((prev >= 0 ? prev : baseIdx) + 1, notes.length - 1);
+              setCursorPosition(getBeatAtNoteIndex(notes, nextIdx));
+              playNoteAtBeatIfEnabled(getBeatAtNoteIndex(notes, nextIdx));
+              return nextIdx;
+            });
           }
           return;
         }
@@ -5376,13 +5391,21 @@ function NoodiMeisterCore({ icons }) {
               setSelectionEnd(prev => Math.max(prev - 1, 0));
               setSelectedNoteIndex(prev => Math.max(prev - 1, 0));
             }
+            const idxNow = selectionStart < 0 ? Math.max(baseIdx - 1, 0) : Math.max(selectionEnd - 1, 0);
+            setCursorPosition(getBeatAtNoteIndex(notes, idxNow));
+            playNoteAtBeatIfEnabled(getBeatAtNoteIndex(notes, idxNow));
           } else {
             // Single selection
             setSelectionStart(-1);
             setSelectionEnd(-1);
             const baseIdx = ensureSelectedIndex(0);
             if (baseIdx < 0) return;
-            setSelectedNoteIndex(prev => Math.max((prev >= 0 ? prev : baseIdx) - 1, 0));
+            setSelectedNoteIndex(prev => {
+              const prevIdx = Math.max((prev >= 0 ? prev : baseIdx) - 1, 0);
+              setCursorPosition(getBeatAtNoteIndex(notes, prevIdx));
+              playNoteAtBeatIfEnabled(getBeatAtNoteIndex(notes, prevIdx));
+              return prevIdx;
+            });
           }
           return;
         }
@@ -5671,6 +5694,7 @@ function NoodiMeisterCore({ icons }) {
   const effectiveLayoutMeasuresPerLine = viewMode === 'score' ? layoutMeasuresPerLine : partLayoutMeasuresPerLine;
   const effectiveLayoutLineBreakBefore = viewMode === 'score' ? layoutLineBreakBefore : partLayoutLineBreakBefore;
   const effectiveLayoutPageBreakBefore = viewMode === 'score' ? layoutPageBreakBefore : partLayoutPageBreakBefore;
+  const effectiveLayoutExtraPages = viewMode === 'score' ? layoutExtraPages : partLayoutExtraPages;
   const scoreContainerRef = useRef(null);
   const scoreContentRef = useRef(null); // div that has handleScoreContentClick – for drag coordinate conversion
   const textboxInteractionRef = useRef(null); // { type: 'move'|'resize', id, startX, startY, boxStartX?, boxStartY?, boxStartW?, boxStartH?, handle? }
