@@ -7905,10 +7905,23 @@ function NoodiMeisterCore({ icons }) {
                   <input
                     ref={lyricInputRef}
                     type="text"
+                    onFocus={() => {
+                      // Laulusõnade sisestus: lukusta aktiivne noot ahelrežiimi, et '-' / tühik ei saaks minna "suvalisele" noodile
+                      // (vältib sõltuvust cursorPosition/noteIndexAtCursor asünkroonsest uuendusest).
+                      const idx = selectedNoteIndex >= 0 ? selectedNoteIndex : noteIndexAtCursor;
+                      if (typeof idx === 'number' && idx >= 0 && idx < notes.length) {
+                        setLyricChainStart(idx);
+                        setLyricChainEnd(Math.max(0, notes.length - 1));
+                        setLyricChainIndex(idx);
+                        setSelectedNoteIndex(idx);
+                        setCursorSubRow(0);
+                        setCursorPosition(getBeatAtNoteIndex(notes, idx));
+                      }
+                    }}
                     value={lyricChainIndex !== null
                       ? (lyricLineIndex === 0 ? (notes[lyricChainIndex]?.lyric ?? '') : (notes[lyricChainIndex]?.lyric2 ?? ''))
                       : (() => {
-                          const idx = lyricChainIndex ?? (selectionStart >= 0 && selectionEnd >= 0 ? Math.min(selectionStart, selectionEnd) : (selectedNoteIndex >= 0 ? selectedNoteIndex : noteIndexAtCursor));
+                          const idx = selectedNoteIndex >= 0 ? selectedNoteIndex : noteIndexAtCursor;
                           const n = notes[idx];
                           if (!n) return '';
                           return lyricLineIndex === 0 ? (n.lyric ?? '') : (n.lyric2 ?? '');
