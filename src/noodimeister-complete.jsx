@@ -5961,6 +5961,38 @@ function NoodiMeisterCore({ icons }) {
     return () => document.removeEventListener('wheel', onWheel, { capture: true });
   }, []);
 
+  const PageSeparatorsOverlay = ({ totalPages, pageWidth, pageHeight, isHorizontal, scrollTop, scrollLeft, viewportW, viewportH, zoom }) => {
+    if (!totalPages || totalPages <= 1) return null;
+    const safeZoom = Number(zoom) > 0 ? Number(zoom) : 1;
+    const vTop = (Number(scrollTop) || 0) / safeZoom;
+    const vLeft = (Number(scrollLeft) || 0) / safeZoom;
+    const vW = (Number(viewportW) || 0) / safeZoom;
+    const vH = (Number(viewportH) || 0) / safeZoom;
+    const bufferPages = 2;
+
+    if (isHorizontal) {
+      const startPage = Math.max(0, Math.floor(vLeft / pageWidth) - bufferPages);
+      const endPage = Math.min(totalPages - 1, Math.ceil((vLeft + vW) / pageWidth) + bufferPages);
+      const lines = [];
+      for (let p = startPage + 1; p <= endPage; p += 1) {
+        lines.push(
+          <div key={`sep-v-${p}`} className="nm-page-separator-line-v" style={{ left: p * pageWidth }} />
+        );
+      }
+      return <div aria-hidden="true" className="nm-page-separator-overlay">{lines}</div>;
+    }
+
+    const startPage = Math.max(0, Math.floor(vTop / pageHeight) - bufferPages);
+    const endPage = Math.min(totalPages - 1, Math.ceil((vTop + vH) / pageHeight) + bufferPages);
+    const lines = [];
+    for (let p = startPage + 1; p <= endPage; p += 1) {
+      lines.push(
+        <div key={`sep-h-${p}`} className="nm-page-separator-line-h" style={{ top: p * pageHeight }} />
+      );
+    }
+    return <div aria-hidden="true" className="nm-page-separator-overlay">{lines}</div>;
+  };
+
   // Selection drag (Shift + mouse down and drag across notes) – document-level mouseup ends the drag.
   useEffect(() => {
     const onMouseUp = () => {
@@ -9126,7 +9158,7 @@ function NoodiMeisterCore({ icons }) {
               /* Portrait: minHeight ≥ ühe lehe kõrgus (a4PageHeightVal), et kast oleks püstine, mitte laiune. */
               minHeight: isHorizontalFlow ? a4PageHeightVal : Math.max(a4PageHeightVal * totalPagesVal, 500, getStaffHeight() + LAYOUT.SYSTEM_GAP + getStaffHeight() + 120),
               ...(viewFitPage && !viewSmartPage ? { width: pw, boxSizing: 'border-box' } : { boxSizing: 'border-box' }),
-              ...(isHorizontalFlow ? { width: totalPagesVal * pw, height: a4PageHeightVal } : {})
+              ...(isHorizontalFlow ? { width: totalPagesVal * pw, height: a4PageHeightVal } : {}),
             }}
             onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; e.currentTarget.classList.add('ring-2', 'ring-amber-400', 'ring-offset-2'); }}
             onDragLeave={(e) => { e.currentTarget.classList.remove('ring-2', 'ring-amber-400', 'ring-offset-2'); }}
@@ -9140,6 +9172,17 @@ function NoodiMeisterCore({ icons }) {
               if (!Number.isNaN(optionIndex) && toolboxes.rhythm?.options?.[optionIndex]) handleToolboxSelection(optionIndex);
             }}
           >
+              <PageSeparatorsOverlay
+                totalPages={totalPagesVal}
+                pageWidth={pw}
+                pageHeight={a4PageHeightVal}
+                isHorizontal={isHorizontalFlow}
+                scrollTop={mainScrollTop}
+                scrollLeft={mainScrollLeft}
+                viewportW={mainRef.current?.clientWidth ?? 0}
+                viewportH={mainRef.current?.clientHeight ?? 0}
+                zoom={scoreZoomLevel}
+              />
               {/* A4 trim caption: kasutaja näeb, et noodipaberi ala = trüki/PDF piir (ei ületa, ei jää väikeseks). */}
               <span className="absolute bottom-2 right-2 px-2 py-1 rounded text-xs font-medium bg-amber-100/90 dark:bg-amber-900/50 text-amber-800 dark:text-amber-200 border border-amber-300 dark:border-amber-700 pointer-events-none select-none print:hidden" aria-hidden="true" title="Trükkimise ja PDF ekspordi piir = A4 (210×297 mm)">
                 A4 {pageOrientation === 'landscape' ? '297×210' : '210×297'} mm

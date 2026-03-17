@@ -111,6 +111,42 @@ html, body, #root {
   overflow: hidden;
 }
 
+/* Screen-only page separators (MuseScore-like) drawn as thin overlay lines at page boundaries.
+   Important: do NOT use repeating background gradients here; those can cause large repaints and lag. */
+.nm-page-separator-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0; /* Score content is above (z-index 1). */
+}
+.nm-page-separator-line-h {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 0;
+  border-top: 1px solid rgba(148, 163, 184, 0.9);
+  box-shadow: 0 10px 14px -14px rgba(2, 6, 23, 0.28);
+}
+.nm-page-separator-line-v {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  border-left: 1px solid rgba(148, 163, 184, 0.9);
+  box-shadow: 10px 0 14px -14px rgba(2, 6, 23, 0.28);
+}
+
+/* Never show separators in export capture or print. */
+.noodimeister-export-capture .nm-page-separator-overlay {
+  display: none !important;
+}
+
+@media print {
+  .nm-page-separator-overlay {
+    display: none !important;
+  }
+}
+
 /* Print: only the notation sheet (score). One browser print page = one paper page (A4 210×297 mm). User can verify in print preview. */
 @media print {
   /* Named page sizes: trüki eelvaates on üks leht = üks A4 (210×297 mm); sisu ei ületa ega jää põhjendamatult väikeseks. */
