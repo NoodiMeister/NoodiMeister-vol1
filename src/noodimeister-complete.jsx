@@ -3490,11 +3490,85 @@ function NoodiMeisterCore({ icons }) {
     setTimeout(() => setSaveFeedback(''), 1800);
   }, [isLoggedIn, saveToStorageSync, saveToStorage, saveToCloud, saveToOneDrive]);
 
-  // Laadi pilvest (Google Drive): vali fail, lae sisu.
+  // Laadi pilvest: Google Drive (Picker) või OneDrive (lihtne failinimekiri).
   const loadFromCloud = useCallback(async () => {
-    const token = googleDrive.getStoredToken();
+    const user = authStorage.getLoggedInUser?.();
+    const provider = user?.provider;
+
+    // OneDrive (Microsoft)
+    if (provider === 'microsoft') {
+      const token = authStorage.getStoredMicrosoftTokenFromAuth?.();
+      if (!token) {
+        setSaveFeedback('Logi sisse Microsoftiga, et laadida OneDrive\'ist.');
+        setTimeout(() => setSaveFeedback(''), 3500);
+        return;
+      }
+      try {
+        setSaveFeedback('Laadin OneDrive\'i failide nimekirja…');
+        const [rootRes, sharedRes] = await Promise.all([
+          oneDrive.listNoodimeisterFilesFromOneDrive(token),
+          oneDrive.listNoodimeisterFilesSharedWithMe(token),
+        ]);
+        const rootFiles = rootRes?.ok ? (rootRes.files || []) : [];
+        const sharedFiles = sharedRes?.ok ? (sharedRes.files || []) : [];
+        const files = [...rootFiles, ...sharedFiles].filter(Boolean);
+        if (!files.length) {
+          const msg = rootRes?.ok === false ? (rootRes?.error || 'OneDrive\'is faile ei leitud.') : 'OneDrive\'is NoodiMeisteri faile ei leitud.';
+          setSaveFeedback(msg);
+          setTimeout(() => setSaveFeedback(''), 3500);
+          return;
+        }
+
+        // Prompt-based chooser (kiire lahendus; hiljem võib asendada eraldi dialoogiga).
+        const maxShow = 25;
+        const shown = files.slice(0, maxShow);
+        setSaveFeedback('Vali fail…');
+        const answer = window.prompt(
+          `Vali OneDrive fail (1-${shown.length})` +
+          (files.length > shown.length ? ` (näitan esimesed ${shown.length}/${files.length})` : '') +
+          ':\n\n' +
+          shown.map((f, i) => `${i + 1}. ${f.name}`).join('\n') +
+          '\n\nSisesta number ja vajuta OK (Cancel = katkesta).'
+        );
+        if (!answer) {
+          setSaveFeedback('');
+          return;
+        }
+        const idx = Number(answer);
+        if (!Number.isFinite(idx) || idx < 1 || idx > shown.length) {
+          setSaveFeedback('Vigane valik.');
+          setTimeout(() => setSaveFeedback(''), 2500);
+          return;
+        }
+        const picked = shown[idx - 1];
+        if (!picked?.id) {
+          setSaveFeedback('Vigane failivalik.');
+          setTimeout(() => setSaveFeedback(''), 2500);
+          return;
+        }
+
+        setSaveFeedback('Laadin OneDrive\'ist…');
+        const content = await oneDrive.getFileContent(token, picked.id);
+        const data = JSON.parse(content);
+        if (importProject(data)) {
+          setSaveFeedback('Laaditud pilvest!');
+          setTimeout(() => setSaveFeedback(''), 2500);
+          setOpenedCloudFile({ provider: 'onedrive', fileId: picked.id });
+        } else {
+          setSaveFeedback('Vigane projektifail');
+          setTimeout(() => setSaveFeedback(''), 2500);
+        }
+      } catch (e) {
+        setSaveFeedback(e?.message || 'OneDrive\'ist laadimine ebaõnnestus');
+        setTimeout(() => setSaveFeedback(''), 3500);
+      }
+      return;
+    }
+
+    // Default: Google Drive
+    const token = googleDrive.getStoredToken?.();
     if (!token) {
-      setSaveFeedback('Logi sisse Google\'iga (Drive luba)');
+      setSaveFeedback('Logi sisse Google\'iga, et laadida Google Drive\'ist.');
       setTimeout(() => setSaveFeedback(''), 3000);
       return;
     }
@@ -3502,7 +3576,14 @@ function NoodiMeisterCore({ icons }) {
       setSaveFeedback('Vali fail…');
       const fileId = await googleDrive.pickFile(token);
       if (!fileId) {
-        setSaveFeedback('');
+        // Picker võib olla blokeeritud / skript ei laadinud / kasutaja tühistas.
+        const pickerReady = !!(window.google && window.google.picker);
+        if (!pickerReady) {
+          setSaveFeedback('Google failivalija ei käivitunud. Luba kolmanda osapoole skriptid või proovi teist brauserit.');
+          setTimeout(() => setSaveFeedback(''), 4500);
+        } else {
+          setSaveFeedback('');
+        }
         return;
       }
       setSaveFeedback('Laadin…');
@@ -3511,6 +3592,7 @@ function NoodiMeisterCore({ icons }) {
       if (importProject(data)) {
         setSaveFeedback('Laaditud pilvest!');
         setTimeout(() => setSaveFeedback(''), 2500);
+        setOpenedCloudFile({ provider: 'google', fileId });
       } else {
         setSaveFeedback('Vigane projektifail');
         setTimeout(() => setSaveFeedback(''), 2500);
@@ -6456,7 +6538,7 @@ function NoodiMeisterCore({ icons }) {
                 <label className="block text-sm font-semibold text-amber-900 dark:text-white mb-2">Taktide paigutus</label>
                 <p className="text-sm text-amber-700 dark:text-white/80 mb-2">Mitu takti soovite vaikimisi ühe rea kohta? (Saate hiljem muuta tööriistakastis Paigutus.)</p>
                 <div className="flex flex-wrap items-center gap-3">
-                  {[2, 3, 4, 6, 8].map((n) => (
+                  {(pageOrientation === 'landscape' ? [4, 6, 8, 12, 16] : [2, 3, 4, 6, 8]).map((n) => (
                     <button
                       key={n}
                       type="button"
@@ -7117,7 +7199,7 @@ function NoodiMeisterCore({ icons }) {
                 <label className="block text-sm font-semibold text-amber-900 mb-1">{t('layout.measuresPerLine')}</label>
                 <p className="text-xs text-amber-700 mb-2">{t('layout.measuresPerLineHint')} {t('layout.measuresPerLineHintOrientation')}</p>
                 <div className="flex flex-wrap gap-2">
-                  {[2, 3, 4, 6, 8].map((n) => (
+                  {(pageOrientation === 'landscape' ? [4, 6, 8, 12, 16] : [2, 3, 4, 6, 8]).map((n) => (
                     <button
                       key={n}
                       type="button"
@@ -8661,7 +8743,7 @@ function NoodiMeisterCore({ icons }) {
                     <div className="mt-4 pt-4 border-t-2 border-amber-200">
                       <h4 className="text-xs font-bold text-amber-900 uppercase mb-2">{t('layout.measuresPerLine')}</h4>
                       <p className="text-xs text-amber-700 mb-2">{t('layout.measuresPerLineHint')}</p>
-                      <div className="flex flex-wrap gap-1 mb-3">{[2, 3, 4, 6, 8].map((n) => (
+                      <div className="flex flex-wrap gap-1 mb-3">{(pageOrientation === 'landscape' ? [4, 6, 8, 12, 16] : [2, 3, 4, 6, 8]).map((n) => (
                         <button key={n} type="button" onClick={() => { dirtyRef.current = true; (viewMode === 'score' ? setLayoutMeasuresPerLine : setPartLayoutMeasuresPerLine)(n); }} className={`px-2 py-1 rounded text-sm font-medium ${effectiveLayoutMeasuresPerLine === n ? 'bg-amber-600 text-white' : 'bg-amber-100 text-amber-800 hover:bg-amber-200'}`}>{n}</button>
                       ))}</div>
                       <div className="mb-3">

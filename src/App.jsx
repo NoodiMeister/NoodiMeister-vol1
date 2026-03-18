@@ -160,6 +160,7 @@ function EnvBanner() {
           left: 0,
           right: 0,
           zIndex: 9999,
+          pointerEvents: 'none',
           background: 'linear-gradient(90deg, #b45309 0%, #92400e 100%)',
           color: '#fff',
           fontSize: '13px',
@@ -170,7 +171,14 @@ function EnvBanner() {
         }}
       >
         TEST – see on testiversioon. Kasutajate andmeid ei mõjuta. Toodang:{' '}
-        <a href="https://www.noodimeister.ee" target="_blank" rel="noopener noreferrer" style={{ color: '#fff', textDecoration: 'underline', fontWeight: 700 }}>noodimeister.ee</a>
+        <a
+          href="https://www.noodimeister.ee"
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{ pointerEvents: 'auto', color: '#fff', textDecoration: 'underline', fontWeight: 700 }}
+        >
+          noodimeister.ee
+        </a>
       </div>
     );
   }
@@ -185,6 +193,7 @@ function EnvBanner() {
           left: 0,
           right: 0,
           zIndex: 9999,
+          pointerEvents: 'none',
           background: 'linear-gradient(90deg, #065f46 0%, #047857 100%)',
           color: '#fff',
           fontSize: '13px',
