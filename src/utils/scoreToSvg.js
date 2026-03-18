@@ -11,6 +11,52 @@ function getPageWh (orientation) {
   return isLandscape ? { w: 1123, h: 794 } : { w: 794, h: 1123 };
 }
 
+function hasSmuflTimeSigDigits (text) {
+  if (!text) return false;
+  for (let i = 0; i < text.length; i += 1) {
+    const code = text.charCodeAt(i);
+    if (code >= 0xE080 && code <= 0xE089) return true;
+  }
+  return false;
+}
+
+/**
+ * svg2pdf/jsPDF Windows: SMuFL PUA digits (U+E080–U+E089) can fall back to a wrong font,
+ * rendering as random letters/diacritics. For export SVG only, convert those glyphs to
+ * plain ASCII digits and force a system font.
+ */
+function rewriteSmuflTimeSigDigitsToAscii (svgInnerHtml) {
+  try {
+    const doc = new DOMParser().parseFromString(
+      `<svg xmlns="${XMLNS}">${svgInnerHtml}</svg>`,
+      'image/svg+xml'
+    );
+    const root = doc.documentElement;
+    const texts = root.querySelectorAll('text');
+    let changed = false;
+    texts.forEach((t) => {
+      const original = t.textContent || '';
+      if (!hasSmuflTimeSigDigits(original)) return;
+      const replaced = original.replace(/[\uE080-\uE089]/g, (ch) => String(ch.charCodeAt(0) - 0xE080));
+      if (replaced !== original) {
+        t.textContent = replaced;
+        // Ensure this renders even if music fonts aren't embedded.
+        t.setAttribute('font-family', 'sans-serif');
+        const style = t.getAttribute('style');
+        if (style && /font-family\s*:/i.test(style)) {
+          t.setAttribute('style', style.replace(/font-family\s*:\s*[^;]+;?/i, 'font-family: sans-serif;'));
+        }
+        changed = true;
+      }
+    });
+    if (!changed) return svgInnerHtml;
+    // Serialize children of wrapper root back to innerHTML
+    return Array.from(root.childNodes).map((n) => new XMLSerializer().serializeToString(n)).join('');
+  } catch (_) {
+    return svgInnerHtml;
+  }
+}
+
 function escapeXml (str) {
   if (str == null) return '';
   return String(str)
@@ -129,7 +175,7 @@ export function scoreToSvg (container, options = {}) {
     const h = notationSvg.getAttribute('height');
     const width = (w != null && w !== '100%') ? parseFloat(w) : (notationSvg.getBoundingClientRect().width || pageWidth);
     const height = (h != null && h !== '100%') ? parseFloat(h) : (notationSvg.getBoundingClientRect().height || 500);
-    const inner = notationSvg.innerHTML;
+    const inner = rewriteSmuflTimeSigDigitsToAscii(notationSvg.innerHTML);
     const vb = notationSvg.getAttribute('viewBox') || `0 0 ${width} ${height}`;
     notationGroup = `<g transform="translate(${tx}, ${notationY})"><svg xmlns="${XMLNS}" x="0" y="0" width="${width}" height="${height}" viewBox="${escapeXml(vb)}" preserveAspectRatio="xMidYMin meet">${inner}</svg></g>`;
   }

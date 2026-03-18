@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="980" height="220" viewBox="0 0 980 220">
+  <title>Harjutus 2-joonelisel noodijoonestikul (v&#228;rvitud noodipead, ilma varteta)</title>
+  <desc>
+    Harjutus: SO, MI, SO, MI, SO, SO, NA, MI, NA, SO, MI, MI.
+    2-jooneline noodijoonestik. Ainult v&#228;rvitud noodipead (ilma r&#252;tmivarteta).
+    Astmete paigutus: MI = alumine joon, NA = joonte vahe, SO = &#252;lemine joon.
+    V&#228;rvid (praegune kokkulepe): SO punane, MI sinine. NA neutraalne (hall) kuni t&#228;psustame.
+  </desc>
+
+  <defs>
+    <style>
+      .staff { stroke: #111; stroke-width: 2; }
+      .note { stroke: #111; stroke-width: 2; }
+      .label { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; font-size: 12px; font-weight: 800; fill: #111; }
+      .hint { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; font-size: 12px; font-weight: 600; fill: #444; }
+      .repeatTick { stroke: #111; stroke-width: 3; stroke-linecap: square; }
+    </style>
+  </defs>
+
+  <rect x="0" y="0" width="980" height="220" fill="#ffffff"/>
+
+  <text x="20" y="18" class="hint">2-jooneline meetod: ainult v&#228;rvitud noodipead (ilma varteta)</text>
+
+  <!-- 2-line staff -->
+  <!-- staffSpace = 24px between lines -->
+  <!-- yBottomLine = 140, yTopLine = 116, ySpace = 128 -->
+  <g>
+    <line class="staff" x1="20" y1="116" x2="960" y2="116"/>
+    <line class="staff" x1="20" y1="140" x2="960" y2="140"/>
+  </g>
+
+  <!-- Degree mapping on 2-line staff -->
+  <!-- SO: y=116 (top line), NA: y=128 (space), MI: y=140 (bottom line) -->
+  <!-- Notehead: circle r=10 -->
+  <!-- x positions: start=60, step=70 -->
+  <g>
+    <!-- Helper: colors -->
+    <!-- SO = red, MI = blue, NA = neutral gray (temporary) -->
+
+    <!-- 1 SO -->
+    <circle class="note" cx="60" cy="116" r="10" fill="#e53935"/>
+    <text class="label" x="60" y="96" text-anchor="middle">SO</text>
+
+    <!-- 2 MI -->
+    <circle class="note" cx="130" cy="140" r="10" fill="#1e88e5"/>
+    <text class="label" x="130" y="96" text-anchor="middle">MI</text>
+
+    <!-- 3 SO -->
+    <circle class="note" cx="200" cy="116" r="10" fill="#e53935"/>
+    <text class="label" x="200" y="96" text-anchor="middle">SO</text>
+
+    <!-- 4 MI -->
+    <circle class="note" cx="270" cy="140" r="10" fill="#1e88e5"/>
+    <text class="label" x="270" y="96" text-anchor="middle">MI</text>
+
+    <!-- 5 SO -->
+    <circle class="note" cx="340" cy="116" r="10" fill="#e53935"/>
+    <text class="label" x="340" y="96" text-anchor="middle">SO</text>
+
+    <!-- 6 SO (repeat tick) -->
+    <line class="repeatTick" x1="375" y1="106" x2="375" y2="126"/>
+    <circle class="note" cx="410" cy="116" r="10" fill="#e53935"/>
+    <text class="label" x="410" y="96" text-anchor="middle">SO</text>
+
+    <!-- 7 NA -->
+    <circle class="note" cx="480" cy="128" r="10" fill="#9e9e9e"/>
+    <text class="label" x="480" y="96" text-anchor="middle">NA</text>
+
+    <!-- 8 MI -->
+    <circle class="note" cx="550" cy="140" r="10" fill="#1e88e5"/>
+    <text class="label" x="550" y="96" text-anchor="middle">MI</text>
+
+    <!-- 9 NA -->
+    <circle class="note" cx="620" cy="128" r="10" fill="#9e9e9e"/>
+    <text class="label" x="620" y="96" text-anchor="middle">NA</text>
+
+    <!-- 10 SO -->
+    <circle class="note" cx="690" cy="116" r="10" fill="#e53935"/>
+    <text class="label" x="690" y="96" text-anchor="middle">SO</text>
+
+    <!-- 11 MI -->
+    <circle class="note" cx="760" cy="140" r="10" fill="#1e88e5"/>
+    <text class="label" x="760" y="96" text-anchor="middle">MI</text>
+
+    <!-- 12 MI (repeat tick + ending tick 2 squares tall) -->
+    <line class="repeatTick" x1="795" y1="130" x2="795" y2="150"/>
+    <circle class="note" cx="830" cy="140" r="10" fill="#1e88e5"/>
+    <text class="label" x="830" y="96" text-anchor="middle">MI</text>
+
+    <!-- End tick (MI right side, 2 squares tall = 40px) -->
+    <line class="repeatTick" x1="860" y1="140" x2="860" y2="180"/>
+  </g>
+</svg>

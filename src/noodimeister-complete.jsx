@@ -11106,7 +11106,7 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
           }
         }
         return (
-        <g>
+        <g className="nm-cursor">
           {showLine ? (
             <line
               x1={cursorX}

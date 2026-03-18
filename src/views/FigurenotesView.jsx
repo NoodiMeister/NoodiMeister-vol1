@@ -151,6 +151,7 @@ export function FigurenotesView({
   effectiveMeasures,
   marginLeft = LAYOUT.MARGIN_LEFT,
   timelineHeight,
+  selectedDuration = '1/4',
   chordLineGap = 0,
   chordLineHeight = 0,
   chordBlocksEnabled = false,
@@ -476,7 +477,17 @@ export function FigurenotesView({
                     {haloEl}
                     {shapeEl}
                     {showMelodyNoteNames && (
-                      <text x={figureCenterX} y={y} textAnchor="middle" dominantBaseline="central" fill={textColor} fontSize={Math.max(8, size * 0.5)} fontWeight="bold">
+                      <text
+                        x={figureCenterX}
+                        y={y}
+                        textAnchor="middle"
+                        dominantBaseline="middle"
+                        alignmentBaseline="middle"
+                        fill={textColor}
+                        fontSize={Math.max(8, size * 0.5)}
+                        fontWeight="bold"
+                        fontFamily="Arial, sans-serif"
+                      >
                         {String(note.pitch || '').toUpperCase().replace('H', 'B')}
                       </text>
                     )}
@@ -521,11 +532,13 @@ export function FigurenotesView({
                 );
               };
 
-              const handleBeatSlot = (beatIndex, e) => {
+              const handleBeatSlot = (beatIndex, slotIndex, slotsPerBeat, e) => {
                 if (typeof onBeatSlotClick !== 'function') return;
                 e.stopPropagation();
                 e.preventDefault?.();
-                const beatPosition = measure.startBeat + beatIndex;
+                const s = Math.max(1, Number(slotsPerBeat) || 1);
+                const slot = Math.max(0, Math.min(s - 1, Number(slotIndex) || 0));
+                const beatPosition = measure.startBeat + beatIndex + (slot / s);
                 onBeatSlotClick(beatPosition);
               };
 
@@ -537,18 +550,26 @@ export function FigurenotesView({
                     <line key={`beat-${b}`} x1={measureX + (b + 1) * beatWidth} y1={sys.yOffset + padVertical} x2={measureX + (b + 1) * beatWidth} y2={sys.yOffset + melodyRowHeight - padVertical} stroke="#e0e0e0" strokeWidth="1" />
                   ))}
                   {/* Tahvel/sõrm: puudeala löögikastidele – noodi lisamine soovitud löögile */}
-                  {onBeatSlotClick && Array.from({ length: Math.ceil(beatsInMeasure) }, (_, beatIndex) => (
-                    <rect
-                      key={`beat-hit-${beatIndex}`}
-                      x={measureX + beatIndex * beatWidth}
-                      y={sys.yOffset + padVertical}
-                      width={beatWidth}
-                      height={boxHeight}
-                      fill="transparent"
-                      style={{ cursor: 'pointer' }}
-                      onPointerDown={(e) => handleBeatSlot(beatIndex, e)}
-                    />
-                  ))}
+                  {onBeatSlotClick && Array.from({ length: Math.ceil(beatsInMeasure) }, (_, beatIndex) => {
+                    // Click slots are subdivided by currently selected duration (e.g. 1/8 => 2 slots per beat).
+                    // Also respect existing shorter rhythms in this beat so user can click them reliably.
+                    const selDurBeats = getDurationInBeats(selectedDuration);
+                    const fromSelected = selDurBeats > 0 && selDurBeats < 1 ? Math.round(1 / selDurBeats) : 1;
+                    const fromExisting = getSlotsPerBeat(beatIndex);
+                    const slotsPerBeat = Math.max(1, fromSelected, fromExisting);
+                    return Array.from({ length: slotsPerBeat }, (_, slotIndex) => (
+                      <rect
+                        key={`beat-hit-${beatIndex}-${slotIndex}`}
+                        x={measureX + (beatIndex + (slotIndex / slotsPerBeat)) * beatWidth}
+                        y={sys.yOffset + padVertical}
+                        width={beatWidth / slotsPerBeat}
+                        height={boxHeight}
+                        fill="transparent"
+                        style={{ cursor: 'pointer' }}
+                        onPointerDown={(e) => handleBeatSlot(beatIndex, slotIndex, slotsPerBeat, e)}
+                      />
+                    ));
+                  })}
                   {measureWidth < (LAYOUT.MEASURE_MIN_WIDTH || 28) && (
                     <rect x={measureX - 1} y={sys.yOffset + 2} width={measureWidth + 2} height={melodyRowHeight - 2 * padVertical} fill="none" stroke="#dc2626" strokeWidth={2} strokeDasharray="4 2" rx={2} />
                   )}
