@@ -51,8 +51,8 @@ html, body, #root {
 
 /* Noodipaber: A4 tunnetus, turvaala äärtest. Laius/kõrgus tulevad inline stiilidest (794×1123 px). */
 .sheet-music-page {
-  width: 210mm;
-  height: 297mm;
+  /* Width/height must come from inline styles so portrait/landscape work correctly.
+     Fixed mm sizes here caused landscape to stay portrait-height on screen. */
   padding: 15mm; /* Turvaala, et noodid ei läheks äärtesse */
   margin: 10px auto;
   background: white;

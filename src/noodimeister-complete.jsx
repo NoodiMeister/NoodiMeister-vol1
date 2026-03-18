@@ -1138,6 +1138,24 @@ function NoodiMeisterCore({ icons }) {
   const [mainScrollTop, setMainScrollTop] = useState(0);
   const [mainScrollLeft, setMainScrollLeft] = useState(0);
   const [mainContentHeight, setMainContentHeight] = useState(0);
+  const mainScrollPendingRef = useRef({ top: 0, left: 0 });
+  const mainScrollRafRef = useRef(0);
+  const onMainScroll = useCallback((e) => {
+    const el = e?.currentTarget;
+    if (!el) return;
+    mainScrollPendingRef.current.top = el.scrollTop;
+    mainScrollPendingRef.current.left = el.scrollLeft;
+    if (mainScrollRafRef.current) return;
+    mainScrollRafRef.current = requestAnimationFrame(() => {
+      mainScrollRafRef.current = 0;
+      const { top, left } = mainScrollPendingRef.current || { top: 0, left: 0 };
+      setMainScrollTop(top);
+      setMainScrollLeft(left);
+    });
+  }, []);
+  useEffect(() => () => {
+    if (mainScrollRafRef.current) cancelAnimationFrame(mainScrollRafRef.current);
+  }, []);
 
   // Mitmed noodiridad (iga rida = üks instrument oma noodivõtmega). Uue instrumendi valik lisab uue rea.
   const initialStaffNotes = [
@@ -1400,6 +1418,13 @@ function NoodiMeisterCore({ icons }) {
   const [pdfPreviewSize, setPdfPreviewSize] = useState({ w: 0, h: 0 });
   /** SVG-põhine eksport: { defsString, contentString, contentHeight } – kasutatakse eelvaate ja PDF vektorite jaoks. */
   const [pdfPreviewSvgData, setPdfPreviewSvgData] = useState(null);
+  const [pdfPreviewPageIndex, setPdfPreviewPageIndex] = useState(0);
+  const pdfPreviewTotalPages = useMemo(() => {
+    if (!pdfPreviewSvgData?.contentHeight || !pdfPreviewSvgData?.orientation) return 1;
+    const isLandscape = pdfPreviewSvgData.orientation === 'landscape';
+    const pageH = isLandscape ? 794 : 1123;
+    return Math.max(1, Math.ceil((Number(pdfPreviewSvgData.contentHeight) || pageH) / pageH));
+  }, [pdfPreviewSvgData]);
   const [pdfPreviewZoom, setPdfPreviewZoom] = useState(1);
   const [pdfPreviewCaptureKey, setPdfPreviewCaptureKey] = useState(0);
   const pdfPreviewContainerRef = useRef(null);
@@ -2362,6 +2387,7 @@ function NoodiMeisterCore({ icons }) {
     if (!showPdfExportPreview || !scoreContainerRef?.current) return;
     setPdfPreviewDataUrl(null);
     setPdfPreviewSvgData(null);
+    setPdfPreviewPageIndex(0);
     const el = scoreContainerRef.current;
     el.classList.add('noodimeister-export-capture');
     const cleanup = () => {
@@ -2388,7 +2414,7 @@ function NoodiMeisterCore({ icons }) {
           pageOrientation,
         };
         const { defsString, contentString, contentHeight, orientation } = scoreToSvg(el, opts);
-        const firstPageSvg = getFirstPageSvgString(defsString, contentString, contentHeight, orientation);
+        const firstPageSvg = getPageSvgString(defsString, contentString, contentHeight, 0, orientation);
         const dataUrl = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(firstPageSvg)));
         setPdfPreviewDataUrl(dataUrl);
         const dims = getScorePageDimensions(orientation);
@@ -2421,6 +2447,21 @@ function NoodiMeisterCore({ icons }) {
     };
     requestAnimationFrame(() => runCapture());
   }, [showPdfExportPreview, pdfPreviewCaptureKey, pageOrientation, pageDesignDataUrl, pageDesignOpacity, songTitle, author, documentFontFamily, titleFontFamily, titleFontSize, authorFontSize, titleBold, titleItalic, authorBold, authorItalic, titleAlignment, authorAlignment]);
+
+  useEffect(() => {
+    if (!showPdfExportPreview) return;
+    if (!pdfPreviewSvgData?.defsString || !pdfPreviewSvgData?.contentString) return;
+    const safeTotal = Math.max(1, pdfPreviewTotalPages || 1);
+    const safeIdx = Math.max(0, Math.min(safeTotal - 1, Number(pdfPreviewPageIndex) || 0));
+    if (safeIdx !== pdfPreviewPageIndex) {
+      setPdfPreviewPageIndex(safeIdx);
+      return;
+    }
+    const { defsString, contentString, contentHeight, orientation } = pdfPreviewSvgData;
+    const pageSvg = getPageSvgString(defsString, contentString, contentHeight, safeIdx, orientation);
+    const dataUrl = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(pageSvg)));
+    setPdfPreviewDataUrl(dataUrl);
+  }, [showPdfExportPreview, pdfPreviewSvgData, pdfPreviewPageIndex, pdfPreviewTotalPages]);
 
   const handlePdfPreviewFit = useCallback(() => {
     setPdfPreviewZoom(1);
@@ -4094,8 +4135,8 @@ function NoodiMeisterCore({ icons }) {
       duration: effectiveDuration,
       durationLabel,
       beat: insertBeat,
-      isDotted: tupletPayload ? false : isDotted,
-      isRest: isRest,
+      isDotted: tupletPayload ? false : (options.forceDotted != null ? !!options.forceDotted : isDotted),
+      isRest: options.forceRest != null ? !!options.forceRest : isRest,
       lyric: '',
       ...(acc !== 0 && { accidental: acc }),
       ...(tupletPayload && { tuplet: tupletPayload })
@@ -4106,7 +4147,17 @@ function NoodiMeisterCore({ icons }) {
 
     const insertIntoStaffNotes = (noteList) => {
       const withBeats = notesWithExplicitBeats(noteList);
-      const merged = [...withBeats, newNote].sort((a, b) => (a.beat ?? 0) - (b.beat ?? 0));
+      // If there's a rest placeholder exactly at this beat span, replace it instead of stacking
+      // a new note on top of the rest (user expectation: rest is consumed by the inserted note).
+      const EPS = 1e-6;
+      const cleaned = withBeats.filter((n) => {
+        const nb = n.beat ?? 0;
+        const nd = n.duration ?? 1;
+        const sameBeat = Math.abs(nb - insertBeat) < EPS;
+        const sameDur = Math.abs(nd - effectiveDuration) < EPS;
+        return !(n.isRest && sameBeat && sameDur);
+      });
+      const merged = [...cleaned, newNote].sort((a, b) => (a.beat ?? 0) - (b.beat ?? 0));
       const totalSpan = merged.reduce((max, n) => Math.max(max, (n.beat ?? 0) + (n.duration ?? 1)), 0);
       if (!hasFullAccess && totalSpan > DEMO_MAX_BEATS) {
         setSaveFeedback('Demo: max 8 takti (2 rida). Logi sisse või registreeru, et kirjutada edasi.');
@@ -4134,7 +4185,7 @@ function NoodiMeisterCore({ icons }) {
     setCursorPosition(insertBeat + effectiveDuration);
     setGhostPitch(pitch);
     setGhostOctave(oct);
-    if (!isRest && playNoteOnInsert && !options.skipPlay) {
+    if (!(options.forceRest != null ? !!options.forceRest : isRest) && playNoteOnInsert && !options.skipPlay) {
       const semitones = acc === 1 ? 1 : acc === -1 ? -1 : 0;
       playPianoNote(pitch, oct, semitones);
     }
@@ -4204,25 +4255,40 @@ function NoodiMeisterCore({ icons }) {
   const insertPatternAtCursor = useCallback((patternKey) => {
     const pattern = RHYTHM_PATTERN_NOTES[patternKey];
     if (!pattern || !ghostPitch) return;
-    const totalBeatsNow = notes.reduce((acc, n) => acc + n.duration, 0);
     const totalDuration = pattern.reduce((s, n) => s + n.duration, 0);
-    if (!hasFullAccess && totalBeatsNow + totalDuration > DEMO_MAX_BEATS) return;
-    const newNotes = pattern.map(({ durationLabel, duration, tuplet }, i) => ({
-      id: Date.now() + i,
-      pitch: ghostPitch,
-      octave: ghostOctave,
-      duration,
-      durationLabel,
-      isDotted: false,
-      isRest: isRest,
-      lyric: '',
-      ...(tuplet && { tuplet })
-    }));
+    const startBeat = cursorPosition;
+    const newNotes = pattern.map(({ durationLabel, duration, tuplet }, i) => {
+      const beat = startBeat + pattern.slice(0, i).reduce((s, n) => s + n.duration, 0);
+      return ({
+        id: Date.now() + i,
+        pitch: ghostPitch,
+        octave: ghostOctave,
+        duration,
+        durationLabel,
+        beat,
+        isDotted: false,
+        isRest: isRest,
+        lyric: '',
+        ...(tuplet && { tuplet })
+      });
+    });
     saveToHistory(notes);
-    setNotes(prev => [...prev, ...newNotes]);
-    setCursorPosition(prev => prev + totalDuration);
+    setNotes((prev) => {
+      const withBeats = notesWithExplicitBeats(prev);
+      const EPS = 1e-6;
+      let cleaned = withBeats;
+      for (const nn of newNotes) {
+        cleaned = cleaned.filter((n) => {
+          const sameBeat = Math.abs((n.beat ?? 0) - (nn.beat ?? 0)) < EPS;
+          const sameDur = Math.abs((n.duration ?? 1) - (nn.duration ?? 1)) < EPS;
+          return !(n.isRest && sameBeat && sameDur);
+        });
+      }
+      return [...cleaned, ...newNotes].sort((a, b) => (a.beat ?? 0) - (b.beat ?? 0));
+    });
+    setCursorPosition(startBeat + totalDuration);
     if (!isRest && playNoteOnInsert) playPianoNote(ghostPitch, ghostOctave);
-  }, [RHYTHM_PATTERN_NOTES, ghostPitch, ghostOctave, isRest, notes, saveToHistory, playPianoNote, playNoteOnInsert]);
+  }, [RHYTHM_PATTERN_NOTES, ghostPitch, ghostOctave, isRest, notes, saveToHistory, playPianoNote, playNoteOnInsert, cursorPosition, notesWithExplicitBeats]);
 
   // Akordi lisamise asukoht: kursor (sisestusrežiim) või valitud noodi algus
   const getChordInsertBeat = useCallback(() => {
@@ -5216,18 +5282,38 @@ function NoodiMeisterCore({ icons }) {
       // Noodi sisestusrežiim (N-mode): nooltega kursor, tähtedega noot (ka tööriistakast avatud).
       // Mängib nooti alati pärast lugemist/sisestust (sama voog, mitte useEffect), et helikõrgus oleks õige.
       if (noteInputMode) {
+        const EPS = 1e-6;
+        const getNextNoteBoundaryBeat = (dir) => {
+          // Liigu järgmise/eelmise noodi algusele (võimaldab lugeda ka 1/8, 1/16 jne rütme).
+          // Kui piire ei leita, kukume tagasi "grid" sammule.
+          let b = 0;
+          let best = null;
+          for (let i = 0; i < notes.length; i++) {
+            const n = notes[i];
+            const noteBeat = typeof n.beat === 'number' ? n.beat : b;
+            if (dir > 0) {
+              if (noteBeat > cursorPosition + EPS) best = best == null ? noteBeat : Math.min(best, noteBeat);
+            } else {
+              if (noteBeat < cursorPosition - EPS) best = best == null ? noteBeat : Math.max(best, noteBeat);
+            }
+            b = noteBeat + (n.duration ?? 1);
+          }
+          return best;
+        };
         const cursorStep = e.shiftKey ? 0.25 : 1;
         if (e.code === 'ArrowLeft') {
           e.preventDefault();
-          const newBeat = Math.max(0, cursorPosition - cursorStep);
-          setCursorPosition(prev => Math.max(0, prev - cursorStep));
+          const boundary = !e.shiftKey ? getNextNoteBoundaryBeat(-1) : null;
+          const newBeat = boundary != null ? Math.max(0, boundary) : Math.max(0, cursorPosition - cursorStep);
+          setCursorPosition(newBeat);
           playNoteAtBeatIfEnabled(newBeat);
           return;
         }
         if (e.code === 'ArrowRight') {
           e.preventDefault();
-          const newBeat = Math.min(maxCursor, cursorPosition + cursorStep);
-          setCursorPosition(prev => Math.min(maxCursor, prev + cursorStep));
+          const boundary = !e.shiftKey ? getNextNoteBoundaryBeat(1) : null;
+          const newBeat = boundary != null ? Math.min(maxCursor, boundary) : Math.min(maxCursor, cursorPosition + cursorStep);
+          setCursorPosition(newBeat);
           playNoteAtBeatIfEnabled(newBeat);
           return;
         }
@@ -5704,26 +5790,10 @@ function NoodiMeisterCore({ icons }) {
           if (restNextRef.current) {
             restNextRef.current = false;
             e.preventDefault();
-            const totalBeatsNow = notes.reduce((acc, n) => acc + n.duration, 0);
             const effectiveDuration = getEffectiveDuration(dur);
-            if (!hasFullAccess && totalBeatsNow + effectiveDuration > DEMO_MAX_BEATS) {
-              setSaveFeedback('Demo: max 8 takti (2 rida). Logi sisse või registreeru, et kirjutada edasi.');
-              setTimeout(() => setSaveFeedback(''), 3500);
-              return;
-            }
-            const newNote = {
-              id: Date.now(),
-              pitch: 'C',
-              octave: ghostOctave,
-              duration: effectiveDuration,
-              durationLabel: dur,
-              isDotted: false,
-              isRest: true,
-              lyric: ''
-            };
-            saveToHistory(notes);
-            setNotes(prev => [...prev, newNote]);
-            setCursorPosition(prev => prev + effectiveDuration);
+            // Insert a rest at the cursor beat (replace any placeholder rest),
+            // not appended to the end of the note list.
+            addNoteAtCursor('C', ghostOctave, 0, { insertAtBeat: cursorPosition, forceRest: true, forceDotted: false, skipPlay: true });
             return;
           }
           lastDurationRef.current = dur;
@@ -6300,14 +6370,22 @@ function NoodiMeisterCore({ icons }) {
     if (!activeTextLineType && !selectedTextboxId) return;
     updateTextToolPosition();
     const main = mainRef.current;
-    const onScrollOrResize = () => updateTextToolPosition();
+    let raf = 0;
+    const onScrollOrResize = () => {
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        updateTextToolPosition();
+      });
+    };
     window.addEventListener('scroll', onScrollOrResize, true);
     window.addEventListener('resize', onScrollOrResize);
-    if (main) main.addEventListener('scroll', onScrollOrResize);
+    if (main) main.addEventListener('scroll', onScrollOrResize, { passive: true });
     return () => {
       window.removeEventListener('scroll', onScrollOrResize, true);
       window.removeEventListener('resize', onScrollOrResize);
       if (main) main.removeEventListener('scroll', onScrollOrResize);
+      if (raf) cancelAnimationFrame(raf);
     };
   }, [activeTextLineType, selectedTextboxId, textBoxes, updateTextToolPosition]);
 
@@ -6823,14 +6901,14 @@ function NoodiMeisterCore({ icons }) {
 
       {/* PDF Export Preview – zoom, ruler, save location */}
       {showPdfExportPreview && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-amber-950/60 dark:bg-black/70 backdrop-blur-sm p-4" onClick={() => { setShowPdfExportPreview(false); setPdfPreviewZoom(1); setPdfPreviewDataUrl(null); }}>
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-amber-950/60 dark:bg-black/70 backdrop-blur-sm p-4" onClick={() => { setShowPdfExportPreview(false); setPdfPreviewZoom(1); setPdfPreviewDataUrl(null); setPdfPreviewPageIndex(0); }}>
           <div
             className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden border-2 border-amber-200 dark:border-white/20 flex flex-col"
             onClick={e => e.stopPropagation()}
           >
             <div className="bg-gradient-to-r from-slate-600 to-slate-700 text-white px-4 py-3 flex items-center justify-between">
               <h2 className="text-lg font-bold">{t('file.exportPdf')} – {t('file.exportPdfTitle') || 'Preview'}</h2>
-              <button type="button" onClick={() => { setShowPdfExportPreview(false); setPdfPreviewZoom(1); setPdfPreviewDataUrl(null); }} className="text-white/90 hover:text-white text-2xl leading-none">&times;</button>
+              <button type="button" onClick={() => { setShowPdfExportPreview(false); setPdfPreviewZoom(1); setPdfPreviewDataUrl(null); setPdfPreviewPageIndex(0); }} className="text-white/90 hover:text-white text-2xl leading-none">&times;</button>
             </div>
             <div className="flex-1 p-4 overflow-y-auto space-y-4">
               <p className="text-sm text-amber-800 dark:text-amber-200">
@@ -6853,6 +6931,37 @@ function NoodiMeisterCore({ icons }) {
                 />
                 <span className="text-sm text-amber-800 dark:text-amber-200 tabular-nums">{Math.round(pdfPreviewZoom * 100)}%</span>
               </div>
+              {pdfPreviewSvgData && (
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-sm font-medium text-amber-900 dark:text-white">Leht:</span>
+                  <button
+                    type="button"
+                    disabled={pdfPreviewPageIndex <= 0}
+                    onClick={() => setPdfPreviewPageIndex((p) => Math.max(0, (Number(p) || 0) - 1))}
+                    className="px-2 py-1 rounded bg-amber-100 dark:bg-amber-900/40 text-amber-900 dark:text-amber-100 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    ←
+                  </button>
+                  <select
+                    value={pdfPreviewPageIndex}
+                    onChange={(e) => setPdfPreviewPageIndex(Math.max(0, Number(e.target.value) || 0))}
+                    className="px-2 py-1 rounded border-2 border-amber-200 bg-amber-50 text-amber-900 text-sm font-medium"
+                    aria-label="Vali lehekülg"
+                  >
+                    {Array.from({ length: Math.max(1, pdfPreviewTotalPages || 1) }, (_, i) => (
+                      <option key={i} value={i}>Leht {i + 1} / {Math.max(1, pdfPreviewTotalPages || 1)}</option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    disabled={pdfPreviewPageIndex >= Math.max(1, (pdfPreviewTotalPages || 1)) - 1}
+                    onClick={() => setPdfPreviewPageIndex((p) => Math.min(Math.max(1, (pdfPreviewTotalPages || 1)) - 1, (Number(p) || 0) + 1))}
+                    className="px-2 py-1 rounded bg-amber-100 dark:bg-amber-900/40 text-amber-900 dark:text-amber-100 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    →
+                  </button>
+                </div>
+              )}
               <div className="flex flex-col items-center gap-2">
                 <span className="text-sm font-medium text-amber-900 dark:text-white self-start">Eelvaade = SVG (viewBox sünkroonitud: vertikaal 794×1123, horisontaal 1123×794). PDF eksportitakse vektoritena; A4 trükk vastavalt lehe suunale.</span>
                 <button type="button" onClick={() => setPdfPreviewCaptureKey(k => k + 1)} className="self-start px-2 py-1 rounded text-sm font-medium bg-amber-100 dark:bg-amber-900/40 text-amber-900 dark:text-amber-100 hover:bg-amber-200 dark:hover:bg-amber-800/50" title="Tee uus pilt noodilehest">Värskenda eelvaadet</button>
@@ -6914,7 +7023,7 @@ function NoodiMeisterCore({ icons }) {
               </div>
             </div>
             <div className="p-4 border-t border-amber-200 dark:border-white/20 flex justify-end gap-2">
-              <button type="button" onClick={() => { setShowPdfExportPreview(false); setPdfPreviewZoom(1); setPdfPreviewDataUrl(null); }} className="px-4 py-2 rounded-lg border-2 border-amber-300 text-amber-800 dark:text-amber-200 font-medium hover:bg-amber-50 dark:hover:bg-amber-900/30">
+              <button type="button" onClick={() => { setShowPdfExportPreview(false); setPdfPreviewZoom(1); setPdfPreviewDataUrl(null); setPdfPreviewPageIndex(0); }} className="px-4 py-2 rounded-lg border-2 border-amber-300 text-amber-800 dark:text-amber-200 font-medium hover:bg-amber-50 dark:hover:bg-amber-900/30">
                 Cancel
               </button>
               <button
@@ -7964,7 +8073,7 @@ function NoodiMeisterCore({ icons }) {
                           className={`flex-1 px-2.5 py-1.5 text-xs font-medium rounded transition-colors ${locale === code ? 'bg-amber-600 text-white' : 'text-amber-50 hover:bg-slate-600'}`}
                           title={name}
                         >
-                          {code.toUpperCase()}
+                          {name}
                         </button>
                       ))}
                     </div>
@@ -9081,7 +9190,7 @@ function NoodiMeisterCore({ icons }) {
         <main
           ref={mainRef}
           className={`main-score-area flex-1 p-8 flex flex-col items-stretch ${pageFlowDirection === 'horizontal' ? 'overflow-x-auto overflow-y-hidden' : 'overflow-auto'}`}
-          onScroll={(e) => { setMainScrollTop(e.target.scrollTop); setMainScrollLeft(e.target.scrollLeft); }}
+          onScroll={onMainScroll}
         >
           {/* Pedagoogiline notatsioon: taustheli ja animeerimine (kursor liigub heli järgi) */}
           {isPedagogicalProject && (
