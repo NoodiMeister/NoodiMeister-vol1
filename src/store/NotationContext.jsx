@@ -71,6 +71,28 @@ export function NotationProvider({ children }) {
   const notes = activeInstrument?.notes ?? [];
   const clefType = activeInstrument?.clef ?? 'treble';
 
+  const shouldApplyFigureRestCleanup = useCallback((options = {}) => {
+    // Apply only when user is working in figurenotation view.
+    // (notationStyle is the actual view switch in NotationOrchestrator)
+    if (notationStyle !== 'FIGURENOTES') return false;
+    // Allow opt-out for special import/transform operations if ever needed.
+    if (options?.disableFigureRestCleanup) return false;
+    return true;
+  }, [notationStyle]);
+
+  const buildIntervalsFromNotes = useCallback((noteList) => {
+    const intervals = [];
+    let beat = 0;
+    (noteList || []).forEach((n, idx) => {
+      const start = typeof n?.beat === 'number' ? n.beat : beat;
+      const dur = Math.max(0, Number(n?.duration ?? 0));
+      const end = start + dur;
+      intervals.push({ note: n, idx, start, end });
+      beat = start + dur;
+    });
+    return intervals;
+  }, []);
+
   const setKeySignature = useCallback((key) => setKeySignatureState(key), []);
   const setTimeSignature = useCallback((ts) => setTimeSignatureState(ts || defaultTimeSignature), []);
   const setTimeSignatureMode = useCallback((mode) => setTimeSignatureModeState(mode), []);
@@ -154,6 +176,9 @@ export function NotationProvider({ children }) {
     const dotted = options.isDotted ?? isDotted;
     const rest = options.isRest ?? isRest;
     const effectiveDuration = getEffectiveDuration(durationLabel, dotted);
+    const insertionBeat = typeof options.beat === 'number' ? options.beat : cursorPosition;
+    const newStart = insertionBeat;
+    const newEnd = insertionBeat + effectiveDuration;
 
     const newNote = {
       id: options.id ?? Date.now(),
@@ -164,6 +189,7 @@ export function NotationProvider({ children }) {
       isDotted: dotted,
       isRest: rest,
       lyric: options.lyric ?? '',
+      ...(typeof options.beat === 'number' && { beat: options.beat }),
       ...(accidental !== 0 && { accidental }),
       ...(options.tuplet && { tuplet: options.tuplet }),
     };
@@ -171,15 +197,50 @@ export function NotationProvider({ children }) {
     setInstrumentsState((prev) =>
       prev.map((inst) =>
         inst.id === activeInstrumentId
-          ? { ...inst, notes: [...inst.notes, newNote] }
+          ? (() => {
+            const existingNotes = inst.notes ?? [];
+
+            if (shouldApplyFigureRestCleanup(options)) {
+              const intervals = buildIntervalsFromNotes(existingNotes);
+
+              // 1) If inserting a figurenote (non-rest), remove any rests that overlap its time range.
+              if (!rest) {
+                const keep = intervals.filter((iv) => {
+                  const isRestNote = !!iv?.note?.isRest;
+                  if (!isRestNote) return true;
+                  // overlap: [a,b) intersects [c,d)
+                  return !(newStart < iv.end && newEnd > iv.start);
+                }).map((iv) => iv.note);
+                return { ...inst, notes: [...keep, newNote] };
+              }
+
+              // 2) If inserting a rest, skip it if it would overlap an existing played note.
+              const overlapsPlayed = intervals.some((iv) => {
+                const isPlayed = !iv?.note?.isRest;
+                if (!isPlayed) return false;
+                return newStart < iv.end && newEnd > iv.start;
+              });
+              if (overlapsPlayed) return inst;
+            }
+
+            return { ...inst, notes: [...existingNotes, newNote] };
+          })()
           : inst
       )
     );
-    setCursorPositionState((p) => p + effectiveDuration);
+    setCursorPositionState((p) => (typeof options.beat === 'number' ? options.beat : p) + effectiveDuration);
     setGhostPitchState(pitch);
     setGhostOctaveState(octave);
     return newNote;
-  }, [selectedRhythm, isDotted, isRest, activeInstrumentId]);
+  }, [
+    selectedRhythm,
+    isDotted,
+    isRest,
+    activeInstrumentId,
+    cursorPosition,
+    buildIntervalsFromNotes,
+    shouldApplyFigureRestCleanup,
+  ]);
 
   /** Transponeerib kõik instrumentide noodid pooltoonide võrra. */
   const transposeScore = useCallback((semitones) => {

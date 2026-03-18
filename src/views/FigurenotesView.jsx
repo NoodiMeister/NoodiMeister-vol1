@@ -821,6 +821,25 @@ export function FigurenotesView({
                     );
                   })()}
                   {(() => {
+                    // If a beat-slot is already "filled" by a figurenote, do not render any rest that overlaps it.
+                    // This avoids the Z-rest appearing behind/over a figurshape in figurenotation mode.
+                    const playedIntervals = measure.notes
+                      .filter((n) => !n?.isRest)
+                      .map((n) => {
+                        const start = Number(n.beat ?? 0);
+                        const dur = Math.max(0, Number(n.duration ?? 0));
+                        return { start, end: start + dur };
+                      })
+                      .filter((iv) => Number.isFinite(iv.start) && Number.isFinite(iv.end) && iv.end > iv.start);
+                    const restOverlapsPlayed = (restNote) => {
+                      const start = Number(restNote?.beat ?? 0);
+                      const dur = Math.max(0, Number(restNote?.duration ?? 0));
+                      const end = start + dur;
+                      if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return false;
+                      // strict overlap on timeline: [a,b) intersects [c,d)
+                      return playedIntervals.some((iv) => start < iv.end && end > iv.start);
+                    };
+
                     // Shorter-than-quarter notes in the same beat: place so that
                     // right edge of one shape + 1px gap + left edge of next shape (repeated for every short note).
                     const compactCenters = new Map();
@@ -887,6 +906,8 @@ export function FigurenotesView({
                         // et pausid tekiks ainult uue takti lisamisel või kasutaja enda valikul.
                         const isAutoGapRest = typeof note.id === 'string' && note.id.startsWith('rest-');
                         if (isAutoGapRest) return null;
+                        // Kui samas ajavahemikus on juba figurshape/noot, loe see slot täidetuks ja ära joonista pausi.
+                        if (restOverlapsPlayed(note)) return null;
                         const restLabelY = sys.yOffset + centerY + 20;
                         const restSyllable = showRhythmSyllables ? getRhythmSyllableForNote(note) : '';
                         if (!figurenotesStems) {
