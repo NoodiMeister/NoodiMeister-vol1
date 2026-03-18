@@ -1346,6 +1346,7 @@ function NoodiMeisterCore({ icons }) {
   const [addedMeasures, setAddedMeasures] = useState(0);
   const [songTitle, setSongTitle] = useState('');
   const [author, setAuthor] = useState('');
+  const [copyrightFooter, setCopyrightFooter] = useState('');
   const [pickupEnabled, setPickupEnabled] = useState(false);
   const [pickupQuantity, setPickupQuantity] = useState(1);
   const [pickupDuration, setPickupDuration] = useState('1/4');
@@ -2377,6 +2378,7 @@ function NoodiMeisterCore({ icons }) {
           pageDesignOpacity,
           songTitle,
           author,
+          footerText: copyrightFooter,
           documentFontFamily,
           titleFontFamily,
           titleFontSize,
@@ -2389,7 +2391,7 @@ function NoodiMeisterCore({ icons }) {
           authorAlignment,
           pageOrientation,
         };
-        const { defsString, contentString, contentHeight, orientation } = scoreToSvg(el, opts);
+        const { defsString, contentString, contentHeight, orientation, footerText } = scoreToSvg(el, opts);
         const orient = (orientation ?? pageOrientation) === 'landscape' ? 'landscape' : 'portrait';
         const pageH = orient === 'landscape' ? 794 : 1123;
         const numPages = Math.max(1, Math.ceil((Number(contentHeight) || pageH) / pageH));
@@ -2397,7 +2399,7 @@ function NoodiMeisterCore({ icons }) {
         const wrapper = document.createElement('div');
         wrapper.className = 'nm-print-svg-pages';
         for (let p = 0; p < numPages; p++) {
-          const pageSvg = getPageSvgString(defsString, contentString, contentHeight, p, orient);
+          const pageSvg = getPageSvgString(defsString, contentString, contentHeight, p, orient, { footerText });
           const dataUrl = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(pageSvg)));
           const pageDiv = document.createElement('div');
           pageDiv.className = 'nm-print-svg-page';
@@ -2483,6 +2485,7 @@ function NoodiMeisterCore({ icons }) {
           pageDesignOpacity,
           songTitle,
           author,
+          footerText: copyrightFooter,
           documentFontFamily,
           titleFontFamily,
           titleFontSize,
@@ -2495,13 +2498,13 @@ function NoodiMeisterCore({ icons }) {
           authorAlignment,
           pageOrientation,
         };
-        const { defsString, contentString, contentHeight, orientation } = scoreToSvg(el, opts);
-        const firstPageSvg = getPageSvgString(defsString, contentString, contentHeight, 0, orientation);
+        const { defsString, contentString, contentHeight, orientation, footerText } = scoreToSvg(el, opts);
+        const firstPageSvg = getPageSvgString(defsString, contentString, contentHeight, 0, orientation, { footerText });
         const dataUrl = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(firstPageSvg)));
         setPdfPreviewDataUrl(dataUrl);
         const dims = getScorePageDimensions(orientation);
         setPdfPreviewSize({ w: dims.width, h: dims.height });
-        setPdfPreviewSvgData({ defsString, contentString, contentHeight, orientation });
+        setPdfPreviewSvgData({ defsString, contentString, contentHeight, orientation, footerText });
         cleanup();
       } catch (e) {
         /* Fallback: PNG html2canvas (nt kui SVG kloon ebaõnnestub). */
@@ -2539,8 +2542,8 @@ function NoodiMeisterCore({ icons }) {
       setPdfPreviewPageIndex(safeIdx);
       return;
     }
-    const { defsString, contentString, contentHeight, orientation } = pdfPreviewSvgData;
-    const pageSvg = getPageSvgString(defsString, contentString, contentHeight, safeIdx, orientation);
+    const { defsString, contentString, contentHeight, orientation, footerText } = pdfPreviewSvgData;
+    const pageSvg = getPageSvgString(defsString, contentString, contentHeight, safeIdx, orientation, { footerText });
     const dataUrl = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(pageSvg)));
     setPdfPreviewDataUrl(dataUrl);
   }, [showPdfExportPreview, pdfPreviewSvgData, pdfPreviewPageIndex, pdfPreviewTotalPages]);
@@ -2586,7 +2589,7 @@ function NoodiMeisterCore({ icons }) {
     try {
       /* SVG → PDF vektoritega (svg2pdf.js): terav, viewBox sünkroonitud orientationiga (portrait 794×1123, landscape 1123×794). */
       if (useSvgExport) {
-        const { defsString, contentString, contentHeight, orientation } = previewSvgData;
+        const { defsString, contentString, contentHeight, orientation, footerText } = previewSvgData;
         const orient = (orientation ?? pageOrientation) === 'landscape' ? 'landscape' : 'portrait';
         const pageH = orient === 'landscape' ? 794 : 1123;
         const numPages = Math.max(1, Math.ceil(contentHeight / pageH));
@@ -2595,7 +2598,7 @@ function NoodiMeisterCore({ icons }) {
         const heightPt = orient === 'landscape' ? 595.28 : 841.89;
         for (let p = 0; p < numPages; p++) {
           if (p > 0) pdf.addPage('a4', orient);
-          const pageSvgString = getPageSvgString(defsString, contentString, contentHeight, p, orient);
+          const pageSvgString = getPageSvgString(defsString, contentString, contentHeight, p, orient, { footerText });
           const wrap = document.createElement('div');
           wrap.innerHTML = pageSvgString;
           const svgEl = wrap.querySelector('svg');
@@ -2751,6 +2754,93 @@ function NoodiMeisterCore({ icons }) {
     }
   }, [songTitle, t, pageOrientation, paperSize]);
 
+  const printPdfBlob = useCallback(async (blob) => {
+    if (!blob) return;
+    const url = URL.createObjectURL(blob);
+    const iframe = document.createElement('iframe');
+    iframe.style.position = 'fixed';
+    iframe.style.right = '0';
+    iframe.style.bottom = '0';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = '0';
+    iframe.style.opacity = '0';
+    iframe.setAttribute('aria-hidden', 'true');
+    iframe.src = url;
+    document.body.appendChild(iframe);
+    const cleanup = () => {
+      try { iframe.remove(); } catch (_) {}
+      try { URL.revokeObjectURL(url); } catch (_) {}
+    };
+    iframe.onload = () => {
+      try {
+        iframe.contentWindow?.focus?.();
+        iframe.contentWindow?.print?.();
+      } finally {
+        setTimeout(cleanup, 1500);
+      }
+    };
+  }, []);
+
+  const printFromPdfPreview = useCallback(async () => {
+    if (isExportingPdf) return;
+    if (!pdfPreviewDataUrl) return;
+    setIsExportingPdf(true);
+    setSaveFeedback(t('file.print') || 'Print');
+    await new Promise((r) => setTimeout(r, 50));
+    try {
+      const useSvg = Boolean(pdfPreviewSvgData?.defsString && pdfPreviewSvgData?.contentString);
+      if (useSvg) {
+        const { defsString, contentString, contentHeight, orientation, footerText } = pdfPreviewSvgData;
+        const orient = (orientation ?? pageOrientation) === 'landscape' ? 'landscape' : 'portrait';
+        const pageH = orient === 'landscape' ? 794 : 1123;
+        const numPages = Math.max(1, Math.ceil((Number(contentHeight) || pageH) / pageH));
+        const pdf = new jsPDF({ orientation: orient, unit: 'pt', format: 'a4' });
+        const widthPt = orient === 'landscape' ? 841.89 : 595.28;
+        const heightPt = orient === 'landscape' ? 595.28 : 841.89;
+        for (let p = 0; p < numPages; p++) {
+          if (p > 0) pdf.addPage('a4', orient);
+          const pageSvgString = getPageSvgString(defsString, contentString, contentHeight, p, orient, { footerText });
+          const wrap = document.createElement('div');
+          wrap.innerHTML = pageSvgString;
+          const svgEl = wrap.querySelector('svg');
+          if (svgEl) await pdf.svg(svgEl, { x: 0, y: 0, width: widthPt, height: heightPt });
+        }
+        await printPdfBlob(pdf.output('blob'));
+        return;
+      }
+
+      const img = await new Promise((resolve, reject) => {
+        const im = new Image();
+        im.onload = () => resolve(im);
+        im.onerror = () => reject(new Error('Preview image failed to load'));
+        im.src = pdfPreviewDataUrl;
+      });
+      const c = document.createElement('canvas');
+      c.width = img.naturalWidth || img.width;
+      c.height = img.naturalHeight || img.height;
+      const ctx = c.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+      const pdf = new jsPDF({ orientation: pageOrientation, unit: 'mm', format: 'a4' });
+      const pdfW = pdf.internal.pageSize.getWidth();
+      const pdfH = pdf.internal.pageSize.getHeight();
+      const imgRatio = c.width / Math.max(1, c.height);
+      const pageRatio = pdfW / Math.max(1, pdfH);
+      const drawW = imgRatio > pageRatio ? pdfW : pdfH * imgRatio;
+      const drawH = imgRatio > pageRatio ? pdfW / imgRatio : pdfH;
+      const x = (pdfW - drawW) / 2;
+      const y = (pdfH - drawH) / 2;
+      pdf.addImage(c.toDataURL('image/png'), 'PNG', x, y, drawW, drawH);
+      await printPdfBlob(pdf.output('blob'));
+    } catch (_) {
+      setSaveFeedback(t('feedback.exportFailed'));
+      setTimeout(() => setSaveFeedback(''), 2000);
+    } finally {
+      setIsExportingPdf(false);
+      setSaveFeedback('');
+    }
+  }, [isExportingPdf, pageOrientation, pdfPreviewDataUrl, pdfPreviewSvgData, printPdfBlob, t]);
+
   // Build state to persist
   const getPersistedState = useCallback(() => ({
     staves,
@@ -2772,6 +2862,7 @@ function NoodiMeisterCore({ icons }) {
     setupCompleted,
     songTitle,
     author,
+    copyrightFooter,
     pickupEnabled,
     pickupQuantity,
     pickupDuration,
@@ -2887,6 +2978,7 @@ function NoodiMeisterCore({ icons }) {
     version: 1,
     songTitle: songTitle || '',
     author: author || '',
+    copyrightFooter: copyrightFooter || '',
     notationStyle,
     notationMode,
     isPedagogicalProject,
@@ -3103,6 +3195,7 @@ function NoodiMeisterCore({ icons }) {
       if (data.setupCompleted != null) setSetupCompleted(data.setupCompleted);
       if (data.songTitle != null) setSongTitle(data.songTitle);
       if (data.author != null) setAuthor(data.author);
+      if (data.copyrightFooter != null) setCopyrightFooter(String(data.copyrightFooter || ''));
       if (data.pickupEnabled != null) setPickupEnabled(data.pickupEnabled);
       if (data.pickupQuantity != null) setPickupQuantity(data.pickupQuantity);
       if (data.pickupDuration != null) setPickupDuration(data.pickupDuration);
@@ -6745,6 +6838,17 @@ function NoodiMeisterCore({ icons }) {
                 </div>
               </div>
               <div>
+                <label className="block text-sm font-semibold text-amber-900 dark:text-white mb-2">Copyright (jalus)</label>
+                <input
+                  type="text"
+                  value={copyrightFooter}
+                  onChange={(e) => { dirtyRef.current = true; setCopyrightFooter(e.target.value); }}
+                  placeholder="© 2026 Sinu nimi"
+                  className="w-full px-4 py-2 rounded-lg border-2 border-amber-200 dark:border-white/30 bg-amber-50 dark:bg-zinc-900 text-amber-900 dark:text-white font-medium focus:ring-2 focus:ring-amber-500 focus:border-amber-500 dark:focus:ring-amber-500 dark:focus:border-amber-500"
+                />
+                <p className="text-xs text-amber-700 dark:text-white/70 mt-1">Ilmub igal lehel PDF eelvaates, ekspordis ja printimisel.</p>
+              </div>
+              <div>
                 <label className="block text-sm font-semibold text-amber-900 dark:text-white mb-2">Taktimõõt</label>
                 <div className="flex flex-wrap gap-2 mb-2">
                   {TIME_SIGNATURE_PRESETS.map(({ label, value }) => (
@@ -7206,6 +7310,19 @@ function NoodiMeisterCore({ icons }) {
             <div className="p-4 border-t border-amber-200 dark:border-white/20 flex justify-end gap-2">
               <button type="button" onClick={() => { setShowPdfExportPreview(false); setPdfPreviewZoom(1); setPdfPreviewDataUrl(null); setPdfPreviewPageIndex(0); }} className="px-4 py-2 rounded-lg border-2 border-amber-300 text-amber-800 dark:text-amber-200 font-medium hover:bg-amber-50 dark:hover:bg-amber-900/30">
                 Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isExportingPdf || !pdfPreviewDataUrl}
+                onClick={async () => {
+                  await printFromPdfPreview();
+                  setShowPdfExportPreview(false);
+                  setHeaderMenuOpen(null);
+                }}
+                className="px-4 py-2 rounded-lg bg-slate-700 text-white font-semibold hover:bg-slate-600 disabled:opacity-60"
+                title={t('file.printTitle') || 'Open print dialog'}
+              >
+                {t('file.print') || 'Print'}
               </button>
               <button
                 type="button"

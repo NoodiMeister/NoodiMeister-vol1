@@ -1,0 +1,19 @@
+---
+description: Node scripts safety + reproducibility (export tools, build helpers)
+globs: "scripts/**/*.js"
+alwaysApply: false
+---
+
+# Noodimeister: Node skriptide reeglid
+
+## Reprodutseeritavus
+
+- Skript peab töötama Node 20 peal (vt `package.json` engines).
+- Failiteed olgu robustsed ja platvormisõbralikud (ära eelda “cwd” ilma kontrollita).
+- Kui skript genereerib faile, tee see deterministlikult (sama sisend → sama väljund).
+
+## Ohutus
+
+- Ära kirjuta üle kasutaja olemasolevaid faile vaikimisi; kui vaja, siis kasuta selget `--force` lippu.
+- Logi edenemist lühidalt, aga piisavalt, et õpetaja/autor saaks aru, mis juhtus.
+

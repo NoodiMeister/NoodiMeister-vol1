@@ -1,0 +1,58 @@
+---
+description: JS/React architecture for Noodimeister (notation, layout, UX stability)
+globs: "**/*.{js,jsx}"
+alwaysApply: false
+---
+
+# Noodimeister: JS/React arhitektuurireeglid
+
+## Kaustade rollid (hoia piirid selged)
+
+- `src/pages/**`: route-level lehed; orkestreerivad, ei sisalda rasket notatsiooniloogikat.
+- `src/components/**`: UI komponendid; peavad olema võimalikult “dumb”, loogika hookides/contextis.
+- `src/store/**`: state + domain actions (nt NotationContext). Siin on app’i “truth”.
+- `src/notation/**`: noodikirja domeen (sümbolid, engraving-defaultid, rütm/beam/jo-nimed).
+- `src/layout/**`: paigutusalgoritmid; ei tohi sõltuda Reactist.
+- `src/orchestrator/**`: ühendab input → logic → state → view (sündmuste ahel).
+- `src/services/**`: väliste teenuste integratsioon (Google Drive, OneDrive, auth storage).
+- `src/utils/**`: väikesed puhtad abifunktsioonid (ei tohi kasvada “jumalmoduliks”).
+
+## UI ↔ state ↔ domain reegel
+
+- UI komponendid ei tohi sisaldada “peidetud reegleid” notatsiooni kohta. Reeglid elavad `src/notation/**` või `src/layout/**`.
+- `Context`/store funktsioonid peavad olema deterministlikud ja testitavad (input → output).
+- Kui muudad layout/notation parameetreid, eelista **konstantide faili** (nt `musescoreStyle.js`-laadne) ja hoia nimed semantilised (stemWidth, beamSpacing…).
+
+## Režiimid on eraldiseisvad (3 põhirežiimi + pedagoogilise alamrežiimid)
+
+- `traditional`, `figurenotes`, `pedagogical` loogika ei tohi “läbi imbuda” üksteisesse.
+- Igal režiimil peab olema selge:
+  - input mapping (klaviatuur/hiir)
+  - cursor rules
+  - layout rules
+  - export/print output (deterministlik)
+
+## Kasutaja-kogemuse stabiilsus (õpetaja tööriist)
+
+- Ära muuda kiirklahve, valikute vaikeseadeid, või exporti käitumist “möödaminnes”.
+- Kui teed UX muudatuse, lisa:
+  - “mis oli enne / mis on nüüd”
+  - kuidas vältida regressiooni (vähemalt manuaalne kontrollplaan `AGENTS.md` järgi)
+
+## Failide ja tööde haldus (no-overwrite)
+
+- Failid/kaustad peavad omama **unikaalset ID-d** (nimi/asukoht ei ole identiteet).
+- Salvestus peab olema “update by id” või “create new”; vaikimisi overwrite nime järgi on keelatud.
+- Kui tekib konflikt (sama nimi/sihtkaust), lahenda see selgelt: rename / duplicate / version, mitte vaikne üle kirjutamine.
+
+## Benchmark MuseScore/Finale/Sibelius
+
+- Kui oled ebakindel “kuidas peab käituma”:
+  - identifitseeri **termin** (nt “beam grouping”, “stem direction”, “note spacing”, “measure layout”)
+  - vaata, kuidas teevad MuseScore/Finale/Sibelius (reeglid ja vaikimisi valikud)
+  - implementeeri sama vaim, kuid Noodimeistri pedagoogilise eesmärgiga (selgus, vähem klikke, vead selgelt)
+
+## Välistused (praktiline)
+
+- Ära tee muudatusi `dist/**`, `.vendor_py/**`, `node_modules/**`, ega suurtele asset failidele, kui see pole selgesõnaliselt ülesanne.
+

@@ -118,6 +118,7 @@ export function scoreToSvg (container, options = {}) {
     pageDesignOpacity = 0.25,
     songTitle = '',
     author = '',
+    footerText = '',
     documentFontFamily = 'Georgia, serif',
     titleFontFamily = '',
     titleFontSize = 55,
@@ -182,23 +183,36 @@ export function scoreToSvg (container, options = {}) {
 
   const contentString = `<g id="scoreContent">${bg}${titleText}${authorText}${notationGroup}</g>`;
 
-  return { defsString, contentString, contentHeight, orientation };
+  return { defsString, contentString, contentHeight, orientation, footerText: String(footerText || '') };
 }
 
 /**
  * Tagastab ühe lehe (A4) SVG stringi. pageIndex 0 = esimene leht.
  * orientation 'landscape' → viewBox "0 0 1123 794", muul juhul "0 0 794 1123".
  */
-export function getPageSvgString (defsString, contentString, contentHeight, pageIndex, orientation = 'portrait') {
+export function getPageSvgString (defsString, contentString, contentHeight, pageIndex, orientation = 'portrait', overlays = {}) {
   const { w: PAGE_W, h: PAGE_H } = getPageWh(orientation);
   const y = -pageIndex * PAGE_H;
   // Avoid 1–3 px clipping at page edges (strokes/markers), which can differ by OS/browser.
   // Keep the page size exact, but allow a tiny bleed inside the page clip.
   const BLEED = 2;
+  const footer = (() => {
+    const text = overlays && typeof overlays.footerText === 'string' ? overlays.footerText.trim() : '';
+    if (!text) return '';
+    const align = overlays.footerAlignment === 'left' || overlays.footerAlignment === 'right' ? overlays.footerAlignment : 'center';
+    const x = align === 'left' ? 40 : align === 'right' ? (PAGE_W - 40) : (PAGE_W / 2);
+    const anchor = align === 'left' ? 'start' : align === 'right' ? 'end' : 'middle';
+    const fontSize = Number.isFinite(Number(overlays.footerFontSize)) ? Math.max(8, Math.min(18, Number(overlays.footerFontSize))) : 10;
+    const opacity = Number.isFinite(Number(overlays.footerOpacity)) ? Math.max(0.2, Math.min(1, Number(overlays.footerOpacity))) : 0.85;
+    const style = `font-family: ExportBody, serif; font-size: ${fontSize}px; fill: #57534e; opacity: ${opacity};`;
+    const yPos = PAGE_H - 26;
+    return `<text x="${x}" y="${yPos}" text-anchor="${anchor}" dominant-baseline="middle" style="${style}">${escapeXml(text)}</text>`;
+  })();
   return `<svg xmlns="${XMLNS}" viewBox="0 0 ${PAGE_W} ${PAGE_H}" width="${PAGE_W}" height="${PAGE_H}" overflow="visible">
 ${defsString}
 <defs><clipPath id="pageClip"><rect x="${BLEED}" y="${BLEED}" width="${PAGE_W - 2 * BLEED}" height="${PAGE_H - 2 * BLEED}"/></clipPath></defs>
 <g transform="translate(0, ${y})" clip-path="url(#pageClip)">${contentString}</g>
+${footer}
 </svg>`;
 }
 

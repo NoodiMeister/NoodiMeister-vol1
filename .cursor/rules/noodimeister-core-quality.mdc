@@ -1,0 +1,40 @@
+---
+description: Noodimeister core quality + teacher-grade UX (always on)
+alwaysApply: true
+---
+
+# Noodimeister: kvaliteet ja UX (õpetaja tööriist)
+
+## Põhimõtted (mitteläbiräägitavad)
+
+- Noodimeister on **õpetaja tööriist**. UX-st tulenevad bugid, korduvad vead ja “edge case” errorid on P0.
+- Kui kasutaja saab vea, peab ta saama **selge tegevusplaani** (mida teha nüüd) ja arendaja peab saama **diagnoositava info** (mida parandada).
+- Muudatused peavad olema **regressioonikindlad**: olemasolev sisestusvoog, render, eksport ja auth ei tohi “vaikselt” halveneda.
+
+## Töövoog igale muudatusele
+
+- Enne muutmist: defineeri **kasutaja-eesmärk** (nt “sisestan noodid klaviatuurilt ja ekspordin PDF’i”).
+- Tee muudatus **väikeses ulatuses** ja hoia API piirid selged (UI ↔ state ↔ layout/notation).
+- Pärast muutmist: lisa **minimaalne kontrollplaan** (2–5 punkti) ja jooksuta projektis olemasolevad build/dev käsud.
+
+## Vea- ja errori-käitumine
+
+- Ära “neela” erindeid. Kui catch on vajalik:
+  - logi struktureeritult (allikas, kood, kirjeldus)
+  - näita kasutajale arusaadav sõnum + järgmine samm
+- Väldi kasutajale krüptilisi stacktrace’e või tooreid OAuth/fetch payload’e.
+
+## Eeskuju teistest noodiprogrammidest (MuseScore / Finale / Sibelius)
+
+- Kui teed notatsiooni, layouti, klahvikäsu, valiku- või tööriistakasti käitumise:
+  - **otsi esmalt analoogset käitumist** MuseScore/Finale/Sibeliusest (terminoloogia, UX, vaikimisi reeglid).
+  - Kui meie koodis on juba analoogne mustri koht, **järgi seda** (ära leiuta uut stiili samale probleemile).
+  - Kui midagi on puudu, **kirjelda puuduva mustri nimi** ja lisa reposse dokument “meie standard” (vt `AGENTS.md`).
+
+## “Do not break teacher flow” kontrollnimekiri
+
+- Klaviatuuri sisestus ja kiirklahvid ei tohi hakata konflikti minema input-väljadega.
+- Notatsiooni render ei tohi tekitada tühje/katkiseid SVG-e.
+- Eksport (PNG/PDF/SVG) ei tohi katki minna vaikimisi seadistustega.
+- Auth (Google/Microsoft) vead peavad andma kasutajale selge info, mitte “unknown error”.
+

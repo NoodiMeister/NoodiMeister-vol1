@@ -1,0 +1,44 @@
+---
+description: User-driven architecture invariants (auth, files, modes, export/print)
+alwaysApply: true
+---
+
+# Noodimeister: kasutajast lähtuv arhitektuur (invariants)
+
+Noodimeistri arhitektuur peab lähtuma kasutaja “teekondadest”. Kõik muudatused peavad säilitama allolevad invariandid.
+
+## Kasutaja teekonnad, mida ei tohi lõhkuda
+
+- **Auth**: kasutaja saab registreerida ja sisse logida sama kontoga, olenemata kanalist:
+  - isiklik keskkond (e-mail/parool vms)
+  - Google
+  - Microsoft
+- **Minu tööd**: kasutaja saab luua/halda kaustu ja faile, ning hallata loodud töid (nimetamine, liigutamine, kustutamine, avamine).
+- **Failide ohutus**: kasutaja ei tohi kogeda, et failid kirjutavad üksteist üle või “kaovad”.
+- **Noodistusmootor**: sisestus/eemaldus (noot + akord) peab olema deterministlik ja ennustatav.
+- **Tekstikastid**: kasutaja lohistab/valib ala → tekstikast tekib täpselt sinna; eelvaated/vaated peavad olema identsed.
+- **Režiimid**: `traditional`, `figurenotes`, `pedagogical` on **eraldiseisvad režiimid** (erinevad reeglid, layout, sümbolid).
+  - `pedagogical` sisaldab omakorda mitut sisestusrežiimi; neid ei tohi “ühte patta” segada.
+- **Kursor ja layout**: kursor ei tohi “joosta kokku/laiali”, vahele jätta noote, või valesti positsioneeruda ühegi režiimi all.
+- **Eksport & print**: lehe suund, joondus, pausid, reavahed ja paigutus peavad minema:
+  - PDF eelvaatesse
+  - print preview aknasse
+  - prinditavale alale
+  **ilma suvaliste lõikamiste või ümberpaigutusteta**.
+
+## Tehnilised reeglid, mis toetavad ülaltoodut
+
+- **Üks tõde failidele**: file/folder meta ja identiteet peab olema ühes kohas (store + services), UI ei tohi “ise arvata”.
+- **Stabiilne identiteet**: failidel/kaustadel peab olema unikaalne ID; nime või asukoha muutus ei tohi ID-d murda.
+- **No-overwrite by design**:
+  - salvestus peab olema kas “create new” või “update existing by id/version”
+  - konfliktid lahendatakse selgelt (rename/duplicate/version), mitte vaikimisi overwrite’iga
+- **Deterministlik render**: sama sisend (notes, modes, layoutOptions) → sama väljund (SVG/PDF layout).
+- **Režiimi piirid**: režiimispetsiifiline loogika elab `src/notation/**` ja `src/layout/**` all, mitte suvaliselt UI sees.
+
+## Kui ei tea, mis on “õige käitumine”
+
+1) Otsi analoogi meie koodist (järgi olemasolevat mustrit).
+2) Kui puudu, võrdle MuseScore/Finale/Sibelius käitumist (termin + UX).
+3) Dokumenteeri “Noodimeistri standard: <teema>” `AGENTS.md`-s ja alles siis implementeeri.
+
