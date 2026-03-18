@@ -147,7 +147,7 @@ export function PianoVisual({
       ? getKeyColor(natural, octave)
       : (getFigureStyle(natural, octave).fill ?? figurenotesColors?.[natural]);
     if (!fillColor) return base;
-    const textColor = natural === 'A' || natural === 'E' ? '#000000' : '#ffffff';
+    const textColor = (natural === 'A' || natural === 'E' || natural === 'B') ? '#000000' : '#ffffff';
     return {
       ...base,
       ['--piano-figurenotes-color']: fillColor,

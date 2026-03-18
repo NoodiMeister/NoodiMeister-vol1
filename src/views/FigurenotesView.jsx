@@ -706,6 +706,8 @@ export function FigurenotesView({
                           const slotChord = chordsInMeasure.find((c) => c.beatPosition >= slotStart && c.beatPosition < slotEnd);
                           const rectX = measureX + rectGap / 2 + slotIndex * (rectWidth + slotGap);
                           const fill = slotChord ? getChordColor(slotChord.chord) : '#e5e7eb';
+                          const chordRoot = slotChord ? getChordRootLetter(slotChord.chord) : null;
+                          const chordTextColor = chordRoot ? getFigurenoteTextColor(chordRoot) : '#1a1a1a';
                           const textX = rectX + 6;
                           return (
                             <g key={`chord-block-${measureIdx}-${slotIndex}`}>
@@ -728,7 +730,7 @@ export function FigurenotesView({
                                     dominantBaseline="middle"
                                     fontSize={chordFontSize}
                                     fontWeight="bold"
-                                    fill="#ffffff"
+                                    fill={chordTextColor}
                                     fontFamily="sans-serif"
                                   >
                                     {slotChord.chord}
@@ -739,7 +741,6 @@ export function FigurenotesView({
                                     const chordNameWidth = slotChord.chord.length * chordFontSize * CHORD_NAME_WIDTH_PER_CHAR;
                                     const gapPx = 10;
                                     const tonesTextX = textX + chordNameWidth + gapPx;
-                                    const chordRoot = getChordRootLetter(slotChord.chord);
                                     const figuresStartX = tonesTextX;
                                     return (
                                       <>
@@ -753,7 +754,7 @@ export function FigurenotesView({
                                               textAnchor="middle"
                                               dominantBaseline="middle"
                                               fontSize={tonesFontSize}
-                                              fill="#f9fafb"
+                                              fill={chordTextColor}
                                               fontFamily="monospace"
                                             >
                                               {toneName}
