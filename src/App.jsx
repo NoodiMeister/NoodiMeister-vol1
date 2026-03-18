@@ -26,6 +26,12 @@ function EscapeLogoutHandler() {
   useEffect(() => {
     const onKeyDown = (e) => {
       if (e.key !== 'Escape') return;
+      // Kui kasutaja parasjagu kirjutab (input/textarea/contentEditable), siis ära logi välja.
+      // Muidu katkestab Escape tekstikasti/pealkirja redigeerimise.
+      const el = e.target;
+      const tag = el?.tagName;
+      const isTypingTarget = tag === 'INPUT' || tag === 'TEXTAREA' || el?.isContentEditable;
+      if (isTypingTarget) return;
       if (!authStorage.isLoggedIn()) return;
       if (store) store.logout();
       else authStorage.clearAuth();

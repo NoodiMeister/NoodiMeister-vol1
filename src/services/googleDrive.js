@@ -7,6 +7,10 @@ const SCRIPT_URL = 'https://apis.google.com/js/api.js';
 const DRIVE_UPLOAD_URL = 'https://www.googleapis.com/upload/drive/v3/files';
 const DRIVE_API_URL = 'https://www.googleapis.com/drive/v3/files';
 
+// Google Picker typically expects an API key (developer key). If missing or blocked, we fall back
+// to a simple list+prompt chooser so "Load from cloud" still works.
+const GOOGLE_API_KEY = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_GOOGLE_API_KEY) || '';
+
 function loadScript() {
   return new Promise((resolve, reject) => {
     if (window.gapi && window.google?.picker) {
@@ -51,14 +55,24 @@ export function pickFolder(accessToken) {
         .setSelectFolderEnabled(true)
         .setMimeTypes('application/vnd.google-apps.folder')
         .setParent('root');
+      let done = false;
+      const finish = (v) => {
+        if (done) return;
+        done = true;
+        resolve(v);
+      };
+      // Safety: if callback never fires (script blocked / popup weirdness), don't hang forever.
+      const timeout = setTimeout(() => finish(null), 45000);
       const picker = new google.picker.PickerBuilder()
+        .setDeveloperKey(GOOGLE_API_KEY || undefined)
         .setOAuthToken(accessToken)
         .addView(view)
         .setCallback((data) => {
+          clearTimeout(timeout);
           if (data.action === google.picker.Action.PICKED && data.docs?.[0]) {
-            resolve(data.docs[0].id);
+            finish(data.docs[0].id);
           } else {
-            resolve(null);
+            finish(null);
           }
         })
         .build();
@@ -182,19 +196,57 @@ export async function uploadBinaryFileInFolder(accessToken, folderId, fileName, 
 export function pickFile(accessToken) {
   return loadScript().then(() => {
     return new Promise((resolve) => {
-      if (!window.google?.picker) {
-        resolve(null);
+      const fallbackPrompt = async () => {
+        try {
+          const [owned, shared] = await Promise.all([
+            listNoodimeisterFiles(accessToken, { pageSize: 50 }).catch(() => []),
+            listNoodimeisterFilesSharedWithMe(accessToken).catch(() => []),
+          ]);
+          const files = [...(owned || []), ...(shared || [])].filter(Boolean);
+          if (!files.length) return resolve(null);
+          const maxShow = 30;
+          const shown = files.slice(0, maxShow);
+          const answer = window.prompt(
+            `Vali Google Drive fail (1-${shown.length})` +
+            (files.length > shown.length ? ` (näitan esimesed ${shown.length}/${files.length})` : '') +
+            ':\n\n' +
+            shown.map((f, i) => `${i + 1}. ${f.name}`).join('\n') +
+            '\n\nSisesta number ja vajuta OK (Cancel = katkesta).'
+          );
+          if (!answer) return resolve(null);
+          const idx = Number(answer);
+          if (!Number.isFinite(idx) || idx < 1 || idx > shown.length) return resolve(null);
+          const picked = shown[idx - 1];
+          return resolve(picked?.id || null);
+        } catch {
+          return resolve(null);
+        }
+      };
+
+      // If Picker isn't available or API key isn't configured, use the fallback chooser.
+      if (!window.google?.picker || !GOOGLE_API_KEY) {
+        fallbackPrompt();
         return;
       }
+
       const view = new google.picker.DocsView(google.picker.ViewId.DOCS);
+      let done = false;
+      const finish = (v) => {
+        if (done) return;
+        done = true;
+        resolve(v);
+      };
+      const timeout = setTimeout(() => finish(null), 45000);
       const picker = new google.picker.PickerBuilder()
+        .setDeveloperKey(GOOGLE_API_KEY)
         .setOAuthToken(accessToken)
         .addView(view)
         .setCallback((data) => {
+          clearTimeout(timeout);
           if (data.action === google.picker.Action.PICKED && data.docs?.[0]) {
-            resolve(data.docs[0].id);
+            finish(data.docs[0].id);
           } else {
-            resolve(null);
+            finish(null);
           }
         })
         .build();

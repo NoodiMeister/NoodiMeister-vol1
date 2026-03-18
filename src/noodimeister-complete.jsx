@@ -4421,6 +4421,12 @@ function NoodiMeisterCore({ icons }) {
     if (activeToolbox === 'instruments' && option.type === 'category') return;
 
     switch (activeToolbox) {
+      case 'textBox': {
+        // Tekstikasti tööriist peab jääma aktiivseks, et kasutaja saaks skooril klõpsates kasti paigutada.
+        // (MuseScore-laadne UX: vali tööriist → klõpsa lehele → tekstiobjekt tekib.)
+        setSelectedOptionIndex(optionIndex);
+        return; // ära sulge toolbox'i
+      }
       case 'rhythm': {
         const selected = getSelectedNotes();
         const hasSelection = selected.length > 0;
