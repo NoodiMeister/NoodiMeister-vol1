@@ -4612,24 +4612,19 @@ function NoodiMeisterCore({ icons }) {
   const hasChordRow = notationStyle === 'FIGURENOTES' && figurenotesChordBlocks;
   const cursorOnMelodyRow = !hasChordRow || cursorSubRow === 0;
   const noteIndexAtCursor = useMemo(() => {
-    let beat = 0;
-    const candidates = [];
-    for (let i = 0; i < notes.length; i++) {
-      const n = notes[i];
-      const noteBeat = typeof n.beat === 'number' ? n.beat : beat;
-      if (cursorPosition >= noteBeat && cursorPosition < noteBeat + n.duration) {
-        candidates.push({ index: i, note: n, noteBeat });
-      }
-      beat = noteBeat + n.duration;
-    }
+    const withBeats = notesWithExplicitBeats(notes);
+    // Sort by beat so "read" follows timeline, not array order.
+    const sorted = withBeats.map((n, i) => ({ n, i, beat: Number(n.beat) || 0, dur: Number(n.duration) || 1 }))
+      .sort((a, b) => a.beat - b.beat);
+    const candidates = sorted.filter(({ beat, dur }) => cursorPosition >= beat && cursorPosition < beat + dur);
     if (candidates.length === 0) return -1;
-    if (candidates.length === 1) return candidates[0].index;
+    if (candidates.length === 1) return candidates[0].i;
     let best = candidates[0];
     for (let k = 1; k < candidates.length; k++) {
-      if (noteToMidi(candidates[k].note) > noteToMidi(best.note)) best = candidates[k];
+      if (noteToMidi(candidates[k].n) > noteToMidi(best.n)) best = candidates[k];
     }
-    return best.index;
-  }, [notes, cursorPosition]);
+    return best.i;
+  }, [notes, cursorPosition, notesWithExplicitBeats]);
 
   /** Noodi alguse löök antud indeksi järgi (SEL-režiimis kursori joondamine klõpsatud nootiga). */
   const getBeatAtNoteIndex = useCallback((noteList, index) => {
@@ -4663,28 +4658,31 @@ function NoodiMeisterCore({ icons }) {
     if (hasChordRow && cursorSubRow === 1) return;
     if (selectionStart >= 0 || selectionEnd >= 0) return; // range selection hoiab oma loogikat
     if (noteIndexAtCursor < 0) return;
+    // Kui kursor on samal beat'il, kus kasutaja juba valis konkreetse noodi (nt akord: mitu nooti sama beat'i peal),
+    // siis ära kirjuta valikut "ülemise noodi" peale tagasi – muidu noolega liikumine võib näida kinni jooksvat.
+    if (selectedNoteIndex >= 0 && selectedNoteIndex < notes.length) {
+      const EPS = 1e-6;
+      const selectedBeat = getBeatAtNoteIndex(notes, selectedNoteIndex);
+      if (Math.abs((cursorPosition ?? 0) - (selectedBeat ?? 0)) < EPS) return;
+    }
     if (selectedNoteIndex === noteIndexAtCursor) return;
     setSelectedNoteIndex(noteIndexAtCursor);
-  }, [noteInputMode, cursorTool, isPedagogicalAudioPlaying, isExportingAnimation, lyricChainIndex, hasChordRow, cursorSubRow, selectionStart, selectionEnd, noteIndexAtCursor, selectedNoteIndex]);
+  }, [noteInputMode, cursorTool, isPedagogicalAudioPlaying, isExportingAnimation, lyricChainIndex, hasChordRow, cursorSubRow, selectionStart, selectionEnd, noteIndexAtCursor, selectedNoteIndex, notes, cursorPosition, getBeatAtNoteIndex]);
 
   /** Noot antud löögil (akordi puhul kõrgeim noteToMidi järgi). Kasutatakse mängimiseks pärast kursori liigutamist. */
   const getNoteAtBeat = useCallback((beat) => {
-    let b = 0;
-    const candidates = [];
-    for (let i = 0; i < notes.length; i++) {
-      const n = notes[i];
-      const noteBeat = typeof n.beat === 'number' ? n.beat : b;
-      if (beat >= noteBeat && beat < noteBeat + n.duration) candidates.push({ index: i, note: n });
-      b = noteBeat + n.duration;
-    }
+    const withBeats = notesWithExplicitBeats(notes);
+    const sorted = withBeats.map((n, i) => ({ n, i, beat: Number(n.beat) || 0, dur: Number(n.duration) || 1 }))
+      .sort((a, b) => a.beat - b.beat);
+    const candidates = sorted.filter(({ beat: nb, dur }) => beat >= nb && beat < nb + dur);
     if (candidates.length === 0) return null;
-    if (candidates.length === 1) return candidates[0].note;
+    if (candidates.length === 1) return candidates[0].n;
     let best = candidates[0];
     for (let k = 1; k < candidates.length; k++) {
-      if (noteToMidi(candidates[k].note) > noteToMidi(best.note)) best = candidates[k];
+      if (noteToMidi(candidates[k].n) > noteToMidi(best.n)) best = candidates[k];
     }
-    return best.note;
-  }, [notes]);
+    return best.n;
+  }, [notes, notesWithExplicitBeats]);
 
   /** Mängib nooti antud löögil, kui seal on noot ja playNoteOnInsert on sisse lülitatud. N- ja SEL-režiim: kursor esitab õige helikõrgust. */
   const playNoteAtBeatIfEnabled = useCallback((beat) => {
