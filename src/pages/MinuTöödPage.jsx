@@ -464,12 +464,12 @@ export default function MinuTöödPage() {
   }, [moveOpen?.provider, moveOpen?.folderId, microsoftToken, moveOneDrivePath.length, moveOneDrivePath[moveOneDrivePath.length - 1]?.id, loadMoveOneDriveFolders]);
 
   const handleMoveFolderGoogleTo = useCallback(async (targetParentId) => {
-    if (!moveOpen || moveOpen.provider !== 'google' || !token) return;
-    if (targetParentId === moveOpen.folderId) return;
+    if (!moveOpen || moveOpen.provider !== 'google' || moveOpen.itemType !== 'folder' || !token) return;
+    if (targetParentId === moveOpen.itemId) return;
     setMoveError(null);
     setMoveLoading(true);
     try {
-      await googleDrive.moveFolder(token, moveOpen.folderId, targetParentId);
+      await googleDrive.moveFolder(token, moveOpen.itemId, targetParentId);
       refreshFolders();
       syncFoldersToCloud();
       loadFiles();
@@ -482,12 +482,28 @@ export default function MinuTöödPage() {
     }
   }, [moveOpen, token, t, refreshFolders, syncFoldersToCloud, loadFiles]);
 
-  const handleMoveFolderOneDriveTo = useCallback(async (targetParentId) => {
-    if (!moveOpen || moveOpen.provider !== 'onedrive' || !microsoftToken) return;
+  const handleMoveFileGoogleTo = useCallback(async (targetParentId) => {
+    if (!moveOpen || moveOpen.provider !== 'google' || moveOpen.itemType !== 'file' || !token) return;
     setMoveError(null);
     setMoveLoading(true);
     try {
-      const result = await oneDrive.moveItem(microsoftToken, moveOpen.folderId, targetParentId);
+      await googleDrive.moveFolder(token, moveOpen.itemId, targetParentId);
+      loadFiles();
+      setMoveOpen(null);
+      setMoveGooglePath([]);
+    } catch (e) {
+      setMoveError(e?.message || (t['mywork.moveFileError'] || 'Teisaldamine ebaõnnestus'));
+    } finally {
+      setMoveLoading(false);
+    }
+  }, [moveOpen, token, t, loadFiles]);
+
+  const handleMoveFolderOneDriveTo = useCallback(async (targetParentId) => {
+    if (!moveOpen || moveOpen.provider !== 'onedrive' || moveOpen.itemType !== 'folder' || !microsoftToken) return;
+    setMoveError(null);
+    setMoveLoading(true);
+    try {
+      const result = await oneDrive.moveItem(microsoftToken, moveOpen.itemId, targetParentId);
       if (result.ok) {
         refreshFolders();
         syncFoldersToCloud();
@@ -503,6 +519,26 @@ export default function MinuTöödPage() {
       setMoveLoading(false);
     }
   }, [moveOpen, microsoftToken, t, refreshFolders, syncFoldersToCloud, loadOneDriveFiles]);
+
+  const handleMoveFileOneDriveTo = useCallback(async (targetParentId) => {
+    if (!moveOpen || moveOpen.provider !== 'onedrive' || moveOpen.itemType !== 'file' || !microsoftToken) return;
+    setMoveError(null);
+    setMoveLoading(true);
+    try {
+      const result = await oneDrive.moveItem(microsoftToken, moveOpen.itemId, targetParentId);
+      if (result.ok) {
+        loadOneDriveFiles();
+        setMoveOpen(null);
+        setMoveOneDrivePath([]);
+      } else {
+        setMoveError(result.error || (t['mywork.moveFileError'] || 'Teisaldamine ebaõnnestus'));
+      }
+    } catch (e) {
+      setMoveError(e?.message || (t['mywork.moveFileError'] || 'Teisaldamine ebaõnnestus'));
+    } finally {
+      setMoveLoading(false);
+    }
+  }, [moveOpen, microsoftToken, t, loadOneDriveFiles]);
 
   const handleCreateFolder = useCallback(async () => {
     const name = (createFolderName || 'NoodiMeister').trim();
@@ -747,7 +783,7 @@ export default function MinuTöödPage() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => { setMoveOpen({ folderId: folder.id, provider: 'google', folderName: displayName }); setMoveError(null); setMoveGooglePath([]); }}
+                      onClick={() => { setMoveOpen({ itemId: folder.id, itemType: 'folder', provider: 'google', itemName: displayName }); setMoveError(null); setMoveGooglePath([]); }}
                       className="p-2 rounded-lg text-amber-700 dark:text-white/80 hover:bg-amber-100 dark:hover:bg-white/10 border border-amber-200/60 dark:border-white/20"
                       title={t['mywork.moveFolder'] || 'Teisalda kaust'}
                       aria-label={t['mywork.moveFolder'] || 'Teisalda kaust'}
@@ -793,6 +829,15 @@ export default function MinuTöödPage() {
                               <span className="font-medium text-amber-900 dark:text-white truncate flex-1">{f.name}</span>
                               <span className="text-sm text-amber-600 dark:text-white/70 flex-shrink-0">{formatDate(f.modifiedTime, locale)}</span>
                             </a>
+                            <button
+                              type="button"
+                              onClick={(e) => { e.preventDefault(); setMoveOpen({ itemId: f.id, itemType: 'file', provider: 'google', itemName: f.name || '' }); setMoveError(null); setMoveGooglePath([]); }}
+                              className="p-2 rounded-lg text-amber-700 dark:text-white/80 hover:bg-amber-100 dark:hover:bg-white/10 border border-transparent hover:border-amber-200 transition-colors"
+                              title={t['file.move'] || t['mywork.moveFile'] || 'Teisalda fail'}
+                              aria-label={t['file.move'] || t['mywork.moveFile'] || 'Teisalda fail'}
+                            >
+                              <FolderInput className="w-5 h-5" />
+                            </button>
                             <button
                               type="button"
                               onClick={(e) => { e.preventDefault(); handleDeleteGoogleFile(f.id, f.name); }}
@@ -867,7 +912,7 @@ export default function MinuTöödPage() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => { setMoveOpen({ folderId: folder.id, provider: 'onedrive', folderName: displayName }); setMoveError(null); setMoveOneDrivePath([]); }}
+                      onClick={() => { setMoveOpen({ itemId: folder.id, itemType: 'folder', provider: 'onedrive', itemName: displayName }); setMoveError(null); setMoveOneDrivePath([]); }}
                       className="p-2 rounded-lg text-amber-700 dark:text-white/80 hover:bg-amber-100 dark:hover:bg-white/10 border border-amber-200/60 dark:border-white/20"
                       title={t['mywork.moveFolder'] || 'Teisalda kaust'}
                       aria-label={t['mywork.moveFolder'] || 'Teisalda kaust'}
@@ -913,6 +958,15 @@ export default function MinuTöödPage() {
                               <span className="font-medium text-amber-900 dark:text-white truncate flex-1">{f.name}</span>
                               <span className="text-sm text-amber-600 dark:text-white/70 flex-shrink-0">{formatOneDriveDate(f, locale)}</span>
                             </a>
+                            <button
+                              type="button"
+                              onClick={(e) => { e.preventDefault(); setMoveOpen({ itemId: f.id, itemType: 'file', provider: 'onedrive', itemName: f.name || '' }); setMoveError(null); setMoveOneDrivePath([]); }}
+                              className="p-2 rounded-lg text-amber-700 dark:text-white/80 hover:bg-amber-100 dark:hover:bg-white/10 border border-transparent hover:border-amber-200 transition-colors"
+                              title={t['file.move'] || t['mywork.moveFile'] || 'Teisalda fail'}
+                              aria-label={t['file.move'] || t['mywork.moveFile'] || 'Teisalda fail'}
+                            >
+                              <FolderInput className="w-5 h-5" />
+                            </button>
                             <button
                               type="button"
                               onClick={(e) => { e.preventDefault(); handleDeleteOneDriveFile(f.id, f.name); }}
@@ -1000,7 +1054,11 @@ export default function MinuTöödPage() {
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => !moveLoading && setMoveOpen(null)}>
             <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-xl border-2 border-amber-200 dark:border-white/20 max-w-md w-full max-h-[85vh] flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
               <div className="flex items-center justify-between px-4 py-3 border-b border-amber-200 dark:border-white/20">
-                <h3 className="font-semibold text-amber-900 dark:text-white">{t['mywork.moveFolderTitle'] || 'Teisalda kaust teise asukohta'}</h3>
+                <h3 className="font-semibold text-amber-900 dark:text-white">
+                  {moveOpen.itemType === 'file'
+                    ? (t['mywork.moveFileTitle'] || 'Teisalda fail teise asukohta')
+                    : (t['mywork.moveFolderTitle'] || 'Teisalda kaust teise asukohta')}
+                </h3>
                 <button type="button" onClick={() => !moveLoading && setMoveOpen(null)} className="p-1 rounded hover:bg-amber-100 dark:hover:bg-white/10 text-amber-900 dark:text-white" aria-label={t['common.close'] || 'Sulge'}>
                   <X className="w-5 h-5" />
                 </button>
@@ -1008,7 +1066,7 @@ export default function MinuTöödPage() {
               <div className="p-4 overflow-y-auto">
                 <p className="text-sm text-amber-800 dark:text-white/90 mb-3">
                   {t['mywork.moveFolderPickLocation'] || 'Vali uus asukoht'}
-                  {moveOpen.folderName && <><br /><strong>{moveOpen.folderName}</strong></>}
+                  {moveOpen.itemName && <><br /><strong>{moveOpen.itemName}</strong></>}
                 </p>
                 {moveError && (
                   <p className="text-sm text-red-600 dark:text-red-400 mb-3">{moveError}</p>
@@ -1039,7 +1097,7 @@ export default function MinuTöödPage() {
                     <div className="space-y-1 mb-3">
                       <button
                         type="button"
-                        onClick={() => handleMoveFolderGoogleTo(moveGooglePath.length > 0 ? moveGooglePath[moveGooglePath.length - 1].id : 'root')}
+                        onClick={() => (moveOpen.itemType === 'file' ? handleMoveFileGoogleTo : handleMoveFolderGoogleTo)(moveGooglePath.length > 0 ? moveGooglePath[moveGooglePath.length - 1].id : 'root')}
                         disabled={moveLoading}
                         className="w-full flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-100 dark:bg-amber-900/40 text-amber-900 dark:text-white font-medium hover:bg-amber-200 dark:hover:bg-amber-800/40 disabled:opacity-60"
                       >
@@ -1066,7 +1124,7 @@ export default function MinuTöödPage() {
                               </button>
                               <button
                                 type="button"
-                                onClick={() => handleMoveFolderGoogleTo(f.id)}
+                                onClick={() => (moveOpen.itemType === 'file' ? handleMoveFileGoogleTo : handleMoveFolderGoogleTo)(f.id)}
                                 disabled={moveLoading}
                                 className="px-3 py-1.5 rounded-lg bg-amber-600 text-white text-sm font-medium hover:bg-amber-500 disabled:opacity-60"
                               >
@@ -1105,7 +1163,7 @@ export default function MinuTöödPage() {
                     <div className="space-y-1 mb-3">
                       <button
                         type="button"
-                        onClick={() => handleMoveFolderOneDriveTo(moveOneDrivePath.length > 0 ? moveOneDrivePath[moveOneDrivePath.length - 1].id : 'root')}
+                        onClick={() => (moveOpen.itemType === 'file' ? handleMoveFileOneDriveTo : handleMoveFolderOneDriveTo)(moveOneDrivePath.length > 0 ? moveOneDrivePath[moveOneDrivePath.length - 1].id : 'root')}
                         disabled={moveLoading}
                         className="w-full flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-100 dark:bg-amber-900/40 text-amber-900 dark:text-white font-medium hover:bg-amber-200 dark:hover:bg-amber-800/40 disabled:opacity-60"
                       >
@@ -1132,7 +1190,7 @@ export default function MinuTöödPage() {
                               </button>
                               <button
                                 type="button"
-                                onClick={() => handleMoveFolderOneDriveTo(f.id)}
+                                onClick={() => (moveOpen.itemType === 'file' ? handleMoveFileOneDriveTo : handleMoveFolderOneDriveTo)(f.id)}
                                 disabled={moveLoading}
                                 className="px-3 py-1.5 rounded-lg bg-amber-600 text-white text-sm font-medium hover:bg-amber-500 disabled:opacity-60"
                               >

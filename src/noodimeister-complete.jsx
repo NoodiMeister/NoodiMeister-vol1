@@ -3257,6 +3257,8 @@ function NoodiMeisterCore({ icons }) {
   const handleOpenProjectFile = useCallback((e) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    // Local file open should never keep "overwrite cloud file" binding.
+    setOpenedCloudFile(null);
     const reader = new FileReader();
     reader.onload = (ev) => {
       try {
@@ -3277,6 +3279,8 @@ function NoodiMeisterCore({ icons }) {
 
   const loadFromStorage = useCallback(() => {
     try {
+      // Loading from browser storage is not a cloud file; avoid accidental overwrite to cloud.
+      setOpenedCloudFile(null);
       const raw = localStorage.getItem(STORAGE_KEY);
       if (!raw) {
         setSaveFeedback('Salvestatud faili pole');
@@ -3475,7 +3479,9 @@ function NoodiMeisterCore({ icons }) {
       try {
         setSaveFeedback('Salvestan…');
         const fileName = ((data.songTitle || t('common.untitled')).replace(/\s+/g, '-').replace(/[^\w\-.]/g, '') || t('common.untitled')) + '.nm';
-        await googleDrive.createFileInFolder(token, savedFolderId, fileName, json);
+        const fileId = await googleDrive.createFileInFolder(token, savedFolderId, fileName, json);
+        // Mark as opened cloud file so Ctrl/Cmd+S overwrites this file next time (no duplicates).
+        if (fileId) setOpenedCloudFile({ provider: 'google', fileId });
         setSaveFeedback('Salvestatud pilve!');
         setTimeout(() => setSaveFeedback(''), 2500);
       } catch (e) {
@@ -3503,7 +3509,8 @@ function NoodiMeisterCore({ icons }) {
       const data = exportScoreToJSON();
       const json = JSON.stringify(data, null, 2);
       const fileName = ((data.songTitle || t('common.untitled')).replace(/\s+/g, '-').replace(/[^\w\-.]/g, '') || t('common.untitled')) + '.nm';
-      await googleDrive.createFileInFolder(token, folderId, fileName, json);
+      const fileId = await googleDrive.createFileInFolder(token, folderId, fileName, json);
+      if (fileId) setOpenedCloudFile({ provider: 'google', fileId });
       authStorage.addGoogleSaveFolder(folderId, '');
       try { await googleDrive.setSaveFoldersConfig(token, authStorage.getGoogleSaveFolders()); } catch (_) {}
       setSaveFeedback('Salvestatud pilve!');
@@ -3531,7 +3538,8 @@ function NoodiMeisterCore({ icons }) {
       const data = exportScoreToJSON();
       const json = JSON.stringify(data, null, 2);
       const fileName = ((data.songTitle || t('common.untitled')).replace(/\s+/g, '-').replace(/[^\w\-.]/g, '') || t('common.untitled')) + '.nm';
-      await googleDrive.createFileInFolder(token, folderId, fileName, json);
+      const fileId = await googleDrive.createFileInFolder(token, folderId, fileName, json);
+      if (fileId) setOpenedCloudFile({ provider: 'google', fileId });
       authStorage.addGoogleSaveFolder(folderId, name);
       try { await googleDrive.setSaveFoldersConfig(token, authStorage.getGoogleSaveFolders()); } catch (_) {}
       setSaveCloudDialogOpen(false);
@@ -3574,11 +3582,13 @@ function NoodiMeisterCore({ icons }) {
       setSaveFeedback('Salvestan…');
       const fileName = ((data.songTitle || t('common.untitled')).replace(/\s+/g, '-').replace(/[^\w\-.]/g, '') || t('common.untitled')) + '.nm';
       const folderId = (sessionSaveFolderId?.cloud === 'onedrive' ? sessionSaveFolderId.folderId : null) || authStorage.getOneDriveSaveFolderId();
+      let savedItem = null;
       if (folderId) {
-        await oneDrive.uploadFileToFolder(token, folderId, fileName, json, 'application/json');
+        savedItem = await oneDrive.uploadFileToFolder(token, folderId, fileName, json, 'application/json');
       } else {
-        await oneDrive.uploadFileToRoot(token, fileName, json, 'application/json');
+        savedItem = await oneDrive.uploadFileToRoot(token, fileName, json, 'application/json');
       }
+      if (savedItem?.id) setOpenedCloudFile({ provider: 'onedrive', fileId: savedItem.id });
       setSaveFeedback(t('feedback.savedToCloud') || 'Salvestatud pilve!');
       setTimeout(() => setSaveFeedback(''), 2500);
     } catch (e) {
@@ -3738,6 +3748,8 @@ function NoodiMeisterCore({ icons }) {
         const hasStaves = Array.isArray(data.staves) && data.staves.length > 0;
         const hasNotes = data.notes && Array.isArray(data.notes);
         if (hasStaves || hasNotes) {
+          // This is a local (browser) restore, not a cloud-opened file.
+          setOpenedCloudFile(null);
           importProject(data);
         }
       }
@@ -4768,17 +4780,23 @@ function NoodiMeisterCore({ icons }) {
       const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
       const modKey = isMac ? e.metaKey : e.ctrlKey;
 
+      // If user is typing in an input/textarea/contenteditable, do NOT globally swallow keystrokes.
+      // Otherwise title/author/text fields can appear "disabled", especially if noteInputMode is on.
+      const active = document.activeElement;
+      const tag = (active?.tagName || '').toLowerCase();
+      const isTypingInInput = tag === 'input' || tag === 'textarea' || (active?.getAttribute?.('contenteditable') === 'true');
+
       // SEL-mode: brauseri ja süsteemiga seotud võtmed on avatud (kasutaja saab vajadusel teha brauseri/süsteemi toimetusi).
       // N-mode: kursor loeb ainult noodi / laulusõnade / akordi ridu; kõik klahvid blokeeritakse – keskendutakse noodi sisestusele, parandamisele, kustutamisele.
       if (noteInputMode) {
-        e.preventDefault();
-        e.stopPropagation();
+        // But allow normal typing when focus is in a text field.
+        if (!isTypingInInput) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
       }
 
       // Ära püüa klahve, kui kasutaja kirjutab input/textarea väljale (nt pealkiri, autor) – v.a. Ctrl+L laulusõna väljal
-      const active = document.activeElement;
-      const tag = active?.tagName?.toLowerCase();
-      const isTypingInInput = tag === 'input' || tag === 'textarea' || (active?.getAttribute?.('contenteditable') === 'true');
       // Abistaja: noodi indeks antud löögil (vajalik, kui kasutaja klõpsas just löögil ja React ei ole veel cursorPosition uuendanud)
       const getNoteIndexForBeat = (beat) => {
         let b = 0;
@@ -4849,6 +4867,13 @@ function NoodiMeisterCore({ icons }) {
       if (modKey && e.code === 'KeyZ' && !e.shiftKey) {
         e.preventDefault();
         undo();
+        return;
+      }
+      // Cmd/Ctrl+B – lisa takt (luba ka siis, kui fookus on pealkirja/autoriväljal)
+      // Muidu jääb mulje, et funktsioon on "välja lülitatud", kui input on kogemata fookuses.
+      if (modKey && e.code === 'KeyB') {
+        e.preventDefault();
+        addMeasure();
         return;
       }
       if (isTypingInInput) return;
@@ -5088,12 +5113,7 @@ function NoodiMeisterCore({ icons }) {
         return;
       }
 
-      // Cmd+B / Ctrl+B – lisa takt
-      if (notationMod && e.code === 'KeyB') {
-        e.preventDefault();
-        addMeasure();
-        return;
-      }
+      // Cmd+B / Ctrl+B – handled earlier (works even when input has focus)
 
       // Alt+[ / Alt+{ – vähenda valitud takti laiust (kokkusurumine); Alt+] / Alt+} – suurenda (laiendamine)
       if (e.altKey && !e.ctrlKey && !e.metaKey && (e.code === 'BracketLeft' || e.code === 'BracketRight')) {
@@ -7875,6 +7895,7 @@ function NoodiMeisterCore({ icons }) {
                       onClick={() => {
                         setHeaderMenuOpen(null);
                         setPianoStripVisible(false);
+                        setOpenedCloudFile(null);
                         setSearchParams({ new: '1' });
                         setNewWorkSetupOpen(true);
                       }}
@@ -9650,6 +9671,14 @@ function NoodiMeisterCore({ icons }) {
                 style={{ zIndex: pageDesignLayer === 'inFront' ? 0 : 1, cursor: cursorTool === 'hand' ? (isHandPanning ? 'grabbing' : 'grab') : undefined }}
                 onClick={handleScoreContentClick}
                 onMouseDown={(e) => {
+                  // Text tool: create text box immediately on mousedown.
+                  // This avoids missing the click event when other tools (e.g. hand pan) prevent it.
+                  if (activeToolbox === 'textBox' && e.button === 0) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleScoreContentClick(e);
+                    return;
+                  }
                   if (cursorTool === 'hand' && e.button === 0 && mainRef?.current) {
                     e.preventDefault();
                     setIsHandPanning(true);
