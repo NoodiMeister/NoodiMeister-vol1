@@ -5318,33 +5318,36 @@ function NoodiMeisterCore({ icons }) {
       // Mängib nooti alati pärast lugemist/sisestust (sama voog, mitte useEffect), et helikõrgus oleks õige.
       if (noteInputMode) {
         const EPS = 1e-6;
+        const getSortedNoteBeats = () => {
+          // Always work off explicit beats and sort by beat to avoid "skipping" when
+          // note array order doesn't strictly match time order.
+          const withBeats = notesWithExplicitBeats(notes).slice().sort((a, b) => (a.beat ?? 0) - (b.beat ?? 0));
+          return withBeats.map((n) => ({
+            start: Number(n.beat) || 0,
+            end: (Number(n.beat) || 0) + (Number(n.duration) || 1),
+          }));
+        };
         const getNoteSpanAtBeat = (beatPos) => {
-          // Returns the span [start,end) of the note/rest covering beatPos, using implicit beats.
-          let b = 0;
-          for (let i = 0; i < notes.length; i++) {
-            const n = notes[i];
-            const start = typeof n.beat === 'number' ? n.beat : b;
-            const dur = Number(n.duration) || 1;
-            const end = start + dur;
-            if (beatPos >= start - EPS && beatPos < end - EPS) return { start, end };
-            b = end;
+          // Returns the span [start,end) of the note/rest covering beatPos.
+          const spans = getSortedNoteBeats();
+          for (let i = 0; i < spans.length; i++) {
+            const s = spans[i];
+            if (beatPos >= s.start - EPS && beatPos < s.end - EPS) return { start: s.start, end: s.end };
           }
           return null;
         };
         const getNextNoteBoundaryBeat = (dir) => {
           // Liigu järgmise/eelmise noodi algusele (võimaldab lugeda ka 1/8, 1/16 jne rütme).
           // Kui piire ei leita, kukume tagasi "grid" sammule.
-          let b = 0;
+          const spans = getSortedNoteBeats();
           let best = null;
-          for (let i = 0; i < notes.length; i++) {
-            const n = notes[i];
-            const noteBeat = typeof n.beat === 'number' ? n.beat : b;
+          for (let i = 0; i < spans.length; i++) {
+            const noteBeat = spans[i].start;
             if (dir > 0) {
               if (noteBeat > cursorPosition + EPS) best = best == null ? noteBeat : Math.min(best, noteBeat);
             } else {
               if (noteBeat < cursorPosition - EPS) best = best == null ? noteBeat : Math.max(best, noteBeat);
             }
-            b = noteBeat + (n.duration ?? 1);
           }
           return best;
         };
