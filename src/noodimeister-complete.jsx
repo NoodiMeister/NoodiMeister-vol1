@@ -9763,6 +9763,8 @@ function NoodiMeisterCore({ icons }) {
                   measures={measuresWithMarks}
                   pageWidth={effectiveLayoutPageWidth}
                   pageOrientation={pageOrientation}
+                  physicalPageGapPx={3}
+                  disablePhysicalPageGaps={showPdfExportPreview}
                   timeSignature={timeSignature}
                   timeSignatureMode={timeSignatureMode}
                   pixelsPerBeat={pixelsPerBeat}
@@ -10245,7 +10247,7 @@ function getFingeringForNote(pitch, octave, instrumentId) {
 }
 
 // Timeline Component – multi-system layout (VexFlow loogika). (PAGE_BREAK_GAP on defineeritud üleval.)
-function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, pageWidth, cursorPosition, notationMode, staffLines, clefType, keySignature = 'C', relativeNotationShowKeySignature = false, relativeNotationShowTraditionalClef = false, onJoClefPositionChange, joClefFocused = false, onJoClefFocus, instrument = 'single-staff-treble', instrumentNotationVariant = 'standard', instrumentConfig = {}, showBarNumbers = true, barNumberSize = 11, showRhythmSyllables = false, joClefStaffPosition: joClefStaffPositionProp, showAllNoteLabels = false, enableEmojiOverlays = true, noteheadShape = 'oval', noteheadEmoji = '♪', onNoteTeacherLabelChange, onNoteLabelClick, chords = [], isDotted, isRest, selectedDuration, noteInputMode, selectedNoteIndex, isNoteSelected, notes: allNotes, onStaffAddNote, onNoteClick, onNoteMouseDown, onNoteMouseEnter, onNotePitchChange, onNoteBeatChange, canHandDragNotes = false, ghostPitch, ghostOctave, onFigureBeatClick, onChordLineMouseMove, onChordLineClick, notationStyle, layoutMeasuresPerLine = 4, layoutLineBreakBefore = [], layoutPageBreakBefore = [], layoutSystemGap = 120, layoutPartsGap, layoutConnectedBarlines = false, staffRowAlignment = 'center', staffIndexInScore = 0, systemTotalHeight, layoutGlobalSpacingMultiplier = 1, systems: systemsProp, baseYOffset = 0, isActiveStaff = true, staffCount = 1, staffHeight: staffHeightProp, figurenotesSize = 16, figurenotesStems = false, figurenotesChordLineGap = 6, figurenotesChordBlocks = false, figurenotesChordBlocksShowTones = true, figurenotesMelodyShowNoteNames = true, figurenotesRowHeight: figurenotesRowHeightProp, figurenotesChordLineHeight: figurenotesChordLineHeightProp, timeSignatureSize = 16, themeColors: themeColorsProp, pedagogicalPlayheadStyle = 'line', pedagogicalPlayheadEmoji = '🎵', pedagogicalPlayheadEmojiSize = 32, cursorSizePx, cursorLineStrokeWidth = 4, cursorSubRow = 0, pedagogicalPlayheadMovement = 'arch', isPedagogicalAudioPlaying = false, isExportingAnimation = false, exportCursorRef, scoreContainerRef, pageFlowDirection = 'vertical', pageOrientation = 'portrait', isFirstInBraceGroup = false, braceGroupSize = 0, lyricFontFamily = 'sans-serif', lyricFontSize = 12, lyricLineYOffset = 0, translateLabel, showLayoutBreakIcons = false, showStaffSpacerHandles = false, onSystemYOffsetChange, onToggleLineBreakAfter, activeLyricNoteIndex = null }) {
+function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, pageWidth, cursorPosition, notationMode, staffLines, clefType, keySignature = 'C', relativeNotationShowKeySignature = false, relativeNotationShowTraditionalClef = false, onJoClefPositionChange, joClefFocused = false, onJoClefFocus, instrument = 'single-staff-treble', instrumentNotationVariant = 'standard', instrumentConfig = {}, showBarNumbers = true, barNumberSize = 11, showRhythmSyllables = false, joClefStaffPosition: joClefStaffPositionProp, showAllNoteLabels = false, enableEmojiOverlays = true, noteheadShape = 'oval', noteheadEmoji = '♪', onNoteTeacherLabelChange, onNoteLabelClick, chords = [], isDotted, isRest, selectedDuration, noteInputMode, selectedNoteIndex, isNoteSelected, notes: allNotes, onStaffAddNote, onNoteClick, onNoteMouseDown, onNoteMouseEnter, onNotePitchChange, onNoteBeatChange, canHandDragNotes = false, ghostPitch, ghostOctave, onFigureBeatClick, onChordLineMouseMove, onChordLineClick, notationStyle, layoutMeasuresPerLine = 4, layoutLineBreakBefore = [], layoutPageBreakBefore = [], layoutSystemGap = 120, layoutPartsGap, layoutConnectedBarlines = false, staffRowAlignment = 'center', staffIndexInScore = 0, systemTotalHeight, layoutGlobalSpacingMultiplier = 1, systems: systemsProp, baseYOffset = 0, isActiveStaff = true, staffCount = 1, staffHeight: staffHeightProp, figurenotesSize = 16, figurenotesStems = false, figurenotesChordLineGap = 6, figurenotesChordBlocks = false, figurenotesChordBlocksShowTones = true, figurenotesMelodyShowNoteNames = true, figurenotesRowHeight: figurenotesRowHeightProp, figurenotesChordLineHeight: figurenotesChordLineHeightProp, timeSignatureSize = 16, themeColors: themeColorsProp, pedagogicalPlayheadStyle = 'line', pedagogicalPlayheadEmoji = '🎵', pedagogicalPlayheadEmojiSize = 32, cursorSizePx, cursorLineStrokeWidth = 4, cursorSubRow = 0, pedagogicalPlayheadMovement = 'arch', isPedagogicalAudioPlaying = false, isExportingAnimation = false, exportCursorRef, scoreContainerRef, pageFlowDirection = 'vertical', pageOrientation = 'portrait', isFirstInBraceGroup = false, braceGroupSize = 0, lyricFontFamily = 'sans-serif', lyricFontSize = 12, lyricLineYOffset = 0, translateLabel, showLayoutBreakIcons = false, showStaffSpacerHandles = false, onSystemYOffsetChange, onToggleLineBreakAfter, activeLyricNoteIndex = null, physicalPageGapPx = 3, disablePhysicalPageGaps = false }) {
   if (typeof GLOBAL_NOTATION_CONFIG === 'undefined' || !GLOBAL_NOTATION_CONFIG || GLOBAL_NOTATION_CONFIG.EMOJIS === false) return null;
   const themeColors = themeColorsProp || { staffLineColor: '#000', noteFill: '#1a1a1a', textColor: '#1a1a1a', scoreBg: '#fffbf0', isDark: false };
   const safeKey = keySignature ?? 'C';
@@ -10312,13 +10314,22 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
   const effectiveMeasures = React.useMemo(() => (measures || []).map((m, i) => ({ ...m, notes: notesByMeasure[i] || [] })), [measures, notesByMeasure]);
   const timelineSvgRef = useRef(null);
   const [staffSpacerDrag, setStaffSpacerDrag] = React.useState({ systemIndex: null, startClientY: 0, cumulativeDelta: 0 });
-  const totalHeight = systemsComputed.length > 0
+  const totalHeightLogical = systemsComputed.length > 0
     ? systemsComputed[systemsComputed.length - 1].yOffset + (staffCount || 1) * timelineHeight + 40
     : (staffCount || 1) * timelineHeight + 40;
   const isHorizontal = pageFlowDirection === 'horizontal';
   const a4Ratio = pageOrientation === 'landscape' ? LAYOUT.A4_HEIGHT_RATIO_LANDSCAPE : LAYOUT.A4_HEIGHT_RATIO;
   const a4PageHeight = (pageWidth || LAYOUT.PAGE_WIDTH_MIN) * a4Ratio;
-  const totalPages = Math.max(1, Math.ceil(totalHeight / a4PageHeight));
+  const totalPages = Math.max(1, Math.ceil(totalHeightLogical / a4PageHeight));
+  // Screen-only "physical page gaps" like MuseScore/Docs (keeps logical layout & export intact).
+  const pageGapPx = (!disablePhysicalPageGaps && !isHorizontal) ? Math.max(0, Number(physicalPageGapPx) || 0) : 0;
+  const systemsForDisplay = pageGapPx > 0
+    ? systems.map((sys) => {
+        const pageIndex = Math.max(0, Math.floor((sys.yOffset || 0) / a4PageHeight));
+        return { ...sys, yOffset: (sys.yOffset || 0) + pageIndex * pageGapPx };
+      })
+    : systems;
+  const totalHeight = pageGapPx > 0 ? (totalHeightLogical + Math.max(0, totalPages - 1) * pageGapPx) : totalHeightLogical;
   const centerY = timelineHeight / 2;
   const pw = pageWidth || LAYOUT.PAGE_WIDTH_MIN;
   const marginLeft = isFigurenotesMode && systemsComputed.length > 0
@@ -10855,7 +10866,7 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
       {/* No canvas/SVG background: paper style comes from the score container (CSS) like Docs/MuseScore */}
       {isFigurenotesMode ? (
         <FigurenotesView
-          systems={systems}
+          systems={systemsForDisplay}
           effectiveMeasures={effectiveMeasures}
           marginLeft={marginLeft}
           timelineHeight={figurenotesRowHeightProp ?? timelineHeight}
@@ -10902,7 +10913,7 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
         />
       ) : (
         <TraditionalNotationView
-          systems={systems}
+          systems={systemsForDisplay}
           effectiveMeasures={effectiveMeasures}
           marginLeft={marginLeft}
           timelineHeight={timelineHeight}
