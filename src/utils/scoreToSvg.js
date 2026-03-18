@@ -146,9 +146,12 @@ export function scoreToSvg (container, options = {}) {
 export function getPageSvgString (defsString, contentString, contentHeight, pageIndex, orientation = 'portrait') {
   const { w: PAGE_W, h: PAGE_H } = getPageWh(orientation);
   const y = -pageIndex * PAGE_H;
-  return `<svg xmlns="${XMLNS}" viewBox="0 0 ${PAGE_W} ${PAGE_H}" width="${PAGE_W}" height="${PAGE_H}">
+  // Avoid 1–3 px clipping at page edges (strokes/markers), which can differ by OS/browser.
+  // Keep the page size exact, but allow a tiny bleed inside the page clip.
+  const BLEED = 2;
+  return `<svg xmlns="${XMLNS}" viewBox="0 0 ${PAGE_W} ${PAGE_H}" width="${PAGE_W}" height="${PAGE_H}" overflow="visible">
 ${defsString}
-<defs><clipPath id="pageClip"><rect x="0" y="0" width="${PAGE_W}" height="${PAGE_H}"/></clipPath></defs>
+<defs><clipPath id="pageClip"><rect x="${BLEED}" y="${BLEED}" width="${PAGE_W - 2 * BLEED}" height="${PAGE_H - 2 * BLEED}"/></clipPath></defs>
 <g transform="translate(0, ${y})" clip-path="url(#pageClip)">${contentString}</g>
 </svg>`;
 }

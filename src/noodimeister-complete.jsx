@@ -2368,11 +2368,26 @@ function NoodiMeisterCore({ icons }) {
     const onBeforePrint = () => {
       const el = scoreContainerRef?.current;
       if (!el) return;
-      const pad = 32;
-      const cw = el.scrollWidth - 2 * pad;
-      const ch = Math.max(1, el.scrollHeight - 2 * pad);
+      const cw = Math.max(1, el.scrollWidth);
+      const ch = Math.max(1, el.scrollHeight);
       const { paperSize: ps, pageOrientation: orient } = printOptionsRef.current;
-      const mmToPx = (mm) => Math.round((mm * 96) / 25.4);
+
+      // Chrome/OS can map CSS mm → CSS px slightly differently in practice.
+      // Measure the browser's current conversion instead of assuming 96 DPI.
+      const mmToPx = (mm) => {
+        const probe = document.createElement('div');
+        probe.style.position = 'fixed';
+        probe.style.left = '-10000mm';
+        probe.style.top = '0';
+        probe.style.width = '100mm';
+        probe.style.height = '1px';
+        probe.style.visibility = 'hidden';
+        document.body.appendChild(probe);
+        const pxPerMm = (probe.getBoundingClientRect().width || (100 * 96) / 25.4) / 100;
+        probe.remove();
+        return Math.round(mm * pxPerMm);
+      };
+
       const margin = 12 * 2;
       const printable = {
         'a4': { portrait: [210 - margin, 297 - margin], landscape: [297 - margin, 210 - margin] },
@@ -6991,16 +7006,26 @@ function NoodiMeisterCore({ icons }) {
                 <button type="button" onClick={() => setPdfPreviewZoom(z => Math.max(0.25, z - 0.25))} className="px-2 py-1 rounded bg-amber-100 dark:bg-amber-900/40 text-amber-900 dark:text-amber-100 text-sm font-medium">−</button>
                 <button type="button" onClick={handlePdfPreviewFit} className="px-2 py-1 rounded bg-amber-100 dark:bg-amber-900/40 text-amber-900 dark:text-amber-100 text-sm font-medium">Mahuta</button>
                 <button type="button" onClick={() => setPdfPreviewZoom(z => Math.min(2.5, z + 0.25))} className="px-2 py-1 rounded bg-amber-100 dark:bg-amber-900/40 text-amber-900 dark:text-amber-100 text-sm font-medium">+</button>
-                <input
-                  type="range"
-                  min={25}
-                  max={250}
-                  step={5}
-                  value={Math.round(pdfPreviewZoom * 100)}
-                  onChange={(e) => setPdfPreviewZoom(Math.round((Number(e.target.value) / 100) * 100) / 100)}
-                  className="w-24 accent-amber-600"
-                  aria-label="Eelvaate suum"
-                />
+                <label className="flex items-center gap-2">
+                  <span className="sr-only">Eelvaate suum protsentides</span>
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    min={25}
+                    max={250}
+                    step={1}
+                    value={Math.round(pdfPreviewZoom * 100)}
+                    onChange={(e) => {
+                      const raw = Number(e.target.value);
+                      if (!Number.isFinite(raw)) return;
+                      const clamped = Math.max(25, Math.min(250, raw));
+                      setPdfPreviewZoom(Math.round((clamped / 100) * 100) / 100);
+                    }}
+                    className="w-20 px-2 py-1 rounded border-2 border-amber-200 bg-amber-50 text-amber-900 text-sm font-medium tabular-nums"
+                    aria-label="Eelvaate suum (%)"
+                  />
+                  <span className="text-sm text-amber-800 dark:text-amber-200">%</span>
+                </label>
                 <span className="text-sm text-amber-800 dark:text-amber-200 tabular-nums">{Math.round(pdfPreviewZoom * 100)}%</span>
               </div>
               {pdfPreviewSvgData && (
