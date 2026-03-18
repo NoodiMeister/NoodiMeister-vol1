@@ -4157,14 +4157,17 @@ function NoodiMeisterCore({ icons }) {
 
     const insertIntoStaffNotes = (noteList) => {
       const withBeats = notesWithExplicitBeats(noteList);
-      // If there's a rest placeholder exactly at this beat span, replace it instead of stacking
-      // a new note on top of the rest (user expectation: rest is consumed by the inserted note).
       const EPS = 1e-6;
       const cleaned = withBeats.filter((n) => {
         const nb = n.beat ?? 0;
         const nd = n.duration ?? 1;
         const sameBeat = Math.abs(nb - insertBeat) < EPS;
         const sameDur = Math.abs(nd - effectiveDuration) < EPS;
+        // Default: "overwrite" the note/rest that starts exactly here (avoid accidental stacking).
+        // Chords are created via addNoteOnTopOfCursor (Shift+Letter), not by stacking here.
+        const overwriteAtStart = sameBeat;
+        if (overwriteAtStart) return false;
+        // Also consume a rest placeholder that exactly matches this span.
         return !(n.isRest && sameBeat && sameDur);
       });
       const merged = [...cleaned, newNote].sort((a, b) => (a.beat ?? 0) - (b.beat ?? 0));
@@ -4192,14 +4195,15 @@ function NoodiMeisterCore({ icons }) {
       if (newNotes == null) return;
       setNotes(newNotes);
     }
-    setCursorPosition(insertBeat + effectiveDuration);
+    // Cursor should never jump past end; keep it clamped.
+    setCursorPosition(Math.min(maxCursor, insertBeat + effectiveDuration));
     setGhostPitch(pitch);
     setGhostOctave(oct);
     if (!(options.forceRest != null ? !!options.forceRest : isRest) && playNoteOnInsert && !options.skipPlay) {
       const semitones = acc === 1 ? 1 : acc === -1 ? -1 : 0;
       playPianoNote(pitch, oct, semitones);
     }
-  }, [cursorPosition, selectedDuration, getEffectiveDuration, isDotted, isRest, notes, saveToHistory, ghostOctave, ghostAccidental, playPianoNote, playNoteOnInsert, tupletMode, durations, staves, activeStaffIndex, notesWithExplicitBeats, notationStyle, keySignature]);
+  }, [cursorPosition, selectedDuration, getEffectiveDuration, isDotted, isRest, notes, saveToHistory, ghostOctave, ghostAccidental, playPianoNote, playNoteOnInsert, tupletMode, durations, staves, activeStaffIndex, notesWithExplicitBeats, notationStyle, keySignature, maxCursor]);
 
   // Add a note on top of the note at cursor (chord input). Traditional or Pedagogical only. Shift+Letter.
   const addNoteOnTopOfCursor = useCallback((pitch, octave, accidental, options = {}) => {
@@ -5293,6 +5297,19 @@ function NoodiMeisterCore({ icons }) {
       // Mängib nooti alati pärast lugemist/sisestust (sama voog, mitte useEffect), et helikõrgus oleks õige.
       if (noteInputMode) {
         const EPS = 1e-6;
+        const getNoteSpanAtBeat = (beatPos) => {
+          // Returns the span [start,end) of the note/rest covering beatPos, using implicit beats.
+          let b = 0;
+          for (let i = 0; i < notes.length; i++) {
+            const n = notes[i];
+            const start = typeof n.beat === 'number' ? n.beat : b;
+            const dur = Number(n.duration) || 1;
+            const end = start + dur;
+            if (beatPos >= start - EPS && beatPos < end - EPS) return { start, end };
+            b = end;
+          }
+          return null;
+        };
         const getNextNoteBoundaryBeat = (dir) => {
           // Liigu järgmise/eelmise noodi algusele (võimaldab lugeda ka 1/8, 1/16 jne rütme).
           // Kui piire ei leita, kukume tagasi "grid" sammule.
@@ -5313,6 +5330,21 @@ function NoodiMeisterCore({ icons }) {
         const cursorStep = e.shiftKey ? 0.25 : 1;
         if (e.code === 'ArrowLeft') {
           e.preventDefault();
+          if (cursorPosition <= 0 + EPS) {
+            setCursorPosition(0);
+            playNoteAtBeatIfEnabled(0);
+            return;
+          }
+          // If cursor is inside a longer note span, jump to its start first (avoid "reading subdivisions" that don't exist).
+          if (!e.shiftKey) {
+            const span = getNoteSpanAtBeat(cursorPosition);
+            if (span && cursorPosition > span.start + EPS) {
+              const newBeat = Math.max(0, span.start);
+              setCursorPosition(newBeat);
+              playNoteAtBeatIfEnabled(newBeat);
+              return;
+            }
+          }
           const boundary = !e.shiftKey ? getNextNoteBoundaryBeat(-1) : null;
           const newBeat = boundary != null ? Math.max(0, boundary) : Math.max(0, cursorPosition - cursorStep);
           setCursorPosition(newBeat);
@@ -5321,6 +5353,21 @@ function NoodiMeisterCore({ icons }) {
         }
         if (e.code === 'ArrowRight') {
           e.preventDefault();
+          if (cursorPosition >= maxCursor - EPS) {
+            setCursorPosition(maxCursor);
+            playNoteAtBeatIfEnabled(maxCursor);
+            return;
+          }
+          // If cursor is inside a longer note span, jump to its end first (avoid "reading subdivisions" that don't exist).
+          if (!e.shiftKey) {
+            const span = getNoteSpanAtBeat(cursorPosition);
+            if (span && cursorPosition < span.end - EPS) {
+              const newBeat = Math.min(maxCursor, span.end);
+              setCursorPosition(newBeat);
+              playNoteAtBeatIfEnabled(newBeat);
+              return;
+            }
+          }
           const boundary = !e.shiftKey ? getNextNoteBoundaryBeat(1) : null;
           const newBeat = boundary != null ? Math.min(maxCursor, boundary) : Math.min(maxCursor, cursorPosition + cursorStep);
           setCursorPosition(newBeat);
