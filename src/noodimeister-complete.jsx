@@ -1138,6 +1138,8 @@ function NoodiMeisterCore({ icons }) {
   const [mainScrollTop, setMainScrollTop] = useState(0);
   const [mainScrollLeft, setMainScrollLeft] = useState(0);
   const [mainContentHeight, setMainContentHeight] = useState(0);
+  // Scroll in <main> can fire very frequently; throttle state updates to 1× per animation frame
+  // to avoid re-rendering the whole app on every scroll tick.
   const mainScrollPendingRef = useRef({ top: 0, left: 0 });
   const mainScrollRafRef = useRef(0);
   const onMainScroll = useCallback((e) => {
@@ -1146,6 +1148,11 @@ function NoodiMeisterCore({ icons }) {
     mainScrollPendingRef.current.top = el.scrollTop;
     mainScrollPendingRef.current.left = el.scrollLeft;
     if (mainScrollRafRef.current) return;
+    if (typeof requestAnimationFrame === 'undefined') {
+      setMainScrollTop(el.scrollTop);
+      setMainScrollLeft(el.scrollLeft);
+      return;
+    }
     mainScrollRafRef.current = requestAnimationFrame(() => {
       mainScrollRafRef.current = 0;
       const { top, left } = mainScrollPendingRef.current || { top: 0, left: 0 };
@@ -1154,7 +1161,10 @@ function NoodiMeisterCore({ icons }) {
     });
   }, []);
   useEffect(() => () => {
-    if (mainScrollRafRef.current) cancelAnimationFrame(mainScrollRafRef.current);
+    if (mainScrollRafRef.current && typeof cancelAnimationFrame !== 'undefined') {
+      cancelAnimationFrame(mainScrollRafRef.current);
+    }
+    mainScrollRafRef.current = 0;
   }, []);
 
   // Mitmed noodiridad (iga rida = üks instrument oma noodivõtmega). Uue instrumendi valik lisab uue rea.
@@ -6160,11 +6170,20 @@ function NoodiMeisterCore({ icons }) {
 
   // Selection drag (Shift + mouse down and drag across notes) – document-level mouseup ends the drag.
   useEffect(() => {
-    const onMouseUp = () => {
+    const clear = () => {
       if (selectionDragRef.current) selectionDragRef.current = null;
     };
+    const onMouseUp = clear;
+    const onPointerUp = clear;
+    const onBlur = clear;
     document.addEventListener('mouseup', onMouseUp);
-    return () => document.removeEventListener('mouseup', onMouseUp);
+    document.addEventListener('pointerup', onPointerUp);
+    window.addEventListener('blur', onBlur);
+    return () => {
+      document.removeEventListener('mouseup', onMouseUp);
+      document.removeEventListener('pointerup', onPointerUp);
+      window.removeEventListener('blur', onBlur);
+    };
   }, []);
 
   // Hand tool pan: drag on score to scroll main area
@@ -6210,6 +6229,12 @@ function NoodiMeisterCore({ icons }) {
   const updateSelectionDragHover = useCallback((noteIndex, e) => {
     const drag = selectionDragRef.current;
     if (!drag || !drag.pointerDown || !drag.shift) return;
+    // Kui Shift pole enam all (nt kasutaja lasi Shifti lahti enne mouseup'i), lõpeta lohistus,
+    // muidu valik "kasvab iseenesest" lihtsalt hiire liikumisel.
+    if (e && e.shiftKey === false) {
+      selectionDragRef.current = null;
+      return;
+    }
     e?.stopPropagation?.();
     setSelectedNoteIndex(noteIndex);
     setSelectionEnd(noteIndex);
@@ -6616,7 +6641,7 @@ function NoodiMeisterCore({ icons }) {
                 <label className="block text-sm font-semibold text-amber-900 dark:text-white mb-2">Taktide paigutus</label>
                 <p className="text-sm text-amber-700 dark:text-white/80 mb-2">Mitu takti soovite vaikimisi ühe rea kohta? (Saate hiljem muuta tööriistakastis Paigutus.)</p>
                 <div className="flex flex-wrap items-center gap-3">
-                  {(pageOrientation === 'landscape' ? [4, 6, 8, 12, 16] : [2, 3, 4, 6, 8]).map((n) => (
+                  {(pageOrientation === 'landscape' ? [2, 4, 6, 8, 12, 16] : [2, 3, 4, 6, 8]).map((n) => (
                     <button
                       key={n}
                       type="button"
@@ -7308,7 +7333,7 @@ function NoodiMeisterCore({ icons }) {
                 <label className="block text-sm font-semibold text-amber-900 mb-1">{t('layout.measuresPerLine')}</label>
                 <p className="text-xs text-amber-700 mb-2">{t('layout.measuresPerLineHint')} {t('layout.measuresPerLineHintOrientation')}</p>
                 <div className="flex flex-wrap gap-2">
-                  {(pageOrientation === 'landscape' ? [4, 6, 8, 12, 16] : [2, 3, 4, 6, 8]).map((n) => (
+                  {(pageOrientation === 'landscape' ? [2, 4, 6, 8, 12, 16] : [2, 3, 4, 6, 8]).map((n) => (
                     <button
                       key={n}
                       type="button"
@@ -8852,7 +8877,7 @@ function NoodiMeisterCore({ icons }) {
                     <div className="mt-4 pt-4 border-t-2 border-amber-200">
                       <h4 className="text-xs font-bold text-amber-900 uppercase mb-2">{t('layout.measuresPerLine')}</h4>
                       <p className="text-xs text-amber-700 mb-2">{t('layout.measuresPerLineHint')}</p>
-                      <div className="flex flex-wrap gap-1 mb-3">{(pageOrientation === 'landscape' ? [4, 6, 8, 12, 16] : [2, 3, 4, 6, 8]).map((n) => (
+                      <div className="flex flex-wrap gap-1 mb-3">{(pageOrientation === 'landscape' ? [2, 4, 6, 8, 12, 16] : [2, 3, 4, 6, 8]).map((n) => (
                         <button key={n} type="button" onClick={() => { dirtyRef.current = true; (viewMode === 'score' ? setLayoutMeasuresPerLine : setPartLayoutMeasuresPerLine)(n); }} className={`px-2 py-1 rounded text-sm font-medium ${effectiveLayoutMeasuresPerLine === n ? 'bg-amber-600 text-white' : 'bg-amber-100 text-amber-800 hover:bg-amber-200'}`}>{n}</button>
                       ))}</div>
                       <div className="mb-3">
@@ -9307,13 +9332,17 @@ function NoodiMeisterCore({ icons }) {
             </div>
           )}
           {(() => {
-            const contentHeightForPages = pageFlowDirection === 'horizontal' ? (lastVerticalContentHeightRef.current || logicalContentHeight) : mainContentHeight;
+            // IMPORTANT: page count must be derived from logical content height, not scrollHeight.
+            // Using scrollHeight creates a feedback loop because we set minHeight based on totalPagesVal.
+            const contentHeightForPages = pageFlowDirection === 'horizontal'
+              ? (lastVerticalContentHeightRef.current || logicalContentHeight)
+              : logicalContentHeight;
             const extraPages = Math.max(0, Number(effectiveLayoutExtraPages) || 0);
             const totalPagesVal = Math.max(1, Math.ceil((contentHeightForPages || logicalContentHeight) / a4PageHeightVal) + extraPages);
             const isHorizontalFlow = pageFlowDirection === 'horizontal';
             const pw = effectiveLayoutPageWidth;
             // Terve leht või tark: kas loogiline kõrgus või tegelik scroll kõrgus
-            const contentH = viewFitOrSmart ? (logicalContentHeight || 800) : (mainContentHeight || logicalContentHeight || 800);
+            const contentH = logicalContentHeight || 800;
             const contentHWithExtraPages = isHorizontalFlow ? contentH : Math.max(contentH, totalPagesVal * a4PageHeightVal);
             const baseW = isHorizontalFlow ? totalPagesVal * pw : (viewFitOrSmart ? pw * fitPageScale : pw);
             const baseH = isHorizontalFlow ? a4PageHeightVal : contentHWithExtraPages;
@@ -9982,10 +10011,10 @@ function NoodiMeisterCore({ icons }) {
         </main>
 
         {/* Lehekülgede / ekraani vaate navigaator – kui dokument on pikem kui üks A4 leht */}
-        {showPageNavigator && (mainContentHeight > 0 || lastVerticalContentHeightRef.current > 0 || logicalContentHeight > 0) && (() => {
+        {showPageNavigator && (lastVerticalContentHeightRef.current > 0 || logicalContentHeight > 0) && (() => {
           const a4PageHeight = a4PageHeightVal;
           const a4PageWidth = effectiveLayoutPageWidth;
-          const contentH = pageFlowDirection === 'horizontal' ? (lastVerticalContentHeightRef.current || logicalContentHeight) : mainContentHeight;
+          const contentH = pageFlowDirection === 'horizontal' ? (lastVerticalContentHeightRef.current || logicalContentHeight) : logicalContentHeight;
           const totalPages = Math.max(1, Math.ceil((contentH || logicalContentHeight) / a4PageHeight));
           if (totalPages <= 1) return null;
           const isHorizontalFlow = pageFlowDirection === 'horizontal';
