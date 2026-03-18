@@ -2354,6 +2354,7 @@ function NoodiMeisterCore({ icons }) {
   }, [isPedagogicalProject, notes, pedagogicalAudioUrl, pedagogicalAudioDuration, pedagogicalAudioBpm, songTitle, stopPedagogicalPlayback, t]);
 
   const printOptionsRef = useRef({ paperSize: 'a4', pageOrientation: 'portrait' });
+  const printSvgCleanupRef = useRef(null);
 
   const handlePrint = useCallback(() => {
     setHeaderMenuOpen(null);
@@ -2368,6 +2369,55 @@ function NoodiMeisterCore({ icons }) {
     const onBeforePrint = () => {
       const el = scoreContainerRef?.current;
       if (!el) return;
+      // Build deterministic SVG pages for printing. Chrome on Windows can render complex
+      // transformed DOM trees in print preview inconsistently; SVG pages avoid that.
+      try {
+        const opts = {
+          pageDesignDataUrl: pageDesignDataUrl || null,
+          pageDesignOpacity,
+          songTitle,
+          author,
+          documentFontFamily,
+          titleFontFamily,
+          titleFontSize,
+          authorFontSize,
+          titleBold,
+          titleItalic,
+          authorBold,
+          authorItalic,
+          titleAlignment,
+          authorAlignment,
+          pageOrientation,
+        };
+        const { defsString, contentString, contentHeight, orientation } = scoreToSvg(el, opts);
+        const orient = (orientation ?? pageOrientation) === 'landscape' ? 'landscape' : 'portrait';
+        const pageH = orient === 'landscape' ? 794 : 1123;
+        const numPages = Math.max(1, Math.ceil((Number(contentHeight) || pageH) / pageH));
+
+        const wrapper = document.createElement('div');
+        wrapper.className = 'nm-print-svg-pages';
+        for (let p = 0; p < numPages; p++) {
+          const pageSvg = getPageSvgString(defsString, contentString, contentHeight, p, orient);
+          const dataUrl = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(pageSvg)));
+          const pageDiv = document.createElement('div');
+          pageDiv.className = 'nm-print-svg-page';
+          const img = document.createElement('img');
+          img.alt = `Page ${p + 1}`;
+          img.src = dataUrl;
+          pageDiv.appendChild(img);
+          wrapper.appendChild(pageDiv);
+        }
+        document.documentElement.classList.add('nm-print-svg-mode');
+        document.body.appendChild(wrapper);
+        printSvgCleanupRef.current = () => {
+          try { wrapper.remove(); } catch (_) {}
+          document.documentElement.classList.remove('nm-print-svg-mode');
+          printSvgCleanupRef.current = null;
+        };
+      } catch (_) {
+        // If SVG print build fails, fall back to legacy print scaling below.
+      }
+
       const cw = Math.max(1, el.scrollWidth);
       const ch = Math.max(1, el.scrollHeight);
       const { paperSize: ps, pageOrientation: orient } = printOptionsRef.current;
@@ -2402,9 +2452,16 @@ function NoodiMeisterCore({ icons }) {
       document.documentElement.style.setProperty('--print-content-w', `${cw}px`);
       document.documentElement.style.setProperty('--print-content-h', `${ch}px`);
     };
+    const onAfterPrint = () => {
+      try { printSvgCleanupRef.current?.(); } catch (_) {}
+    };
     window.addEventListener('beforeprint', onBeforePrint);
-    return () => window.removeEventListener('beforeprint', onBeforePrint);
-  }, []);
+    window.addEventListener('afterprint', onAfterPrint);
+    return () => {
+      window.removeEventListener('beforeprint', onBeforePrint);
+      window.removeEventListener('afterprint', onAfterPrint);
+    };
+  }, [pageDesignDataUrl, pageDesignOpacity, songTitle, author, documentFontFamily, titleFontFamily, titleFontSize, authorFontSize, titleBold, titleItalic, authorBold, authorItalic, titleAlignment, authorAlignment, pageOrientation]);
 
   const pdfExportOptionsRef = useRef({ pageFlowDirection: 'vertical', pageWidth: LAYOUT.PAGE_WIDTH_PX });
 
@@ -10902,6 +10959,7 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
           effectiveMeasures={effectiveMeasures}
           marginLeft={marginLeft}
           timelineHeight={figurenotesRowHeightProp ?? timelineHeight}
+          selectedDuration={selectedDuration}
           chordLineGap={figurenotesChordBlocks ? figurenotesChordLineGap : 0}
           chordLineHeight={figurenotesChordBlocks ? (figurenotesChordLineHeightProp ?? Math.round((figurenotesRowHeightProp ?? timelineHeight) / 2)) : 0}
           chordBlocksEnabled={figurenotesChordBlocks}

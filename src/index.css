@@ -142,6 +142,36 @@ html, body, #root {
 }
 
 @media print {
+  /* Deterministic print mode: render as SVG pages (avoids Chrome print layout quirks with transforms). */
+  html.nm-print-svg-mode body * {
+    visibility: hidden;
+  }
+  html.nm-print-svg-mode .nm-print-svg-pages,
+  html.nm-print-svg-mode .nm-print-svg-pages * {
+    visibility: visible;
+  }
+  html.nm-print-svg-mode .nm-print-svg-pages {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+  }
+  html.nm-print-svg-mode .nm-print-svg-page {
+    page-break-after: always;
+    break-after: page;
+  }
+  html.nm-print-svg-mode .nm-print-svg-page:last-child {
+    page-break-after: auto;
+    break-after: auto;
+  }
+  html.nm-print-svg-mode .nm-print-svg-page img {
+    width: 100%;
+    height: auto;
+    display: block;
+  }
+
   .nm-page-separator-overlay {
     display: none !important;
   }
