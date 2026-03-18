@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { FilePlus, Folder, FolderOpen, FolderPlus, Cloud, LogIn, Loader2, User, Settings, ChevronDown, Trash2, X, Pencil, FolderMinus, FolderInput, ChevronRight } from 'lucide-react';
+import { FilePlus, Folder, FolderOpen, FolderPlus, Cloud, LogIn, Loader2, User, Settings, ChevronDown, Trash2, X, Pencil, FolderMinus, FolderInput, ChevronRight, Copy } from 'lucide-react';
 import * as googleDrive from '../services/googleDrive';
 import * as oneDrive from '../services/oneDrive';
 import * as authStorage from '../services/authStorage';
@@ -98,6 +98,8 @@ export default function MinuTöödPage() {
   const themeMode = store?.theme?.mode ?? 'light';
   const setThemeMode = (mode) => { if (store?.setTheme) store.setTheme(mode); };
   const t = getTranslations(locale);
+  const base = (typeof import.meta !== 'undefined' && import.meta.env?.BASE_URL) || '';
+  const basePath = base.replace(/\/$/, '') || '';
 
   useEffect(() => {
     const close = (e) => {
@@ -368,6 +370,19 @@ export default function MinuTöödPage() {
     }
   }, [token, loadFiles, t]);
 
+  const handleCopyGoogleFile = useCallback(async (fileId, fileName, targetFolderId) => {
+    if (!token) return;
+    try {
+      const created = await googleDrive.copyProjectFile(token, fileId, targetFolderId || 'root', fileName || '');
+      loadFiles();
+      if (created?.id) {
+        navigate(`${basePath}/app?fileId=${encodeURIComponent(created.id)}`);
+      }
+    } catch (e) {
+      setError(e?.message || (t['file.copyError'] || 'Koopia tegemine ebaõnnestus'));
+    }
+  }, [token, loadFiles, navigate, t]);
+
   const handleDeleteOneDriveFile = useCallback(async (fileId, fileName) => {
     const msg = (t['file.deleteConfirm'] || 'Kas kustutame faili "{name}"? Seda ei saa tagasi võtta.').replace('{name}', fileName || '');
     if (!window.confirm(msg)) return;
@@ -379,6 +394,17 @@ export default function MinuTöödPage() {
       setOneDriveError(e?.message || (t['account.deleteError'] || 'Kustutamine ebaõnnestus'));
     }
   }, [microsoftToken, loadOneDriveFiles, t]);
+
+  const handleCopyOneDriveFile = useCallback(async (fileId, fileName, targetFolderId) => {
+    if (!microsoftToken) return;
+    const result = await oneDrive.copyProjectFile(microsoftToken, fileId, targetFolderId || 'root', fileName || '');
+    if (result.ok && result.id) {
+      loadOneDriveFiles();
+      navigate(`${basePath}/app?fileId=${encodeURIComponent(result.id)}&cloud=onedrive`);
+    } else {
+      setOneDriveError(result.error || (t['file.copyError'] || 'Koopia tegemine ebaõnnestus'));
+    }
+  }, [microsoftToken, loadOneDriveFiles, navigate, t]);
 
   const handleRenameFolder = useCallback(async () => {
     if (!renameOpen || !renameName.trim()) return;
@@ -588,8 +614,6 @@ export default function MinuTöödPage() {
     return <div className="loading-screen">{t['mywork.loadingApp']}</div>;
   }
 
-  const base = (typeof import.meta !== 'undefined' && import.meta.env?.BASE_URL) || '';
-  const basePath = base.replace(/\/$/, '') || '';
   const hrefNew = `${basePath}/app?new=1`;
   const hrefLocal = `${basePath}/app?local=1`;
 
@@ -831,6 +855,15 @@ export default function MinuTöödPage() {
                             </a>
                             <button
                               type="button"
+                              onClick={(e) => { e.preventDefault(); handleCopyGoogleFile(f.id, f.name, folder.id); }}
+                              className="p-2 rounded-lg text-amber-700 dark:text-white/80 hover:bg-amber-100 dark:hover:bg-white/10 border border-transparent hover:border-amber-200 transition-colors"
+                              title={t['file.copy'] || 'Tee koopia'}
+                              aria-label={t['file.copy'] || 'Tee koopia'}
+                            >
+                              <Copy className="w-5 h-5" />
+                            </button>
+                            <button
+                              type="button"
                               onClick={(e) => { e.preventDefault(); setMoveOpen({ itemId: f.id, itemType: 'file', provider: 'google', itemName: f.name || '' }); setMoveError(null); setMoveGooglePath([]); }}
                               className="p-2 rounded-lg text-amber-700 dark:text-white/80 hover:bg-amber-100 dark:hover:bg-white/10 border border-transparent hover:border-amber-200 transition-colors"
                               title={t['file.move'] || t['mywork.moveFile'] || 'Teisalda fail'}
@@ -958,6 +991,15 @@ export default function MinuTöödPage() {
                               <span className="font-medium text-amber-900 dark:text-white truncate flex-1">{f.name}</span>
                               <span className="text-sm text-amber-600 dark:text-white/70 flex-shrink-0">{formatOneDriveDate(f, locale)}</span>
                             </a>
+                            <button
+                              type="button"
+                              onClick={(e) => { e.preventDefault(); handleCopyOneDriveFile(f.id, f.name, folder.id); }}
+                              className="p-2 rounded-lg text-amber-700 dark:text-white/80 hover:bg-amber-100 dark:hover:bg-white/10 border border-transparent hover:border-amber-200 transition-colors"
+                              title={t['file.copy'] || 'Tee koopia'}
+                              aria-label={t['file.copy'] || 'Tee koopia'}
+                            >
+                              <Copy className="w-5 h-5" />
+                            </button>
                             <button
                               type="button"
                               onClick={(e) => { e.preventDefault(); setMoveOpen({ itemId: f.id, itemType: 'file', provider: 'onedrive', itemName: f.name || '' }); setMoveError(null); setMoveOneDrivePath([]); }}

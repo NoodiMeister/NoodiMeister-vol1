@@ -399,6 +399,36 @@ export async function updateFileContent(token, fileId, content, contentType = 'a
   return body;
 }
 
+function buildCopyName(originalName) {
+  const name = String(originalName || '').trim() || 'Untitled.nm';
+  const lower = name.toLowerCase();
+  const ext = lower.endsWith('.noodimeister') ? '.noodimeister' : lower.endsWith('.nm') ? '.nm' : '';
+  const base = ext ? name.slice(0, -ext.length) : name;
+  const safeBase = base.trim() || 'Untitled';
+  return `${safeBase} (koopia)${ext || '.nm'}`;
+}
+
+/**
+ * Tee NoodiMeisteri projektifailist koopia (uue ID-ga) samasse või teise kausta.
+ * Teostus: loe sisu ja laadi uus fail üles.
+ * @param {string} token
+ * @param {string} fileId
+ * @param {string} targetFolderId
+ * @param {string} originalName
+ * @param {string} [newName]
+ * @returns {Promise<{ ok: boolean, id?: string, name?: string, error?: string }>}
+ */
+export async function copyProjectFile(token, fileId, targetFolderId, originalName, newName) {
+  try {
+    const content = await getFileContent(token, fileId);
+    const name = (newName && String(newName).trim()) ? String(newName).trim() : buildCopyName(originalName);
+    const item = await uploadFileToFolder(token, targetFolderId || 'root', name, content, 'application/json');
+    return { ok: true, id: item?.id, name: item?.name || name };
+  } catch (e) {
+    return { ok: false, error: e?.message || 'Koopia tegemine ebaõnnestus.' };
+  }
+}
+
 /**
  * Loe salvestuskaustade nimekiri OneDrive'ist (sünkroonimiseks teise seadmega). Fail juurkaustas.
  * @param {string} token

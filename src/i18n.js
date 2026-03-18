@@ -149,6 +149,8 @@ const translations = {
     'nav.openNotationTool': 'Tööriist',
     'file.delete': 'Kustuta fail',
     'file.deleteConfirm': 'Kas kustutame faili "{name}"? Seda ei saa tagasi võtta.',
+    'file.copy': 'Tee koopia',
+    'file.copyError': 'Koopia tegemine ebaõnnestus',
     // Laadimine
     'loading.tools': 'Laen tööriista…',
     // Tööriistariba
@@ -825,6 +827,8 @@ const translations = {
     'nav.openNotationTool': 'Notation tool',
     'file.delete': 'Delete file',
     'file.deleteConfirm': 'Delete file "{name}"? This cannot be undone.',
+    'file.copy': 'Make a copy',
+    'file.copyError': 'Copy failed',
     'loading.tools': 'Loading tools…',
     'toolbar.rhythm': 'Rhythm',
     'toolbar.selected': 'Selected',
@@ -1477,6 +1481,8 @@ const translations = {
     'nav.openNotationTool': 'Työkalu',
     'file.delete': 'Poista tiedosto',
     'file.deleteConfirm': 'Poistetaanko tiedosto "{name}"? Tätä ei voi perua.',
+    'file.copy': 'Tee kopio',
+    'file.copyError': 'Kopiointi epäonnistui',
     'loading.tools': 'Ladataan työkalua…',
     'toolbar.rhythm': 'Rytmi',
     'toolbar.selected': 'Valittu',

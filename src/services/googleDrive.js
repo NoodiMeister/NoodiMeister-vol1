@@ -457,6 +457,33 @@ export async function renameFolder(accessToken, folderId, newName) {
   return { name: data.name || newName.trim() };
 }
 
+function buildCopyName(originalName) {
+  const name = String(originalName || '').trim() || 'Untitled.nm';
+  const lower = name.toLowerCase();
+  const ext = lower.endsWith('.noodimeister') ? '.noodimeister' : lower.endsWith('.nm') ? '.nm' : '';
+  const base = ext ? name.slice(0, -ext.length) : name;
+  const safeBase = base.trim() || 'Untitled';
+  return `${safeBase} (koopia)${ext || '.nm'}`;
+}
+
+/**
+ * Tee NoodiMeisteri projektifailist koopia (uue fileId-ga) samasse või teise kausta.
+ * Teostus: loe sisu ja loo uus fail NOODIMEISTER_MIME_TYPE'ga.
+ * @param {string} accessToken
+ * @param {string} fileId
+ * @param {string} targetFolderId
+ * @param {string} [newName]
+ * @returns {Promise<{ id: string }>}
+ */
+export async function copyProjectFile(accessToken, fileId, targetFolderId, originalName, newName) {
+  if (!accessToken) throw new Error('Token aegunud. Logi uuesti sisse.');
+  if (!fileId) throw new Error('Fail puudub');
+  const content = await getFileContent(accessToken, fileId);
+  const fileName = (newName && String(newName).trim()) ? String(newName).trim() : buildCopyName(originalName);
+  const id = await createFileInFolder(accessToken, targetFolderId || 'root', fileName, content);
+  return { id };
+}
+
 /** Salvestuskaustade nimekirja konfiguratsioonifail Drive'i juurkaustas (sünkroonimiseks seadmete vahel). */
 const SAVE_FOLDERS_CONFIG_FILENAME = 'NoodiMeister-save-folders.json';
 
