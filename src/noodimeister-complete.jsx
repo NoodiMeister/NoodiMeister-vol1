@@ -3020,6 +3020,14 @@ function NoodiMeisterCore({ icons }) {
     }
   }, [isExportingPdf, pageOrientation, pageFlowDirection, paperSize, pdfPreviewDataUrl, pdfPreviewSvgData, printPdfBlob, t, buildVectorPdfFromSnapshot]);
 
+  const normalizedVisibleStavesForPersistence = useMemo(() => {
+    const next = visibleStaves.length === staves.length
+      ? visibleStaves.map((value) => value !== false)
+      : staves.map(() => true);
+    return next.some(Boolean) ? next : staves.map(() => true);
+  }, [staves, visibleStaves]);
+  const normalizedPageDesignLayerForPersistence = pageDesignLayer === 'inFront' ? 'inFront' : 'behind';
+
   // Build state to persist
   const getPersistedState = useCallback(() => ({
     staves,
@@ -3112,18 +3120,18 @@ function NoodiMeisterCore({ icons }) {
     pageDesignDataUrl: pageDesignDataUrl || undefined,
     pageDesignOpacity,
     pageDesignFit,
-    pageDesignLayer,
+    pageDesignLayer: normalizedPageDesignLayerForPersistence,
     pageDesignPositionX,
     pageDesignPositionY,
     pageDesignCrop,
-    visibleStaves: visibleStaves.length === staves.length ? visibleStaves : staves.map(() => true),
+    visibleStaves: normalizedVisibleStavesForPersistence,
     intermissionLabels,
     lyricLineIndex,
     lyricLineYOffset,
     lyricFontSize,
     noteheadShape,
     noteheadEmoji
-  }), [staves, activeStaffIndex, staffYOffsets, measureStretchFactors, systemYOffsets, visibleStaves, intermissionLabels, timeSignature, timeSignatureMode, keySignature, staffLines, notationStyle, pixelsPerBeat, notationMode, instrumentNotationVariant, cursorPosition, addedMeasures, measureRepeatMarks, setupCompleted, songTitle, author, copyrightFooter, pickupEnabled, pickupQuantity, pickupDuration, pageOrientation, paperSize, layoutMeasuresPerLine, layoutLineBreakBefore, layoutPageBreakBefore, layoutExtraPages, layoutSystemGap, layoutPartsGap, layoutConnectedBarlines, layoutGlobalSpacingMultiplier, viewMode, partLayoutMeasuresPerLine, partLayoutLineBreakBefore, partLayoutPageBreakBefore, partLayoutExtraPages, showPageNavigator, pageFlowDirection, viewFitPage, viewSmartPage, visibleToolIds, tuningReferenceNote, tuningReferenceOctave, tuningReferenceHz, playNoteOnInsert, figurenotesSize, figurenotesStems, figurenotesChordLineGap, figurenotesChordBlocks, figurenotesChordBlocksShowTones, figurenotesMelodyShowNoteNames, timeSignatureSize, showBarNumbers, barNumberSize, showRhythmSyllables, showAllNoteLabels, enableEmojiOverlays, joClefStaffPosition, relativeNotationShowKeySignature, relativeNotationShowTraditionalClef, isPedagogicalProject, pedagogicalAudioBpm, pedagogicalAudioPlaybackRate, pedagogicalPlayheadStyle, pedagogicalPlayheadEmoji, pedagogicalPlayheadEmojiSize, cursorLineStrokeWidth, pedagogicalPlayheadMovement, chords, textBoxes, documentFontFamily, lyricFontFamily, titleFontSize, authorFontSize, titleFontFamily, authorFontFamily, titleBold, titleItalic, authorBold, authorItalic, titleAlignment, authorAlignment, staffRowAlignment, pageDesignDataUrl, pageDesignOpacity, pageDesignFit, pageDesignLayer, pageDesignPositionX, pageDesignPositionY, pageDesignCrop, lyricLineIndex, lyricLineYOffset, lyricFontSize, noteheadShape, noteheadEmoji]);
+  }), [staves, activeStaffIndex, staffYOffsets, measureStretchFactors, systemYOffsets, normalizedVisibleStavesForPersistence, normalizedPageDesignLayerForPersistence, intermissionLabels, timeSignature, timeSignatureMode, keySignature, staffLines, notationStyle, pixelsPerBeat, notationMode, instrumentNotationVariant, cursorPosition, addedMeasures, measureRepeatMarks, setupCompleted, songTitle, author, copyrightFooter, pickupEnabled, pickupQuantity, pickupDuration, pageOrientation, paperSize, layoutMeasuresPerLine, layoutLineBreakBefore, layoutPageBreakBefore, layoutExtraPages, layoutSystemGap, layoutPartsGap, layoutConnectedBarlines, layoutGlobalSpacingMultiplier, viewMode, partLayoutMeasuresPerLine, partLayoutLineBreakBefore, partLayoutPageBreakBefore, partLayoutExtraPages, showPageNavigator, pageFlowDirection, viewFitPage, viewSmartPage, visibleToolIds, tuningReferenceNote, tuningReferenceOctave, tuningReferenceHz, playNoteOnInsert, figurenotesSize, figurenotesStems, figurenotesChordLineGap, figurenotesChordBlocks, figurenotesChordBlocksShowTones, figurenotesMelodyShowNoteNames, timeSignatureSize, showBarNumbers, barNumberSize, showRhythmSyllables, showAllNoteLabels, enableEmojiOverlays, joClefStaffPosition, relativeNotationShowKeySignature, relativeNotationShowTraditionalClef, isPedagogicalProject, pedagogicalAudioBpm, pedagogicalAudioPlaybackRate, pedagogicalPlayheadStyle, pedagogicalPlayheadEmoji, pedagogicalPlayheadEmojiSize, cursorLineStrokeWidth, pedagogicalPlayheadMovement, chords, textBoxes, documentFontFamily, lyricFontFamily, titleFontSize, authorFontSize, titleFontFamily, authorFontFamily, titleBold, titleItalic, authorBold, authorItalic, titleAlignment, authorAlignment, staffRowAlignment, pageDesignDataUrl, pageDesignOpacity, pageDesignFit, pageDesignPositionX, pageDesignPositionY, pageDesignCrop, lyricLineIndex, lyricLineYOffset, lyricFontSize, noteheadShape, noteheadEmoji]);
 
   const saveToStorageSync = useCallback(() => {
     try {
@@ -3201,14 +3209,20 @@ function NoodiMeisterCore({ icons }) {
     try {
       const legacyScoreData = data.scoreData ?? data.notes;
       const legacyNotesArr = Array.isArray(legacyScoreData) ? legacyScoreData : [];
+      const restoredNotationStyle = data.notationStyle || (data.gridOnlyMode != null ? (data.gridOnlyMode ? 'FIGURENOTES' : 'TRADITIONAL') : null);
+      const restoredNotationMode = data.notationMode || (restoredNotationStyle === 'FIGURENOTES' ? 'figurenotes' : null);
       if (Array.isArray(data.staves) && data.staves.length > 0) {
         const stavesHaveAnyNotes = data.staves.some((staff) => Array.isArray(staff?.notes) && staff.notes.length > 0);
         const hydratedStaves = (!stavesHaveAnyNotes && legacyNotesArr.length > 0)
           ? data.staves.map((staff, idx) => ({
             ...staff,
             notes: idx === 0 ? legacyNotesArr : (Array.isArray(staff?.notes) ? staff.notes : []),
+            notationMode: staff?.notationMode || restoredNotationMode || 'traditional',
           }))
-          : data.staves;
+          : data.staves.map((staff) => ({
+            ...staff,
+            notationMode: staff?.notationMode || restoredNotationMode || 'traditional',
+          }));
         setStaves(hydratedStaves);
         setActiveStaffIndex(typeof data.activeStaffIndex === 'number' ? Math.max(0, Math.min(data.activeStaffIndex, data.staves.length - 1)) : 0);
         if (Array.isArray(data.staffYOffsets)) setStaffYOffsets(data.staffYOffsets);
@@ -3223,11 +3237,11 @@ function NoodiMeisterCore({ icons }) {
           const id1 = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `staff-${Date.now()}-a`;
           const id2 = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `staff-${Date.now()}-b`;
           setStaves([
-            { id: id1, instrumentId: 'piano', clefType: 'treble', notes: notesArr, braceGroupId, notationMode: data.notationMode ?? 'traditional' },
-            { id: id2, instrumentId: 'piano', clefType: 'bass', notes: [], braceGroupId, notationMode: data.notationMode ?? 'traditional' }
+            { id: id1, instrumentId: 'piano', clefType: 'treble', notes: notesArr, braceGroupId, notationMode: restoredNotationMode || 'traditional' },
+            { id: id2, instrumentId: 'piano', clefType: 'bass', notes: [], braceGroupId, notationMode: restoredNotationMode || 'traditional' }
           ]);
         } else {
-          setStaves([{ id: '1', instrumentId: instId, clefType: (cfg?.defaultClef) || data.clefType || 'treble', notes: notesArr, notationMode: data.notationMode ?? 'traditional' }]);
+          setStaves([{ id: '1', instrumentId: instId, clefType: (cfg?.defaultClef) || data.clefType || 'treble', notes: notesArr, notationMode: restoredNotationMode || 'traditional' }]);
         }
         setActiveStaffIndex(0);
       }
@@ -3235,8 +3249,8 @@ function NoodiMeisterCore({ icons }) {
       if (data.timeSignatureMode) setTimeSignatureMode(data.timeSignatureMode);
       if (data.keySignature) setKeySignature(data.keySignature);
       if (data.staffLines != null) setStaffLines(data.staffLines);
-      if (data.notationStyle) setNotationStyle(data.notationStyle);
-      if (data.notationMode) setNotationMode(data.notationMode);
+      if (restoredNotationStyle) setNotationStyle(restoredNotationStyle);
+      if (restoredNotationMode) setNotationMode(restoredNotationMode);
       if (data.noteheadShape) setNoteheadShape(data.noteheadShape);
       if (data.noteheadEmoji != null) setNoteheadEmoji(data.noteheadEmoji);
       if (data.pixelsPerBeat != null) setPixelsPerBeat(data.pixelsPerBeat);
@@ -3365,7 +3379,12 @@ function NoodiMeisterCore({ icons }) {
         });
       }
       if (Array.isArray(data.textBoxes)) setTextBoxes(data.textBoxes);
-      if (Array.isArray(data.visibleStaves)) setVisibleStaves(data.visibleStaves);
+      if (Array.isArray(data.visibleStaves)) {
+        const normalizedVisible = data.staves?.length
+          ? data.visibleStaves.slice(0, data.staves.length).map((value) => value !== false)
+          : data.visibleStaves.map((value) => value !== false);
+        setVisibleStaves(normalizedVisible.some(Boolean) ? normalizedVisible : (Array.isArray(data.staves) ? data.staves.map(() => true) : []));
+      }
       if (Array.isArray(data.intermissionLabels)) setIntermissionLabels(data.intermissionLabels);
       if (data.documentFontFamily) setDocumentFontFamily(data.documentFontFamily);
       if (data.lyricFontFamily) setLyricFontFamily(data.lyricFontFamily);
@@ -3498,11 +3517,16 @@ function NoodiMeisterCore({ icons }) {
         return;
       }
       const data = JSON.parse(raw);
+      const restoredNotationStyle = data.notationStyle || (data.gridOnlyMode != null ? (data.gridOnlyMode ? 'FIGURENOTES' : 'TRADITIONAL') : null);
+      const restoredNotationMode = data.notationMode || (restoredNotationStyle === 'FIGURENOTES' ? 'figurenotes' : null);
       const hasStaves = Array.isArray(data.staves) && data.staves.length > 0;
       const hasNotes = data.notes && Array.isArray(data.notes);
       if (hasStaves || hasNotes) {
         if (hasStaves) {
-          setStaves(data.staves);
+          setStaves(data.staves.map((staff) => ({
+            ...staff,
+            notationMode: staff?.notationMode || restoredNotationMode || 'traditional',
+          })));
           setActiveStaffIndex(typeof data.activeStaffIndex === 'number' ? Math.max(0, Math.min(data.activeStaffIndex, data.staves.length - 1)) : 0);
           if (Array.isArray(data.staffYOffsets)) setStaffYOffsets(data.staffYOffsets);
           if (Array.isArray(data.measureStretchFactors)) setMeasureStretchFactors(data.measureStretchFactors);
@@ -3516,11 +3540,11 @@ function NoodiMeisterCore({ icons }) {
             const id2 = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `staff-${Date.now()}-b`;
             const notesArr = Array.isArray(data.notes) ? data.notes : [];
             setStaves([
-              { id: id1, instrumentId: 'piano', clefType: 'treble', notes: notesArr, braceGroupId, notationMode: data.notationMode ?? 'traditional' },
-              { id: id2, instrumentId: 'piano', clefType: 'bass', notes: [], braceGroupId, notationMode: data.notationMode ?? 'traditional' }
+              { id: id1, instrumentId: 'piano', clefType: 'treble', notes: notesArr, braceGroupId, notationMode: restoredNotationMode || 'traditional' },
+              { id: id2, instrumentId: 'piano', clefType: 'bass', notes: [], braceGroupId, notationMode: restoredNotationMode || 'traditional' }
             ]);
           } else {
-            setStaves([{ id: '1', instrumentId: instId, clefType: (cfg?.defaultClef) || data.clefType || 'treble', notes: data.notes ?? [], notationMode: data.notationMode ?? 'traditional' }]);
+            setStaves([{ id: '1', instrumentId: instId, clefType: (cfg?.defaultClef) || data.clefType || 'treble', notes: data.notes ?? [], notationMode: restoredNotationMode || 'traditional' }]);
           }
           setActiveStaffIndex(0);
         }
@@ -3528,8 +3552,7 @@ function NoodiMeisterCore({ icons }) {
         if (data.timeSignatureMode) setTimeSignatureMode(data.timeSignatureMode);
         if (data.keySignature) setKeySignature(data.keySignature);
         if (data.staffLines != null) setStaffLines(data.staffLines);
-        if (data.notationStyle) setNotationStyle(data.notationStyle);
-        else if (data.gridOnlyMode != null) setNotationStyle(data.gridOnlyMode ? 'FIGURENOTES' : 'TRADITIONAL');
+        if (restoredNotationStyle) setNotationStyle(restoredNotationStyle);
         if (data.pixelsPerBeat != null) setPixelsPerBeat(data.pixelsPerBeat);
         if (data.figurenotesSize != null) setFigurenotesSize(Math.max(12, Math.min(500, data.figurenotesSize)));
         if (data.figurenotesStems != null) setFigurenotesStems(!!data.figurenotesStems);
@@ -3538,7 +3561,7 @@ function NoodiMeisterCore({ icons }) {
       if ('figurenotesChordBlocksShowTones' in data) setFigurenotesChordBlocksShowTones(!!data.figurenotesChordBlocksShowTones);
       if ('figurenotesMelodyShowNoteNames' in data) setFigurenotesMelodyShowNoteNames(!!data.figurenotesMelodyShowNoteNames);
       if (data.timeSignatureSize != null) setTimeSignatureSize(Math.max(12, Math.min(48, data.timeSignatureSize)));
-      if (data.notationMode) setNotationMode(data.notationMode);
+      if (restoredNotationMode) setNotationMode(restoredNotationMode);
       if (data.noteheadShape) setNoteheadShape(data.noteheadShape);
       if (data.noteheadEmoji != null) setNoteheadEmoji(data.noteheadEmoji);
       if (data.instrumentNotationVariant) setInstrumentNotationVariant(data.instrumentNotationVariant);
@@ -4588,7 +4611,7 @@ function NoodiMeisterCore({ icons }) {
     const acc = accidental !== undefined
       ? accidental
       : (notationStyle === 'FIGURENOTES' ? getAccidentalForPitchInKey(pitch, keySignature) : ghostAccidental);
-    const durationLabel = lastDurationRef.current ?? selectedDuration;
+    const durationLabel = options.overrideDurationLabel || lastDurationRef.current || selectedDuration;
     let effectiveDuration = getEffectiveDuration(durationLabel);
     let tupletPayload = null;
     if (tupletMode) {
@@ -10635,10 +10658,10 @@ function NoodiMeisterCore({ icons }) {
                         lastBeatClickForLyricRef.current = { beat: beatPosition, at: Date.now() };
                         const draft = mouseInsertDraftRef.current;
                         // Mängi noot kursori kohal (N- ja SEL-režiim), kui liigutame ainult kursorit (mitte teise klõpsuga noodit).
-                        if (!draft || !draft.startBeat) playNoteAtBeatIfEnabled(beatPosition);
+                        if (!draft || draft.startBeat == null) playNoteAtBeatIfEnabled(beatPosition);
                         if (!mousePitchInputEnabled || !noteInputModeRef.current) return;
                         // First click: pick up a draft note (no insertion yet).
-                        if (!draft || !draft.startBeat) {
+                        if (!draft || draft.startBeat == null) {
                           const pitch = ghostPitch || 'C';
                           const octave = typeof ghostOctave === 'number' ? ghostOctave : 4;
                           setMouseInsertDraft({
@@ -10653,7 +10676,7 @@ function NoodiMeisterCore({ icons }) {
                           return;
                         }
                         // Second click: drop the note at chosen beat.
-                        const beat = beatPosition != null ? beatPosition : draft.currentBeat || draft.startBeat;
+                        const beat = beatPosition != null ? beatPosition : (draft.currentBeat ?? draft.startBeat ?? 0);
                         const pitch = draft.pitch || ghostPitch || 'C';
                         const octave = typeof draft.octave === 'number' ? draft.octave : (ghostOctave ?? 4);
                         const durLabel = draft.durationLabel || selectedDuration || '1/4';
