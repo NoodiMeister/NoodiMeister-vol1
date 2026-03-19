@@ -1136,6 +1136,7 @@ function NoodiMeisterCore({ icons }) {
   const [partLayoutMeasuresPerLine, setPartLayoutMeasuresPerLine] = useState(4);
   const [partLayoutLineBreakBeforeByMode, setPartLayoutLineBreakBeforeByMode] = useState({});
   const [partLayoutPageBreakBeforeByMode, setPartLayoutPageBreakBeforeByMode] = useState({});
+  const [measureRepeatMarksByMode, setMeasureRepeatMarksByMode] = useState({});
   const [partLayoutExtraPages, setPartLayoutExtraPages] = useState(0);
   const [showPageNavigator, setShowPageNavigator] = useState(false);
   /** When true, scale the score so one A4 page fits in the visible area (whole page layout on screen). */
@@ -1526,8 +1527,6 @@ function NoodiMeisterCore({ icons }) {
   const [textBoxes, setTextBoxes] = useState([]); // { id, x, y, text, type?: 'text'|'tempo', tempoBpm?: number, fontSize?: number }
   const [selectedTextboxId, setSelectedTextboxId] = useState(null);
   const [textBoxDraftText, setTextBoxDraftText] = useState(''); // vaba tekst enne lisamist
-  // Kordusmärgid ja hüpped (Leland SMuFL) – võtmeks takti indeks: repeatStart, repeatEnd, volta1, volta2, segno, coda
-  const [measureRepeatMarksByMode, setMeasureRepeatMarksByMode] = useState({});
   const [textBoxTempoBpm, setTextBoxTempoBpm] = useState(''); // BPM tempo kasti jaoks
   // Fondid: dokumendi font (pealkiri, autor, teksti kastid) ja laulutekstide font (noodi all)
   const [documentFontFamily, setDocumentFontFamily] = useState('Georgia, serif');
