@@ -180,6 +180,11 @@ export function buildScoreSceneSnapshot (options = {}) {
   const {
     pageDesignDataUrl,
     pageDesignOpacity = 0.25,
+    pageDesignFit = 'cover',
+    pageDesignPositionX = 50,
+    pageDesignPositionY = 50,
+    pageDesignCrop = null,
+    pageDesignLayer = 'behind',
     footerText = '',
     contentWidth: explicitContentWidth,
     contentHeight: explicitContentHeight,
@@ -222,6 +227,18 @@ export function buildScoreSceneSnapshot (options = {}) {
     footerText: String(footerText || ''),
     pageDesignDataUrl: pageDesignDataUrl || '',
     pageDesignOpacity: Math.max(0, Math.min(1, Number(pageDesignOpacity) || 0.25)),
+    pageDesignFit: pageDesignFit === 'contain' ? 'contain' : 'cover',
+    pageDesignPositionX: Math.max(0, Math.min(100, Number(pageDesignPositionX) || 50)),
+    pageDesignPositionY: Math.max(0, Math.min(100, Number(pageDesignPositionY) || 50)),
+    pageDesignCrop: pageDesignCrop && typeof pageDesignCrop === 'object'
+      ? {
+          top: Math.max(0, Math.min(50, Number(pageDesignCrop.top) || 0)),
+          right: Math.max(0, Math.min(50, Number(pageDesignCrop.right) || 0)),
+          bottom: Math.max(0, Math.min(50, Number(pageDesignCrop.bottom) || 0)),
+          left: Math.max(0, Math.min(50, Number(pageDesignCrop.left) || 0)),
+        }
+      : { top: 0, right: 0, bottom: 0, left: 0 },
+    pageDesignLayer: pageDesignLayer === 'inFront' ? 'inFront' : 'behind',
   };
 }
 
@@ -304,27 +321,63 @@ export function getPageSvgString (defsString, contentString, pageModel, pageInde
   const { pageMetrics, flowDirection, pageCount } = normalized;
   const PAGE_W = pageMetrics.widthPx;
   const PAGE_H = pageMetrics.heightPx;
+  const mergedOverlays = {
+    footerText: pageModel?.footerText,
+    pageDesignDataUrl: pageModel?.pageDesignDataUrl,
+    pageDesignOpacity: pageModel?.pageDesignOpacity,
+    pageDesignFit: pageModel?.pageDesignFit,
+    pageDesignPositionX: pageModel?.pageDesignPositionX,
+    pageDesignPositionY: pageModel?.pageDesignPositionY,
+    pageDesignCrop: pageModel?.pageDesignCrop,
+    pageDesignLayer: pageModel?.pageDesignLayer,
+    ...(overlays || {}),
+  };
   const x = flowDirection === 'horizontal' ? -pageIndex * PAGE_W : 0;
   const y = flowDirection === 'vertical' ? -pageIndex * PAGE_H : 0;
   // Avoid 1–3 px clipping at page edges (strokes/markers), which can differ by OS/browser.
   // Keep the page size exact, but allow a tiny bleed inside the page clip.
   const BLEED = 2;
-  const background = (() => {
-    const href = overlays && typeof overlays.pageDesignDataUrl === 'string' ? overlays.pageDesignDataUrl.trim() : '';
-    if (!href) return '';
-    const opacity = Number.isFinite(Number(overlays.pageDesignOpacity))
-      ? Math.max(0, Math.min(1, Number(overlays.pageDesignOpacity)))
+  const pageDesignMarkup = (() => {
+    const href = typeof mergedOverlays.pageDesignDataUrl === 'string' ? mergedOverlays.pageDesignDataUrl.trim() : '';
+    if (!href) return { behind: '', front: '' };
+    const opacity = Number.isFinite(Number(mergedOverlays.pageDesignOpacity))
+      ? Math.max(0, Math.min(1, Number(mergedOverlays.pageDesignOpacity)))
       : 0.25;
-    return `<image href="${String(href).replace(/"/g, '&quot;')}" x="0" y="0" width="${PAGE_W}" height="${PAGE_H}" preserveAspectRatio="xMidYMid slice" opacity="${opacity}"/>`;
+    const fit = mergedOverlays.pageDesignFit === 'contain' ? 'contain' : 'cover';
+    const posX = Math.max(0, Math.min(100, Number(mergedOverlays.pageDesignPositionX) || 50));
+    const posY = Math.max(0, Math.min(100, Number(mergedOverlays.pageDesignPositionY) || 50));
+    const crop = mergedOverlays.pageDesignCrop && typeof mergedOverlays.pageDesignCrop === 'object'
+      ? {
+          top: Math.max(0, Math.min(50, Number(mergedOverlays.pageDesignCrop.top) || 0)),
+          right: Math.max(0, Math.min(50, Number(mergedOverlays.pageDesignCrop.right) || 0)),
+          bottom: Math.max(0, Math.min(50, Number(mergedOverlays.pageDesignCrop.bottom) || 0)),
+          left: Math.max(0, Math.min(50, Number(mergedOverlays.pageDesignCrop.left) || 0)),
+        }
+      : { top: 0, right: 0, bottom: 0, left: 0 };
+    const alignX = posX < 33 ? 'xMin' : posX > 66 ? 'xMax' : 'xMid';
+    const alignY = posY < 33 ? 'YMin' : posY > 66 ? 'YMax' : 'YMid';
+    const preserveAspectRatio = fit === 'contain'
+      ? `${alignX}${alignY} meet`
+      : `${alignX}${alignY} slice`;
+    const image = fit === 'cover' || fit === 'contain'
+      ? `<image href="${String(href).replace(/"/g, '&quot;')}" x="0" y="0" width="${PAGE_W}" height="${PAGE_H}" preserveAspectRatio="${preserveAspectRatio}" opacity="${opacity}"/>`
+      : `<image href="${String(href).replace(/"/g, '&quot;')}" x="0" y="0" width="${PAGE_W}" height="${PAGE_H}" preserveAspectRatio="none" opacity="${opacity}"/>`;
+    const cropId = `pageDesignCrop-${pageIndex}`;
+    const hasCrop = crop.top > 0 || crop.right > 0 || crop.bottom > 0 || crop.left > 0;
+    const cropped = hasCrop
+      ? `<defs><clipPath id="${cropId}"><rect x="${(crop.left / 100) * PAGE_W}" y="${(crop.top / 100) * PAGE_H}" width="${PAGE_W - ((crop.left + crop.right) / 100) * PAGE_W}" height="${PAGE_H - ((crop.top + crop.bottom) / 100) * PAGE_H}"/></clipPath></defs><g clip-path="url(#${cropId})">${image}</g>`
+      : image;
+    if (mergedOverlays.pageDesignLayer === 'inFront') return { behind: '', front: cropped };
+    return { behind: cropped, front: '' };
   })();
   const footer = (() => {
-    const text = overlays && typeof overlays.footerText === 'string' ? overlays.footerText.trim() : '';
+    const text = typeof mergedOverlays.footerText === 'string' ? mergedOverlays.footerText.trim() : '';
     if (!text) return '';
-    const align = overlays.footerAlignment === 'left' || overlays.footerAlignment === 'right' ? overlays.footerAlignment : 'center';
+    const align = mergedOverlays.footerAlignment === 'left' || mergedOverlays.footerAlignment === 'right' ? mergedOverlays.footerAlignment : 'center';
     const x = align === 'left' ? 40 : align === 'right' ? (PAGE_W - 40) : (PAGE_W / 2);
     const anchor = align === 'left' ? 'start' : align === 'right' ? 'end' : 'middle';
-    const fontSize = Number.isFinite(Number(overlays.footerFontSize)) ? Math.max(8, Math.min(18, Number(overlays.footerFontSize))) : 10;
-    const opacity = Number.isFinite(Number(overlays.footerOpacity)) ? Math.max(0.2, Math.min(1, Number(overlays.footerOpacity))) : 0.85;
+    const fontSize = Number.isFinite(Number(mergedOverlays.footerFontSize)) ? Math.max(8, Math.min(18, Number(mergedOverlays.footerFontSize))) : 10;
+    const opacity = Number.isFinite(Number(mergedOverlays.footerOpacity)) ? Math.max(0.2, Math.min(1, Number(mergedOverlays.footerOpacity))) : 0.85;
     const style = `font-family: ExportBody, serif; font-size: ${fontSize}px; fill: #57534e; opacity: ${opacity};`;
     const yPos = PAGE_H - 26;
     return `<text x="${x}" y="${yPos}" text-anchor="${anchor}" dominant-baseline="middle" style="${style}">${escapeXml(text)}</text>`;
@@ -332,8 +385,9 @@ export function getPageSvgString (defsString, contentString, pageModel, pageInde
   return `<svg xmlns="${XMLNS}" viewBox="0 0 ${PAGE_W} ${PAGE_H}" width="${PAGE_W}" height="${PAGE_H}" overflow="visible">
 ${defsString}
 <defs><clipPath id="pageClip"><rect x="${BLEED}" y="${BLEED}" width="${PAGE_W - 2 * BLEED}" height="${PAGE_H - 2 * BLEED}"/></clipPath></defs>
-${background}
+${pageDesignMarkup.behind}
 <g transform="translate(${x}, ${y})" clip-path="url(#pageClip)">${contentString}</g>
+${pageDesignMarkup.front}
 ${footer}
 </svg>`;
 }

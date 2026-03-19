@@ -6,6 +6,7 @@ import {
   isLoggedIn,
   KEY_MICROSOFT_TOKEN,
   KEY_MICROSOFT_EXPIRY,
+  clearGoogleAuthSession,
   setLoggedInUser,
 } from './services/authStorage';
 import { LOCALE_STORAGE_KEY, DEFAULT_LOCALE, getTranslations } from './i18n';
@@ -163,6 +164,7 @@ export default function MicrosoftRedirectHandler() {
               setErrorMessage(t['auth.storageNotAvailable'] || 'Salvestus ei ole saadaval.');
               return;
             }
+            clearGoogleAuthSession();
             storage.setItem(KEY_MICROSOFT_TOKEN, accessToken);
             const expiresAt = result.expiresOn ? result.expiresOn.getTime() : 0;
             storage.setItem(KEY_MICROSOFT_EXPIRY, String(expiresAt));

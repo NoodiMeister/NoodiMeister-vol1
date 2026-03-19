@@ -226,10 +226,36 @@ export function setLoggedInUser(user, rememberMe = false) {
   return sessionUser;
 }
 
+export function clearGoogleAuthSession() {
+  if (typeof window === 'undefined') return;
+  try {
+    [window.sessionStorage, window.localStorage].forEach((s) => {
+      if (s) {
+        s.removeItem(KEY_GOOGLE_TOKEN);
+        s.removeItem(KEY_GOOGLE_EXPIRY);
+      }
+    });
+  } catch (_) {}
+}
+
+export function clearMicrosoftAuthSession() {
+  if (typeof window === 'undefined') return;
+  try {
+    [window.sessionStorage, window.localStorage].forEach((s) => {
+      if (s) {
+        s.removeItem(KEY_MICROSOFT_TOKEN);
+        s.removeItem(KEY_MICROSOFT_EXPIRY);
+      }
+    });
+    clearMsalCache();
+  } catch (_) {}
+}
+
 /** Google token (Drive) – loetakse samast salvestusest kui sisselogimine. */
 export function getStoredTokenFromAuth() {
   const storage = getStorageForRead();
   if (!storage) return null;
+  if (getLoggedInUser()?.provider !== 'google') return null;
   const token = storage.getItem(KEY_GOOGLE_TOKEN);
   const expiry = storage.getItem(KEY_GOOGLE_EXPIRY);
   if (!token) return null;
@@ -244,6 +270,7 @@ export function getStoredTokenFromAuth() {
 export function getStoredMicrosoftTokenFromAuth() {
   const storage = getStorageForRead();
   if (!storage) return null;
+  if (getLoggedInUser()?.provider !== 'microsoft') return null;
   const token = storage.getItem(KEY_MICROSOFT_TOKEN);
   const expiry = storage.getItem(KEY_MICROSOFT_EXPIRY);
   if (!token) return null;

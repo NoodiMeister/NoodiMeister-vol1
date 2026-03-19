@@ -1,16 +1,10 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { GoogleOAuthProvider } from '@react-oauth/google';
-import '@fontsource/bravura';
-import '@fontsource/noto-serif/400.css';
-import '@fontsource/noto-serif/400-italic.css';
-import '@fontsource/noto-serif/700.css';
-import '@fontsource/noto-serif/700-italic.css';
-import '@fontsource/noto-sans/400.css';
-import '@fontsource/noto-sans/700.css';
 import './utils/notationConstants'; // Lae enne Appi – vältib TDZ/ReferenceError lazy chunkides (Vercel)
 import App from './App';
 import MicrosoftRedirectHandler from './MicrosoftRedirectHandler';
+import { installRuntimeFontFaces, warmRuntimeFonts, loadOptionalInstrumentFonts } from './export/exportFontAssets';
 import './index.css';
 
 // Kõik leheküljed vaikimisi hele režiimis. Salvestatud teema rakendub pärast rakenduse laadimist.
@@ -50,6 +44,9 @@ try {
   const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
   const rootEl = document.getElementById('root');
   if (!rootEl) throw new Error('Element #root ei leitud. Kontrolli index.html.');
+  installRuntimeFontFaces(document);
+  warmRuntimeFonts(document).catch(() => {});
+  loadOptionalInstrumentFonts(document).catch(() => {});
   const root = ReactDOM.createRoot(rootEl);
 
   const hash = typeof window !== 'undefined' ? (window.location.hash || '') : '';

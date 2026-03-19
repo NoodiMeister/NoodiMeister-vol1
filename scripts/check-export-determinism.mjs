@@ -16,15 +16,15 @@ async function read(relativePath) {
 async function main() {
   const scoreToSvg = await read('src/utils/scoreToSvg.js');
   const app = await read('src/noodimeister-complete.jsx');
-  const css = await read('src/index.css');
+  const exportFontAssets = await read('src/export/exportFontAssets.js');
 
   assert(scoreToSvg.includes('export function buildScoreSceneSnapshot'), 'Missing DOM-free scene snapshot builder.');
   assert(!scoreToSvg.includes('local("serif")'), 'Export defs still depend on local serif fallback.');
   assert(app.includes('buildScoreSceneSnapshot('), 'Preview/PDF path is not using the scene snapshot builder.');
   assert(app.includes('renderToStaticMarkup('), 'Export scene is not rendered from deterministic React markup.');
   assert(app.includes('pageDiv.innerHTML = pageSvg;'), 'Print preview is not using inline SVG pages.');
-  assert(css.includes("@font-face {\n  font-family: 'Leland';"), 'Leland alias font-face is missing.');
-  assert(css.includes('@fontsource/bravura/files/bravura-latin-400-normal.woff2'), 'Leland is not mapped to bundled Bravura.');
+  assert(exportFontAssets.includes("font-family: 'Leland'"), 'Leland alias font-face is missing.');
+  assert(exportFontAssets.includes('@fontsource/bravura/files/bravura-latin-400-normal.woff2'), 'Leland is not mapped to bundled Bravura.');
 
   console.log('Export determinism smoke checks passed.');
 }

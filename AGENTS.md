@@ -8,10 +8,11 @@ Noodimeister peab käituma “õpetaja tööriistana”: võimalikult vähe üll
 
 Kõik muudatused peavad hoidma kasutaja teekonnad tervena:
 
-- **Auth**: sama kasutaja saab registreerida ja sisse logida isikliku konto / Google / Microsoft kanaliga.
+- **Auth**: kasutaja saab registreerida ja sisse logida isikliku konto / Google / Microsoft kanaliga, kuid identiteeti ei tohi automaatselt kokku liita üle providerite. `provider + email` moodustab konto identiteedi; erinevad Google/Microsoft e-mailid peavad jääma eraldi kontodeks ja eraldi tööruumideks.
 - **Minu tööd**: kaustade ja failide loomine + haldus (loodud tööde turvaline säilimine).
 - **No-overwrite**: failid ei tohi üksteist üle kirjutada; konfliktid lahendatakse selgelt (rename/duplicate/version), mitte vaikimisi overwrite’iga.
 - **Noodistusmootor**: noodi/akordi sisestus ja eemaldus peab olema deterministlik, kursor ei tohi skip’ida ega “joosta”.
+- **Sisestuse kvaliteet**: tekstikastide, nootide, akordide, TAB-ide ja fingering-märkide sisestus peab töötama sujuvalt, täpselt ja ilma lag'ita; ükski sisestus ei tohi juhuslikult dubleeruda, kaduda või nihkuda.
 - **Režiimid**: traditional / figurenotes / pedagogical on eraldiseisvad režiimid; pedagoogiline sisaldab mitut sisestusrežiimi.
 - **Eksport & print**: PDF eelvaade ja print preview peavad vastama prinditavale alale; ei mingeid suvalisi lõikamisi või ümberpaigutusi.
 
@@ -47,4 +48,9 @@ Kõik muudatused peavad hoidma kasutaja teekonnad tervena:
 - **Standard: veateated kasutajale**
   - kasutajale: inimkeelne selgitus + järgmine samm
   - arendajale: struktureeritud info (allikas, kood, kirjeldus)
+
+- **Standard: sisestus peab tunduma “pro-grade”**
+  - tekstikasti loomine, noodi sisestus, TAB/fingering ja akordi sisestus peavad reageerima kohe ja ennustatavalt
+  - sisestusvoogudes ei tohi olla märgatavat lag'i, topeltsisestust, vahelejätmisi ega cursor-jitter'it
+  - enne sisestusloogika muutmist võrdle käitumist MuseScore/Finale/Sibelius tüüpi töövoogudega
 

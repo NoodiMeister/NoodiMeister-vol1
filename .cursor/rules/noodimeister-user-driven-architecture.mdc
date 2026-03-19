@@ -9,14 +9,15 @@ Noodimeistri arhitektuur peab lähtuma kasutaja “teekondadest”. Kõik muudat
 
 ## Kasutaja teekonnad, mida ei tohi lõhkuda
 
-- **Auth**: kasutaja saab registreerida ja sisse logida sama kontoga, olenemata kanalist:
-  - isiklik keskkond (e-mail/parool vms)
-  - Google
-  - Microsoft
+- **Auth**: kasutaja saab registreerida ja sisse logida isikliku konto / Google / Microsoft kaudu, kuid identiteeti ei tohi vaikimisi kokku liita üle providerite.
+  - konto identiteet on `provider + email`
+  - erinevad Google ja Microsoft e-mailid peavad jääma eraldi kontodeks
+  - eraldi kontodel peavad olema eraldi tööruumid, sessioonid ja pilvekäitumine
 - **Minu tööd**: kasutaja saab luua/halda kaustu ja faile, ning hallata loodud töid (nimetamine, liigutamine, kustutamine, avamine).
 - **Failide ohutus**: kasutaja ei tohi kogeda, et failid kirjutavad üksteist üle või “kaovad”.
 - **Noodistusmootor**: sisestus/eemaldus (noot + akord) peab olema deterministlik ja ennustatav.
 - **Tekstikastid**: kasutaja lohistab/valib ala → tekstikast tekib täpselt sinna; eelvaated/vaated peavad olema identsed.
+- **Sisestuse sujuvus**: teksti, nootide, akordide, TAB-ide ja fingering-märkide sisestus peab töötama ilma lag'i, topeltsisestuse, vahelejätmiste või juhuslike nihkumisteta.
 - **Režiimid**: `traditional`, `figurenotes`, `pedagogical` on **eraldiseisvad režiimid** (erinevad reeglid, layout, sümbolid).
   - `pedagogical` sisaldab omakorda mitut sisestusrežiimi; neid ei tohi “ühte patta” segada.
 - **Kursor ja layout**: kursor ei tohi “joosta kokku/laiali”, vahele jätta noote, või valesti positsioneeruda ühegi režiimi all.
@@ -34,6 +35,7 @@ Noodimeistri arhitektuur peab lähtuma kasutaja “teekondadest”. Kõik muudat
   - salvestus peab olema kas “create new” või “update existing by id/version”
   - konfliktid lahendatakse selgelt (rename/duplicate/version), mitte vaikimisi overwrite’iga
 - **Deterministlik render**: sama sisend (notes, modes, layoutOptions) → sama väljund (SVG/PDF layout).
+- **Sisestus peab jääma kergeks**: sisestusvoogudes väldi tarbetuid täis-renderdusi, globaalseid kõrvalmõjusid ja DOM/oleku muudatusi, mis võivad põhjustada tajutavat viivitust.
 - **Režiimi piirid**: režiimispetsiifiline loogika elab `src/notation/**` ja `src/layout/**` all, mitte suvaliselt UI sees.
 
 ## Kui ei tea, mis on “õige käitumine”

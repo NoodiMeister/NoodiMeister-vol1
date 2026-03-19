@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useGoogleLogin } from '@react-oauth/google';
 import { useNavigate } from 'react-router-dom';
-import { getStorageForLogin, getStorageForRead, getLoggedInUser, isLoggedIn, setLoggedInUser } from '../services/authStorage';
+import { getStorageForLogin, getStorageForRead, getLoggedInUser, isLoggedIn, setLoggedInUser, clearMicrosoftAuthSession, KEY_GOOGLE_TOKEN, KEY_GOOGLE_EXPIRY } from '../services/authStorage';
 import { formatAuthError } from '../utils/authError';
 import { LOCALE_STORAGE_KEY, DEFAULT_LOCALE, getTranslations } from '../i18n';
 
@@ -22,12 +22,6 @@ function getMicrosoftTesterEmails() {
   if (!raw || typeof raw !== 'string') return [];
   return raw.split(',').map((e) => e.trim().toLowerCase()).filter(Boolean);
 }
-
-const KEY_LOGGED_IN = 'noodimeister-logged-in';
-const KEY_GOOGLE_TOKEN = 'noodimeister-google-token';
-const KEY_GOOGLE_EXPIRY = 'noodimeister-google-token-expiry';
-const KEY_MICROSOFT_TOKEN = 'noodimeister-microsoft-token';
-const KEY_MICROSOFT_EXPIRY = 'noodimeister-microsoft-token-expiry';
 
 const microsoftClientId = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_MICROSOFT_CLIENT_ID) || '';
 const microsoftTenantId = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_MICROSOFT_TENANT_ID) || 'common';
@@ -350,6 +344,7 @@ function useCloudLoginWithProvider(mode = 'login', stayLoggedIn = false, onError
             if (onError) onError(payload);
             return;
           }
+          clearMicrosoftAuthSession();
           if (tokenResponse.access_token) {
             storage.setItem(KEY_GOOGLE_TOKEN, tokenResponse.access_token);
             const expiresAt = tokenResponse.expires_in ? Date.now() + tokenResponse.expires_in * 1000 : 0;

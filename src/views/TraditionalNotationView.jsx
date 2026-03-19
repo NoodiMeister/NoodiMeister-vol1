@@ -34,6 +34,7 @@ import {
   getBeamGap,
 } from '../notation/BeamCalculation';
 import { renderFiguredBassFigurations } from '../notation/figuredBassFigurations';
+import { hasBundledOptionalFont } from '../export/exportFontAssets';
 
 const LAYOUT = { MARGIN_LEFT: 60, CLEF_WIDTH: 45, MEASURE_MIN_WIDTH: 28 };
 const PAGE_BREAK_GAP = 80;
@@ -258,9 +259,19 @@ export function TraditionalNotationView({
   const centerY = timelineHeight / 2;
   const timeSigTextColor = themeColors?.textColor ?? '#333';
   const timeSigNoteFill = themeColors?.noteFill ?? '#333';
+  const [, setOptionalFontVersion] = useState(0);
   const [noteDrag, setNoteDrag] = useState(null); // { noteIndex, staffY } when dragging a note to change pitch
   const [noteBeatDrag, setNoteBeatDrag] = useState(null); // { noteIndex, startClientX } when hand tool dragging note to new beat
   const lastPitchRef = useRef(null); // avoid duplicate updates when pitch unchanged
+  const tinWhistleFontFamily = hasBundledOptionalFont('TinWhistleTab') ? 'TinWhistleTab' : 'Noto Sans';
+  const recorderFontFamily = hasBundledOptionalFont('RecorderFont') ? 'RecorderFont' : 'Noto Sans';
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    const handleOptionalFontsChanged = () => setOptionalFontVersion((v) => v + 1);
+    window.addEventListener('noodimeister-optional-fonts-changed', handleOptionalFontsChanged);
+    return () => window.removeEventListener('noodimeister-optional-fonts-changed', handleOptionalFontsChanged);
+  }, []);
 
   // Layout: must be before measureLayout useMemo (which uses effectiveMarginLeft)
   const staffLeft = (isFirstInBraceGroup && braceGroupSize >= 2) ? STAFF_LEFT_WITH_BRACE : STAFF_LEFT_WITHOUT_BRACE;
@@ -1007,7 +1018,7 @@ export function TraditionalNotationView({
                                 dominantBaseline="auto"
                                 fontSize={Math.max(12, spacing * 1.4)}
                                 fill="var(--note-fill, #1a1a1a)"
-                                fontFamily="TinWhistleTab, sans-serif"
+                                fontFamily={tinWhistleFontFamily}
                               >
                                 {name}
                               </text>
@@ -1026,7 +1037,7 @@ export function TraditionalNotationView({
                                 dominantBaseline="auto"
                                 fontSize={Math.max(12, spacing * 1.4)}
                                 fill="var(--note-fill, #1a1a1a)"
-                                fontFamily="RecorderFont, sans-serif"
+                                fontFamily={recorderFontFamily}
                               >
                                 {char}
                               </text>

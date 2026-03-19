@@ -4,32 +4,8 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Traditional notation: alias the legacy font names to bundled, deterministic webfonts. */
-@font-face {
-  font-family: 'Leland';
-  src: url('@fontsource/bravura/files/bravura-latin-400-normal.woff2') format('woff2');
-  font-display: swap;
-}
-
-@font-face {
-  font-family: 'LelandText';
-  src: url('@fontsource/noto-serif/files/noto-serif-latin-400-normal.woff2') format('woff2');
-  font-display: swap;
-}
-
-/* Tin whistle fingering / tab notation (a, b, c, d, e, f, g, c#). */
-@font-face {
-  font-family: 'TinWhistleTab';
-  src: url('/fonts/TinWhistleTab.ttf') format('truetype');
-  font-display: swap;
-}
-
-/* Recorder finger tables (soprano C). */
-@font-face {
-  font-family: 'RecorderFont';
-  src: url('/fonts/RecorderFont-BYDx.ttf') format('truetype');
-  font-display: swap;
-}
+/* Optional fingering fonts are loaded at runtime only when the files actually exist.
+   This avoids build-time broken asset warnings and keeps fallback rendering deterministic. */
 
 html, body, #root {
   margin: 0;
