@@ -56,6 +56,8 @@ export default function MinuTöödPage() {
   const [oneDriveLoading, setOneDriveLoading] = useState(false);
   const [error, setError] = useState(null);
   const [oneDriveError, setOneDriveError] = useState(null);
+  const [googleNotice, setGoogleNotice] = useState(null);
+  const [oneDriveNotice, setOneDriveNotice] = useState(null);
   const [user, setUser] = useState(null);
   const [authReady, setAuthReady] = useState(false);
   const [locale, setLocaleState] = useState(() => {
@@ -157,7 +159,10 @@ export default function MinuTöödPage() {
           const local = authStorage.getGoogleSaveFolders();
           if (local.length > 0) await googleDrive.setSaveFoldersConfig(token, local);
         }
-      } catch (_) { /* jäta lokaal nimekiri alles */ }
+        setGoogleNotice(null);
+      } catch (e) {
+        setGoogleNotice(e?.message || (t['mywork.worksLoadError'] || 'Google Drive sünkroonimine ebaõnnestus. Kontrolli ühendust või logi uuesti sisse.'));
+      }
     }
     if (microsoftToken) {
       try {
@@ -168,10 +173,13 @@ export default function MinuTöödPage() {
           const local = authStorage.getOneDriveSaveFolders();
           if (local.length > 0) await oneDrive.setSaveFoldersConfig(microsoftToken, local);
         }
-      } catch (_) { /* jäta lokaal nimekiri alles */ }
+        setOneDriveNotice(null);
+      } catch (e) {
+        setOneDriveNotice(e?.message || (t['mywork.oneDriveLoadError'] || 'OneDrive sünkroonimine ebaõnnestus. Kontrolli ühendust või logi uuesti sisse.'));
+      }
     }
     refreshFolders();
-  }, [token, microsoftToken, refreshFolders]);
+  }, [token, microsoftToken, refreshFolders, t]);
 
   /** Salvesta praegune kaustade nimekiri pilve (sünkroonimiseks teise seadmega). */
   const syncFoldersToCloud = useCallback(async () => {
@@ -201,8 +209,10 @@ export default function MinuTöödPage() {
     }
     setLoading(true);
     setError(null);
+    setGoogleNotice(null);
     try {
       const byId = {};
+      const failedFolders = [];
       await Promise.all(
         folders.map(async (f) => {
           try {
@@ -210,10 +220,14 @@ export default function MinuTöödPage() {
             byId[f.id] = list;
           } catch {
             byId[f.id] = [];
+            failedFolders.push(f.name || f.id);
           }
         })
       );
       setFilesByGoogleFolderId(byId);
+      if (failedFolders.length > 0) {
+        setGoogleNotice(`Mõne Google Drive kausta sisu ei laaditud: ${failedFolders.join(', ')}. Kontrolli õigusi või logi uuesti sisse.`);
+      }
     } catch (e) {
       setError(e?.message || (t['mywork.worksLoadError'] || 'Tööde laadimine ebaõnnestus'));
       setFilesByGoogleFolderId({});
@@ -236,19 +250,26 @@ export default function MinuTöödPage() {
     }
     setOneDriveLoading(true);
     setOneDriveError(null);
+    setOneDriveNotice(null);
     try {
       const byId = {};
+      const failedFolders = [];
       await Promise.all(
         folders.map(async (f) => {
           try {
             const result = await oneDrive.listNoodimeisterFilesFromOneDrive(microsoftToken, f.id);
             byId[f.id] = result.ok ? (result.files || []) : [];
+            if (!result.ok) failedFolders.push(f.name || f.id);
           } catch {
             byId[f.id] = [];
+            failedFolders.push(f.name || f.id);
           }
         })
       );
       setFilesByOneDriveFolderId(byId);
+      if (failedFolders.length > 0) {
+        setOneDriveNotice(`Mõne OneDrive kausta sisu ei laaditud: ${failedFolders.join(', ')}. Kontrolli õigusi või logi uuesti sisse.`);
+      }
     } catch (e) {
       setOneDriveError(e?.message || (t['mywork.oneDriveLoadError'] || 'OneDrive laadimine ebaõnnestus'));
       setFilesByOneDriveFolderId({});
@@ -766,6 +787,11 @@ export default function MinuTöödPage() {
                 {error}
               </div>
             )}
+            {googleNotice && (
+              <div className="rounded-lg bg-amber-50 border border-amber-200 text-amber-900 p-4 mb-4">
+                {googleNotice}
+              </div>
+            )}
             {!loading && !error && googleFolders.length === 0 && (
               <p className="text-amber-700/90 dark:text-white/80 py-6">{t["mywork.noGoogleFilesHint"]}</p>
             )}
@@ -902,6 +928,11 @@ export default function MinuTöödPage() {
             {oneDriveError && (
               <div className="rounded-lg bg-red-50 border border-red-200 text-red-800 p-4 mb-4">
                 {oneDriveError}
+              </div>
+            )}
+            {oneDriveNotice && (
+              <div className="rounded-lg bg-amber-50 border border-amber-200 text-amber-900 p-4 mb-4">
+                {oneDriveNotice}
               </div>
             )}
             {!oneDriveLoading && !oneDriveError && oneDriveFolders.length === 0 && (

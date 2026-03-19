@@ -1,15 +1,12 @@
 /**
- * Noodilehe (ScorePage) serialiseerimine üheks SVG-ks.
- * viewBox lukustab A4 raami: portrait 794×1123 px, landscape 1123×794 px (297×210 mm).
- * Kasutatakse PDF eelvaate ja svg2pdf ekspordi jaoks.
+ * Noodilehe (ScorePage) serialiseerimine paged-SVG kujule.
+ * Kasutatakse PDF eelvaate, vektor-PDF ekspordi ja print SVG lehtede jaoks.
  */
 
-const XMLNS = 'http://www.w3.org/2000/svg';
+import { getExportOrientation, getPageCount, getPageMetrics } from './pageGeometry';
+import { getExportFontFaceCss, resolveExportTextFamily } from '../export/exportFontAssets';
 
-function getPageWh (orientation) {
-  const isLandscape = orientation === 'landscape';
-  return isLandscape ? { w: 1123, h: 794 } : { w: 794, h: 1123 };
-}
+const XMLNS = 'http://www.w3.org/2000/svg';
 
 function hasSmuflTimeSigDigits (text) {
   if (!text) return false;
@@ -25,7 +22,7 @@ function hasSmuflTimeSigDigits (text) {
  * rendering as random letters/diacritics. For export SVG only, convert those glyphs to
  * plain ASCII digits and force a system font.
  */
-function rewriteSmuflTimeSigDigitsToAscii (svgInnerHtml) {
+export function rewriteSmuflTimeSigDigitsToAscii (svgInnerHtml) {
   try {
     const doc = new DOMParser().parseFromString(
       `<svg xmlns="${XMLNS}">${svgInnerHtml}</svg>`,
@@ -67,26 +64,21 @@ function escapeXml (str) {
     .replace(/'/g, '&apos;');
 }
 
-/**
- * Ehitab @font-face defs, et pealkiri ja autor kasutaksid sama fonti (süsteemifondid).
- */
-function buildFontDefs (documentFontFamily, titleFontFamily) {
-  const titleFont = titleFontFamily || documentFontFamily || 'Georgia, serif';
-  const bodyFont = documentFontFamily || 'Georgia, serif';
-  const titleLocal = escapeXml(titleFont.split(',')[0].trim());
-  const bodyLocal = escapeXml(bodyFont.split(',')[0].trim());
+function buildFontDefs () {
   return `<defs>
-  <style type="text/css">
-    @font-face { font-family: 'ExportTitle'; src: local("${titleLocal}"), local("serif"); }
-    @font-face { font-family: 'ExportBody'; src: local("${bodyLocal}"), local("serif"); }
-  </style>
+  <style type="text/css"><![CDATA[
+${getExportFontFaceCss()}
+  ]]></style>
 </defs>`;
 }
 
 /**
  * Leiab konteinerist noodistiku SVG (suurim viewBox-iga svg).
  */
-function findNotationSvg (container) {
+function findNotationSvg (container, preferredSvg = null) {
+  if (preferredSvg && typeof preferredSvg.getAttribute === 'function' && preferredSvg.getAttribute('viewBox')) {
+    return preferredSvg;
+  }
   const svgs = container.querySelectorAll('svg[viewBox]');
   let best = null;
   let maxArea = 0;
@@ -106,13 +98,145 @@ function findNotationSvg (container) {
   return best;
 }
 
+function getRelativePosition (container, element) {
+  const containerRect = container?.getBoundingClientRect?.();
+  const elementRect = element?.getBoundingClientRect?.();
+  if (containerRect && elementRect && Number.isFinite(elementRect.left) && Number.isFinite(elementRect.top)) {
+    return {
+      x: Math.max(0, elementRect.left - containerRect.left + (container.scrollLeft || 0)),
+      y: Math.max(0, elementRect.top - containerRect.top + (container.scrollTop || 0)),
+    };
+  }
+
+  let x = 0;
+  let y = 0;
+  let el = element;
+  while (el && el !== container) {
+    x += el.offsetLeft || 0;
+    y += el.offsetTop || 0;
+    el = el.offsetParent;
+  }
+  return { x, y };
+}
+
+function normalizePageModel (pageModel = {}) {
+  const pageMetrics = pageModel.pageMetrics || getPageMetrics({
+    paperSize: pageModel.paperSize,
+    orientation: pageModel.orientation,
+  });
+  const flowDirection = pageModel.flowDirection === 'horizontal' ? 'horizontal' : 'vertical';
+  const contentWidth = Math.max(pageMetrics.widthPx, Number(pageModel.contentWidth) || pageMetrics.widthPx);
+  const contentHeight = Math.max(pageMetrics.heightPx, Number(pageModel.contentHeight) || pageMetrics.heightPx);
+  const pageExtent = flowDirection === 'horizontal' ? pageMetrics.widthPx : pageMetrics.heightPx;
+  return {
+    pageMetrics,
+    flowDirection,
+    contentWidth,
+    contentHeight,
+    pageCount: getPageCount(flowDirection === 'horizontal' ? contentWidth : contentHeight, pageExtent),
+  };
+}
+
+function buildScoreTextMarkup (pageWidth, options = {}) {
+  const {
+    songTitle = '',
+    author = '',
+    documentFontFamily = 'Noto Serif, serif',
+    titleFontFamily = '',
+    authorFontFamily = '',
+    titleFontSize = 55,
+    authorFontSize = 14,
+    titleBold = false,
+    titleItalic = false,
+    authorBold = false,
+    authorItalic = false,
+    titleAlignment = 'center',
+    authorAlignment = 'center',
+  } = options;
+  const anchor = titleAlignment === 'right' ? 'end' : titleAlignment === 'left' ? 'start' : 'middle';
+  const authorAnchor = authorAlignment === 'right' ? 'end' : authorAlignment === 'left' ? 'start' : 'middle';
+  const titleX = titleAlignment === 'left' ? 40 : titleAlignment === 'right' ? pageWidth - 40 : pageWidth / 2;
+  const authorX = authorAlignment === 'left' ? 40 : authorAlignment === 'right' ? pageWidth - 40 : pageWidth / 2;
+  const titleFamily = resolveExportTextFamily(titleFontFamily || documentFontFamily, 'ExportTitle');
+  const authorFamily = resolveExportTextFamily(authorFontFamily || documentFontFamily, 'ExportBody');
+  const titleStyle = `font-family: ${titleFamily}; font-size: ${titleFontSize}px; font-weight: ${titleBold ? '700' : '400'}; font-style: ${titleItalic ? 'italic' : 'normal'}; fill: #1c1917;`;
+  const authorStyle = `font-family: ${authorFamily}; font-size: ${authorFontSize}px; font-weight: ${authorBold ? '700' : '400'}; font-style: ${authorItalic ? 'italic' : 'normal'}; fill: #78716c;`;
+  return {
+    headerHeight: Math.max(160, 120 + 40),
+    titleText: `<text x="${titleX}" y="80" text-anchor="${anchor}" dominant-baseline="middle" style="${titleStyle}">${escapeXml(songTitle) || 'Nimetu'}</text>`,
+    authorText: `<text x="${authorX}" y="120" text-anchor="${authorAnchor}" dominant-baseline="middle" style="${authorStyle}">${escapeXml(author)}</text>`,
+  };
+}
+
+export function buildScoreSceneSnapshot (options = {}) {
+  const flowDirection = options.pageFlowDirection === 'horizontal' ? 'horizontal' : 'vertical';
+  const orientation = getExportOrientation(options.pageOrientation, flowDirection);
+  const pageMetrics = getPageMetrics({
+    paperSize: options.paperSize,
+    orientation,
+  });
+  const pageWidth = pageMetrics.widthPx;
+  const pageHeight = pageMetrics.heightPx;
+  const {
+    pageDesignDataUrl,
+    pageDesignOpacity = 0.25,
+    footerText = '',
+    contentWidth: explicitContentWidth,
+    contentHeight: explicitContentHeight,
+    sceneMarkup = '',
+    sceneX = 0,
+    sceneY = null,
+    sceneWidth = pageWidth,
+    sceneHeight = 0,
+    sceneViewBox = '',
+    overlayMarkup = '',
+  } = options;
+  const defsString = buildFontDefs();
+  const textMarkup = buildScoreTextMarkup(pageWidth, options);
+  const effectiveSceneY = Number.isFinite(Number(sceneY)) ? Number(sceneY) : textMarkup.headerHeight;
+  const sceneW = Math.max(1, Number(sceneWidth) || pageWidth);
+  const sceneH = Math.max(1, Number(sceneHeight) || 1);
+  const contentWidth = Math.max(pageWidth, Number(explicitContentWidth) || sceneW);
+  const contentHeight = Math.max(pageHeight, Number(explicitContentHeight) || (effectiveSceneY + sceneH + 40));
+  const viewBox = escapeXml(sceneViewBox || `0 0 ${sceneW} ${sceneH}`);
+  const sceneSvg = sceneMarkup
+    ? `<g transform="translate(${sceneX}, ${effectiveSceneY})"><svg xmlns="${XMLNS}" x="0" y="0" width="${sceneW}" height="${sceneH}" viewBox="${viewBox}" preserveAspectRatio="xMidYMin meet">${sceneMarkup}</svg></g>`
+    : '';
+  const contentString = `<g id="scoreContent">${textMarkup.titleText}${textMarkup.authorText}${sceneSvg}${overlayMarkup || ''}</g>`;
+  const pageModel = normalizePageModel({
+    pageMetrics,
+    flowDirection,
+    contentWidth,
+    contentHeight,
+  });
+  return {
+    defsString,
+    contentString,
+    pageMetrics,
+    contentWidth: pageModel.contentWidth,
+    contentHeight: pageModel.contentHeight,
+    flowDirection,
+    pageCount: pageModel.pageCount,
+    orientation,
+    paperSize: pageMetrics.paperSize,
+    footerText: String(footerText || ''),
+    pageDesignDataUrl: pageDesignDataUrl || '',
+    pageDesignOpacity: Math.max(0, Math.min(1, Number(pageDesignOpacity) || 0.25)),
+  };
+}
+
 /**
- * Tagastab { defsString, contentString, contentHeight }.
- * contentString on <g> sees: taust, pealkiri, autor, noodistiku SVG kloon.
+ * Tagastab paged-SVG mudeli, mida kasutavad preview/print/PDF.
  */
 export function scoreToSvg (container, options = {}) {
-  const orientation = options.pageOrientation === 'landscape' ? 'landscape' : 'portrait';
-  const { w: pageWidth, h: pageHeight } = getPageWh(orientation);
+  const flowDirection = options.pageFlowDirection === 'horizontal' ? 'horizontal' : 'vertical';
+  const orientation = getExportOrientation(options.pageOrientation, flowDirection);
+  const pageMetrics = getPageMetrics({
+    paperSize: options.paperSize,
+    orientation,
+  });
+  const pageWidth = pageMetrics.widthPx;
+  const pageHeight = pageMetrics.heightPx;
   const {
     pageDesignDataUrl,
     pageDesignOpacity = 0.25,
@@ -129,73 +253,70 @@ export function scoreToSvg (container, options = {}) {
     authorItalic = false,
     titleAlignment = 'center',
     authorAlignment = 'center',
+    contentWidth: explicitContentWidth,
+    contentHeight: explicitContentHeight,
+    notationSvgElement = null,
   } = options;
 
-  const contentHeight = Math.max(pageHeight, container.scrollHeight || pageHeight);
-  const defsString = buildFontDefs(documentFontFamily, titleFontFamily);
-
-  let bg = '';
-  if (pageDesignDataUrl) {
-    const opacity = Math.max(0, Math.min(1, Number(pageDesignOpacity) || 0.25));
-    const safeHref = String(pageDesignDataUrl).replace(/"/g, '&quot;');
-    bg = `<image href="${safeHref}" x="0" y="0" width="${pageWidth}" height="${contentHeight}" preserveAspectRatio="xMidYMid slice" opacity="${opacity}"/>`;
-  }
-
-  const titleY = 80;
-  const authorY = 120;
-  const anchor = titleAlignment === 'right' ? 'end' : titleAlignment === 'left' ? 'start' : 'middle';
-  const authorAnchor = authorAlignment === 'right' ? 'end' : authorAlignment === 'left' ? 'start' : 'middle';
-  const titleX = titleAlignment === 'left' ? 40 : titleAlignment === 'right' ? pageWidth - 40 : pageWidth / 2;
-  const authorX = authorAlignment === 'left' ? 40 : authorAlignment === 'right' ? pageWidth - 40 : pageWidth / 2;
-
-  const titleStyle = `font-family: ExportTitle, serif; font-size: ${titleFontSize}px; font-weight: ${titleBold ? 'bold' : 'normal'}; font-style: ${titleItalic ? 'italic' : 'normal'}; fill: #1c1917;`;
-  const authorStyle = `font-family: ExportBody, serif; font-size: ${authorFontSize}px; font-weight: ${authorBold ? 'bold' : 'normal'}; font-style: ${authorItalic ? 'italic' : 'normal'}; fill: #78716c;`;
-
-  const titleText = `<text x="${titleX}" y="${titleY}" text-anchor="${anchor}" dominant-baseline="middle" style="${titleStyle}">${escapeXml(songTitle) || 'Nimetu'}</text>`;
-  const authorText = `<text x="${authorX}" y="${authorY}" text-anchor="${authorAnchor}" dominant-baseline="middle" style="${authorStyle}">${escapeXml(author)}</text>`;
-
-  /* Pealkiri ja autor alati nootide KOHAL: noodistiku Y asetame alati päise alla (export-capture ajal võib offsetTop olla 0). */
-  const HEADER_HEIGHT = Math.max(160, authorY + 40);
-
-  let notationGroup = '';
-  const notationSvg = findNotationSvg(container);
+  const notationSvg = findNotationSvg(container, notationSvgElement);
   if (!notationSvg) {
     throw new Error('Notation SVG not found');
   }
-  {
-    let tx = 0;
-    let ty = 0;
-    let el = notationSvg;
-    while (el && el !== container) {
-      tx += el.offsetLeft || 0;
-      ty += el.offsetTop || 0;
-      el = el.offsetParent;
-    }
-    const notationY = Math.max(ty, HEADER_HEIGHT);
-    const w = notationSvg.getAttribute('width');
-    const h = notationSvg.getAttribute('height');
-    const width = (w != null && w !== '100%') ? parseFloat(w) : (notationSvg.getBoundingClientRect().width || pageWidth);
-    const height = (h != null && h !== '100%') ? parseFloat(h) : (notationSvg.getBoundingClientRect().height || 500);
-    const inner = rewriteSmuflTimeSigDigitsToAscii(notationSvg.innerHTML);
-    const vb = notationSvg.getAttribute('viewBox') || `0 0 ${width} ${height}`;
-    notationGroup = `<g transform="translate(${tx}, ${notationY})"><svg xmlns="${XMLNS}" x="0" y="0" width="${width}" height="${height}" viewBox="${escapeXml(vb)}" preserveAspectRatio="xMidYMin meet">${inner}</svg></g>`;
-  }
-
-  const contentString = `<g id="scoreContent">${bg}${titleText}${authorText}${notationGroup}</g>`;
-
-  return { defsString, contentString, contentHeight, orientation, footerText: String(footerText || '') };
+  const { x: tx, y: ty } = getRelativePosition(container, notationSvg);
+  const w = notationSvg.getAttribute('width');
+  const h = notationSvg.getAttribute('height');
+  const width = (w != null && w !== '100%') ? parseFloat(w) : (notationSvg.getBoundingClientRect().width || pageWidth);
+  const height = (h != null && h !== '100%') ? parseFloat(h) : (notationSvg.getBoundingClientRect().height || 500);
+  const viewBox = notationSvg.getAttribute('viewBox') || `0 0 ${width} ${height}`;
+  return buildScoreSceneSnapshot({
+    ...options,
+    pageDesignDataUrl,
+    pageDesignOpacity,
+    songTitle,
+    author,
+    footerText,
+    documentFontFamily,
+    titleFontFamily,
+    titleFontSize,
+    authorFontSize,
+    titleBold,
+    titleItalic,
+    authorBold,
+    authorItalic,
+    titleAlignment,
+    authorAlignment,
+    contentWidth: Math.max(pageWidth, Number(explicitContentWidth) || container.scrollWidth || pageWidth),
+    contentHeight: Math.max(pageHeight, Number(explicitContentHeight) || container.scrollHeight || pageHeight),
+    sceneMarkup: notationSvg.innerHTML,
+    sceneX: tx,
+    sceneY: ty,
+    sceneWidth: width,
+    sceneHeight: height,
+    sceneViewBox: viewBox,
+  });
 }
 
 /**
- * Tagastab ühe lehe (A4) SVG stringi. pageIndex 0 = esimene leht.
- * orientation 'landscape' → viewBox "0 0 1123 794", muul juhul "0 0 794 1123".
+ * Tagastab ühe SVG lehe stringi page-modeli põhjal.
  */
-export function getPageSvgString (defsString, contentString, contentHeight, pageIndex, orientation = 'portrait', overlays = {}) {
-  const { w: PAGE_W, h: PAGE_H } = getPageWh(orientation);
-  const y = -pageIndex * PAGE_H;
+export function getPageSvgString (defsString, contentString, pageModel, pageIndex, overlays = {}) {
+  const normalized = normalizePageModel(pageModel);
+  const { pageMetrics, flowDirection, pageCount } = normalized;
+  const PAGE_W = pageMetrics.widthPx;
+  const PAGE_H = pageMetrics.heightPx;
+  const x = flowDirection === 'horizontal' ? -pageIndex * PAGE_W : 0;
+  const y = flowDirection === 'vertical' ? -pageIndex * PAGE_H : 0;
   // Avoid 1–3 px clipping at page edges (strokes/markers), which can differ by OS/browser.
   // Keep the page size exact, but allow a tiny bleed inside the page clip.
   const BLEED = 2;
+  const background = (() => {
+    const href = overlays && typeof overlays.pageDesignDataUrl === 'string' ? overlays.pageDesignDataUrl.trim() : '';
+    if (!href) return '';
+    const opacity = Number.isFinite(Number(overlays.pageDesignOpacity))
+      ? Math.max(0, Math.min(1, Number(overlays.pageDesignOpacity)))
+      : 0.25;
+    return `<image href="${String(href).replace(/"/g, '&quot;')}" x="0" y="0" width="${PAGE_W}" height="${PAGE_H}" preserveAspectRatio="xMidYMid slice" opacity="${opacity}"/>`;
+  })();
   const footer = (() => {
     const text = overlays && typeof overlays.footerText === 'string' ? overlays.footerText.trim() : '';
     if (!text) return '';
@@ -211,14 +332,15 @@ export function getPageSvgString (defsString, contentString, contentHeight, page
   return `<svg xmlns="${XMLNS}" viewBox="0 0 ${PAGE_W} ${PAGE_H}" width="${PAGE_W}" height="${PAGE_H}" overflow="visible">
 ${defsString}
 <defs><clipPath id="pageClip"><rect x="${BLEED}" y="${BLEED}" width="${PAGE_W - 2 * BLEED}" height="${PAGE_H - 2 * BLEED}"/></clipPath></defs>
-<g transform="translate(0, ${y})" clip-path="url(#pageClip)">${contentString}</g>
+${background}
+<g transform="translate(${x}, ${y})" clip-path="url(#pageClip)">${contentString}</g>
 ${footer}
 </svg>`;
 }
 
 /**
- * Tagastab esimese lehe eelvaate SVG stringi (viewBox sünkroonitud orientationiga).
+ * Tagastab esimese lehe eelvaate SVG stringi.
  */
-export function getFirstPageSvgString (defsString, contentString, contentHeight, orientation = 'portrait') {
-  return getPageSvgString(defsString, contentString, contentHeight, 0, orientation);
+export function getFirstPageSvgString (defsString, contentString, pageModel, overlays = {}) {
+  return getPageSvgString(defsString, contentString, pageModel, 0, overlays);
 }

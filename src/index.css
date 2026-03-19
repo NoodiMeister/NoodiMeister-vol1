@@ -4,16 +4,16 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Traditional notation: Leland (symbols) + Leland Text (text glyphs). Only woff2 in repo; .otf would 404. */
+/* Traditional notation: alias the legacy font names to bundled, deterministic webfonts. */
 @font-face {
   font-family: 'Leland';
-  src: url('/fonts/Leland.woff2') format('woff2');
+  src: url('@fontsource/bravura/files/bravura-latin-400-normal.woff2') format('woff2');
   font-display: swap;
 }
 
 @font-face {
   font-family: 'LelandText';
-  src: url('/fonts/LelandText.woff2') format('woff2');
+  src: url('@fontsource/noto-serif/files/noto-serif-latin-400-normal.woff2') format('woff2');
   font-display: swap;
 }
 
@@ -171,7 +171,8 @@ html, body, #root {
     page-break-after: auto;
     break-after: auto;
   }
-  html.nm-print-svg-mode .nm-print-svg-page img {
+  html.nm-print-svg-mode .nm-print-svg-page img,
+  html.nm-print-svg-mode .nm-print-svg-page svg {
     width: 100%;
     height: auto;
     display: block;

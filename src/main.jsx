@@ -1,6 +1,13 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { GoogleOAuthProvider } from '@react-oauth/google';
+import '@fontsource/bravura';
+import '@fontsource/noto-serif/400.css';
+import '@fontsource/noto-serif/400-italic.css';
+import '@fontsource/noto-serif/700.css';
+import '@fontsource/noto-serif/700-italic.css';
+import '@fontsource/noto-sans/400.css';
+import '@fontsource/noto-sans/700.css';
 import './utils/notationConstants'; // Lae enne Appi – vältib TDZ/ReferenceError lazy chunkides (Vercel)
 import App from './App';
 import MicrosoftRedirectHandler from './MicrosoftRedirectHandler';

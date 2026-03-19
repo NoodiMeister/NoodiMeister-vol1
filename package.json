@@ -10,12 +10,16 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
+    "test:export-smoke": "node scripts/check-export-determinism.mjs",
     "mark-error-fixed": "node scripts/mark-auth-error-fixed.js",
     "export-symbols": "node scripts/export-all-symbols-png.js",
     "build-gallery": "node scripts/build-gallery-html.js"
   },
   "dependencies": {
     "@azure/msal-browser": "^5.4.0",
+    "@fontsource/bravura": "^5.2.5",
+    "@fontsource/noto-sans": "^5.2.10",
+    "@fontsource/noto-serif": "^5.2.9",
     "@react-oauth/google": "^0.13.4",
     "html2canvas": "^1.4.1",
     "jspdf": "^4.2.0",

@@ -1,6 +1,7 @@
 // Version 1.0.5 - Final Graphics Fix
 import React, { useState, useEffect, useLayoutEffect, useCallback, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
+import { renderToStaticMarkup } from 'react-dom/server.browser';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { InteractivePiano } from './piano';
 import * as googleDrive from './services/googleDrive';
@@ -59,8 +60,11 @@ import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 import 'svg2pdf.js';
 import Soundfont from 'soundfont-player';
-import { scoreToSvg, getFirstPageSvgString, getPageSvgString } from './utils/scoreToSvg';
+import { buildScoreSceneSnapshot, getPageSvgString } from './utils/scoreToSvg';
 import { getScorePageDimensions } from './layout/LayoutManager';
+import { getExportOrientation, getPageCount, getPageMetrics, getPaperDimensionsMm } from './utils/pageGeometry';
+import { getMissingFonts, supportsDocumentFonts, waitForDocumentFonts } from './utils/fontReady';
+import { buildTextBoxesSvgMarkup } from './export/textBoxSvg';
 
 // Safe Initialization: väline seadete objekt KÕIGE ALGUSES (väljaspool komponente). Vercel ei minifitseeri var-deklaratsioone YA/JA-ks.
 var GLOBAL_NOTATION_CONFIG = {
@@ -101,6 +105,22 @@ var LUCIDE_ICONS = [
 ];
 var STORAGE_KEY = 'noodimeister-data';
 var THEME_STORAGE_KEY = 'noodimeister-theme';
+var CLOUD_RECOVERY_STORAGE_PREFIX = 'noodimeister-cloud-recovery';
+
+function getCloudRecoverySessionId() {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return `cloud-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+function getCloudRecoveryStorageKey(provider, fileId) {
+  if (!provider || !fileId) return '';
+  const safeProvider = String(provider).trim().toLowerCase();
+  const safeFileId = String(fileId).trim();
+  if (!safeProvider || !safeFileId) return '';
+  return `${CLOUD_RECOVERY_STORAGE_PREFIX}:${safeProvider}:${safeFileId}`;
+}
 
 /** Default: light; user must change color mode themselves. */
 function getStoredTheme() {
@@ -954,6 +974,8 @@ function NoodiMeisterCore({ icons }) {
   const store = useNoodimeisterOptional();
   const [searchParamsForAccess] = useSearchParams();
   const hasFullAccess = (store?.hasFullAccess ?? authStorage.isLoggedIn()) || !!(searchParamsForAccess && typeof searchParamsForAccess.get === 'function' && searchParamsForAccess.get('fileId'));
+  const activeAuthProvider = String(store?.user?.provider || authStorage.getLoggedInUser?.()?.provider || '').trim().toLowerCase();
+  const allowBrowserProjectPersistence = activeAuthProvider !== 'google' && activeAuthProvider !== 'microsoft';
 
   // JO-võti ja noodigraafika state (GLOBAL_NOTATION_CONFIG on faili alguses)
   const [joClefFocused, setJoClefFocused] = useState(false);
@@ -1426,19 +1448,24 @@ function NoodiMeisterCore({ icons }) {
   const [isExportingPdf, setIsExportingPdf] = useState(false);
   const [showPdfExportPreview, setShowPdfExportPreview] = useState(false);
   const [pdfPreviewDataUrl, setPdfPreviewDataUrl] = useState(null);
+  const [pdfPreviewSvgString, setPdfPreviewSvgString] = useState('');
   const [pdfPreviewSize, setPdfPreviewSize] = useState({ w: 0, h: 0 });
-  /** SVG-põhine eksport: { defsString, contentString, contentHeight } – kasutatakse eelvaate ja PDF vektorite jaoks. */
+  /** SVG-põhine eksport: üks page-model preview/print/PDF jaoks. */
   const [pdfPreviewSvgData, setPdfPreviewSvgData] = useState(null);
   const [pdfPreviewPageIndex, setPdfPreviewPageIndex] = useState(0);
   const pdfPreviewTotalPages = useMemo(() => {
-    if (!pdfPreviewSvgData?.contentHeight || !pdfPreviewSvgData?.orientation) return 1;
-    const isLandscape = pdfPreviewSvgData.orientation === 'landscape';
-    const pageH = isLandscape ? 794 : 1123;
-    return Math.max(1, Math.ceil((Number(pdfPreviewSvgData.contentHeight) || pageH) / pageH));
+    return Math.max(1, Number(pdfPreviewSvgData?.pageCount) || 1);
   }, [pdfPreviewSvgData]);
   const [pdfPreviewZoom, setPdfPreviewZoom] = useState(1);
   const [pdfPreviewCaptureKey, setPdfPreviewCaptureKey] = useState(0);
   const pdfPreviewContainerRef = useRef(null);
+  const [pdfPreviewCaptureState, setPdfPreviewCaptureState] = useState({
+    stage: 'idle',
+    source: 'none',
+    message: '',
+    error: '',
+    missingFonts: [],
+  });
   const [pdfExportSaveLocation, setPdfExportSaveLocation] = useState('downloads'); // 'downloads' | 'custom'
   const [pdfExportFileHandle, setPdfExportFileHandle] = useState(null);
   const [pdfExportChosenPath, setPdfExportChosenPath] = useState('');
@@ -1546,6 +1573,56 @@ function NoodiMeisterCore({ icons }) {
   const [fileSubmenuOpen, setFileSubmenuOpen] = useState(null); // 'exportAnimation' | null
   const [viewSubmenuOpen, setViewSubmenuOpen] = useState(null); // 'orientation' | 'navigator' | 'flow' | null
   const [pageFlowDirection, setPageFlowDirection] = useState('vertical'); // 'vertical' | 'horizontal'
+  const activeExportOrientation = useMemo(() => getExportOrientation(pageOrientation, pageFlowDirection), [pageOrientation, pageFlowDirection]);
+  const activeExportPageMetrics = useMemo(
+    () => getPageMetrics({ paperSize, orientation: activeExportOrientation }),
+    [paperSize, activeExportOrientation]
+  );
+  const pdfPreviewDiagnostics = useMemo(() => {
+    const items = [];
+    const missingFonts = Array.isArray(pdfPreviewCaptureState.missingFonts) ? pdfPreviewCaptureState.missingFonts : [];
+    const hasFontApi = supportsDocumentFonts();
+    const hasCustomSavePicker = typeof window !== 'undefined' && typeof window.showSaveFilePicker === 'function';
+    const hasBeforePrintHooks = typeof window !== 'undefined' && ('onbeforeprint' in window);
+
+    if (pdfPreviewCaptureState.stage === 'capturing') {
+      items.push({ level: 'info', title: t('pdfDiagnostics.captureInProgressTitle'), message: t('pdfDiagnostics.captureInProgressBody') });
+    }
+
+    if (pdfPreviewCaptureState.source === 'svg') {
+      items.push({ level: 'ok', title: t('pdfDiagnostics.vectorReadyTitle'), message: t('pdfDiagnostics.vectorReadyBody') });
+    } else if (pdfPreviewCaptureState.source === 'png') {
+      items.push({ level: 'warning', title: t('pdfDiagnostics.rasterFallbackTitle'), message: pdfPreviewCaptureState.message || t('pdfDiagnostics.rasterFallbackBody') });
+    } else if (pdfPreviewCaptureState.source === 'error') {
+      items.push({ level: 'error', title: t('pdfDiagnostics.captureFailedTitle'), message: pdfPreviewCaptureState.error || t('pdfDiagnostics.captureFailedBody') });
+    }
+
+    if (!hasFontApi) {
+      items.push({ level: 'warning', title: t('pdfDiagnostics.fontApiUnavailableTitle'), message: t('pdfDiagnostics.fontApiUnavailableBody') });
+    } else if (missingFonts.length > 0) {
+      items.push({ level: 'warning', title: t('pdfDiagnostics.missingFontsTitle'), message: `${t('pdfDiagnostics.missingFontsBody')} ${missingFonts.join(', ')}` });
+    } else {
+      items.push({ level: 'ok', title: t('pdfDiagnostics.fontsReadyTitle'), message: t('pdfDiagnostics.fontsReadyBody') });
+    }
+
+    if (!hasCustomSavePicker) {
+      items.push({ level: 'info', title: t('pdfDiagnostics.saveLocationFallbackTitle'), message: t('pdfDiagnostics.saveLocationFallbackBody') });
+    }
+
+    if (!hasBeforePrintHooks) {
+      items.push({ level: 'warning', title: t('pdfDiagnostics.printHooksTitle'), message: t('pdfDiagnostics.printHooksBody') });
+    }
+
+    items.push({
+      level: 'info',
+      title: t('pdfDiagnostics.pageModelTitle'),
+      message: `${activeExportPageMetrics.paperSize.toUpperCase()} ${Math.round(activeExportPageMetrics.widthMm)}x${Math.round(activeExportPageMetrics.heightMm)} mm, ${activeExportPageMetrics.orientation}`,
+    });
+
+    const priority = { error: 3, warning: 2, info: 1, ok: 0 };
+    const summaryLevel = items.reduce((best, item) => (priority[item.level] > priority[best] ? item.level : best), 'ok');
+    return { summaryLevel, items };
+  }, [activeExportPageMetrics, pdfPreviewCaptureState, t]);
   const headerMenuRef = useRef(null);
   useEffect(() => {
     const closeMenus = (e) => {
@@ -1601,6 +1678,8 @@ function NoodiMeisterCore({ icons }) {
   const [saveCloudNewFolderName, setSaveCloudNewFolderName] = useState('NoodiMeister');
   const [setupCompleted, setSetupCompleted] = useState(() => {
     try {
+      const provider = String(authStorage.getLoggedInUser?.()?.provider || '').trim().toLowerCase();
+      if (provider === 'google' || provider === 'microsoft') return false;
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) {
         const d = JSON.parse(raw);
@@ -1613,6 +1692,8 @@ function NoodiMeisterCore({ icons }) {
   const projectFileInputRef = useRef(null);
   const dirtyRef = useRef(false);
   const lastPersistedRef = useRef(null);
+  const exportTargetSvgRef = useRef(null);
+  const cloudRecoverySessionIdRef = useRef(getCloudRecoverySessionId());
   const syncChannelRef = useRef(null);
   const syncClientIdRef = useRef((typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `sync-${Date.now()}-${Math.random().toString(36).slice(2)}`);
   const syncRevisionRef = useRef(0);
@@ -2354,108 +2435,154 @@ function NoodiMeisterCore({ icons }) {
     }, durationSec * 1000 + 1500);
   }, [isPedagogicalProject, notes, pedagogicalAudioUrl, pedagogicalAudioDuration, pedagogicalAudioBpm, songTitle, stopPedagogicalPlayback, t]);
 
-  const printOptionsRef = useRef({ paperSize: 'a4', pageOrientation: 'portrait' });
+  const printOptionsRef = useRef({ paperSize: 'a4', pageOrientation: 'portrait', pageFlowDirection: 'vertical' });
   const printSvgCleanupRef = useRef(null);
-
-  const handlePrint = useCallback(() => {
-    setHeaderMenuOpen(null);
-    window.print();
-  }, []);
+  const buildExportSceneRef = useRef(() => ({
+    sceneMarkup: '',
+    overlayMarkup: '',
+    sceneWidth: 0,
+    sceneHeight: 0,
+    sceneViewBox: '0 0 1 1',
+    contentWidth: 0,
+    contentHeight: 0,
+  }));
 
   useEffect(() => {
-    printOptionsRef.current = { paperSize, pageOrientation };
-  }, [paperSize, pageOrientation]);
+    printOptionsRef.current = { paperSize, pageOrientation, pageFlowDirection };
+  }, [paperSize, pageOrientation, pageFlowDirection]);
+
+  const cleanupPrintSvgPages = useCallback(() => {
+    try { printSvgCleanupRef.current?.(); } catch (_) {}
+  }, []);
+
+  const buildScoreExportSnapshot = useCallback(async (waitForFontsFirst = true) => {
+    if (waitForFontsFirst) {
+      await waitForDocumentFonts();
+      const missingFonts = getMissingFonts();
+      if (missingFonts.length > 0) {
+        console.warn('[print-pdf] Some export fonts are not loaded yet.', missingFonts);
+        setSaveFeedback(`Muusikafondid puuduvad: ${missingFonts.join(', ')}. PDF eelvaade võib erineda.`);
+        setTimeout(() => setSaveFeedback(''), 4500);
+      }
+    }
+    const scene = buildExportSceneRef.current();
+    return buildScoreSceneSnapshot({
+      pageDesignDataUrl: pageDesignDataUrl || null,
+      pageDesignOpacity,
+      songTitle,
+      author,
+      footerText: copyrightFooter,
+      documentFontFamily,
+      titleFontFamily,
+      authorFontFamily,
+      titleFontSize,
+      authorFontSize,
+      titleBold,
+      titleItalic,
+      authorBold,
+      authorItalic,
+      titleAlignment,
+      authorAlignment,
+      pageOrientation,
+      paperSize,
+      pageFlowDirection,
+      sceneMarkup: scene.sceneMarkup,
+      overlayMarkup: scene.overlayMarkup,
+      sceneWidth: scene.sceneWidth,
+      sceneHeight: scene.sceneHeight,
+      sceneViewBox: scene.sceneViewBox,
+      contentWidth: scene.contentWidth,
+      contentHeight: scene.contentHeight,
+    });
+  }, [pageDesignDataUrl, pageDesignOpacity, songTitle, author, copyrightFooter, documentFontFamily, titleFontFamily, authorFontFamily, titleFontSize, authorFontSize, titleBold, titleItalic, authorBold, authorItalic, titleAlignment, authorAlignment, pageOrientation, paperSize, pageFlowDirection]);
+
+  const renderPrintSvgPages = useCallback((snapshot) => {
+    if (!snapshot) return;
+    cleanupPrintSvgPages();
+
+    const wrapper = document.createElement('div');
+    wrapper.className = 'nm-print-svg-pages';
+    for (let p = 0; p < Math.max(1, snapshot.pageCount || 1); p++) {
+      const pageSvg = getPageSvgString(snapshot.defsString, snapshot.contentString, snapshot, p, {
+        footerText: snapshot.footerText,
+        pageDesignDataUrl: snapshot.pageDesignDataUrl,
+        pageDesignOpacity: snapshot.pageDesignOpacity,
+      });
+      const pageDiv = document.createElement('div');
+      pageDiv.className = 'nm-print-svg-page';
+      pageDiv.innerHTML = pageSvg;
+      wrapper.appendChild(pageDiv);
+    }
+
+    document.documentElement.classList.add('nm-print-svg-mode');
+    document.body.appendChild(wrapper);
+    printSvgCleanupRef.current = () => {
+      try { wrapper.remove(); } catch (_) {}
+      document.documentElement.classList.remove('nm-print-svg-mode');
+      printSvgCleanupRef.current = null;
+    };
+  }, [cleanupPrintSvgPages]);
+
+  const applyLegacyPrintScale = useCallback(() => {
+    const el = scoreContainerRef?.current;
+    if (!el) return;
+
+    const cw = Math.max(1, el.scrollWidth);
+    const ch = Math.max(1, el.scrollHeight);
+    const { paperSize: ps, pageOrientation: rawOrientation, pageFlowDirection: flowDir } = printOptionsRef.current;
+    const exportOrientation = getExportOrientation(rawOrientation, flowDir);
+
+    const mmToPx = (mm) => {
+      const probe = document.createElement('div');
+      probe.style.position = 'fixed';
+      probe.style.left = '-10000mm';
+      probe.style.top = '0';
+      probe.style.width = '100mm';
+      probe.style.height = '1px';
+      probe.style.visibility = 'hidden';
+      document.body.appendChild(probe);
+      const pxPerMm = (probe.getBoundingClientRect().width || (100 * 96) / 25.4) / 100;
+      probe.remove();
+      return Math.round(mm * pxPerMm);
+    };
+
+    const margin = 12 * 2;
+    const paper = getPaperDimensionsMm(ps, exportOrientation);
+    const printW = mmToPx(Math.max(1, paper.width - margin));
+    const printH = mmToPx(Math.max(1, paper.height - margin));
+    const scale = Math.min(1, printW / cw, printH / ch);
+    document.documentElement.style.setProperty('--print-scale', String(scale));
+    document.documentElement.style.setProperty('--print-content-w', `${cw}px`);
+    document.documentElement.style.setProperty('--print-content-h', `${ch}px`);
+  }, []);
+
+  const preparePrintPreview = useCallback(async (waitForFontsFirst = true) => {
+    let rendered = false;
+    try {
+      const snapshot = await buildScoreExportSnapshot(waitForFontsFirst);
+      if (snapshot) {
+        renderPrintSvgPages(snapshot);
+        rendered = true;
+      }
+    } catch (_) {
+      rendered = false;
+    }
+    applyLegacyPrintScale();
+    return rendered;
+  }, [applyLegacyPrintScale, buildScoreExportSnapshot, renderPrintSvgPages]);
+
+  const handlePrint = useCallback(async () => {
+    setHeaderMenuOpen(null);
+    await preparePrintPreview(true);
+    window.print();
+  }, [preparePrintPreview]);
 
   useEffect(() => {
     const onBeforePrint = () => {
-      const el = scoreContainerRef?.current;
-      if (!el) return;
-      // Build deterministic SVG pages for printing. Chrome on Windows can render complex
-      // transformed DOM trees in print preview inconsistently; SVG pages avoid that.
-      try {
-        const opts = {
-          pageDesignDataUrl: pageDesignDataUrl || null,
-          pageDesignOpacity,
-          songTitle,
-          author,
-          footerText: copyrightFooter,
-          documentFontFamily,
-          titleFontFamily,
-          titleFontSize,
-          authorFontSize,
-          titleBold,
-          titleItalic,
-          authorBold,
-          authorItalic,
-          titleAlignment,
-          authorAlignment,
-          pageOrientation,
-        };
-        const { defsString, contentString, contentHeight, orientation, footerText } = scoreToSvg(el, opts);
-        const orient = (orientation ?? pageOrientation) === 'landscape' ? 'landscape' : 'portrait';
-        const pageH = orient === 'landscape' ? 794 : 1123;
-        const numPages = Math.max(1, Math.ceil((Number(contentHeight) || pageH) / pageH));
-
-        const wrapper = document.createElement('div');
-        wrapper.className = 'nm-print-svg-pages';
-        for (let p = 0; p < numPages; p++) {
-          const pageSvg = getPageSvgString(defsString, contentString, contentHeight, p, orient, { footerText });
-          const dataUrl = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(pageSvg)));
-          const pageDiv = document.createElement('div');
-          pageDiv.className = 'nm-print-svg-page';
-          const img = document.createElement('img');
-          img.alt = `Page ${p + 1}`;
-          img.src = dataUrl;
-          pageDiv.appendChild(img);
-          wrapper.appendChild(pageDiv);
-        }
-        document.documentElement.classList.add('nm-print-svg-mode');
-        document.body.appendChild(wrapper);
-        printSvgCleanupRef.current = () => {
-          try { wrapper.remove(); } catch (_) {}
-          document.documentElement.classList.remove('nm-print-svg-mode');
-          printSvgCleanupRef.current = null;
-        };
-      } catch (_) {
-        // If SVG print build fails, fall back to legacy print scaling below.
-      }
-
-      const cw = Math.max(1, el.scrollWidth);
-      const ch = Math.max(1, el.scrollHeight);
-      const { paperSize: ps, pageOrientation: orient } = printOptionsRef.current;
-
-      // Chrome/OS can map CSS mm → CSS px slightly differently in practice.
-      // Measure the browser's current conversion instead of assuming 96 DPI.
-      const mmToPx = (mm) => {
-        const probe = document.createElement('div');
-        probe.style.position = 'fixed';
-        probe.style.left = '-10000mm';
-        probe.style.top = '0';
-        probe.style.width = '100mm';
-        probe.style.height = '1px';
-        probe.style.visibility = 'hidden';
-        document.body.appendChild(probe);
-        const pxPerMm = (probe.getBoundingClientRect().width || (100 * 96) / 25.4) / 100;
-        probe.remove();
-        return Math.round(mm * pxPerMm);
-      };
-
-      const margin = 12 * 2;
-      const printable = {
-        'a4': { portrait: [210 - margin, 297 - margin], landscape: [297 - margin, 210 - margin] },
-        'a3': { portrait: [297 - margin, 420 - margin], landscape: [420 - margin, 297 - margin] },
-        'a5': { portrait: [148 - margin, 210 - margin], landscape: [210 - margin, 148 - margin] },
-      };
-      const [wMm, hMm] = (printable[ps] || printable.a4)[orient === 'landscape' ? 'landscape' : 'portrait'];
-      const printW = mmToPx(wMm);
-      const printH = mmToPx(hMm);
-      const scale = Math.min(1, printW / cw, printH / ch);
-      document.documentElement.style.setProperty('--print-scale', String(scale));
-      document.documentElement.style.setProperty('--print-content-w', `${cw}px`);
-      document.documentElement.style.setProperty('--print-content-h', `${ch}px`);
+      void preparePrintPreview(false);
     };
     const onAfterPrint = () => {
-      try { printSvgCleanupRef.current?.(); } catch (_) {}
+      cleanupPrintSvgPages();
     };
     window.addEventListener('beforeprint', onBeforePrint);
     window.addEventListener('afterprint', onAfterPrint);
@@ -2463,48 +2590,47 @@ function NoodiMeisterCore({ icons }) {
       window.removeEventListener('beforeprint', onBeforePrint);
       window.removeEventListener('afterprint', onAfterPrint);
     };
-  }, [pageDesignDataUrl, pageDesignOpacity, songTitle, author, documentFontFamily, titleFontFamily, titleFontSize, authorFontSize, titleBold, titleItalic, authorBold, authorItalic, titleAlignment, authorAlignment, pageOrientation]);
+  }, [preparePrintPreview, cleanupPrintSvgPages]);
 
-  const pdfExportOptionsRef = useRef({ pageFlowDirection: 'vertical', pageWidth: LAYOUT.PAGE_WIDTH_PX });
+  const pdfExportOptionsRef = useRef({ pageFlowDirection: 'vertical', pageWidth: LAYOUT.PAGE_WIDTH_PX, pageOrientation: 'portrait', paperSize: 'a4' });
 
   useEffect(() => {
     if (!showPdfExportPreview || !scoreContainerRef?.current) return;
     setPdfPreviewDataUrl(null);
+    setPdfPreviewSvgString('');
     setPdfPreviewSvgData(null);
     setPdfPreviewPageIndex(0);
+    setPdfPreviewCaptureState({
+      stage: 'capturing',
+      source: 'none',
+      message: '',
+      error: '',
+      missingFonts: getMissingFonts(),
+    });
     const el = scoreContainerRef.current;
     el.classList.add('noodimeister-export-capture');
     const cleanup = () => {
       if (el.classList.contains('noodimeister-export-capture')) el.classList.remove('noodimeister-export-capture');
     };
-    const runCapture = () => {
-      /* Proovime esmalt SVG-põhist eelvaadet (viewBox 0 0 794 1123, vektorid, ilma mastaabikadudeta). */
+    const runCapture = async () => {
       try {
-        const opts = {
-          pageDesignDataUrl: pageDesignDataUrl || null,
-          pageDesignOpacity,
-          songTitle,
-          author,
-          footerText: copyrightFooter,
-          documentFontFamily,
-          titleFontFamily,
-          titleFontSize,
-          authorFontSize,
-          titleBold,
-          titleItalic,
-          authorBold,
-          authorItalic,
-          titleAlignment,
-          authorAlignment,
-          pageOrientation,
-        };
-        const { defsString, contentString, contentHeight, orientation, footerText } = scoreToSvg(el, opts);
-        const firstPageSvg = getPageSvgString(defsString, contentString, contentHeight, 0, orientation, { footerText });
-        const dataUrl = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(firstPageSvg)));
-        setPdfPreviewDataUrl(dataUrl);
-        const dims = getScorePageDimensions(orientation);
-        setPdfPreviewSize({ w: dims.width, h: dims.height });
-        setPdfPreviewSvgData({ defsString, contentString, contentHeight, orientation, footerText });
+        const snapshot = await buildScoreExportSnapshot(true);
+        if (!snapshot) throw new Error('SVG snapshot unavailable');
+        const firstPageSvg = getPageSvgString(snapshot.defsString, snapshot.contentString, snapshot, 0, {
+          footerText: snapshot.footerText,
+          pageDesignDataUrl: snapshot.pageDesignDataUrl,
+          pageDesignOpacity: snapshot.pageDesignOpacity,
+        });
+        setPdfPreviewSvgString(firstPageSvg);
+        setPdfPreviewSize({ w: snapshot.pageMetrics.widthPx, h: snapshot.pageMetrics.heightPx });
+        setPdfPreviewSvgData(snapshot);
+        setPdfPreviewCaptureState({
+          stage: 'ready',
+          source: 'svg',
+          message: t('pdfDiagnostics.vectorReadyBody'),
+          error: '',
+          missingFonts: getMissingFonts(),
+        });
         cleanup();
       } catch (e) {
         /* Fallback: PNG html2canvas (nt kui SVG kloon ebaõnnestub). */
@@ -2522,16 +2648,36 @@ function NoodiMeisterCore({ icons }) {
           windowWidth: w,
           windowHeight: h,
         }).then((canvas) => {
+          setPdfPreviewSvgString('');
           setPdfPreviewDataUrl(canvas.toDataURL('image/png'));
           setPdfPreviewSize({ w: canvas.width, h: canvas.height });
-        }).catch(() => {
+          setPdfPreviewCaptureState({
+            stage: 'ready',
+            source: 'png',
+            message: e?.message || t('pdfDiagnostics.rasterFallbackBody'),
+            error: '',
+            missingFonts: getMissingFonts(),
+          });
+          setSaveFeedback(t('pdfDiagnostics.rasterFallbackToast'));
+          setTimeout(() => setSaveFeedback(''), 3500);
+        }).catch((innerErr) => {
+          setPdfPreviewSvgString('');
           setPdfPreviewDataUrl(null);
           setPdfPreviewSize({ w: 0, h: 0 });
+          setPdfPreviewCaptureState({
+            stage: 'failed',
+            source: 'error',
+            message: '',
+            error: innerErr?.message || e?.message || t('pdfDiagnostics.captureFailedBody'),
+            missingFonts: getMissingFonts(),
+          });
+          setSaveFeedback(t('pdfDiagnostics.captureFailedToast'));
+          setTimeout(() => setSaveFeedback(''), 3500);
         });
       }
     };
-    requestAnimationFrame(() => runCapture());
-  }, [showPdfExportPreview, pdfPreviewCaptureKey, pageOrientation, pageDesignDataUrl, pageDesignOpacity, songTitle, author, documentFontFamily, titleFontFamily, titleFontSize, authorFontSize, titleBold, titleItalic, authorBold, authorItalic, titleAlignment, authorAlignment]);
+    requestAnimationFrame(() => { void runCapture(); });
+  }, [showPdfExportPreview, pdfPreviewCaptureKey, buildScoreExportSnapshot, t]);
 
   useEffect(() => {
     if (!showPdfExportPreview) return;
@@ -2542,14 +2688,33 @@ function NoodiMeisterCore({ icons }) {
       setPdfPreviewPageIndex(safeIdx);
       return;
     }
-    const { defsString, contentString, contentHeight, orientation, footerText } = pdfPreviewSvgData;
-    const pageSvg = getPageSvgString(defsString, contentString, contentHeight, safeIdx, orientation, { footerText });
-    const dataUrl = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(pageSvg)));
-    setPdfPreviewDataUrl(dataUrl);
+    const pageSvg = getPageSvgString(pdfPreviewSvgData.defsString, pdfPreviewSvgData.contentString, pdfPreviewSvgData, safeIdx, {
+      footerText: pdfPreviewSvgData.footerText,
+      pageDesignDataUrl: pdfPreviewSvgData.pageDesignDataUrl,
+      pageDesignOpacity: pdfPreviewSvgData.pageDesignOpacity,
+    });
+    setPdfPreviewSvgString(pageSvg);
+    setPdfPreviewDataUrl(null);
   }, [showPdfExportPreview, pdfPreviewSvgData, pdfPreviewPageIndex, pdfPreviewTotalPages]);
 
   const handlePdfPreviewFit = useCallback(() => {
     setPdfPreviewZoom(1);
+  }, []);
+
+  const closePdfExportPreview = useCallback(() => {
+    setShowPdfExportPreview(false);
+    setPdfPreviewZoom(1);
+    setPdfPreviewDataUrl(null);
+    setPdfPreviewSvgString('');
+    setPdfPreviewSvgData(null);
+    setPdfPreviewPageIndex(0);
+    setPdfPreviewCaptureState({
+      stage: 'idle',
+      source: 'none',
+      message: '',
+      error: '',
+      missingFonts: [],
+    });
   }, []);
 
   const handlePdfExportChooseLocation = useCallback(async () => {
@@ -2571,6 +2736,47 @@ function NoodiMeisterCore({ icons }) {
     }
   }, [songTitle, t]);
 
+  const getPdfFilename = useCallback(() => (
+    ((songTitle || t('common.untitled')).replace(/\s+/g, '-').replace(/[^\w\-.]/g, '') || 'score') + '.pdf'
+  ), [songTitle, t]);
+
+  const buildVectorPdfFromSnapshot = useCallback(async (snapshot) => {
+    if (!snapshot?.defsString || !snapshot?.contentString || !snapshot?.pageMetrics) {
+      throw new Error('Vector PDF snapshot unavailable');
+    }
+
+    const pdf = new jsPDF({
+      orientation: snapshot.pageMetrics.orientation,
+      unit: 'pt',
+      format: [snapshot.pageMetrics.widthPt, snapshot.pageMetrics.heightPt],
+    });
+
+    for (let p = 0; p < Math.max(1, snapshot.pageCount || 1); p++) {
+      if (p > 0) {
+        pdf.addPage([snapshot.pageMetrics.widthPt, snapshot.pageMetrics.heightPt], snapshot.pageMetrics.orientation);
+      }
+      const pageSvgString = getPageSvgString(snapshot.defsString, snapshot.contentString, snapshot, p, {
+        footerText: snapshot.footerText,
+        pageDesignDataUrl: snapshot.pageDesignDataUrl,
+        pageDesignOpacity: snapshot.pageDesignOpacity,
+      });
+      const pdfSafeSvgString = rewriteSmuflTimeSigDigitsToAscii(pageSvgString);
+      const wrap = document.createElement('div');
+      wrap.innerHTML = pdfSafeSvgString;
+      const svgEl = wrap.querySelector('svg');
+      if (svgEl) {
+        await pdf.svg(svgEl, {
+          x: 0,
+          y: 0,
+          width: snapshot.pageMetrics.widthPt,
+          height: snapshot.pageMetrics.heightPt,
+        });
+      }
+    }
+
+    return pdf;
+  }, []);
+
   const exportToPdf = useCallback(async (saveOptions = {}) => {
     const { fileHandle, usePreviewImage, previewDataUrl, previewSize, usePreviewSvg, previewSvgData } = saveOptions;
     const useSvgExport = Boolean(usePreviewSvg && previewSvgData?.defsString != null && previewSvgData?.contentString != null);
@@ -2580,33 +2786,16 @@ function NoodiMeisterCore({ icons }) {
     if (!useSvgExport && !usePreviewPng && !container) {
       setSaveFeedback(t('feedback.exportFailed'));
       setTimeout(() => setSaveFeedback(''), 2000);
-      return;
+      return false;
     }
     setIsExportingPdf(true);
     setSaveFeedback('PDF…');
     setShowPageNavigator(true);
     await new Promise((r) => setTimeout(r, 150));
     try {
-      /* SVG → PDF vektoritega (svg2pdf.js): terav, viewBox sünkroonitud orientationiga (portrait 794×1123, landscape 1123×794). */
       if (useSvgExport) {
-        const { defsString, contentString, contentHeight, orientation, footerText } = previewSvgData;
-        const orient = (orientation ?? pageOrientation) === 'landscape' ? 'landscape' : 'portrait';
-        const pageH = orient === 'landscape' ? 794 : 1123;
-        const numPages = Math.max(1, Math.ceil(contentHeight / pageH));
-        const pdf = new jsPDF({ orientation: orient, unit: 'pt', format: 'a4' });
-        const widthPt = orient === 'landscape' ? 841.89 : 595.28;
-        const heightPt = orient === 'landscape' ? 595.28 : 841.89;
-        for (let p = 0; p < numPages; p++) {
-          if (p > 0) pdf.addPage('a4', orient);
-          const pageSvgString = getPageSvgString(defsString, contentString, contentHeight, p, orient, { footerText });
-          const wrap = document.createElement('div');
-          wrap.innerHTML = pageSvgString;
-          const svgEl = wrap.querySelector('svg');
-          if (svgEl) {
-            await pdf.svg(svgEl, { x: 0, y: 0, width: widthPt, height: heightPt });
-          }
-        }
-        const filename = ((songTitle || t('common.untitled')).replace(/\s+/g, '-').replace(/[^\w\-.]/g, '') || 'score') + '.pdf';
+        const pdf = await buildVectorPdfFromSnapshot(previewSvgData);
+        const filename = getPdfFilename();
         if (fileHandle && typeof fileHandle.createWritable === 'function') {
           const blob = pdf.output('blob');
           const writable = await fileHandle.createWritable();
@@ -2616,7 +2805,7 @@ function NoodiMeisterCore({ icons }) {
           pdf.save(filename);
         }
         setSaveFeedback('');
-        return;
+        return true;
       }
 
       let canvas;
@@ -2637,6 +2826,7 @@ function NoodiMeisterCore({ icons }) {
         });
       } else {
         container.classList.add('noodimeister-export-capture');
+        await waitForDocumentFonts();
         await new Promise((r) => requestAnimationFrame(r));
         canvas = await html2canvas(container, {
           scale: exportScale,
@@ -2662,31 +2852,28 @@ function NoodiMeisterCore({ icons }) {
       const contentW = Math.max(1, Math.min(rawContentW, boundsW));
       const contentH = Math.max(1, rawContentH);
 
-      const { pageFlowDirection: flowDir, pageWidth: pw, pageOrientation: pdfPageOrientation } = pdfExportOptionsRef.current;
+      const { pageFlowDirection: flowDir, pageWidth: pw, pageHeight: ph, pageOrientation: rawOrientation, paperSize: activePaperSize } = pdfExportOptionsRef.current;
       const isHorizontalFlow = flowDir === 'horizontal';
-      const pdfOrientation = isHorizontalFlow ? 'landscape' : pageOrientation;
-      /* Eksport alati A4-le: 210mm laius × 297mm kõrgus (püstine) või 297×210 (risti). Trükkimine A4 paberile. */
-      const A4_WIDTH_MM = 210;
-      const A4_HEIGHT_MM = 297;
+      const pdfOrientation = getExportOrientation(rawOrientation, flowDir);
+      const exportPageMetrics = getPageMetrics({ paperSize: activePaperSize, orientation: pdfOrientation });
       const pdf = new jsPDF({
         orientation: pdfOrientation,
         unit: 'mm',
-        format: 'a4',
+        format: [exportPageMetrics.widthMm, exportPageMetrics.heightMm],
       });
       const pdfPageWmm = pdf.internal.pageSize.getWidth();
       const pdfPageHmm = pdf.internal.pageSize.getHeight();
-      const PDF_TOP_MARGIN_MM = 0;
-      const imgWmm = pdfOrientation === 'landscape' ? A4_HEIGHT_MM : A4_WIDTH_MM;   /* 210 */
-      const imgHmm = pdfOrientation === 'landscape' ? A4_WIDTH_MM : A4_HEIGHT_MM;   /* 297 */
+      const imgWmm = exportPageMetrics.widthMm;
+      const imgHmm = exportPageMetrics.heightMm;
 
       if (isHorizontalFlow) {
-        const pageWidthPx = pw || LAYOUT.PAGE_WIDTH_PX;
-        const a4PageHeightPx = pageWidthPx * LAYOUT.A4_HEIGHT_RATIO_LANDSCAPE;
+        const pageWidthPx = pw || exportPageMetrics.widthPx;
+        const pageHeightPx = ph || exportPageMetrics.heightPx;
         const totalPages = Math.max(1, Math.ceil(contentW / (pageWidthPx * scale)));
         for (let p = 0; p < totalPages; p++) {
           const srcX = p * pageWidthPx * scale;
           const sliceW = Math.min(Math.round(pageWidthPx * scale), contentW - Math.round(p * pageWidthPx * scale));
-          const sliceH = Math.min(Math.round(a4PageHeightPx * scale), contentH);
+          const sliceH = Math.min(Math.round(pageHeightPx * scale), contentH);
           if (sliceW <= 0 || sliceH <= 0) continue;
           const sliceCanvas = document.createElement('canvas');
           sliceCanvas.width = sliceW;
@@ -2694,7 +2881,7 @@ function NoodiMeisterCore({ icons }) {
           const ctx = sliceCanvas.getContext('2d');
           ctx.drawImage(canvas, srcX, 0, sliceW, sliceH, 0, 0, sliceW, sliceH);
           const sliceData = sliceCanvas.toDataURL('image/png');
-          if (p > 0) pdf.addPage('a4', pdfOrientation);
+          if (p > 0) pdf.addPage([exportPageMetrics.widthMm, exportPageMetrics.heightMm], pdfOrientation);
           pdf.addImage(sliceData, 'PNG', 0, 0, imgWmm, imgHmm);
         }
       } else {
@@ -2714,7 +2901,7 @@ function NoodiMeisterCore({ icons }) {
             const ctx = sliceCanvas.getContext('2d');
             ctx.drawImage(canvas, 0, startPx * scale, contentW, sliceH, 0, 0, contentW, sliceH);
             const sliceData = sliceCanvas.toDataURL('image/png');
-            if (p > 0) pdf.addPage('a4', pdfOrientation);
+            if (p > 0) pdf.addPage([exportPageMetrics.widthMm, exportPageMetrics.heightMm], pdfOrientation);
             pdf.addImage(sliceData, 'PNG', 0, 0, imgWmm, imgHmm);
           }
         } else {
@@ -2729,13 +2916,13 @@ function NoodiMeisterCore({ icons }) {
           let position = 0;
           pdf.addImage(imgData, 'PNG', 0, position, imgWmm, imgHLongMm);
           for (let p = 1; p < numPages; p++) {
-            pdf.addPage('a4', pdfOrientation);
+            pdf.addPage([exportPageMetrics.widthMm, exportPageMetrics.heightMm], pdfOrientation);
             position = -p * pdfPageHmm;
             pdf.addImage(imgData, 'PNG', 0, position, imgWmm, imgHLongMm);
           }
         }
       }
-      const filename = ((songTitle || t('common.untitled')).replace(/\s+/g, '-').replace(/[^\w\-.]/g, '') || 'score') + '.pdf';
+      const filename = getPdfFilename();
       if (fileHandle && typeof fileHandle.createWritable === 'function') {
         const blob = pdf.output('blob');
         const writable = await fileHandle.createWritable();
@@ -2745,14 +2932,16 @@ function NoodiMeisterCore({ icons }) {
         pdf.save(filename);
       }
       setSaveFeedback('');
+      return true;
     } catch (e) {
       setSaveFeedback(t('feedback.exportFailed'));
       setTimeout(() => setSaveFeedback(''), 2000);
+      return false;
     } finally {
       if (container?.classList?.contains('noodimeister-export-capture')) container.classList.remove('noodimeister-export-capture');
       setIsExportingPdf(false);
     }
-  }, [songTitle, t, pageOrientation, paperSize]);
+  }, [t, buildVectorPdfFromSnapshot, getPdfFilename]);
 
   const printPdfBlob = useCallback(async (blob) => {
     if (!blob) return;
@@ -2784,30 +2973,16 @@ function NoodiMeisterCore({ icons }) {
 
   const printFromPdfPreview = useCallback(async () => {
     if (isExportingPdf) return;
-    if (!pdfPreviewDataUrl) return;
+    if (!pdfPreviewDataUrl && !pdfPreviewSvgData) return false;
     setIsExportingPdf(true);
     setSaveFeedback(t('file.print') || 'Print');
     await new Promise((r) => setTimeout(r, 50));
     try {
       const useSvg = Boolean(pdfPreviewSvgData?.defsString && pdfPreviewSvgData?.contentString);
       if (useSvg) {
-        const { defsString, contentString, contentHeight, orientation, footerText } = pdfPreviewSvgData;
-        const orient = (orientation ?? pageOrientation) === 'landscape' ? 'landscape' : 'portrait';
-        const pageH = orient === 'landscape' ? 794 : 1123;
-        const numPages = Math.max(1, Math.ceil((Number(contentHeight) || pageH) / pageH));
-        const pdf = new jsPDF({ orientation: orient, unit: 'pt', format: 'a4' });
-        const widthPt = orient === 'landscape' ? 841.89 : 595.28;
-        const heightPt = orient === 'landscape' ? 595.28 : 841.89;
-        for (let p = 0; p < numPages; p++) {
-          if (p > 0) pdf.addPage('a4', orient);
-          const pageSvgString = getPageSvgString(defsString, contentString, contentHeight, p, orient, { footerText });
-          const wrap = document.createElement('div');
-          wrap.innerHTML = pageSvgString;
-          const svgEl = wrap.querySelector('svg');
-          if (svgEl) await pdf.svg(svgEl, { x: 0, y: 0, width: widthPt, height: heightPt });
-        }
+        const pdf = await buildVectorPdfFromSnapshot(pdfPreviewSvgData);
         await printPdfBlob(pdf.output('blob'));
-        return;
+        return true;
       }
 
       const img = await new Promise((resolve, reject) => {
@@ -2821,7 +2996,9 @@ function NoodiMeisterCore({ icons }) {
       c.height = img.naturalHeight || img.height;
       const ctx = c.getContext('2d');
       ctx.drawImage(img, 0, 0);
-      const pdf = new jsPDF({ orientation: pageOrientation, unit: 'mm', format: 'a4' });
+      const previewOrientation = getExportOrientation(pageOrientation, pageFlowDirection);
+      const previewPageMetrics = getPageMetrics({ paperSize, orientation: previewOrientation });
+      const pdf = new jsPDF({ orientation: previewOrientation, unit: 'mm', format: [previewPageMetrics.widthMm, previewPageMetrics.heightMm] });
       const pdfW = pdf.internal.pageSize.getWidth();
       const pdfH = pdf.internal.pageSize.getHeight();
       const imgRatio = c.width / Math.max(1, c.height);
@@ -2832,14 +3009,16 @@ function NoodiMeisterCore({ icons }) {
       const y = (pdfH - drawH) / 2;
       pdf.addImage(c.toDataURL('image/png'), 'PNG', x, y, drawW, drawH);
       await printPdfBlob(pdf.output('blob'));
+      return true;
     } catch (_) {
       setSaveFeedback(t('feedback.exportFailed'));
       setTimeout(() => setSaveFeedback(''), 2000);
+      return false;
     } finally {
       setIsExportingPdf(false);
       setSaveFeedback('');
     }
-  }, [isExportingPdf, pageOrientation, pdfPreviewDataUrl, pdfPreviewSvgData, printPdfBlob, t]);
+  }, [isExportingPdf, pageOrientation, pageFlowDirection, paperSize, pdfPreviewDataUrl, pdfPreviewSvgData, printPdfBlob, t, buildVectorPdfFromSnapshot]);
 
   // Build state to persist
   const getPersistedState = useCallback(() => ({
@@ -2944,19 +3123,26 @@ function NoodiMeisterCore({ icons }) {
     lyricFontSize,
     noteheadShape,
     noteheadEmoji
-  }), [staves, activeStaffIndex, staffYOffsets, measureStretchFactors, systemYOffsets, visibleStaves, intermissionLabels, timeSignature, timeSignatureMode, keySignature, staffLines, notationStyle, pixelsPerBeat, notationMode, instrumentNotationVariant, cursorPosition, addedMeasures, measureRepeatMarks, setupCompleted, songTitle, author, pickupEnabled, pickupQuantity, pickupDuration, pageOrientation, paperSize, layoutMeasuresPerLine, layoutLineBreakBefore, layoutPageBreakBefore, layoutExtraPages, layoutSystemGap, layoutPartsGap, layoutConnectedBarlines, layoutGlobalSpacingMultiplier, viewMode, partLayoutMeasuresPerLine, partLayoutLineBreakBefore, partLayoutPageBreakBefore, partLayoutExtraPages, showPageNavigator, pageFlowDirection, viewFitPage, viewSmartPage, visibleToolIds, tuningReferenceNote, tuningReferenceOctave, tuningReferenceHz, playNoteOnInsert, figurenotesSize, figurenotesStems, figurenotesChordLineGap, figurenotesChordBlocks, figurenotesChordBlocksShowTones, figurenotesMelodyShowNoteNames, timeSignatureSize, showBarNumbers, barNumberSize, showRhythmSyllables, showAllNoteLabels, enableEmojiOverlays, joClefStaffPosition, relativeNotationShowKeySignature, relativeNotationShowTraditionalClef, isPedagogicalProject, pedagogicalAudioBpm, pedagogicalAudioPlaybackRate, pedagogicalPlayheadStyle, pedagogicalPlayheadEmoji, pedagogicalPlayheadEmojiSize, cursorLineStrokeWidth, pedagogicalPlayheadMovement, chords, textBoxes, documentFontFamily, lyricFontFamily, titleFontSize, authorFontSize, titleFontFamily, authorFontFamily, titleBold, titleItalic, authorBold, authorItalic, titleAlignment, authorAlignment, staffRowAlignment, pageDesignDataUrl, pageDesignOpacity, pageDesignFit, pageDesignLayer, pageDesignPositionX, pageDesignPositionY, pageDesignCrop, lyricLineIndex, lyricLineYOffset, lyricFontSize, noteheadShape, noteheadEmoji]);
+  }), [staves, activeStaffIndex, staffYOffsets, measureStretchFactors, systemYOffsets, visibleStaves, intermissionLabels, timeSignature, timeSignatureMode, keySignature, staffLines, notationStyle, pixelsPerBeat, notationMode, instrumentNotationVariant, cursorPosition, addedMeasures, measureRepeatMarks, setupCompleted, songTitle, author, copyrightFooter, pickupEnabled, pickupQuantity, pickupDuration, pageOrientation, paperSize, layoutMeasuresPerLine, layoutLineBreakBefore, layoutPageBreakBefore, layoutExtraPages, layoutSystemGap, layoutPartsGap, layoutConnectedBarlines, layoutGlobalSpacingMultiplier, viewMode, partLayoutMeasuresPerLine, partLayoutLineBreakBefore, partLayoutPageBreakBefore, partLayoutExtraPages, showPageNavigator, pageFlowDirection, viewFitPage, viewSmartPage, visibleToolIds, tuningReferenceNote, tuningReferenceOctave, tuningReferenceHz, playNoteOnInsert, figurenotesSize, figurenotesStems, figurenotesChordLineGap, figurenotesChordBlocks, figurenotesChordBlocksShowTones, figurenotesMelodyShowNoteNames, timeSignatureSize, showBarNumbers, barNumberSize, showRhythmSyllables, showAllNoteLabels, enableEmojiOverlays, joClefStaffPosition, relativeNotationShowKeySignature, relativeNotationShowTraditionalClef, isPedagogicalProject, pedagogicalAudioBpm, pedagogicalAudioPlaybackRate, pedagogicalPlayheadStyle, pedagogicalPlayheadEmoji, pedagogicalPlayheadEmojiSize, cursorLineStrokeWidth, pedagogicalPlayheadMovement, chords, textBoxes, documentFontFamily, lyricFontFamily, titleFontSize, authorFontSize, titleFontFamily, authorFontFamily, titleBold, titleItalic, authorBold, authorItalic, titleAlignment, authorAlignment, staffRowAlignment, pageDesignDataUrl, pageDesignOpacity, pageDesignFit, pageDesignLayer, pageDesignPositionX, pageDesignPositionY, pageDesignCrop, lyricLineIndex, lyricLineYOffset, lyricFontSize, noteheadShape, noteheadEmoji]);
 
   const saveToStorageSync = useCallback(() => {
     try {
       const state = getPersistedState();
       lastPersistedRef.current = state;
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-      dirtyRef.current = false;
+      if (allowBrowserProjectPersistence) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        dirtyRef.current = false;
+      }
     } catch (_) {}
-  }, [getPersistedState]);
+  }, [allowBrowserProjectPersistence, getPersistedState]);
 
   const saveToStorage = useCallback(() => {
     try {
+      if (!allowBrowserProjectPersistence) {
+        setSaveFeedback('Cloud-kontol salvesta otse Google Drivei või OneDrivei.');
+        setTimeout(() => setSaveFeedback(''), 2500);
+        return;
+      }
       saveToStorageSync();
       setSaveFeedback(t('feedback.saved'));
       setTimeout(() => setSaveFeedback(''), 1800);
@@ -2964,7 +3150,7 @@ function NoodiMeisterCore({ icons }) {
       setSaveFeedback(t('feedback.saveError'));
       setTimeout(() => setSaveFeedback(''), 2000);
     }
-  }, [saveToStorageSync]);
+  }, [allowBrowserProjectPersistence, saveToStorageSync]);
 
   const clearDirty = useCallback(() => { dirtyRef.current = false; }, []);
 
@@ -2973,102 +3159,20 @@ function NoodiMeisterCore({ icons }) {
     navigate('/tood');
   }, [saveToStorageSync, navigate]);
 
-  // Project file export – single JSON object (future: can send to cloud API)
-  const exportScoreToJSON = useCallback(() => ({
-    version: 1,
-    songTitle: songTitle || '',
-    author: author || '',
-    copyrightFooter: copyrightFooter || '',
-    notationStyle,
-    notationMode,
-    isPedagogicalProject,
-    timeSignature,
-    timeSignatureMode,
-    keySignature,
-    staffLines,
-    pixelsPerBeat,
-    instrumentNotationVariant,
-    pickupEnabled,
-    pickupQuantity,
-    pickupDuration,
-    setupCompleted,
-    cursorPosition,
-    addedMeasures,
-    pageOrientation,
-    layoutMeasuresPerLine,
-    layoutLineBreakBefore,
-    layoutPageBreakBefore,
-    layoutSystemGap,
-    viewMode,
-    partLayoutMeasuresPerLine,
-    partLayoutLineBreakBefore,
-    partLayoutPageBreakBefore,
-    showPageNavigator,
-    pageFlowDirection,
-    viewFitPage,
-    viewSmartPage,
-    visibleToolIds,
-    tuningReferenceNote,
-    tuningReferenceOctave,
-    tuningReferenceHz,
-    playNoteOnInsert,
-    figurenotesSize,
-    figurenotesStems,
-    figurenotesChordLineGap,
-    figurenotesChordBlocks: !!figurenotesChordBlocks,
-    figurenotesChordBlocksShowTones: !!figurenotesChordBlocksShowTones,
-    figurenotesMelodyShowNoteNames: !!figurenotesMelodyShowNoteNames,
-    timeSignatureSize,
-    showBarNumbers,
-    barNumberSize,
-    showRhythmSyllables,
-    showAllNoteLabels,
-    enableEmojiOverlays,
-    joClefStaffPosition,
-    relativeNotationShowKeySignature,
-    relativeNotationShowTraditionalClef,
-    pedagogicalAudioBpm,
-    pedagogicalAudioPlaybackRate,
-    pedagogicalAudioData: pedagogicalAudioDataRef.current || undefined,
-    pedagogicalPlayheadStyle,
-    pedagogicalPlayheadEmoji,
-    pedagogicalPlayheadEmojiSize,
-    cursorLineStrokeWidth,
-    pedagogicalPlayheadMovement,
-    staves,
-    activeStaffIndex,
-    staffYOffsets,
-    measureStretchFactors: measureStretchFactors?.length ? measureStretchFactors : undefined,
-    systemYOffsets: systemYOffsets?.length ? systemYOffsets : undefined,
-    scoreData: staves[0]?.notes,
-    chords,
-    textBoxes,
-    documentFontFamily,
-    lyricFontFamily,
-    lyricFontSize,
-    lyricLineIndex,
-    lyricLineYOffset,
-    titleFontSize,
-    authorFontSize,
-    titleFontFamily: titleFontFamily || undefined,
-    authorFontFamily: authorFontFamily || undefined,
-    titleBold,
-    titleItalic,
-    authorBold,
-    authorItalic,
-    titleAlignment,
-    authorAlignment,
-    staffRowAlignment,
-    pageDesignDataUrl: pageDesignDataUrl || undefined,
-    pageDesignOpacity,
-    pageDesignFit,
-    pageDesignLayer,
-    pageDesignPositionX,
-    pageDesignPositionY,
-    pageDesignCrop,
-    visibleStaves: visibleStaves.length === staves.length ? visibleStaves : staves.map(() => true),
-    intermissionLabels
-  }), [songTitle, author, notationStyle, notationMode, isPedagogicalProject, timeSignature, timeSignatureMode, keySignature, staffLines, pixelsPerBeat, instrumentNotationVariant, pickupEnabled, pickupQuantity, pickupDuration, setupCompleted, cursorPosition, addedMeasures, pageOrientation, paperSize, layoutMeasuresPerLine, layoutLineBreakBefore, layoutPageBreakBefore, layoutSystemGap, layoutPartsGap, layoutConnectedBarlines, layoutGlobalSpacingMultiplier, viewMode, partLayoutMeasuresPerLine, partLayoutLineBreakBefore, partLayoutPageBreakBefore, showPageNavigator, pageFlowDirection, viewFitPage, viewSmartPage, visibleToolIds, tuningReferenceNote, tuningReferenceOctave, tuningReferenceHz, playNoteOnInsert, figurenotesSize, figurenotesStems, figurenotesChordLineGap, figurenotesChordBlocks, figurenotesChordBlocksShowTones, figurenotesMelodyShowNoteNames, timeSignatureSize, showBarNumbers, barNumberSize, showRhythmSyllables, showAllNoteLabels, enableEmojiOverlays, joClefStaffPosition, relativeNotationShowKeySignature, relativeNotationShowTraditionalClef, pedagogicalAudioBpm, pedagogicalAudioPlaybackRate, pedagogicalPlayheadStyle, pedagogicalPlayheadEmoji, pedagogicalPlayheadEmojiSize, cursorLineStrokeWidth, pedagogicalPlayheadMovement, staves, activeStaffIndex, staffYOffsets, measureStretchFactors, systemYOffsets, visibleStaves, intermissionLabels, chords, textBoxes, documentFontFamily, lyricFontFamily, lyricFontSize, lyricLineIndex, lyricLineYOffset, titleFontSize, authorFontSize, titleFontFamily, authorFontFamily, titleBold, titleItalic, authorBold, authorItalic, titleAlignment, authorAlignment, staffRowAlignment, pageDesignDataUrl, pageDesignOpacity, pageDesignFit, pageDesignLayer, pageDesignPositionX, pageDesignPositionY, pageDesignCrop]);
+  const buildProjectSnapshot = useCallback(() => {
+    const state = getPersistedState();
+    return {
+      version: 2,
+      ...state,
+      songTitle: state.songTitle || '',
+      author: state.author || '',
+      copyrightFooter: state.copyrightFooter || '',
+      scoreData: state.staves?.[0]?.notes,
+    };
+  }, [getPersistedState]);
+
+  // Project file export – same canonical snapshot as persistence/cloud save.
+  const exportScoreToJSON = useCallback(() => buildProjectSnapshot(), [buildProjectSnapshot]);
 
   // Download project file (future: replace with upload to Google Drive / OneDrive)
   const downloadProject = useCallback(() => {
@@ -3095,15 +3199,23 @@ function NoodiMeisterCore({ icons }) {
   const importProject = useCallback((data) => {
     if (!data || typeof data !== 'object') return false;
     try {
+      const legacyScoreData = data.scoreData ?? data.notes;
+      const legacyNotesArr = Array.isArray(legacyScoreData) ? legacyScoreData : [];
       if (Array.isArray(data.staves) && data.staves.length > 0) {
-        setStaves(data.staves);
+        const stavesHaveAnyNotes = data.staves.some((staff) => Array.isArray(staff?.notes) && staff.notes.length > 0);
+        const hydratedStaves = (!stavesHaveAnyNotes && legacyNotesArr.length > 0)
+          ? data.staves.map((staff, idx) => ({
+            ...staff,
+            notes: idx === 0 ? legacyNotesArr : (Array.isArray(staff?.notes) ? staff.notes : []),
+          }))
+          : data.staves;
+        setStaves(hydratedStaves);
         setActiveStaffIndex(typeof data.activeStaffIndex === 'number' ? Math.max(0, Math.min(data.activeStaffIndex, data.staves.length - 1)) : 0);
         if (Array.isArray(data.staffYOffsets)) setStaffYOffsets(data.staffYOffsets);
       if (Array.isArray(data.measureStretchFactors)) setMeasureStretchFactors(data.measureStretchFactors);
       if (Array.isArray(data.systemYOffsets)) setSystemYOffsets(data.systemYOffsets);
       } else {
-        const scoreData = data.scoreData ?? data.notes;
-        const notesArr = Array.isArray(scoreData) ? scoreData : [];
+        const notesArr = legacyNotesArr;
         const instId = data.instrument || 'single-staff-treble';
         const cfg = INSTRUMENT_CONFIG_BASE[instId];
         if (instId === 'piano' || cfg?.type === 'grandStaff') {
@@ -3372,6 +3484,11 @@ function NoodiMeisterCore({ icons }) {
 
   const loadFromStorage = useCallback(() => {
     try {
+      if (!allowBrowserProjectPersistence) {
+        setSaveFeedback('Cloud-kontol on brauseri projektisalvestus välja lülitatud.');
+        setTimeout(() => setSaveFeedback(''), 2500);
+        return;
+      }
       // Loading from browser storage is not a cloud file; avoid accidental overwrite to cloud.
       setOpenedCloudFile(null);
       const raw = localStorage.getItem(STORAGE_KEY);
@@ -3432,6 +3549,7 @@ function NoodiMeisterCore({ icons }) {
         if (data.setupCompleted != null) setSetupCompleted(data.setupCompleted);
         if (data.songTitle != null) setSongTitle(data.songTitle);
         if (data.author != null) setAuthor(data.author);
+        if (data.copyrightFooter != null) setCopyrightFooter(String(data.copyrightFooter || ''));
         if (data.pickupEnabled != null) setPickupEnabled(data.pickupEnabled);
         if (data.pickupQuantity != null) setPickupQuantity(data.pickupQuantity);
         if (data.pickupDuration != null) setPickupDuration(data.pickupDuration);
@@ -3535,7 +3653,97 @@ function NoodiMeisterCore({ icons }) {
       setSaveFeedback('Viga laadimisel');
       setTimeout(() => setSaveFeedback(''), 2000);
     }
-  }, [clearDirty]);
+  }, [allowBrowserProjectPersistence, clearDirty]);
+
+  const createCloudFileBinding = useCallback((provider, meta, overrides = {}) => {
+    if (!provider || !meta?.id) return null;
+    return {
+      provider,
+      fileId: meta.id,
+      name: meta.name || '',
+      versionTag: provider === 'google'
+        ? (meta.modifiedTime || overrides.versionTag || '')
+        : (meta.eTag || overrides.versionTag || ''),
+      parentId: meta.parentId || meta.parents?.[0] || overrides.parentId || '',
+      modifiedAt: meta.modifiedTime || meta.lastModifiedDateTime || '',
+      shared: meta.shared === true || overrides.shared === true,
+    };
+  }, []);
+
+  const getCloudRecoverySnapshot = useCallback((binding) => {
+    if (allowBrowserProjectPersistence || typeof window === 'undefined') return null;
+    const key = getCloudRecoveryStorageKey(binding?.provider, binding?.fileId);
+    if (!key) return null;
+    try {
+      const raw = localStorage.getItem(key);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (!parsed || parsed.sessionId !== cloudRecoverySessionIdRef.current) return null;
+      if (!parsed.snapshot || typeof parsed.snapshot !== 'object') return null;
+      return parsed;
+    } catch (_) {
+      return null;
+    }
+  }, [allowBrowserProjectPersistence]);
+
+  const writeCloudRecoverySnapshot = useCallback((binding, snapshotOverride = null) => {
+    if (allowBrowserProjectPersistence || typeof window === 'undefined') return;
+    const key = getCloudRecoveryStorageKey(binding?.provider, binding?.fileId);
+    if (!key) return;
+    try {
+      const snapshot = snapshotOverride || buildProjectSnapshot();
+      localStorage.setItem(key, JSON.stringify({
+        sessionId: cloudRecoverySessionIdRef.current,
+        savedAt: new Date().toISOString(),
+        provider: binding.provider,
+        fileId: binding.fileId,
+        versionTag: binding.versionTag || '',
+        snapshot,
+      }));
+    } catch (_) {}
+  }, [allowBrowserProjectPersistence, buildProjectSnapshot]);
+
+  const clearCloudRecoverySnapshot = useCallback((binding) => {
+    if (typeof window === 'undefined') return;
+    const key = getCloudRecoveryStorageKey(binding?.provider, binding?.fileId);
+    if (!key) return;
+    try { localStorage.removeItem(key); } catch (_) {}
+  }, []);
+
+  const buildProjectJson = useCallback(() => {
+    const data = exportScoreToJSON();
+    const json = JSON.stringify(data, null, 2);
+    if (!json || json.length < 50 || !Array.isArray(data?.staves) || data.staves.length === 0) {
+      throw new Error('Projektisisu puudub või on vigane – salvestamine peatatud');
+    }
+    return { data, json };
+  }, [exportScoreToJSON]);
+
+  const maybeRestoreCloudRecoverySnapshot = useCallback((binding, remoteData) => {
+    const recovery = getCloudRecoverySnapshot(binding);
+    if (!recovery?.snapshot) return remoteData;
+    setSaveFeedback('Taastasin viimase sama seadme tööseisu pärast katkestust.');
+    setTimeout(() => setSaveFeedback(''), 3000);
+    return recovery.snapshot;
+  }, [getCloudRecoverySnapshot]);
+
+  const ensureGoogleOverwriteAllowed = useCallback(async (token, binding) => {
+    if (!binding?.fileId) return binding;
+    const latest = await googleDrive.getFileMetadata(token, binding.fileId);
+    if (binding.versionTag && latest?.modifiedTime && binding.versionTag !== latest.modifiedTime) {
+      throw new Error('Pilvefail on teises seadmes muutunud. Laadi viimane versioon või salvesta koopia.');
+    }
+    return createCloudFileBinding('google', latest, binding) || binding;
+  }, [createCloudFileBinding]);
+
+  const ensureOneDriveOverwriteAllowed = useCallback(async (token, binding) => {
+    if (!binding?.fileId) return binding;
+    const latest = await oneDrive.getFileMetadata(token, binding.fileId);
+    if (binding.versionTag && latest?.eTag && binding.versionTag !== latest.eTag) {
+      throw new Error('Pilvefail on teises seadmes muutunud. Laadi viimane versioon või salvesta koopia.');
+    }
+    return createCloudFileBinding('onedrive', latest, binding) || binding;
+  }, [createCloudFileBinding]);
 
   // Salvesta pilve: kui on salvestuskaust seadistatud, salvesta otse sinna; vastasel juhul ava dialoog.
   const saveToCloud = useCallback(async () => {
@@ -3545,19 +3753,18 @@ function NoodiMeisterCore({ icons }) {
       setTimeout(() => setSaveFeedback(''), 3000);
       return;
     }
-    const data = exportScoreToJSON();
-    const json = JSON.stringify(data, null, 2);
-    // Ära salvesta tühja või vigast sisu (vältib faili tühjendamist Drive'is).
-    if (!json || json.length < 50 || !Array.isArray(data?.staves) || data.staves.length === 0) {
-      setSaveFeedback('Projektisisu puudub või on vigane – salvestamine peatatud');
-      setTimeout(() => setSaveFeedback(''), 4000);
-      return;
-    }
+    const { data, json } = buildProjectJson();
     // Kui fail on avatud Drive'ist (/app?fileId=...), kirjuta sama fileId üle (ei loo koopiat).
     if (openedCloudFile?.provider === 'google' && openedCloudFile.fileId) {
       try {
         setSaveFeedback('Salvestan…');
-        await googleDrive.updateProjectFile(token, openedCloudFile.fileId, json);
+        writeCloudRecoverySnapshot(openedCloudFile, data);
+        const safeBinding = await ensureGoogleOverwriteAllowed(token, openedCloudFile);
+        const updatedMeta = await googleDrive.updateProjectFile(token, safeBinding.fileId, json);
+        const nextBinding = createCloudFileBinding('google', { ...safeBinding, ...updatedMeta }, safeBinding) || safeBinding;
+        setOpenedCloudFile(nextBinding);
+        clearCloudRecoverySnapshot(nextBinding);
+        clearDirty();
         setSaveFeedback('Salvestatud pilve (sama fail)!');
         setTimeout(() => setSaveFeedback(''), 2500);
       } catch (e) {
@@ -3573,8 +3780,15 @@ function NoodiMeisterCore({ icons }) {
         setSaveFeedback('Salvestan…');
         const fileName = ((data.songTitle || t('common.untitled')).replace(/\s+/g, '-').replace(/[^\w\-.]/g, '') || t('common.untitled')) + '.nm';
         const fileId = await googleDrive.createFileInFolder(token, savedFolderId, fileName, json);
-        // Mark as opened cloud file so Ctrl/Cmd+S overwrites this file next time (no duplicates).
-        if (fileId) setOpenedCloudFile({ provider: 'google', fileId });
+        if (fileId) {
+          const meta = await googleDrive.getFileMetadata(token, fileId);
+          const binding = createCloudFileBinding('google', meta, { parentId: savedFolderId });
+          if (binding) {
+            setOpenedCloudFile(binding);
+            clearCloudRecoverySnapshot(binding);
+          }
+        }
+        clearDirty();
         setSaveFeedback('Salvestatud pilve!');
         setTimeout(() => setSaveFeedback(''), 2500);
       } catch (e) {
@@ -3584,7 +3798,7 @@ function NoodiMeisterCore({ icons }) {
       return;
     }
     setSaveCloudDialogOpen(true);
-  }, [exportScoreToJSON, sessionSaveFolderId, openedCloudFile]);
+  }, [buildProjectJson, clearCloudRecoverySnapshot, clearDirty, createCloudFileBinding, ensureGoogleOverwriteAllowed, openedCloudFile, sessionSaveFolderId, t, writeCloudRecoverySnapshot]);
 
   // Vali olemasolev kaust (Picker) ja salvesta sinna. Lisa kaust nimekirja, et järgmine salvestamine kasutaks sama kausta.
   const saveToCloudPickExisting = useCallback(async () => {
@@ -3599,11 +3813,18 @@ function NoodiMeisterCore({ icons }) {
         return;
       }
       setSaveFeedback('Salvestan…');
-      const data = exportScoreToJSON();
-      const json = JSON.stringify(data, null, 2);
+      const { data, json } = buildProjectJson();
       const fileName = ((data.songTitle || t('common.untitled')).replace(/\s+/g, '-').replace(/[^\w\-.]/g, '') || t('common.untitled')) + '.nm';
       const fileId = await googleDrive.createFileInFolder(token, folderId, fileName, json);
-      if (fileId) setOpenedCloudFile({ provider: 'google', fileId });
+      if (fileId) {
+        const meta = await googleDrive.getFileMetadata(token, fileId);
+        const binding = createCloudFileBinding('google', meta, { parentId: folderId });
+        if (binding) {
+          setOpenedCloudFile(binding);
+          clearCloudRecoverySnapshot(binding);
+        }
+      }
+      clearDirty();
       authStorage.addGoogleSaveFolder(folderId, '');
       try { await googleDrive.setSaveFoldersConfig(token, authStorage.getGoogleSaveFolders()); } catch (_) {}
       setSaveFeedback('Salvestatud pilve!');
@@ -3612,7 +3833,7 @@ function NoodiMeisterCore({ icons }) {
       setSaveFeedback(e?.message || 'Pilve salvestamine ebaõnnestus');
       setTimeout(() => setSaveFeedback(''), 3000);
     }
-  }, [exportScoreToJSON]);
+  }, [buildProjectJson, clearCloudRecoverySnapshot, clearDirty, createCloudFileBinding, t]);
 
   // Loo uus kaust juurkaustas ja salvesta sinna. Lisa kaust nimekirja, et järgmine salvestamine kasutaks sama kausta (vältib topeltkaustu).
   const saveToCloudCreateFolder = useCallback(async () => {
@@ -3628,11 +3849,18 @@ function NoodiMeisterCore({ icons }) {
       setSaveFeedback('Loon kausta…');
       const folderId = await googleDrive.createFolder(token, 'root', name);
       setSaveFeedback('Salvestan…');
-      const data = exportScoreToJSON();
-      const json = JSON.stringify(data, null, 2);
+      const { data, json } = buildProjectJson();
       const fileName = ((data.songTitle || t('common.untitled')).replace(/\s+/g, '-').replace(/[^\w\-.]/g, '') || t('common.untitled')) + '.nm';
       const fileId = await googleDrive.createFileInFolder(token, folderId, fileName, json);
-      if (fileId) setOpenedCloudFile({ provider: 'google', fileId });
+      if (fileId) {
+        const meta = await googleDrive.getFileMetadata(token, fileId);
+        const binding = createCloudFileBinding('google', meta, { parentId: folderId });
+        if (binding) {
+          setOpenedCloudFile(binding);
+          clearCloudRecoverySnapshot(binding);
+        }
+      }
+      clearDirty();
       authStorage.addGoogleSaveFolder(folderId, name);
       try { await googleDrive.setSaveFoldersConfig(token, authStorage.getGoogleSaveFolders()); } catch (_) {}
       setSaveCloudDialogOpen(false);
@@ -3642,7 +3870,7 @@ function NoodiMeisterCore({ icons }) {
       setSaveFeedback(e?.message || 'Pilve salvestamine ebaõnnestus');
       setTimeout(() => setSaveFeedback(''), 3000);
     }
-  }, [exportScoreToJSON, saveCloudNewFolderName]);
+  }, [buildProjectJson, clearCloudRecoverySnapshot, clearDirty, createCloudFileBinding, saveCloudNewFolderName, t]);
 
   // Salvesta OneDrive'i (Microsoft): kui fail on avatud pilvest, kirjuta sama fileId üle; muidu uus fail kausta/juurkausta.
   const saveToOneDrive = useCallback(async () => {
@@ -3652,17 +3880,17 @@ function NoodiMeisterCore({ icons }) {
       setTimeout(() => setSaveFeedback(''), 3000);
       return;
     }
-    const data = exportScoreToJSON();
-    const json = JSON.stringify(data, null, 2);
-    if (!json || json.length < 50 || !Array.isArray(data?.staves) || data.staves.length === 0) {
-      setSaveFeedback('Projektisisu puudub või on vigane – salvestamine peatatud');
-      setTimeout(() => setSaveFeedback(''), 4000);
-      return;
-    }
+    const { data, json } = buildProjectJson();
     if (openedCloudFile?.provider === 'onedrive' && openedCloudFile.fileId) {
       try {
         setSaveFeedback('Salvestan…');
-        await oneDrive.updateFileContent(token, openedCloudFile.fileId, json, 'application/json');
+        writeCloudRecoverySnapshot(openedCloudFile, data);
+        const safeBinding = await ensureOneDriveOverwriteAllowed(token, openedCloudFile);
+        const updated = await oneDrive.updateFileContent(token, safeBinding.fileId, json, 'application/json', { ifMatch: safeBinding.versionTag || undefined });
+        const nextBinding = createCloudFileBinding('onedrive', updated, safeBinding) || safeBinding;
+        setOpenedCloudFile(nextBinding);
+        clearCloudRecoverySnapshot(nextBinding);
+        clearDirty();
         setSaveFeedback(t('feedback.savedToCloud') || 'Salvestatud pilve (sama fail)!');
         setTimeout(() => setSaveFeedback(''), 2500);
       } catch (e) {
@@ -3675,20 +3903,43 @@ function NoodiMeisterCore({ icons }) {
       setSaveFeedback('Salvestan…');
       const fileName = ((data.songTitle || t('common.untitled')).replace(/\s+/g, '-').replace(/[^\w\-.]/g, '') || t('common.untitled')) + '.nm';
       const folderId = (sessionSaveFolderId?.cloud === 'onedrive' ? sessionSaveFolderId.folderId : null) || authStorage.getOneDriveSaveFolderId();
-      let savedItem = null;
-      if (folderId) {
-        savedItem = await oneDrive.uploadFileToFolder(token, folderId, fileName, json, 'application/json');
-      } else {
-        savedItem = await oneDrive.uploadFileToRoot(token, fileName, json, 'application/json');
+      const savedItem = await oneDrive.createProjectFile(token, folderId || 'root', fileName, json, 'application/json');
+      const binding = createCloudFileBinding('onedrive', savedItem, { parentId: folderId || 'root' });
+      if (binding) {
+        setOpenedCloudFile(binding);
+        clearCloudRecoverySnapshot(binding);
       }
-      if (savedItem?.id) setOpenedCloudFile({ provider: 'onedrive', fileId: savedItem.id });
+      clearDirty();
       setSaveFeedback(t('feedback.savedToCloud') || 'Salvestatud pilve!');
       setTimeout(() => setSaveFeedback(''), 2500);
     } catch (e) {
       setSaveFeedback(e?.message || 'Pilve salvestamine ebaõnnestus');
       setTimeout(() => setSaveFeedback(''), 3000);
     }
-  }, [exportScoreToJSON, sessionSaveFolderId, openedCloudFile]);
+  }, [buildProjectJson, clearCloudRecoverySnapshot, clearDirty, createCloudFileBinding, ensureOneDriveOverwriteAllowed, openedCloudFile, sessionSaveFolderId, t, writeCloudRecoverySnapshot]);
+
+  const saveToActiveCloud = useCallback(() => {
+    if (openedCloudFile?.provider === 'onedrive') {
+      saveToOneDrive();
+      return;
+    }
+    if (openedCloudFile?.provider === 'google') {
+      saveToCloud();
+      return;
+    }
+    const user = authStorage.getLoggedInUser?.();
+    const provider = user?.provider;
+    if (provider === 'microsoft') {
+      saveToOneDrive();
+      return;
+    }
+    if (provider === 'google') {
+      saveToCloud();
+      return;
+    }
+    setSaveFeedback('Logi sisse Google\'i või Microsoftiga, et salvestada pilve.');
+    setTimeout(() => setSaveFeedback(''), 3000);
+  }, [openedCloudFile, saveToCloud, saveToOneDrive]);
 
   /** Cmd/Ctrl+S: alati uuenda localStorage (brauser); kui sisse logitud, salvesta ka pilve. Avatud pilve fail uuendatakse sama fileId-ga (mitte uut koopiat). */
   const handleSaveShortcut = useCallback(() => {
@@ -3700,11 +3951,11 @@ function NoodiMeisterCore({ icons }) {
     const user = authStorage.getLoggedInUser();
     const provider = user?.provider;
     if (provider === 'google' && googleDrive.getStoredToken()) {
-      saveToCloud();
+      saveToActiveCloud();
       return;
     }
     if (provider === 'microsoft' && authStorage.getStoredMicrosoftTokenFromAuth()) {
-      saveToOneDrive();
+      saveToActiveCloud();
       return;
     }
     if (provider === 'apple') {
@@ -3714,7 +3965,7 @@ function NoodiMeisterCore({ icons }) {
     }
     setSaveFeedback(t('feedback.saved') || 'Salvestatud!');
     setTimeout(() => setSaveFeedback(''), 1800);
-  }, [isLoggedIn, saveToStorageSync, saveToStorage, saveToCloud, saveToOneDrive]);
+  }, [isLoggedIn, saveToStorageSync, saveToStorage, saveToActiveCloud, writeCloudRecoverySnapshot, openedCloudFile, buildProjectSnapshot]);
 
   // Laadi pilvest: Google Drive (Picker) või OneDrive (lihtne failinimekiri).
   const loadFromCloud = useCallback(async () => {
@@ -3774,12 +4025,16 @@ function NoodiMeisterCore({ icons }) {
         }
 
         setSaveFeedback('Laadin OneDrive\'ist…');
-        const content = await oneDrive.getFileContent(token, picked.id);
-        const data = JSON.parse(content);
+        const [content, meta] = await Promise.all([
+          oneDrive.getFileContent(token, picked.id),
+          oneDrive.getFileMetadata(token, picked.id),
+        ]);
+        const binding = createCloudFileBinding('onedrive', meta, { fileId: picked.id, shared: !!picked.webUrl });
+        const data = maybeRestoreCloudRecoverySnapshot(binding, JSON.parse(content));
         if (importProject(data)) {
           setSaveFeedback('Laaditud pilvest!');
           setTimeout(() => setSaveFeedback(''), 2500);
-          setOpenedCloudFile({ provider: 'onedrive', fileId: picked.id });
+          setOpenedCloudFile(binding);
         } else {
           setSaveFeedback('Vigane projektifail');
           setTimeout(() => setSaveFeedback(''), 2500);
@@ -3813,12 +4068,16 @@ function NoodiMeisterCore({ icons }) {
         return;
       }
       setSaveFeedback('Laadin…');
-      const content = await googleDrive.getFileContent(token, fileId);
-      const data = JSON.parse(content);
+      const [content, meta] = await Promise.all([
+        googleDrive.getFileContent(token, fileId),
+        googleDrive.getFileMetadata(token, fileId),
+      ]);
+      const binding = createCloudFileBinding('google', meta, { fileId });
+      const data = maybeRestoreCloudRecoverySnapshot(binding, JSON.parse(content));
       if (importProject(data)) {
         setSaveFeedback('Laaditud pilvest!');
         setTimeout(() => setSaveFeedback(''), 2500);
-        setOpenedCloudFile({ provider: 'google', fileId });
+        setOpenedCloudFile(binding);
       } else {
         setSaveFeedback('Vigane projektifail');
         setTimeout(() => setSaveFeedback(''), 2500);
@@ -3827,13 +4086,14 @@ function NoodiMeisterCore({ icons }) {
       setSaveFeedback(e?.message || 'Pilvest laadimine ebaõnnestus');
       setTimeout(() => setSaveFeedback(''), 3000);
     }
-  }, [importProject]);
+  }, [createCloudFileBinding, importProject, maybeRestoreCloudRecoverySnapshot]);
 
   // Load from localStorage on mount (skip when opening as new work /app?new=1 or /app?fileId=...)
   // Use importProject so both staves and legacy notes format load in full (taktid, lehekülje disain jms).
   useEffect(() => {
     if (searchParams?.get?.('new') === '1') return;
     if (searchParams?.get?.('fileId')) return; // laaditakse Drive'ist eraldi effect'iga
+    if (!allowBrowserProjectPersistence) return;
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) {
@@ -3847,7 +4107,7 @@ function NoodiMeisterCore({ icons }) {
         }
       }
     } catch (_) { /* ignore */ }
-  }, [importProject]);
+  }, [allowBrowserProjectPersistence, importProject, searchParams]);
 
   // Load from Google Drive or OneDrive when opening /app?fileId=... [&cloud=onedrive]
   const driveFileId = searchParams?.get?.('fileId');
@@ -3866,15 +4126,19 @@ function NoodiMeisterCore({ icons }) {
         done();
         return;
       }
-      oneDrive.getFileContent(token, driveFileId)
-        .then((content) => {
+      Promise.all([
+        oneDrive.getFileContent(token, driveFileId),
+        oneDrive.getFileMetadata(token, driveFileId),
+      ])
+        .then(([content, meta]) => {
           if (cancelled) return;
-          const data = JSON.parse(content);
+          const binding = createCloudFileBinding('onedrive', meta, { fileId: driveFileId });
+          const data = maybeRestoreCloudRecoverySnapshot(binding, JSON.parse(content));
           if (importProject(data)) {
             setSaveFeedback('Laaditud!');
             setTimeout(() => setSaveFeedback(''), 2500);
             // Märgi, et praegu avatud fail on OneDrive'i fail – Cmd/Ctrl+S saab selle üle kirjutada sama fileId-ga.
-            setOpenedCloudFile({ provider: 'onedrive', fileId: driveFileId });
+            setOpenedCloudFile(binding);
           } else {
             setSaveFeedback('Vigane projektifail');
             setTimeout(() => setSaveFeedback(''), 3000);
@@ -3897,15 +4161,19 @@ function NoodiMeisterCore({ icons }) {
         done();
         return;
       }
-      googleDrive.getFileContent(token, driveFileId)
-        .then((content) => {
+      Promise.all([
+        googleDrive.getFileContent(token, driveFileId),
+        googleDrive.getFileMetadata(token, driveFileId),
+      ])
+        .then(([content, meta]) => {
           if (cancelled) return;
-          const data = JSON.parse(content);
+          const binding = createCloudFileBinding('google', meta, { fileId: driveFileId });
+          const data = maybeRestoreCloudRecoverySnapshot(binding, JSON.parse(content));
           if (importProject(data)) {
             setSaveFeedback('Laaditud!');
             setTimeout(() => setSaveFeedback(''), 2500);
             // Märgi, et praegu avatud fail on Google Drive'i fail – Cmd/Ctrl+S saab selle üle kirjutada sama fileId-ga.
-            setOpenedCloudFile({ provider: 'google', fileId: driveFileId });
+            setOpenedCloudFile(binding);
           } else {
             setSaveFeedback('Vigane projektifail');
             setTimeout(() => setSaveFeedback(''), 3000);
@@ -3923,17 +4191,25 @@ function NoodiMeisterCore({ icons }) {
     if (isOneDrive) loadFromOneDrive();
     else loadFromGoogle();
     return () => { cancelled = true; };
-  }, [driveFileId, isOneDrive, importProject]);
+  }, [createCloudFileBinding, driveFileId, importProject, isOneDrive, maybeRestoreCloudRecoverySnapshot]);
 
   // Kohene salvestamine localStorage'i, kui akordiplokkide seaded muutuvad – vältib seadete kaotust kiire värskenduse korral
   useEffect(() => {
+    if (!allowBrowserProjectPersistence) {
+      if (openedCloudFile?.fileId) writeCloudRecoverySnapshot(openedCloudFile);
+      return;
+    }
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(getPersistedState()));
     } catch (_) { /* ignore */ }
-  }, [figurenotesChordBlocks, figurenotesChordBlocksShowTones, figurenotesMelodyShowNoteNames, figurenotesChordLineGap, getPersistedState]);
+  }, [allowBrowserProjectPersistence, figurenotesChordBlocks, figurenotesChordBlocksShowTones, figurenotesMelodyShowNoteNames, figurenotesChordLineGap, getPersistedState, openedCloudFile, writeCloudRecoverySnapshot]);
 
   // Auto-save to localStorage when relevant state changes
   useEffect(() => {
+    if (!allowBrowserProjectPersistence) {
+      if (openedCloudFile?.fileId) writeCloudRecoverySnapshot(openedCloudFile);
+      return;
+    }
     if (autoSaveTimeoutRef.current) clearTimeout(autoSaveTimeoutRef.current);
     autoSaveTimeoutRef.current = setTimeout(() => {
       try {
@@ -3944,7 +4220,7 @@ function NoodiMeisterCore({ icons }) {
     return () => {
       if (autoSaveTimeoutRef.current) clearTimeout(autoSaveTimeoutRef.current);
     };
-  }, [staves, activeStaffIndex, timeSignature, timeSignatureMode, keySignature, staffLines, notationStyle, pixelsPerBeat, notationMode, cursorPosition, addedMeasures, setupCompleted, songTitle, author, pickupEnabled, pickupQuantity, pickupDuration, layoutSystemGap, tuningReferenceNote, tuningReferenceOctave, tuningReferenceHz, playNoteOnInsert, figurenotesSize, figurenotesStems, figurenotesChordLineGap, figurenotesChordBlocks, figurenotesChordBlocksShowTones, figurenotesMelodyShowNoteNames, timeSignatureSize, showBarNumbers, barNumberSize, joClefStaffPosition, chords, textBoxes, getPersistedState]);
+  }, [allowBrowserProjectPersistence, staves, activeStaffIndex, timeSignature, timeSignatureMode, keySignature, staffLines, notationStyle, pixelsPerBeat, notationMode, cursorPosition, addedMeasures, setupCompleted, songTitle, author, pickupEnabled, pickupQuantity, pickupDuration, layoutSystemGap, tuningReferenceNote, tuningReferenceOctave, tuningReferenceHz, playNoteOnInsert, figurenotesSize, figurenotesStems, figurenotesChordLineGap, figurenotesChordBlocks, figurenotesChordBlocksShowTones, figurenotesMelodyShowNoteNames, timeSignatureSize, showBarNumbers, barNumberSize, joClefStaffPosition, chords, textBoxes, getPersistedState, openedCloudFile, writeCloudRecoverySnapshot]);
 
   // Hoiatus ja salvestamine enne sulgemist (tab/akna sulg, värskendus, navigeerimine)
   useEffect(() => {
@@ -3952,6 +4228,14 @@ function NoodiMeisterCore({ icons }) {
   }, [getPersistedState]);
   useEffect(() => {
     const onBeforeUnload = (e) => {
+      if (!allowBrowserProjectPersistence) {
+        if (dirtyRef.current && openedCloudFile?.fileId) {
+          writeCloudRecoverySnapshot(openedCloudFile);
+          e.preventDefault();
+          e.returnValue = '';
+        }
+        return;
+      }
       if (dirtyRef.current) {
         try {
           const state = getPersistedState();
@@ -3963,7 +4247,7 @@ function NoodiMeisterCore({ icons }) {
     };
     window.addEventListener('beforeunload', onBeforeUnload);
     return () => window.removeEventListener('beforeunload', onBeforeUnload);
-  }, [getPersistedState]);
+  }, [allowBrowserProjectPersistence, getPersistedState, openedCloudFile, writeCloudRecoverySnapshot]);
 
   // Cursor clamp is done later (after measures) so last beat of last bar is allowed; no early clamp here
 
@@ -6139,22 +6423,27 @@ function NoodiMeisterCore({ icons }) {
   const systemsForScoreRef = useRef([]);
   const exportContentBoundsRef = useRef({ width: 0, height: 0 });
   const exportCursorRef = useRef(null); // { x, y, emoji, size } container-relative, for MP4 fillText
-  /** Lehe laius ja suund sõltuvad ainult rakenduse valikust (Vaade → Lehe suund), mitte seadme ega brauseri ekraani suurusest (iPad, Android, MacBook, PC). */
-  /** A4 96 DPI: portrait 794×1123, landscape 1123×794 (suhe 1 : 1.414). */
-  const getFullPageLayoutWidth = (orientation) => (orientation === 'landscape' ? LAYOUT.PAGE_HEIGHT_PX : LAYOUT.PAGE_WIDTH_PX);
-  const pageWidth = getFullPageLayoutWidth(pageOrientation);
-  const [fitPageDisplayWidth, setFitPageDisplayWidth] = useState(() => getFullPageLayoutWidth('portrait'));
-  useEffect(() => { setFitPageDisplayWidth(0); }, [pageOrientation]);
+  const getFullPageLayoutWidth = useCallback((orientation, size = paperSize) => getScorePageDimensions(orientation, size).width, [paperSize]);
+  const basePageMetrics = useMemo(() => getPageMetrics({ paperSize, orientation: pageOrientation }), [paperSize, pageOrientation]);
+  const pageWidth = basePageMetrics.widthPx;
+  const [fitPageDisplayWidth, setFitPageDisplayWidth] = useState(() => getScorePageDimensions('portrait').width);
+  useEffect(() => { setFitPageDisplayWidth(0); }, [pageOrientation, paperSize]);
   useEffect(() => {
-    pdfExportOptionsRef.current = { pageFlowDirection, pageWidth, pageOrientation };
-  }, [pageFlowDirection, pageWidth, pageOrientation]);
+    pdfExportOptionsRef.current = {
+      pageFlowDirection,
+      pageWidth,
+      pageHeight: basePageMetrics.heightPx,
+      pageOrientation,
+      paperSize,
+    };
+  }, [pageFlowDirection, pageWidth, pageOrientation, paperSize, basePageMetrics.heightPx]);
   const basePageWidth = pageWidth;
   const effectiveLayoutPageWidth = (viewFitPage && !viewSmartPage)
     ? (fitPageDisplayWidth > 0 ? fitPageDisplayWidth : getFullPageLayoutWidth(pageOrientation))
     : basePageWidth;
-  const a4HeightRatio = pageOrientation === 'landscape' ? LAYOUT.A4_HEIGHT_RATIO_LANDSCAPE : LAYOUT.A4_HEIGHT_RATIO;
-  // A4 page height for layout (no PAGE_WIDTH_MIN fallback so portrait/landscape proportions are exact).
-  const a4PageHeightPx = effectiveLayoutPageWidth * a4HeightRatio;
+  const pageHeightRatio = basePageMetrics.heightPx / Math.max(1, basePageMetrics.widthPx);
+  const a4PageHeightPx = effectiveLayoutPageWidth * pageHeightRatio;
+  const a4PageHeightVal = a4PageHeightPx;
   /** Figurenotes row height (beat-box / line) scales with Noodigraafika suurus so barlines and box match note size. */
   const figurenotesRowHeight = Math.max(FIGURE_ROW_HEIGHT, Math.round(FIGURE_ROW_HEIGHT * figurenotesSize / 75));
   /** Chord line in figurenotes: only when user has enabled it in chord toolbox; half height of beat-box + 5px, below melody row; gap 0–20 px. */
@@ -6207,6 +6496,219 @@ function NoodiMeisterCore({ icons }) {
     : (visibleStaffList.length > 0 && visibleStaffList.length < staves.length
       ? FOCUS_STAFF_HEIGHT
       : getStaffHeight());
+  const exportLayoutState = useMemo(() => {
+    const contentHeightForPages = pageFlowDirection === 'horizontal'
+      ? (lastVerticalContentHeightRef.current || logicalContentHeight)
+      : logicalContentHeight;
+    const extraPages = Math.max(0, Number(effectiveLayoutExtraPages) || 0);
+    const totalPages = Math.max(1, Math.ceil((contentHeightForPages || logicalContentHeight) / a4PageHeightVal) + extraPages);
+    const notationHeight = logicalContentHeight || 800;
+    const contentHeight = pageFlowDirection === 'horizontal'
+      ? notationHeight
+      : Math.max(notationHeight, totalPages * a4PageHeightVal);
+    const contentWidth = pageFlowDirection === 'horizontal'
+      ? totalPages * effectiveLayoutPageWidth
+      : effectiveLayoutPageWidth;
+    return {
+      contentHeightForPages,
+      totalPages,
+      notationHeight,
+      contentHeight,
+      contentWidth,
+      pageHeight: a4PageHeightVal,
+    };
+  }, [pageFlowDirection, logicalContentHeight, effectiveLayoutExtraPages, a4PageHeightVal, effectiveLayoutPageWidth]);
+  const buildExportScene = useCallback(() => {
+    const staffEntries = visibleStaffList.length > 0
+      ? visibleStaffList
+      : staves.map((staff, i) => ({ staff, staffIdx: i, visibleIndex: i }));
+    const falseSelection = () => false;
+    const lyricActiveNoteIndex = null;
+    const timelinesMarkup = renderToStaticMarkup(
+      <>
+        {staffEntries.map(({ staff, staffIdx, visibleIndex }) => {
+          const isFirstInBraceGroup = staff.braceGroupId && staves[staffIdx + 1]?.braceGroupId === staff.braceGroupId;
+          const braceGroupSize = isFirstInBraceGroup ? 2 : 0;
+          const baseYOffset = visibleIndex * (effectiveStaffHeight + layoutPartsGap) + (staffYOffsets[staffIdx] ?? 0);
+          return (
+            <Timeline
+              key={`export-${staff.id}`}
+              measures={measuresWithMarks}
+              pageWidth={effectiveLayoutPageWidth}
+              paperSize={paperSize}
+              pageOrientation={pageOrientation}
+              physicalPageGapPx={0}
+              disablePhysicalPageGaps
+              hideCursorOverlay
+              timeSignature={timeSignature}
+              timeSignatureMode={timeSignatureMode}
+              pixelsPerBeat={pixelsPerBeat}
+              cursorPosition={0}
+              notationMode={notationMode}
+              staffLines={staffLines}
+              clefType={staff.clefType}
+              keySignature={keySignature}
+              isFirstInBraceGroup={isFirstInBraceGroup}
+              braceGroupSize={braceGroupSize}
+              relativeNotationShowKeySignature={relativeNotationShowKeySignature}
+              relativeNotationShowTraditionalClef={relativeNotationShowTraditionalClef}
+              joClefStaffPosition={joClefStaffPosition}
+              joClefFocused={false}
+              instrument={staff.instrumentId}
+              instrumentNotationVariant={instrumentNotationVariant}
+              instrumentConfig={instrumentConfig}
+              isDotted={isDotted}
+              isRest={isRest}
+              selectedDuration={selectedDuration}
+              noteInputMode={false}
+              selectedNoteIndex={-1}
+              isNoteSelected={falseSelection}
+              notes={staff.notes}
+              ghostPitch={null}
+              ghostOctave={null}
+              activeLyricNoteIndex={lyricActiveNoteIndex}
+              notationStyle={notationStyle}
+              layoutMeasuresPerLine={effectiveLayoutMeasuresPerLine}
+              layoutLineBreakBefore={effectiveLayoutLineBreakBefore}
+              layoutPageBreakBefore={effectiveLayoutPageBreakBefore}
+              layoutSystemGap={layoutSystemGap}
+              layoutPartsGap={layoutPartsGap}
+              layoutConnectedBarlines={layoutConnectedBarlines}
+              staffRowAlignment={staffRowAlignment}
+              staffIndexInScore={visibleIndex}
+              systemTotalHeight={((visibleStaffList.length > 0 ? visibleStaffList.length : staves.length) * (effectiveStaffHeight + layoutPartsGap)) - layoutPartsGap}
+              layoutGlobalSpacingMultiplier={layoutGlobalSpacingMultiplier}
+              showLayoutBreakIcons={false}
+              showStaffSpacerHandles={false}
+              systems={systemsForScore}
+              baseYOffset={baseYOffset}
+              isActiveStaff={false}
+              staffCount={visibleStaffList.length > 0 ? visibleStaffList.length : staves.length}
+              staffHeight={effectiveStaffHeight}
+              showBarNumbers={showBarNumbers}
+              barNumberSize={barNumberSize}
+              showRhythmSyllables={showRhythmSyllables}
+              showAllNoteLabels={showAllNoteLabels}
+              enableEmojiOverlays={enableEmojiOverlays}
+              noteheadShape={noteheadShape}
+              noteheadEmoji={noteheadEmoji}
+              translateLabel={t}
+              chords={chords}
+              figurenotesSize={figurenotesSize}
+              figurenotesStems={figurenotesStems}
+              figurenotesChordLineGap={figurenotesChordBlocks ? effectiveChordLineGap : 0}
+              figurenotesChordBlocks={figurenotesChordBlocks}
+              figurenotesChordBlocksShowTones={figurenotesChordBlocksShowTones}
+              figurenotesMelodyShowNoteNames={figurenotesMelodyShowNoteNames}
+              figurenotesRowHeight={figurenotesRowHeight}
+              figurenotesChordLineHeight={figurenotesChordBlocks ? figurenotesChordLineHeight : 0}
+              timeSignatureSize={timeSignatureSize}
+              themeColors={themeColors}
+              pedagogicalPlayheadStyle={pedagogicalPlayheadStyle}
+              pedagogicalPlayheadEmoji={pedagogicalPlayheadEmoji}
+              pedagogicalPlayheadEmojiSize={pedagogicalPlayheadEmojiSize}
+              cursorSizePx={cursorSizePx}
+              cursorLineStrokeWidth={cursorLineStrokeWidth}
+              cursorSubRow={cursorSubRow}
+              pedagogicalPlayheadMovement={pedagogicalPlayheadMovement}
+              isPedagogicalAudioPlaying={false}
+              isExportingAnimation={false}
+              pageFlowDirection={pageFlowDirection}
+              lyricFontFamily={lyricFontFamily}
+              lyricFontSize={lyricFontSize}
+              lyricLineYOffset={lyricLineYOffset}
+              svgWidthOverride={exportLayoutState.contentWidth}
+            />
+          );
+        })}
+      </>
+    );
+    const textBoxesMarkup = buildTextBoxesSvgMarkup(textBoxes, {
+      defaultFontFamily: documentFontFamily,
+      defaultFill: '#78350f',
+    });
+    const textBoxesBottom = textBoxes.reduce((max, box) => {
+      const boxBottom = (Number(box?.y) || 0) + Math.max(24, Number(box?.height) || 60);
+      return Math.max(max, boxBottom);
+    }, 0);
+    return {
+      sceneMarkup: timelinesMarkup,
+      overlayMarkup: textBoxesMarkup,
+      sceneWidth: exportLayoutState.contentWidth,
+      sceneHeight: pageFlowDirection === 'horizontal' ? exportLayoutState.pageHeight : exportLayoutState.contentHeight,
+      sceneViewBox: `0 0 ${exportLayoutState.contentWidth} ${pageFlowDirection === 'horizontal' ? exportLayoutState.pageHeight : exportLayoutState.contentHeight}`,
+      contentWidth: exportLayoutState.contentWidth,
+      contentHeight: Math.max(exportLayoutState.contentHeight + 160, textBoxesBottom + 40),
+    };
+  }, [
+    visibleStaffList,
+    staves,
+    effectiveStaffHeight,
+    layoutPartsGap,
+    staffYOffsets,
+    measuresWithMarks,
+    effectiveLayoutPageWidth,
+    paperSize,
+    pageOrientation,
+    timeSignature,
+    timeSignatureMode,
+    pixelsPerBeat,
+    notationMode,
+    staffLines,
+    keySignature,
+    relativeNotationShowKeySignature,
+    relativeNotationShowTraditionalClef,
+    joClefStaffPosition,
+    instrumentNotationVariant,
+    instrumentConfig,
+    isDotted,
+    isRest,
+    selectedDuration,
+    notationStyle,
+    effectiveLayoutMeasuresPerLine,
+    effectiveLayoutLineBreakBefore,
+    effectiveLayoutPageBreakBefore,
+    layoutSystemGap,
+    layoutConnectedBarlines,
+    staffRowAlignment,
+    layoutGlobalSpacingMultiplier,
+    systemsForScore,
+    showBarNumbers,
+    barNumberSize,
+    showRhythmSyllables,
+    showAllNoteLabels,
+    enableEmojiOverlays,
+    noteheadShape,
+    noteheadEmoji,
+    chords,
+    figurenotesSize,
+    figurenotesStems,
+    figurenotesChordBlocks,
+    figurenotesChordBlocksShowTones,
+    figurenotesMelodyShowNoteNames,
+    effectiveChordLineGap,
+    figurenotesRowHeight,
+    figurenotesChordLineHeight,
+    timeSignatureSize,
+    themeColors,
+    pedagogicalPlayheadStyle,
+    pedagogicalPlayheadEmoji,
+    pedagogicalPlayheadEmojiSize,
+    cursorSizePx,
+    cursorLineStrokeWidth,
+    cursorSubRow,
+    pedagogicalPlayheadMovement,
+    pageFlowDirection,
+    lyricFontFamily,
+    lyricFontSize,
+    lyricLineYOffset,
+    exportLayoutState,
+    pageFlowDirection,
+    t,
+    textBoxes,
+    documentFontFamily,
+  ]);
+  buildExportSceneRef.current = buildExportScene;
   const cursorMeasureIndex = measures.length > 0
     ? (() => {
         const i = measures.findIndex(m => cursorPosition >= m.startBeat && cursorPosition < m.endBeat);
@@ -6233,8 +6735,6 @@ function NoodiMeisterCore({ icons }) {
     return () => cancelAnimationFrame(t);
   }, [measures, layoutMeasuresPerLine, partLayoutMeasuresPerLine, layoutSystemGap, viewMode, pageOrientation, notes, addedMeasures]);
 
-  // Terve leht: A4 laius + pikkus (210:297 või 297:210). Pikkus = laius × suhe, et üks leht mahuks ekraanile.
-  const a4PageHeightVal = effectiveLayoutPageWidth * a4HeightRatio;
   const [fitPageScale, setFitPageScale] = useState(1);
   const viewFitOrSmart = viewFitPage || viewSmartPage;
   useEffect(() => {
@@ -6259,10 +6759,9 @@ function NoodiMeisterCore({ icons }) {
         if (availW <= 0 || availH <= 0) return;
       }
       if (viewFitPage && !viewSmartPage) {
-        // MuseScore-style: fixed page size (portrait = tall, landscape = wide), scale so one full page fits in viewport
+        // MuseScore-style: fixed page size, scale so one full page fits in viewport.
         const pw = getFullPageLayoutWidth(pageOrientation);
-        const ratio = pageOrientation === 'landscape' ? LAYOUT.A4_HEIGHT_RATIO_LANDSCAPE : LAYOUT.A4_HEIGHT_RATIO;
-        const pageHeight = pw * ratio;
+        const pageHeight = pw * pageHeightRatio;
         setFitPageDisplayWidth(pw);
         setFitPageScale(Math.min(1, availW / pw, availH / pageHeight));
       } else {
@@ -6483,13 +6982,15 @@ function NoodiMeisterCore({ icons }) {
   }, []);
 
   const handleScoreContentClick = useCallback((e) => {
-    if (activeToolbox !== 'textBox') return;
+    // Canva/MuseScore UX: Text cursor can place a text box by clicking the page,
+    // even if the text toolbox panel is not currently open.
+    if (cursorTool !== 'type') return;
     const rect = e.currentTarget.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
     const id = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `box-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    const option = toolboxes.textBox?.options?.[selectedOptionIndex];
-    const isTempo = option?.bpm != null || (option?.value && option.value !== 'free');
+    const option = activeToolbox === 'textBox' ? toolboxes.textBox?.options?.[selectedOptionIndex] : null;
+    const isTempo = !!option && (option?.bpm != null || (option?.value && option.value !== 'free'));
     const bpm = isTempo && textBoxTempoBpm ? parseInt(textBoxTempoBpm, 10) : option?.bpm;
     const text = isTempo ? (option?.label ?? '') + (bpm ? ` ${bpm} BPM` : '') : (textBoxDraftText || '').trim();
     dirtyRef.current = true;
@@ -6507,7 +7008,7 @@ function NoodiMeisterCore({ icons }) {
     }]);
     if (!isTempo) setTextBoxDraftText('');
     if (isTempo && textBoxTempoBpm) setTextBoxTempoBpm('');
-  }, [activeToolbox, selectedOptionIndex, textBoxDraftText, textBoxTempoBpm, toolboxes.textBox?.options]);
+  }, [cursorTool, activeToolbox, selectedOptionIndex, textBoxDraftText, textBoxTempoBpm, toolboxes.textBox?.options]);
 
   useEffect(() => {
     pageDesignDimensionsRef.current = { pw: effectiveLayoutPageWidth, a4: a4PageHeightVal };
@@ -6679,9 +7180,11 @@ function NoodiMeisterCore({ icons }) {
       state.notationStyle = style;
       state.notationMode = style === 'FIGURENOTES' ? 'figurenotes' : 'traditional';
       if (layoutMeasuresPerLine === 0) state.layoutMeasuresPerLine = 4;
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      if (allowBrowserProjectPersistence) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      }
     } catch (_) { /* ignore */ }
-  }, [getPersistedState, layoutMeasuresPerLine]);
+  }, [allowBrowserProjectPersistence, getPersistedState, layoutMeasuresPerLine]);
 
   const TIME_SIGNATURE_PRESETS = [
     { label: '4/4', value: [4, 4] },
@@ -7176,19 +7679,47 @@ function NoodiMeisterCore({ icons }) {
 
       {/* PDF Export Preview – zoom, ruler, save location */}
       {showPdfExportPreview && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-amber-950/60 dark:bg-black/70 backdrop-blur-sm p-4" onClick={() => { setShowPdfExportPreview(false); setPdfPreviewZoom(1); setPdfPreviewDataUrl(null); setPdfPreviewPageIndex(0); }}>
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-amber-950/60 dark:bg-black/70 backdrop-blur-sm p-4" onClick={closePdfExportPreview}>
           <div
             className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden border-2 border-amber-200 dark:border-white/20 flex flex-col"
             onClick={e => e.stopPropagation()}
           >
             <div className="bg-gradient-to-r from-slate-600 to-slate-700 text-white px-4 py-3 flex items-center justify-between">
               <h2 className="text-lg font-bold">{t('file.exportPdf')} – {t('file.exportPdfTitle') || 'Preview'}</h2>
-              <button type="button" onClick={() => { setShowPdfExportPreview(false); setPdfPreviewZoom(1); setPdfPreviewDataUrl(null); setPdfPreviewPageIndex(0); }} className="text-white/90 hover:text-white text-2xl leading-none">&times;</button>
+              <button type="button" onClick={closePdfExportPreview} className="text-white/90 hover:text-white text-2xl leading-none">&times;</button>
             </div>
             <div className="flex-1 p-4 overflow-y-auto space-y-4">
               <p className="text-sm text-amber-800 dark:text-amber-200">
-                Eksporditud PDF ja trükk on täpselt <strong>A4 (210×297 mm)</strong>. Noodid jäävad selle raami sisse; üle ääre ei lähe ega jää põhjendamatult väikeseks. Kontrolli eelvaates, et sisu sobib.
+                Eksporditud PDF ja trükk kasutavad <strong>{activeExportPageMetrics.paperSize.toUpperCase()} ({Math.round(activeExportPageMetrics.widthMm)}×{Math.round(activeExportPageMetrics.heightMm)} mm)</strong> lehte. Kontrolli eelvaates, et noodid, pealkiri ja jalus mahuvad samasse raami.
               </p>
+              <div className={`rounded-xl border px-3 py-3 space-y-2 ${
+                pdfPreviewDiagnostics.summaryLevel === 'error'
+                  ? 'border-red-300 bg-red-50 dark:border-red-800 dark:bg-red-950/30'
+                  : pdfPreviewDiagnostics.summaryLevel === 'warning'
+                    ? 'border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-950/30'
+                    : 'border-emerald-300 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950/20'
+              }`}>
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <span className="text-sm font-semibold text-amber-900 dark:text-white">{t('pdfDiagnostics.panelTitle')}</span>
+                  <span className={`text-xs font-medium px-2 py-1 rounded-full ${
+                    pdfPreviewDiagnostics.summaryLevel === 'error'
+                      ? 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-100'
+                      : pdfPreviewDiagnostics.summaryLevel === 'warning'
+                        ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-100'
+                        : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-100'
+                  }`}>
+                    {t(`pdfDiagnostics.level.${pdfPreviewDiagnostics.summaryLevel}`)}
+                  </span>
+                </div>
+                <div className="space-y-2">
+                  {pdfPreviewDiagnostics.items.map((item, idx) => (
+                    <div key={`${item.title}-${idx}`} className="rounded-lg border border-black/10 dark:border-white/10 bg-white/60 dark:bg-black/10 px-3 py-2">
+                      <div className="text-sm font-medium text-amber-900 dark:text-white">{item.title}</div>
+                      <div className="text-xs text-amber-800 dark:text-amber-100/90">{item.message}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-sm font-medium text-amber-900 dark:text-white">Zoom:</span>
                 <button type="button" onClick={() => setPdfPreviewZoom(z => Math.max(0.25, z - 0.25))} className="px-2 py-1 rounded bg-amber-100 dark:bg-amber-900/40 text-amber-900 dark:text-amber-100 text-sm font-medium">−</button>
@@ -7248,15 +7779,17 @@ function NoodiMeisterCore({ icons }) {
                 </div>
               )}
               <div className="flex flex-col items-center gap-2">
-                <span className="text-sm font-medium text-amber-900 dark:text-white self-start">Eelvaade = SVG (viewBox sünkroonitud: vertikaal 794×1123, horisontaal 1123×794). PDF eksportitakse vektoritena; A4 trükk vastavalt lehe suunale.</span>
+                <span className="text-sm font-medium text-amber-900 dark:text-white self-start">
+                  Eelvaade = SVG ({(pdfPreviewSvgData?.pageMetrics?.paperSize || activeExportPageMetrics.paperSize).toUpperCase()} {(pdfPreviewSvgData?.pageMetrics?.orientation || activeExportPageMetrics.orientation) === 'landscape' ? 'landscape' : 'portrait'} {Math.round((pdfPreviewSvgData?.pageMetrics?.widthPx || activeExportPageMetrics.widthPx))}×{Math.round((pdfPreviewSvgData?.pageMetrics?.heightPx || activeExportPageMetrics.heightPx))} px). PDF eksporditakse sama lehemudeliga.
+                </span>
                 <button type="button" onClick={() => setPdfPreviewCaptureKey(k => k + 1)} className="self-start px-2 py-1 rounded text-sm font-medium bg-amber-100 dark:bg-amber-900/40 text-amber-900 dark:text-amber-100 hover:bg-amber-200 dark:hover:bg-amber-800/50" title="Tee uus pilt noodilehest">Värskenda eelvaadet</button>
                 <div
                   ref={pdfPreviewContainerRef}
                   className="relative bg-white dark:bg-gray-100 rounded-sm shadow-lg box-border"
                   style={{
                     width: '100%',
-                    maxWidth: getScorePageDimensions(pageOrientation).width,
-                    aspectRatio: pageOrientation === 'landscape' ? '297/210' : '210/297',
+                    maxWidth: pdfPreviewSvgData?.pageMetrics?.widthPx || activeExportPageMetrics.widthPx,
+                    aspectRatio: `${pdfPreviewSvgData?.pageMetrics?.widthMm || activeExportPageMetrics.widthMm}/${pdfPreviewSvgData?.pageMetrics?.heightMm || activeExportPageMetrics.heightMm}`,
                     border: '3px solid #b45309',
                     boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.08)',
                     overflow: 'auto',
@@ -7265,8 +7798,25 @@ function NoodiMeisterCore({ icons }) {
                     justifyContent: 'center',
                   }}
                 >
-                  {/* Eelvaate zoom: 100% = noodileht täidab raami; <100% vähendab, >100% suurendab (keritav). Programmi zoom ei mõjuta eelvaate sisu (pildistatakse A4 1:1). */}
-                  {pdfPreviewDataUrl ? (
+                  {/* Eelvaate zoom: 100% = noodileht täidab raami; <100% vähendab, >100% suurendab (keritav). Programmi zoom ei muuda page-modelit. */}
+                  {pdfPreviewSvgString ? (
+                    <div
+                      className="box-border flex-shrink-0 flex items-center justify-center"
+                      style={{
+                        width: `${pdfPreviewZoom * 100}%`,
+                        height: `${pdfPreviewZoom * 100}%`,
+                        minWidth: 0,
+                        minHeight: 0,
+                        alignSelf: 'center',
+                      }}
+                    >
+                      <div
+                        className="block max-w-full max-h-full"
+                        style={{ width: '100%', height: '100%' }}
+                        dangerouslySetInnerHTML={{ __html: pdfPreviewSvgString }}
+                      />
+                    </div>
+                  ) : pdfPreviewDataUrl ? (
                     <div
                       className="box-border flex-shrink-0 flex items-center justify-center"
                       style={{
@@ -7288,7 +7838,7 @@ function NoodiMeisterCore({ icons }) {
                     <span className="text-amber-700 dark:text-amber-600 text-sm">Loading preview…</span>
                   )}
                   <span className="absolute bottom-1 right-1 px-1.5 py-0.5 rounded text-xs font-medium bg-amber-200/95 dark:bg-amber-800/95 text-amber-900 dark:text-amber-100 pointer-events-none" aria-hidden="true">
-                    A4 {pageOrientation === 'landscape' ? '297×210' : '210×297'} mm
+                    {(pdfPreviewSvgData?.pageMetrics?.paperSize || activeExportPageMetrics.paperSize).toUpperCase()} {Math.round(pdfPreviewSvgData?.pageMetrics?.widthMm || activeExportPageMetrics.widthMm)}×{Math.round(pdfPreviewSvgData?.pageMetrics?.heightMm || activeExportPageMetrics.heightMm)} mm
                   </span>
                 </div>
               </div>
@@ -7308,16 +7858,18 @@ function NoodiMeisterCore({ icons }) {
               </div>
             </div>
             <div className="p-4 border-t border-amber-200 dark:border-white/20 flex justify-end gap-2">
-              <button type="button" onClick={() => { setShowPdfExportPreview(false); setPdfPreviewZoom(1); setPdfPreviewDataUrl(null); setPdfPreviewPageIndex(0); }} className="px-4 py-2 rounded-lg border-2 border-amber-300 text-amber-800 dark:text-amber-200 font-medium hover:bg-amber-50 dark:hover:bg-amber-900/30">
+              <button type="button" onClick={closePdfExportPreview} className="px-4 py-2 rounded-lg border-2 border-amber-300 text-amber-800 dark:text-amber-200 font-medium hover:bg-amber-50 dark:hover:bg-amber-900/30">
                 Cancel
               </button>
               <button
                 type="button"
-                disabled={isExportingPdf || !pdfPreviewDataUrl}
+                disabled={isExportingPdf || (!pdfPreviewSvgString && !pdfPreviewDataUrl)}
                 onClick={async () => {
-                  await printFromPdfPreview();
-                  setShowPdfExportPreview(false);
-                  setHeaderMenuOpen(null);
+                  const ok = await printFromPdfPreview();
+                  if (ok) {
+                    closePdfExportPreview();
+                    setHeaderMenuOpen(null);
+                  }
                 }}
                 className="px-4 py-2 rounded-lg bg-slate-700 text-white font-semibold hover:bg-slate-600 disabled:opacity-60"
                 title={t('file.printTitle') || 'Open print dialog'}
@@ -7326,10 +7878,10 @@ function NoodiMeisterCore({ icons }) {
               </button>
               <button
                 type="button"
-                disabled={isExportingPdf || !pdfPreviewDataUrl}
+                disabled={isExportingPdf || (!pdfPreviewSvgString && !pdfPreviewDataUrl)}
                 onClick={async () => {
                   const opts = pdfExportSaveLocation === 'custom' && pdfExportFileHandle ? { fileHandle: pdfExportFileHandle } : {};
-                  await exportToPdf({
+                  const ok = await exportToPdf({
                     ...opts,
                     usePreviewSvg: !!pdfPreviewSvgData,
                     previewSvgData: pdfPreviewSvgData || undefined,
@@ -7337,8 +7889,10 @@ function NoodiMeisterCore({ icons }) {
                     previewDataUrl: pdfPreviewDataUrl,
                     previewSize: pdfPreviewSize,
                   });
-                  setShowPdfExportPreview(false);
-                  setHeaderMenuOpen(null);
+                  if (ok) {
+                    closePdfExportPreview();
+                    setHeaderMenuOpen(null);
+                  }
                 }}
                 className="px-4 py-2 rounded-lg bg-amber-600 text-white font-semibold hover:bg-amber-500 disabled:opacity-60"
               >
@@ -7451,6 +8005,16 @@ function NoodiMeisterCore({ icons }) {
                   value={author}
                   onChange={(e) => { dirtyRef.current = true; setAuthor(e.target.value); }}
                   placeholder="Helilooja nimi"
+                  className="w-full px-3 py-2 rounded-lg border-2 border-amber-200 bg-amber-50 text-amber-900"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-amber-900 mb-1">Copyright (jalus)</label>
+                <input
+                  type="text"
+                  value={copyrightFooter}
+                  onChange={(e) => { dirtyRef.current = true; setCopyrightFooter(e.target.value); }}
+                  placeholder="© 2026 Sinu nimi"
                   className="w-full px-3 py-2 rounded-lg border-2 border-amber-200 bg-amber-50 text-amber-900"
                 />
               </div>
@@ -8039,7 +8603,7 @@ function NoodiMeisterCore({ icons }) {
                     <div className="my-1 border-t border-slate-600" />
                     <button
                       type="button"
-                      onClick={() => { setPianoStripVisible(false); saveToCloud(); setHeaderMenuOpen(null); }}
+                      onClick={() => { setPianoStripVisible(false); saveToActiveCloud(); setHeaderMenuOpen(null); }}
                       className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-amber-50 hover:bg-slate-600"
                     >
                       <CloudUpload className="w-4 h-4" /> {t('file.saveCloud')}
@@ -8047,7 +8611,7 @@ function NoodiMeisterCore({ icons }) {
                     {openedCloudFile && (
                       <button
                         type="button"
-                        onClick={() => { setPianoStripVisible(false); saveToCloud(); setHeaderMenuOpen(null); }}
+                        onClick={() => { setPianoStripVisible(false); saveToActiveCloud(); setHeaderMenuOpen(null); }}
                         className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-amber-50 hover:bg-slate-600"
                       >
                         <CloudUpload className="w-4 h-4" /> {t('file.overwriteCloud')}
@@ -9630,7 +10194,7 @@ function NoodiMeisterCore({ icons }) {
           <div className="flex flex-col flex-1 min-h-0 w-full">
           <div className="flex items-center gap-3 flex-wrap flex-shrink-0 py-2 px-1 border-b border-amber-200/60 dark:border-white/20">
             <span className="text-sm font-medium text-amber-900 dark:text-amber-100">Suum:</span>
-            <button type="button" onClick={handleFitToWidth} className="px-3 py-1.5 rounded-lg bg-amber-100 dark:bg-amber-900/50 text-amber-900 dark:text-amber-100 text-sm font-medium hover:bg-amber-200 dark:hover:bg-amber-800/60" title="Mahuta noodipaber A4 raami laiusele">Mahuta lehele</button>
+            <button type="button" onClick={handleFitToWidth} className="px-3 py-1.5 rounded-lg bg-amber-100 dark:bg-amber-900/50 text-amber-900 dark:text-amber-100 text-sm font-medium hover:bg-amber-200 dark:hover:bg-amber-800/60" title={`Mahuta noodipaber ${paperSize.toUpperCase()} raami laiusele`}>Mahuta lehele</button>
             <input type="range" min={SCORE_ZOOM_MIN * 100} max={SCORE_ZOOM_MAX * 100} step="5" value={scoreZoomLevel * 100} onChange={(e) => setScoreZoomLevel(Math.round((Number(e.target.value) / 100) * 100) / 100)} className="w-28 accent-amber-600" aria-label="Noodiala suum" />
             <span className="text-sm text-amber-800 dark:text-amber-200 tabular-nums">{Math.round(scoreZoomLevel * 100)}%</span>
           </div>
@@ -9696,9 +10260,9 @@ function NoodiMeisterCore({ icons }) {
                 viewportH={mainRef.current?.clientHeight ?? 0}
                 zoom={scoreZoomLevel}
               />
-              {/* A4 trim caption: kasutaja näeb, et noodipaberi ala = trüki/PDF piir (ei ületa, ei jää väikeseks). */}
-              <span className="absolute bottom-2 right-2 px-2 py-1 rounded text-xs font-medium bg-amber-100/90 dark:bg-amber-900/50 text-amber-800 dark:text-amber-200 border border-amber-300 dark:border-amber-700 pointer-events-none select-none print:hidden" aria-hidden="true" title="Trükkimise ja PDF ekspordi piir = A4 (210×297 mm)">
-                A4 {pageOrientation === 'landscape' ? '297×210' : '210×297'} mm
+              {/* Trim caption: kasutaja näeb, et noodipaberi ala = trüki/PDF piir. */}
+              <span className="absolute bottom-2 right-2 px-2 py-1 rounded text-xs font-medium bg-amber-100/90 dark:bg-amber-900/50 text-amber-800 dark:text-amber-200 border border-amber-300 dark:border-amber-700 pointer-events-none select-none print:hidden" aria-hidden="true" title={`Trükkimise ja PDF ekspordi piir = ${paperSize.toUpperCase()} (${Math.round(activeExportPageMetrics.widthMm)}×${Math.round(activeExportPageMetrics.heightMm)} mm)`}>
+                {paperSize.toUpperCase()} {Math.round(activeExportPageMetrics.widthMm)}×{Math.round(activeExportPageMetrics.heightMm)} mm
               </span>
               {/* Lehekülje nurganupud: lisa/eemalda lõppu tühi lehekülg */}
               <div className="absolute inset-0 print:hidden pointer-events-none" aria-hidden="true">
@@ -9790,7 +10354,7 @@ function NoodiMeisterCore({ icons }) {
                 onMouseDown={(e) => {
                   // Text tool: create text box immediately on mousedown.
                   // This avoids missing the click event when other tools (e.g. hand pan) prevent it.
-                  if (activeToolbox === 'textBox' && e.button === 0) {
+                  if (cursorTool === 'type' && e.button === 0) {
                     e.preventDefault();
                     e.stopPropagation();
                     handleScoreContentClick(e);
@@ -9997,6 +10561,7 @@ function NoodiMeisterCore({ icons }) {
                   key={staff.id}
                   measures={measuresWithMarks}
                   pageWidth={effectiveLayoutPageWidth}
+                  paperSize={paperSize}
                   pageOrientation={pageOrientation}
                   physicalPageGapPx={3}
                   disablePhysicalPageGaps={showPdfExportPreview}
@@ -10182,6 +10747,7 @@ function NoodiMeisterCore({ icons }) {
                   isExportingAnimation={isExportingAnimation}
                   exportCursorRef={isFirstVisible ? exportCursorRef : undefined}
                   scoreContainerRef={isFirstVisible ? scoreContainerRef : undefined}
+                  exportSvgRef={isFirstVisible ? exportTargetSvgRef : undefined}
                   pageFlowDirection={pageFlowDirection}
                   lyricFontFamily={lyricFontFamily}
                   lyricFontSize={lyricFontSize}
@@ -10206,6 +10772,8 @@ function NoodiMeisterCore({ icons }) {
               const h = box.height ?? 60;
               const align = box.textAlign ?? 'center';
               const isSelected = selectedTextboxId === box.id;
+              const allowInteract = cursorTool !== 'hand';
+              const allowDragResize = cursorTool === 'select';
               return (
                 <div
                   key={box.id}
@@ -10222,11 +10790,22 @@ function NoodiMeisterCore({ icons }) {
                     fontStyle: box.fontStyle || undefined,
                     borderColor: isSelected ? 'rgb(217 119 6)' : 'rgb(253 230 138)',
                     textAlign: align,
+                    pointerEvents: allowInteract ? 'auto' : 'none',
                   }}
                   onClick={(e) => e.stopPropagation()}
                   onMouseDown={(e) => {
+                    if (!allowInteract) return;
                     if (e.target.closest('button') || e.target.closest('[data-resize-handle]')) return;
                     e.stopPropagation();
+                    // Text tool: click selects the box (for floating text controls), but does not drag/resize.
+                    if (cursorTool === 'type') {
+                      setSelectedTextboxId(box.id);
+                      setActiveTextLineType(null);
+                      return;
+                    }
+                    if (!allowDragResize) return;
+                    setSelectedTextboxId(box.id);
+                    setActiveTextLineType(null);
                     textboxDragStartRef.current = { id: box.id, startX: e.clientX, startY: e.clientY, boxStartX: box.x, boxStartY: box.y };
                   }}
                 >
@@ -10258,6 +10837,7 @@ function NoodiMeisterCore({ icons }) {
                             className="absolute w-3 h-3 bg-amber-600 rounded-sm border border-amber-800 z-10"
                             style={{ ...pos, cursor }}
                             onMouseDown={(e) => {
+                              if (!allowDragResize) return;
                               e.stopPropagation();
                               e.preventDefault();
                               textboxDragStartRef.current = null;
@@ -10483,7 +11063,7 @@ function getFingeringForNote(pitch, octave, instrumentId) {
 }
 
 // Timeline Component – multi-system layout (VexFlow loogika). (PAGE_BREAK_GAP on defineeritud üleval.)
-function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, pageWidth, cursorPosition, notationMode, staffLines, clefType, keySignature = 'C', relativeNotationShowKeySignature = false, relativeNotationShowTraditionalClef = false, onJoClefPositionChange, joClefFocused = false, onJoClefFocus, instrument = 'single-staff-treble', instrumentNotationVariant = 'standard', instrumentConfig = {}, showBarNumbers = true, barNumberSize = 11, showRhythmSyllables = false, joClefStaffPosition: joClefStaffPositionProp, showAllNoteLabels = false, enableEmojiOverlays = true, noteheadShape = 'oval', noteheadEmoji = '♪', onNoteTeacherLabelChange, onNoteLabelClick, chords = [], isDotted, isRest, selectedDuration, noteInputMode, selectedNoteIndex, isNoteSelected, notes: allNotes, onStaffAddNote, onNoteClick, onNoteMouseDown, onNoteMouseEnter, onNotePitchChange, onNoteBeatChange, canHandDragNotes = false, ghostPitch, ghostOctave, onFigureBeatClick, onChordLineMouseMove, onChordLineClick, notationStyle, layoutMeasuresPerLine = 4, layoutLineBreakBefore = [], layoutPageBreakBefore = [], layoutSystemGap = 120, layoutPartsGap, layoutConnectedBarlines = false, staffRowAlignment = 'center', staffIndexInScore = 0, systemTotalHeight, layoutGlobalSpacingMultiplier = 1, systems: systemsProp, baseYOffset = 0, isActiveStaff = true, staffCount = 1, staffHeight: staffHeightProp, figurenotesSize = 16, figurenotesStems = false, figurenotesChordLineGap = 6, figurenotesChordBlocks = false, figurenotesChordBlocksShowTones = true, figurenotesMelodyShowNoteNames = true, figurenotesRowHeight: figurenotesRowHeightProp, figurenotesChordLineHeight: figurenotesChordLineHeightProp, timeSignatureSize = 16, themeColors: themeColorsProp, pedagogicalPlayheadStyle = 'line', pedagogicalPlayheadEmoji = '🎵', pedagogicalPlayheadEmojiSize = 32, cursorSizePx, cursorLineStrokeWidth = 4, cursorSubRow = 0, pedagogicalPlayheadMovement = 'arch', isPedagogicalAudioPlaying = false, isExportingAnimation = false, exportCursorRef, scoreContainerRef, pageFlowDirection = 'vertical', pageOrientation = 'portrait', isFirstInBraceGroup = false, braceGroupSize = 0, lyricFontFamily = 'sans-serif', lyricFontSize = 12, lyricLineYOffset = 0, translateLabel, showLayoutBreakIcons = false, showStaffSpacerHandles = false, onSystemYOffsetChange, onToggleLineBreakAfter, activeLyricNoteIndex = null, physicalPageGapPx = 3, disablePhysicalPageGaps = false, hideCursorOverlay = false }) {
+function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, pageWidth, cursorPosition, notationMode, staffLines, clefType, keySignature = 'C', relativeNotationShowKeySignature = false, relativeNotationShowTraditionalClef = false, onJoClefPositionChange, joClefFocused = false, onJoClefFocus, instrument = 'single-staff-treble', instrumentNotationVariant = 'standard', instrumentConfig = {}, showBarNumbers = true, barNumberSize = 11, showRhythmSyllables = false, joClefStaffPosition: joClefStaffPositionProp, showAllNoteLabels = false, enableEmojiOverlays = true, noteheadShape = 'oval', noteheadEmoji = '♪', onNoteTeacherLabelChange, onNoteLabelClick, chords = [], isDotted, isRest, selectedDuration, noteInputMode, selectedNoteIndex, isNoteSelected, notes: allNotes, onStaffAddNote, onNoteClick, onNoteMouseDown, onNoteMouseEnter, onNotePitchChange, onNoteBeatChange, canHandDragNotes = false, ghostPitch, ghostOctave, onFigureBeatClick, onChordLineMouseMove, onChordLineClick, notationStyle, layoutMeasuresPerLine = 4, layoutLineBreakBefore = [], layoutPageBreakBefore = [], layoutSystemGap = 120, layoutPartsGap, layoutConnectedBarlines = false, staffRowAlignment = 'center', staffIndexInScore = 0, systemTotalHeight, layoutGlobalSpacingMultiplier = 1, systems: systemsProp, baseYOffset = 0, isActiveStaff = true, staffCount = 1, staffHeight: staffHeightProp, figurenotesSize = 16, figurenotesStems = false, figurenotesChordLineGap = 6, figurenotesChordBlocks = false, figurenotesChordBlocksShowTones = true, figurenotesMelodyShowNoteNames = true, figurenotesRowHeight: figurenotesRowHeightProp, figurenotesChordLineHeight: figurenotesChordLineHeightProp, timeSignatureSize = 16, themeColors: themeColorsProp, pedagogicalPlayheadStyle = 'line', pedagogicalPlayheadEmoji = '🎵', pedagogicalPlayheadEmojiSize = 32, cursorSizePx, cursorLineStrokeWidth = 4, cursorSubRow = 0, pedagogicalPlayheadMovement = 'arch', isPedagogicalAudioPlaying = false, isExportingAnimation = false, exportCursorRef, scoreContainerRef, exportSvgRef, pageFlowDirection = 'vertical', pageOrientation = 'portrait', paperSize = 'a4', isFirstInBraceGroup = false, braceGroupSize = 0, lyricFontFamily = 'sans-serif', lyricFontSize = 12, lyricLineYOffset = 0, translateLabel, showLayoutBreakIcons = false, showStaffSpacerHandles = false, onSystemYOffsetChange, onToggleLineBreakAfter, activeLyricNoteIndex = null, physicalPageGapPx = 3, disablePhysicalPageGaps = false, hideCursorOverlay = false, svgWidthOverride = null }) {
   if (typeof GLOBAL_NOTATION_CONFIG === 'undefined' || !GLOBAL_NOTATION_CONFIG || GLOBAL_NOTATION_CONFIG.EMOJIS === false) return null;
   const themeColors = themeColorsProp || { staffLineColor: '#000', noteFill: '#1a1a1a', textColor: '#1a1a1a', scoreBg: '#fffbf0', isDark: false };
   const safeKey = keySignature ?? 'C';
@@ -10554,8 +11134,8 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
     ? systemsComputed[systemsComputed.length - 1].yOffset + (staffCount || 1) * timelineHeight + 40
     : (staffCount || 1) * timelineHeight + 40;
   const isHorizontal = pageFlowDirection === 'horizontal';
-  const a4Ratio = pageOrientation === 'landscape' ? LAYOUT.A4_HEIGHT_RATIO_LANDSCAPE : LAYOUT.A4_HEIGHT_RATIO;
-  const a4PageHeight = (pageWidth || LAYOUT.PAGE_WIDTH_MIN) * a4Ratio;
+  const pageMetrics = getPageMetrics({ paperSize, orientation: pageOrientation });
+  const a4PageHeight = (pageWidth || LAYOUT.PAGE_WIDTH_MIN) * (pageMetrics.heightPx / Math.max(1, pageMetrics.widthPx));
   const totalPages = Math.max(1, Math.ceil(totalHeightLogical / a4PageHeight));
   // Screen-only "physical page gaps" like MuseScore/Docs (keeps logical layout & export intact).
   const pageGapPx = (!disablePhysicalPageGaps && !isHorizontal) ? Math.max(0, Number(physicalPageGapPx) || 0) : 0;
@@ -11082,14 +11662,19 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
     return null;
   })();
 
-  const svgWidth = isHorizontal ? totalPages * (pageWidth || LAYOUT.PAGE_WIDTH_MIN) : '100%';
+  const svgWidth = Number.isFinite(Number(svgWidthOverride))
+    ? Number(svgWidthOverride)
+    : (isHorizontal ? totalPages * (pageWidth || LAYOUT.PAGE_WIDTH_MIN) : '100%');
   const svgHeight = isHorizontal ? a4PageHeight : totalHeight;
   var viewBoxW = typeof svgWidth === 'number' ? svgWidth : (pageWidth || LAYOUT.PAGE_WIDTH_MIN);
   var viewBoxH = typeof svgHeight === 'number' ? svgHeight : totalHeight;
 
   return (
     <svg
-      ref={timelineSvgRef}
+      ref={(node) => {
+        timelineSvgRef.current = node;
+        if (exportSvgRef) exportSvgRef.current = node;
+      }}
       width={svgWidth}
       height={svgHeight}
       viewBox={`0 0 ${viewBoxW} ${viewBoxH}`}

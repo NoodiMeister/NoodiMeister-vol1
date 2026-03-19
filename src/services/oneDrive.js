@@ -335,6 +335,45 @@ export async function uploadFileToFolder(token, folderId, fileName, content, con
   return body;
 }
 
+async function createEmptyFile(token, parentId, fileName) {
+  const path = parentId && parentId !== 'root'
+    ? `/me/drive/items/${encodeURIComponent(parentId)}/children`
+    : '/me/drive/root/children';
+  const res = await fetch(`${GRAPH_ROOT}${path}`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      name: fileName,
+      file: {},
+      '@microsoft.graph.conflictBehavior': 'rename',
+    }),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const msg =
+      body?.error?.message ||
+      body?.message ||
+      (res.status === 403
+        ? 'Õigused OneDrive\'i salvestamiseks puuduvad (võib vajada Files.ReadWrite või uut sisselogimist).'
+        : `HTTP ${res.status}`);
+    const err = new Error(msg);
+    err.status = res.status;
+    err.body = body;
+    throw err;
+  }
+  return body;
+}
+
+export async function createProjectFile(token, folderId, fileName, content, contentType = 'application/json') {
+  if (!token) throw new Error('Microsofti token puudub (proovi uuesti sisse logida Microsoftiga).');
+  const created = await createEmptyFile(token, folderId || 'root', fileName);
+  if (!created?.id) throw new Error('Uue faili loomine ebaõnnestus.');
+  return updateFileContent(token, created.id, content, contentType);
+}
+
 /**
  * Kustuta fail OneDrive'ist.
  * @param {string} token
@@ -368,6 +407,20 @@ export async function getFileContent(token, fileId) {
   return res.text();
 }
 
+export async function getFileMetadata(token, fileId) {
+  if (!token) throw new Error('Microsofti token puudub.');
+  const item = await graphGet(token, `/me/drive/items/${encodeURIComponent(fileId)}?$select=id,name,eTag,lastModifiedDateTime,parentReference,remoteItem,shared,file`);
+  return {
+    id: item?.id,
+    name: item?.name || '',
+    eTag: item?.eTag || '',
+    lastModifiedDateTime: item?.lastModifiedDateTime || '',
+    parentId: item?.parentReference?.id || '',
+    parentPath: item?.parentReference?.path || '',
+    shared: !!(item?.remoteItem || item?.shared),
+  };
+}
+
 /**
  * Uuenda olemasoleva OneDrive'i faili sisu (kirjuta sama fail üle). Cmd/Ctrl+S avatud faili puhul.
  * @param {string} token
@@ -376,13 +429,15 @@ export async function getFileContent(token, fileId) {
  * @param {string} [contentType='application/json']
  * @returns {Promise<object>} driveItem
  */
-export async function updateFileContent(token, fileId, content, contentType = 'application/json') {
+export async function updateFileContent(token, fileId, content, contentType = 'application/json', options = {}) {
   if (!token) throw new Error('Microsofti token puudub.');
+  const ifMatch = typeof options.ifMatch === 'string' ? options.ifMatch.trim() : '';
   const res = await fetch(`${GRAPH_ROOT}/me/drive/items/${encodeURIComponent(fileId)}/content`, {
     method: 'PUT',
     headers: {
       Authorization: `Bearer ${token}`,
       'Content-Type': contentType,
+      ...(ifMatch ? { 'If-Match': ifMatch } : {}),
     },
     body: typeof content === 'string' ? content : JSON.stringify(content),
   });
@@ -391,7 +446,9 @@ export async function updateFileContent(token, fileId, content, contentType = 'a
     const msg =
       body?.error?.message ||
       body?.message ||
-      (res.status === 403
+      (res.status === 412
+        ? 'Pilvefail on teises seadmes muutunud. Laadi viimane versioon või salvesta koopia.'
+        : res.status === 403
         ? 'Õigused OneDrive\'i salvestamiseks puuduvad (võib vajada Files.ReadWrite või uut sisselogimist).'
         : `HTTP ${res.status}`);
     throw new Error(msg);
@@ -422,7 +479,7 @@ export async function copyProjectFile(token, fileId, targetFolderId, originalNam
   try {
     const content = await getFileContent(token, fileId);
     const name = (newName && String(newName).trim()) ? String(newName).trim() : buildCopyName(originalName);
-    const item = await uploadFileToFolder(token, targetFolderId || 'root', name, content, 'application/json');
+    const item = await createProjectFile(token, targetFolderId || 'root', name, content, 'application/json');
     return { ok: true, id: item?.id, name: item?.name || name };
   } catch (e) {
     return { ok: false, error: e?.message || 'Koopia tegemine ebaõnnestus.' };

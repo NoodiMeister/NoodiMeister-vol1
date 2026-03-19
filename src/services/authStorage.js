@@ -14,6 +14,16 @@ export const KEY_GOOGLE_SAVE_FOLDERS = 'noodimeister-google-save-folders';
 export const KEY_ONEDRIVE_SAVE_FOLDER = 'noodimeister-onedrive-save-folder';
 export const KEY_ONEDRIVE_SAVE_FOLDERS = 'noodimeister-onedrive-save-folders';
 export const KEY_SHORTCUT_PREFS = 'noodimeister-shortcut-prefs';
+export const KEY_USERS = 'noodimeister-users';
+
+function normalizeEmail(email) {
+  return String(email || '').trim().toLowerCase();
+}
+
+function normalizeProvider(provider) {
+  const value = String(provider || 'local').trim().toLowerCase();
+  return value === 'google' || value === 'microsoft' ? value : 'local';
+}
 
 /** Kasutaja e-posti põhine võti (iga kasutaja oma kaustade nimekiri – turvalisus). */
 function getGoogleSaveFoldersStorageKey(email) {
@@ -140,6 +150,80 @@ export function getLoggedInUser() {
     console.error('[authStorage] getLoggedInUser:', e?.message);
     return null;
   }
+}
+
+export function getStoredUsers() {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = window.localStorage?.getItem(KEY_USERS);
+    const parsed = JSON.parse(raw || '[]');
+    if (!Array.isArray(parsed)) return [];
+    return parsed.map((entry) => ({
+      ...entry,
+      email: normalizeEmail(entry?.email),
+      provider: normalizeProvider(entry?.provider),
+      authMethods: Array.isArray(entry?.authMethods)
+        ? entry.authMethods.map(normalizeProvider).filter(Boolean)
+        : [normalizeProvider(entry?.provider)],
+    }));
+  } catch (_) {
+    return [];
+  }
+}
+
+function writeStoredUsers(users) {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage?.setItem(KEY_USERS, JSON.stringify(Array.isArray(users) ? users : []));
+  } catch (_) {}
+}
+
+export function upsertUserAccount(user, options = {}) {
+  const email = normalizeEmail(user?.email);
+  if (!email) return null;
+  const provider = normalizeProvider(options.provider || user?.provider || 'local');
+  const users = getStoredUsers();
+  const index = users.findIndex((entry) => normalizeEmail(entry?.email) === email && normalizeProvider(entry?.provider) === provider);
+  const existing = index >= 0 ? users[index] : null;
+  const authMethods = Array.isArray(existing?.authMethods) ? [...existing.authMethods] : [];
+  if (!authMethods.includes(provider)) authMethods.push(provider);
+
+  const merged = {
+    ...existing,
+    ...user,
+    email,
+    name: String(user?.name || existing?.name || email.split('@')[0] || '').trim(),
+    provider,
+    authMethods,
+    password: user?.password ?? existing?.password,
+    createdAt: existing?.createdAt || new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+
+  if (index >= 0) users[index] = merged;
+  else users.push(merged);
+  writeStoredUsers(users);
+  return merged;
+}
+
+export function setLoggedInUser(user, rememberMe = false) {
+  const storage = getStorageForLogin(rememberMe);
+  if (!storage) return null;
+  const provider = normalizeProvider(user?.provider);
+  const merged = upsertUserAccount(user, { provider });
+  if (!merged?.email) return null;
+  const sessionUser = {
+    email: merged.email,
+    name: merged.name,
+    provider,
+    authMethods: Array.isArray(merged.authMethods) ? merged.authMethods : [],
+  };
+  try {
+    storage.setItem(KEY_LOGGED_IN, JSON.stringify(sessionUser));
+  } catch (_) {
+    return null;
+  }
+  return sessionUser;
 }
 
 /** Google token (Drive) – loetakse samast salvestusest kui sisselogimine. */
