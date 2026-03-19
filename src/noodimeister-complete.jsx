@@ -1869,6 +1869,10 @@ function NoodiMeisterCore({ icons }) {
     if (isNewWorkFlow) setNewWorkSetupOpen(true);
   }, [isNewWorkFlow]);
 
+  useEffect(() => {
+    if (!setupCompleted) setNewWorkSetupOpen(true);
+  }, [setupCompleted]);
+
   const partWindowStaffIndices = useMemo(() => {
     if (!partStaffId) return null;
     const idx = staves.findIndex((s) => String(s.id) === String(partStaffId));
@@ -7367,7 +7371,7 @@ function NoodiMeisterCore({ icons }) {
     <div className="min-h-screen flex flex-col relative bg-[var(--bg-color)]">
       {floatingTextToolPopup}
       {/* New Project Setup Wizard – overlay until mode selected */}
-      {!setupCompleted && (
+      {false && !setupCompleted && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-amber-950/80 dark:bg-black/70 backdrop-blur-sm p-6">
           <div className="bg-white dark:bg-black rounded-2xl shadow-2xl max-w-2xl w-full overflow-hidden border-2 border-amber-200 dark:border-white/20">
             <div className="bg-gradient-to-r from-amber-700 to-amber-600 dark:from-amber-800 dark:to-amber-900 text-white px-8 py-6">
@@ -7535,7 +7539,11 @@ function NoodiMeisterCore({ icons }) {
           role="dialog"
           aria-modal="true"
           aria-labelledby="new-work-dialog-title"
-          onClick={() => { setNewWorkSetupOpen(false); setSearchParams((prev) => { const next = new URLSearchParams(prev); next.delete('new'); return next; }); }}
+          onClick={() => {
+            if (!setupCompleted) return;
+            setNewWorkSetupOpen(false);
+            setSearchParams((prev) => { const next = new URLSearchParams(prev); next.delete('new'); return next; });
+          }}
         >
           <div className="bg-white dark:bg-black rounded-2xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-hidden border-2 border-amber-200 dark:border-white/20 flex flex-col" onClick={e => e.stopPropagation()}>
             <div className="bg-gradient-to-r from-amber-600 to-amber-700 text-white px-6 py-4 flex items-center justify-between shrink-0">
@@ -7718,13 +7726,15 @@ function NoodiMeisterCore({ icons }) {
               >
                 Loo töö
               </button>
-              <button
-                type="button"
-                onClick={() => { setNewWorkSetupOpen(false); setSearchParams({}); }}
-                className="px-4 py-3 rounded-lg border-2 border-amber-300 text-amber-800 font-medium hover:bg-amber-50"
-              >
-                Tühista
-              </button>
+              {setupCompleted && (
+                <button
+                  type="button"
+                  onClick={() => { setNewWorkSetupOpen(false); setSearchParams({}); }}
+                  className="px-4 py-3 rounded-lg border-2 border-amber-300 text-amber-800 font-medium hover:bg-amber-50"
+                >
+                  Tühista
+                </button>
+              )}
             </div>
           </div>
         </div>
