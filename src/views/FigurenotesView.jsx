@@ -12,7 +12,7 @@ import { smuflNoteheadForType, smuflTimeSigDigitsForNumber, SMUFL_GLYPH } from '
 import { getShapePathsByOctave, getFigureStyle } from '../constants/FigureNotesLibrary';
 import { getChordMidiNotes } from '../musical/chordPlayback';
 import { getAccidentalForPitchInKey } from '../utils/notationConstants';
-import { TIME_SIG_LAYOUT } from '../notation/TimeSignatureLayout';
+import { TIME_SIG_LAYOUT, getFigureTimeSignatureX } from '../notation/TimeSignatureLayout';
 
 const LAYOUT = { MARGIN_LEFT: 60, MEASURE_MIN_WIDTH: 28 };
 const FIGURE_START_PADDING = 8;
@@ -94,10 +94,9 @@ function TimeSigDigits({ x, y, fontSize, number, fill }) {
   );
 }
 
-function renderTimeSignature(timeSignature, timeSignatureMode, centerY, notationSize = TIME_SIG_REF, textColor = '#333', noteFill = '#333') {
+function renderTimeSignature(timeSignature, timeSignatureMode, centerY, notationSize = TIME_SIG_REF, textColor = '#333', noteFill = '#333', x = 45) {
   const scale = notationSize / TIME_SIG_REF;
   const L = TIME_SIG_LAYOUT;
-  const x = 45;
   const y = centerY;
   const fNum = Math.round(18 * scale);
   const fDen = Math.round(18 * scale);
@@ -294,7 +293,7 @@ export function FigurenotesView({
 
             {sys.systemIndex === 0 && (
               <g transform={`translate(0, ${sys.yOffset})`}>
-                {renderTimeSignature(timeSignature, timeSignatureMode, centerY, timeSignatureSize, timeSigTextColor, timeSigNoteFill)}
+                {renderTimeSignature(timeSignature, timeSignatureMode, centerY, timeSignatureSize, timeSigTextColor, timeSigNoteFill, getFigureTimeSignatureX(marginLeft))}
               </g>
             )}
 

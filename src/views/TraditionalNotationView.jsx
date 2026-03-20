@@ -12,7 +12,7 @@ import { getRhythmSyllableForNote } from '../notation/rhythmSyllables';
 import { expandEmojiShortcuts } from '../utils/emojiShortcuts';
 import { SmuflGlyph } from '../notation/smufl/SmuflGlyph';
 import { SMUFL_GLYPH, NOTEHEAD_SHAPE_GLYPH, smuflRestForDurationLabel, smuflTimeSigDigitsForNumber } from '../notation/smufl/glyphs';
-import { TIME_SIG_LAYOUT } from '../notation/TimeSignatureLayout';
+import { TIME_SIG_LAYOUT, getTraditionalTimeSignatureX } from '../notation/TimeSignatureLayout';
 import {
   getStaffLinePositions,
   getYFromStaffPosition,
@@ -599,8 +599,14 @@ export function TraditionalNotationView({
                     (() => {
                       const sharpCount = (relativeNotationShowKeySignature && keySignature && keySignature !== 'C') ? ({ G: 1, D: 2, A: 3, E: 4, B: 5 }[keySignature] || 0) : 0;
                       const flatCount = (relativeNotationShowKeySignature && keySignature && keySignature !== 'C') ? ({ F: 1, Bb: 2, Eb: 3 }[keySignature] || 0) : 0;
-                      const keySigWidth = Math.max(sharpCount, flatCount) * 12;
-                      const timeSigX = clefX + (multiStaff ? 50 : 0) + LAYOUT.CLEF_WIDTH + 1 + keySigWidth;
+                      const keySigCount = Math.max(sharpCount, flatCount);
+                      const timeSigX = getTraditionalTimeSignatureX({
+                        staffLeft,
+                        clefWidth: LAYOUT.CLEF_WIDTH,
+                        keySigCount,
+                        extraLeft: multiStaff ? 50 : 0,
+                        measureStartX: effectiveMarginLeft,
+                      });
                       return (
                         <g transform={`translate(${timeSigX}, ${staffY})`}>{renderTimeSignature(timeSignature, timeSignatureMode, centerY, timeSigTextColor, timeSigNoteFill, 0)}</g>
                       );

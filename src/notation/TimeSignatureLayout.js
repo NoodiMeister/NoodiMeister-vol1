@@ -35,3 +35,31 @@ export const TIME_SIG_LAYOUT = {
   WHOLE_RX: 5,
   WHOLE_RY: 3,
 };
+
+/** MuseScore-like visual spacing: place time signature after clef+key and before first measure content. */
+export const TIME_SIG_SPACING = {
+  AFTER_CLEF_PX: 6,
+  KEY_SIG_STEP_PX: 12,
+  BEFORE_FIRST_MEASURE_PX: 6,
+  FIGURE_BEFORE_FIRST_MEASURE_PX: 14,
+};
+
+export function getTraditionalTimeSignatureX({
+  staffLeft = 10,
+  clefWidth = 45,
+  keySigCount = 0,
+  extraLeft = 0,
+  measureStartX,
+}) {
+  const count = Math.max(0, Number(keySigCount) || 0);
+  const baseX = staffLeft + 1 + extraLeft + clefWidth + TIME_SIG_SPACING.AFTER_CLEF_PX + count * TIME_SIG_SPACING.KEY_SIG_STEP_PX;
+  if (typeof measureStartX === 'number' && Number.isFinite(measureStartX)) {
+    return Math.min(baseX, Math.max(0, measureStartX - TIME_SIG_SPACING.BEFORE_FIRST_MEASURE_PX));
+  }
+  return baseX;
+}
+
+export function getFigureTimeSignatureX(measureStartX, fallbackX = 45) {
+  if (typeof measureStartX !== 'number' || !Number.isFinite(measureStartX)) return fallbackX;
+  return Math.max(12, measureStartX - TIME_SIG_SPACING.FIGURE_BEFORE_FIRST_MEASURE_PX);
+}
