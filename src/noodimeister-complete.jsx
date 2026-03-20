@@ -61,6 +61,7 @@ import 'svg2pdf.js';
 import Soundfont from 'soundfont-player';
 import { scoreToSvg, getFirstPageSvgString, getPageSvgString } from './utils/scoreToSvg';
 import { getScorePageDimensions } from './layout/LayoutManager';
+import { openCloudFileInNewBrowserTab } from './utils/appUrls';
 
 // Safe Initialization: väline seadete objekt KÕIGE ALGUSES (väljaspool komponente). Vercel ei minifitseeri var-deklaratsioone YA/JA-ks.
 var GLOBAL_NOTATION_CONFIG = {
@@ -97,7 +98,7 @@ var LUCIDE_ICONS = [
   'Music2', 'Clock', 'Hash', 'Type', 'Piano', 'Palette', 'Layout', 'Check', 'Save', 'FolderOpen',
   'Plus', 'Settings', 'Key', 'Repeat', 'Cloud', 'LogOut', 'LogIn', 'UserPlus', 'User', 'CloudUpload', 'CloudDownload', 'FolderPlus', 'ChevronDown',
   'Play', 'Pause', 'Video', 'Eye', 'ArrowDown', 'ArrowRight', 'ArrowUpDown', 'X', 'Printer', 'FileDown',
-  'Hand', 'MousePointer', 'Keyboard'
+  'Hand', 'MousePointer', 'Keyboard', 'ExternalLink'
 ];
 var STORAGE_KEY = 'noodimeister-data';
 var THEME_STORAGE_KEY = 'noodimeister-theme';
@@ -1469,6 +1470,11 @@ function NoodiMeisterCore({ icons }) {
   const [shortcutsEditingActionKey, setShortcutsEditingActionKey] = useState(null);
   const [shortcutsDraftPrefs, setShortcutsDraftPrefs] = useState({});
   const [saveCloudDialogOpen, setSaveCloudDialogOpen] = useState(false);
+  /** Google Drive: modaalne faililoend (Drive API), mitte Picker / prompt. */
+  const [googleLoadPickerOpen, setGoogleLoadPickerOpen] = useState(false);
+  const [googleLoadPickerLoading, setGoogleLoadPickerLoading] = useState(false);
+  const [googleLoadPickerError, setGoogleLoadPickerError] = useState('');
+  const [googleLoadPickerRows, setGoogleLoadPickerRows] = useState([]);
 
   useEffect(() => {
     if (!settingsOpen) return;
@@ -1656,14 +1662,14 @@ function NoodiMeisterCore({ icons }) {
     if (bodyOverflowRef.current == null) {
       bodyOverflowRef.current = body.style.overflow || '';
     }
-    const hasBlockingModal = newWorkSetupOpen || saveCloudDialogOpen || settingsOpen || shortcutsOpen || showPdfExportPreview;
+    const hasBlockingModal = newWorkSetupOpen || saveCloudDialogOpen || googleLoadPickerOpen || settingsOpen || shortcutsOpen || showPdfExportPreview;
     body.style.overflow = hasBlockingModal ? 'hidden' : bodyOverflowRef.current;
     return () => {
       if (body && bodyOverflowRef.current != null) {
         body.style.overflow = bodyOverflowRef.current;
       }
     };
-  }, [newWorkSetupOpen, saveCloudDialogOpen, settingsOpen, shortcutsOpen, showPdfExportPreview]);
+  }, [newWorkSetupOpen, saveCloudDialogOpen, googleLoadPickerOpen, settingsOpen, shortcutsOpen, showPdfExportPreview]);
 
   useEffect(() => {
     if (isNewWorkFlow) setNewWorkSetupOpen(true);
@@ -3716,7 +3722,35 @@ function NoodiMeisterCore({ icons }) {
     setTimeout(() => setSaveFeedback(''), 1800);
   }, [isLoggedIn, saveToStorageSync, saveToStorage, saveToCloud, saveToOneDrive]);
 
-  // Laadi pilvest: Google Drive (Picker) või OneDrive (lihtne failinimekiri).
+  const loadGoogleDriveProjectById = useCallback(async (fileId) => {
+    const token = googleDrive.getStoredToken?.();
+    if (!token || !fileId) return;
+    setGoogleLoadPickerOpen(false);
+    setGoogleLoadPickerError('');
+    try {
+      setSaveFeedback(t('feedback.loadingFromCloud') || 'Laadin…');
+      const content = await googleDrive.getFileContent(token, fileId);
+      const data = JSON.parse(content);
+      if (importProject(data)) {
+        setSaveFeedback(t('feedback.loadedFromCloud') || 'Laaditud pilvest!');
+        setTimeout(() => setSaveFeedback(''), 2500);
+        setOpenedCloudFile({ provider: 'google', fileId });
+      } else {
+        setSaveFeedback('Vigane projektifail');
+        setTimeout(() => setSaveFeedback(''), 2500);
+      }
+    } catch (e) {
+      setSaveFeedback(e?.message || 'Pilvest laadimine ebaõnnestus');
+      setTimeout(() => setSaveFeedback(''), 3000);
+    }
+  }, [importProject, t]);
+
+  const openGoogleDriveProjectInNewTab = useCallback((fileId) => {
+    openCloudFileInNewBrowserTab(fileId);
+    setGoogleLoadPickerOpen(false);
+  }, []);
+
+  // Laadi pilvest: Google Drive (modaalne nimekiri) või OneDrive (prompt).
   const loadFromCloud = useCallback(async () => {
     const user = authStorage.getLoggedInUser?.();
     const provider = user?.provider;
@@ -3791,43 +3825,41 @@ function NoodiMeisterCore({ icons }) {
       return;
     }
 
-    // Default: Google Drive
+    // Default: Google Drive — rakendusesisene klikitav nimekiri (Drive API).
     const token = googleDrive.getStoredToken?.();
     if (!token) {
-      setSaveFeedback('Logi sisse Google\'iga, et laadida Google Drive\'ist.');
+      setSaveFeedback(t('feedback.loadFromCloudHint') || 'Logi sisse Google\'iga, et laadida Google Drive\'ist.');
       setTimeout(() => setSaveFeedback(''), 3000);
       return;
     }
+    setGoogleLoadPickerError('');
+    setGoogleLoadPickerRows([]);
+    setGoogleLoadPickerOpen(true);
+    setGoogleLoadPickerLoading(true);
     try {
-      setSaveFeedback('Vali fail…');
-      const fileId = await googleDrive.pickFile(token);
-      if (!fileId) {
-        // Picker võib olla blokeeritud / skript ei laadinud / kasutaja tühistas.
-        const pickerReady = !!(window.google && window.google.picker);
-        if (!pickerReady) {
-          setSaveFeedback('Google failivalija ei käivitunud. Luba kolmanda osapoole skriptid või proovi teist brauserit.');
-          setTimeout(() => setSaveFeedback(''), 4500);
-        } else {
-          setSaveFeedback('');
-        }
-        return;
+      const [owned, shared] = await Promise.all([
+        googleDrive.listNoodimeisterFiles(token, { pageSize: 100 }),
+        googleDrive.listNoodimeisterFilesSharedWithMe(token),
+      ]);
+      const byId = new Map();
+      for (const f of owned || []) {
+        if (f?.id) byId.set(f.id, { ...f, fromShared: false });
       }
-      setSaveFeedback('Laadin…');
-      const content = await googleDrive.getFileContent(token, fileId);
-      const data = JSON.parse(content);
-      if (importProject(data)) {
-        setSaveFeedback('Laaditud pilvest!');
-        setTimeout(() => setSaveFeedback(''), 2500);
-        setOpenedCloudFile({ provider: 'google', fileId });
-      } else {
-        setSaveFeedback('Vigane projektifail');
-        setTimeout(() => setSaveFeedback(''), 2500);
+      for (const f of shared || []) {
+        if (f?.id && !byId.has(f.id)) byId.set(f.id, { ...f, fromShared: true });
       }
+      const rows = Array.from(byId.values()).sort((a, b) => {
+        const ta = new Date(a.modifiedTime || 0).getTime();
+        const tb = new Date(b.modifiedTime || 0).getTime();
+        return tb - ta;
+      });
+      setGoogleLoadPickerRows(rows);
     } catch (e) {
-      setSaveFeedback(e?.message || 'Pilvest laadimine ebaõnnestus');
-      setTimeout(() => setSaveFeedback(''), 3000);
+      setGoogleLoadPickerError(e?.message || t('file.loadCloudPickerListError'));
+    } finally {
+      setGoogleLoadPickerLoading(false);
     }
-  }, [importProject]);
+  }, [t, importProject]);
 
   // Load from localStorage on mount (skip when opening as new work /app?new=1 or /app?fileId=...)
   // Use importProject so both staves and legacy notes format load in full (taktid, lehekülje disain jms).
@@ -6701,7 +6733,7 @@ function NoodiMeisterCore({ icons }) {
       </div>
     );
   }
-  const { Music2, Clock, Hash, Type, Piano, Palette, Layout, Check, Save, FolderOpen, Plus, Settings, Key, Repeat, Cloud, LogOut, LogIn, UserPlus, User, CloudUpload, CloudDownload, FolderPlus, ChevronDown, Eye, ArrowDown, ArrowRight, Hand, MousePointer, Keyboard } = icons || {};
+  const { Music2, Clock, Hash, Type, Piano, Palette, Layout, Check, Save, FolderOpen, Plus, Settings, Key, Repeat, Cloud, LogOut, LogIn, UserPlus, User, CloudUpload, CloudDownload, FolderPlus, ChevronDown, Eye, ArrowDown, ArrowRight, Hand, MousePointer, Keyboard, ExternalLink } = icons || {};
 
   const showFloatingTextTool = (activeTextLineType === 'title' || activeTextLineType === 'author') || selectedTextboxId;
   const activeBox = selectedTextboxId ? textBoxes.find((b) => b.id === selectedTextboxId) : null;
@@ -7959,6 +7991,93 @@ function NoodiMeisterCore({ icons }) {
                 </div>
               </div>
               <button onClick={() => setSaveCloudDialogOpen(false)} className="w-full py-2 rounded-lg bg-amber-200 text-amber-900 font-semibold hover:bg-amber-300">Tühista</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {googleLoadPickerOpen && (
+        <div
+          className="fixed inset-0 z-[110] flex items-center justify-center bg-amber-950/60 dark:bg-black/70 backdrop-blur-sm p-6"
+          onClick={() => { setGoogleLoadPickerOpen(false); setGoogleLoadPickerError(''); }}
+          onKeyDown={(e) => { if (e.key === 'Escape') { setGoogleLoadPickerOpen(false); setGoogleLoadPickerError(''); } }}
+          role="presentation"
+        >
+          <div
+            className="bg-white dark:bg-black rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden border-2 border-sky-200 dark:border-white/20 flex flex-col max-h-[85vh]"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-labelledby="google-load-picker-title"
+            aria-modal="true"
+          >
+            <div className="bg-gradient-to-r from-sky-600 to-sky-700 text-white px-5 py-3 flex items-center justify-between gap-2">
+              <h2 id="google-load-picker-title" className="text-base font-bold flex items-center gap-2">
+                <CloudDownload className="w-5 h-5 shrink-0" />
+                {t('file.loadCloudPickerTitle')}
+              </h2>
+              <button
+                type="button"
+                onClick={() => { setGoogleLoadPickerOpen(false); setGoogleLoadPickerError(''); }}
+                className="text-white/90 hover:text-white text-2xl leading-none shrink-0"
+                aria-label={t('file.loadCloudPickerClose')}
+              >
+                &times;
+              </button>
+            </div>
+            <div className="p-4 flex flex-col gap-3 min-h-0">
+              <p className="text-sm text-amber-900 dark:text-amber-100/90">{t('file.loadCloudPickerIntro')}</p>
+              {googleLoadPickerLoading && (
+                <p className="text-sm text-sky-800 dark:text-sky-200 animate-pulse">{t('file.loadCloudPickerLoading')}</p>
+              )}
+              {googleLoadPickerError && (
+                <p className="text-sm text-red-700 dark:text-red-300">{googleLoadPickerError}</p>
+              )}
+              {!googleLoadPickerLoading && !googleLoadPickerError && googleLoadPickerRows.length === 0 && (
+                <p className="text-sm text-amber-800 dark:text-amber-200/90">{t('file.loadCloudPickerEmpty')}</p>
+              )}
+              {!googleLoadPickerLoading && googleLoadPickerRows.length > 0 && (() => {
+                const dateLocaleTag = locale === 'en' ? 'en-GB' : locale === 'fi' ? 'fi-FI' : 'et-EE';
+                return (
+                  <ul className="overflow-y-auto max-h-[50vh] border border-amber-200 dark:border-white/15 rounded-lg divide-y divide-amber-100 dark:divide-white/10">
+                    {googleLoadPickerRows.map((row) => (
+                      <li key={row.id} className="flex items-stretch bg-amber-50/50 dark:bg-white/5">
+                        <button
+                          type="button"
+                          onClick={() => loadGoogleDriveProjectById(row.id)}
+                          className="flex-1 min-w-0 text-left flex items-center gap-3 px-4 py-3 hover:bg-amber-100/90 dark:hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-inset transition-colors"
+                        >
+                          <AppLogo variant="iconMd" alt="" className="shrink-0" />
+                          <span className="min-w-0 flex-1">
+                            <span className="block font-medium text-amber-950 dark:text-white truncate" title={row.name}>{row.name}</span>
+                            <span className="block text-xs text-amber-700 dark:text-amber-200/80 mt-0.5">
+                              {row.modifiedTime
+                                ? new Date(row.modifiedTime).toLocaleString(dateLocaleTag, { dateStyle: 'short', timeStyle: 'short' })
+                                : '—'}
+                              {row.fromShared ? ` · ${t('file.loadCloudPickerShared')}` : ''}
+                            </span>
+                          </span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); openGoogleDriveProjectInNewTab(row.id); }}
+                          className="shrink-0 px-3 flex items-center justify-center border-l border-amber-200/80 dark:border-white/15 text-sky-700 dark:text-sky-300 hover:bg-sky-50 dark:hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-inset transition-colors"
+                          title={t('file.loadCloudOpenNewTab')}
+                          aria-label={t('file.loadCloudOpenNewTab')}
+                        >
+                          {ExternalLink && <ExternalLink className="w-5 h-5" aria-hidden />}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                );
+              })()}
+              <button
+                type="button"
+                onClick={() => { setGoogleLoadPickerOpen(false); setGoogleLoadPickerError(''); }}
+                className="w-full py-2 rounded-lg bg-amber-200 dark:bg-amber-900/40 text-amber-900 dark:text-amber-100 font-semibold hover:bg-amber-300 dark:hover:bg-amber-900/60"
+              >
+                {t('file.loadCloudPickerClose')}
+              </button>
             </div>
           </div>
         </div>
@@ -10397,7 +10516,7 @@ function NoodiMeisterCore({ icons }) {
                       getKeyColor={notationMode === 'vabanotatsioon' ? (pitch, oct) => getPedagogicalSymbol(keySignature, joClefStaffPosition, pitch, oct).color : null}
                       keySignature={keySignature}
                       keyboardPlaysPiano={pianoStripVisible && (notationStyle === 'FIGURENOTES' || notationMode === 'vabanotatsioon')}
-                      ignoreKeyboardWhenModalOpen={newWorkSetupOpen || saveCloudDialogOpen || settingsOpen || shortcutsOpen || showPdfExportPreview}
+                      ignoreKeyboardWhenModalOpen={newWorkSetupOpen || saveCloudDialogOpen || googleLoadPickerOpen || settingsOpen || shortcutsOpen || showPdfExportPreview}
                     />
                   </div>
                 </div>

@@ -52,6 +52,14 @@ Kõik muudatused peavad hoidma kasutaja teekonnad tervena:
 
 ### Noodimeistri standardid (elav dokument)
 
+- **Standard: scorepage (noodileht) — toote- ja visuaalne definitsioon (kohustuslik AI-le ja arendajale)**
+  - **Mis see on:** **Scorepage (noodileht)** on **dokumendi leht**: ala, kuhu kasutaja peab saama **kirjutada noote** ja **tekste**, **muuta takte**, **muuta layout’it** (paigutus, reavahetused jne). Pärast sisestust peab **kogu noodikiri** koos **staff** (joonestik(ud)) ja **keys** (võtmed / vastav kontekst sõltuvalt režiimist) **eksisteerima ja olema nähtav** selles vaates — mitte ainult “mõnes teises mälus”.
+  - **Eksport ja print:** **PDF-eksport** ja **print** peavad **eelvaates** (preview) kuvama **sama** töö sisu ja piire (käitumine “enne printimist” — kasutaja näeb, mida trükitakse). See eeldus on scorepage’iga seotud; regressioon, kus preview või PDF ei vasta scorele, on **blokeeriv** kuni parandatud.
+  - **Scorepage on rakenduse süda.** See peab olema alati **nähtav** ja korrektses kihis: noodilehe sisu (taktimõõt, beat-boxid, noodid jne) peab olema **z-index / stacking context**, mis tagab nähtavuse lehekülje kujunduse suhtes (tüüpiliselt score’i kiht **vähemalt 1** võrreldes tausta/dekooriga; täpne number sõltub paigutusest — oluline on, et noodid ei jääks alumisse või nähtamatusse kihti).
+  - **Paigutus:** scorepage asub **MainLayout** sees, **paremal** pool külgmenüüd.
+  - **Kriitiline nõue:** kui scorepage on **tühi või nähtamatu**, on rakendus **kasutu** — selliseid regressioone ei tohi merge’ida ilma paranduseta.
+  - **Overflow:** ära pane vanem-konteineritele **`overflow: hidden`** ilma kontrollimata, et noodileht (sh vertikaalne/horisontaalne sisu) **mahuks** vaatesse või oleks mõistlikult **scrollitav**; muidu võib “olemas olev” score jääda lõigatuks või nähtamatuks.
+
 - **Standard: veateated kasutajale**
   - kasutajale: inimkeelne selgitus + järgmine samm
   - arendajale: struktureeritud info (allikas, kood, kirjeldus)

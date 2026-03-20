@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { FilePlus, Folder, FolderOpen, FolderPlus, Cloud, LogIn, Loader2, User, Settings, ChevronDown, Trash2, X, Pencil, FolderMinus, FolderInput, ChevronRight, Copy } from 'lucide-react';
+import { FilePlus, Folder, FolderOpen, FolderPlus, Cloud, LogIn, Loader2, User, Settings, ChevronDown, Trash2, X, Pencil, FolderMinus, FolderInput, ChevronRight, Copy, ExternalLink } from 'lucide-react';
 import * as googleDrive from '../services/googleDrive';
 import * as oneDrive from '../services/oneDrive';
 import * as authStorage from '../services/authStorage';
 import { LOCALE_STORAGE_KEY, DEFAULT_LOCALE, LOCALES, getTranslations } from '../i18n';
 import { AppLogo } from '../components/AppLogo';
 import { useNoodimeisterOptional } from '../store/NoodimeisterContext';
+import { openCloudFileInNewBrowserTab } from '../utils/appUrls';
 
 /** Error Boundary: sisselogimise järgne vaade – punane kast veateatega */
 class MinuToodErrorBoundary extends React.Component {
@@ -855,6 +856,15 @@ export default function MinuTöödPage() {
                             </a>
                             <button
                               type="button"
+                              onClick={() => openCloudFileInNewBrowserTab(f.id)}
+                              className="p-2 rounded-lg text-amber-700 dark:text-white/80 hover:bg-amber-100 dark:hover:bg-white/10 border border-transparent hover:border-amber-200 transition-colors"
+                              title={t['mywork.openFileNewTab']}
+                              aria-label={t['mywork.openFileNewTab']}
+                            >
+                              <ExternalLink className="w-5 h-5" aria-hidden />
+                            </button>
+                            <button
+                              type="button"
                               onClick={(e) => { e.preventDefault(); handleCopyGoogleFile(f.id, f.name, folder.id); }}
                               className="p-2 rounded-lg text-amber-700 dark:text-white/80 hover:bg-amber-100 dark:hover:bg-white/10 border border-transparent hover:border-amber-200 transition-colors"
                               title={t['file.copy'] || 'Tee koopia'}
@@ -993,6 +1003,15 @@ export default function MinuTöödPage() {
                             </a>
                             <button
                               type="button"
+                              onClick={() => openCloudFileInNewBrowserTab(f.id, { cloud: 'onedrive' })}
+                              className="p-2 rounded-lg text-amber-700 dark:text-white/80 hover:bg-amber-100 dark:hover:bg-white/10 border border-transparent hover:border-amber-200 transition-colors"
+                              title={t['mywork.openFileNewTab']}
+                              aria-label={t['mywork.openFileNewTab']}
+                            >
+                              <ExternalLink className="w-5 h-5" aria-hidden />
+                            </button>
+                            <button
+                              type="button"
                               onClick={(e) => { e.preventDefault(); handleCopyOneDriveFile(f.id, f.name, folder.id); }}
                               className="p-2 rounded-lg text-amber-700 dark:text-white/80 hover:bg-amber-100 dark:hover:bg-white/10 border border-transparent hover:border-amber-200 transition-colors"
                               title={t['file.copy'] || 'Tee koopia'}
@@ -1047,15 +1066,24 @@ export default function MinuTöödPage() {
                 ) : (
                   <ul className="space-y-2" role="list">
                     {sharedGoogleFiles.map((f) => (
-                      <li key={f.id}>
+                      <li key={f.id} className="flex items-center gap-2">
                         <a
                           href={`${basePath}/app?fileId=${encodeURIComponent(f.id)}`}
-                          className="flex items-center gap-3 px-4 py-3 rounded-xl bg-white dark:bg-zinc-900 border border-amber-200/60 dark:border-white/20 shadow-sm hover:bg-amber-50 dark:hover:bg-white/10 hover:border-amber-300 dark:hover:border-white/30 transition-colors no-underline text-inherit text-amber-900 dark:text-white"
+                          className="flex-1 min-w-0 flex items-center gap-3 px-4 py-3 rounded-xl bg-white dark:bg-zinc-900 border border-amber-200/60 dark:border-white/20 shadow-sm hover:bg-amber-50 dark:hover:bg-white/10 hover:border-amber-300 dark:hover:border-white/30 transition-colors no-underline text-inherit text-amber-900 dark:text-white"
                         >
                           <AppLogo variant="iconMd" alt="" />
                           <span className="font-medium truncate flex-1">{f.name}</span>
                           <span className="text-sm text-amber-600 dark:text-white/70 flex-shrink-0">{formatDate(f.modifiedTime, locale)}</span>
                         </a>
+                        <button
+                          type="button"
+                          onClick={() => openCloudFileInNewBrowserTab(f.id)}
+                          className="p-2 rounded-lg text-amber-700 dark:text-white/80 hover:bg-amber-100 dark:hover:bg-white/10 border border-transparent hover:border-amber-200 transition-colors shrink-0"
+                          title={t['mywork.openFileNewTab']}
+                          aria-label={t['mywork.openFileNewTab']}
+                        >
+                          <ExternalLink className="w-5 h-5" aria-hidden />
+                        </button>
                       </li>
                     ))}
                   </ul>
@@ -1074,15 +1102,24 @@ export default function MinuTöödPage() {
                 ) : (
                   <ul className="space-y-2" role="list">
                     {sharedOneDriveFiles.map((f) => (
-                      <li key={f.id}>
+                      <li key={f.id} className="flex items-center gap-2">
                         <a
                           href={`${basePath}/app?fileId=${encodeURIComponent(f.id)}&cloud=onedrive`}
-                          className="flex items-center gap-3 px-4 py-3 rounded-xl bg-white dark:bg-zinc-900 border border-amber-200/60 dark:border-white/20 shadow-sm hover:bg-amber-50 dark:hover:bg-white/10 hover:border-amber-300 dark:hover:border-white/30 transition-colors no-underline text-inherit text-amber-900 dark:text-white"
+                          className="flex-1 min-w-0 flex items-center gap-3 px-4 py-3 rounded-xl bg-white dark:bg-zinc-900 border border-amber-200/60 dark:border-white/20 shadow-sm hover:bg-amber-50 dark:hover:bg-white/10 hover:border-amber-300 dark:hover:border-white/30 transition-colors no-underline text-inherit text-amber-900 dark:text-white"
                         >
                           <AppLogo variant="iconMd" alt="" />
                           <span className="font-medium truncate flex-1">{f.name}</span>
                           <span className="text-sm text-amber-600 dark:text-white/70 flex-shrink-0">{formatOneDriveDate(f, locale)}</span>
                         </a>
+                        <button
+                          type="button"
+                          onClick={() => openCloudFileInNewBrowserTab(f.id, { cloud: 'onedrive' })}
+                          className="p-2 rounded-lg text-amber-700 dark:text-white/80 hover:bg-amber-100 dark:hover:bg-white/10 border border-transparent hover:border-amber-200 transition-colors shrink-0"
+                          title={t['mywork.openFileNewTab']}
+                          aria-label={t['mywork.openFileNewTab']}
+                        >
+                          <ExternalLink className="w-5 h-5" aria-hidden />
+                        </button>
                       </li>
                     ))}
                   </ul>

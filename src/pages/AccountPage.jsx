@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { User, Cloud, HardDrive, LogIn, LogOut, FolderOpen, FolderPlus, FilePlus, Loader2, X, ChevronRight, Settings, ChevronDown, Trash2, Pencil } from 'lucide-react';
+import { User, Cloud, HardDrive, LogIn, LogOut, FolderOpen, FolderPlus, FilePlus, Loader2, X, ChevronRight, Settings, ChevronDown, Trash2, Pencil, ExternalLink } from 'lucide-react';
 import { LOCALE_STORAGE_KEY, DEFAULT_LOCALE, LOCALES, getTranslations } from '../i18n';
 import { useNoodimeisterOptional } from '../store/NoodimeisterContext';
 import {
@@ -34,6 +34,7 @@ import {
   setSaveFoldersConfig as oneDriveSetSaveFoldersConfig,
 } from '../services/oneDrive';
 import { AppLogo } from '../components/AppLogo';
+import { openCloudFileInNewBrowserTab } from '../utils/appUrls';
 
 export default function AccountPage() {
   const navigate = useNavigate();
@@ -523,15 +524,24 @@ export default function AccountPage() {
                   {googleFiles.state === 'success' && googleFiles.data.length > 0 && (
                     <ul className="space-y-1.5 max-h-48 overflow-y-auto">
                       {googleFiles.data.map((f) => (
-                        <li key={f.id}>
+                        <li key={f.id} className="flex items-center gap-1">
                           <a
                             href={`${basePath}/app?fileId=${encodeURIComponent(f.id)}`}
-                            className="flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-50/70 dark:bg-white/10 border border-amber-200/60 dark:border-white/20 hover:bg-amber-100/80 dark:hover:bg-white/20 no-underline text-inherit"
+                            className="flex flex-1 min-w-0 items-center gap-2 px-3 py-2 rounded-lg bg-amber-50/70 dark:bg-white/10 border border-amber-200/60 dark:border-white/20 hover:bg-amber-100/80 dark:hover:bg-white/20 no-underline text-inherit"
                           >
                             <AppLogo variant="iconSm" alt="" />
                             <span className="truncate flex-1 text-sm font-medium">{f.name}</span>
                             <span className="text-xs text-amber-600 dark:text-white/70 flex-shrink-0">{formatDate(f.modifiedTime)}</span>
                           </a>
+                          <button
+                            type="button"
+                            onClick={() => openCloudFileInNewBrowserTab(f.id)}
+                            className="p-2 rounded-lg text-amber-700 dark:text-white/80 hover:bg-amber-100 dark:hover:bg-white/15 shrink-0"
+                            title={t['mywork.openFileNewTab']}
+                            aria-label={t['mywork.openFileNewTab']}
+                          >
+                            <ExternalLink className="w-4 h-4" aria-hidden />
+                          </button>
                         </li>
                       ))}
                     </ul>
@@ -555,15 +565,24 @@ export default function AccountPage() {
                   {oneDriveFiles.state === 'success' && oneDriveFiles.data.length > 0 && (
                     <ul className="space-y-1.5 max-h-48 overflow-y-auto">
                       {oneDriveFiles.data.map((f) => (
-                        <li key={f.id}>
+                        <li key={f.id} className="flex items-center gap-1">
                           <a
                             href={`${basePath}/app?fileId=${encodeURIComponent(f.id)}&cloud=onedrive`}
-                            className="flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-50/70 dark:bg-white/10 border border-amber-200/60 dark:border-white/20 hover:bg-amber-100/80 dark:hover:bg-white/20 no-underline text-inherit"
+                            className="flex flex-1 min-w-0 items-center gap-2 px-3 py-2 rounded-lg bg-amber-50/70 dark:bg-white/10 border border-amber-200/60 dark:border-white/20 hover:bg-amber-100/80 dark:hover:bg-white/20 no-underline text-inherit"
                           >
                             <AppLogo variant="iconSm" alt="" />
                             <span className="truncate flex-1 text-sm font-medium">{f.name}</span>
                             <span className="text-xs text-amber-600 dark:text-white/70 flex-shrink-0">{formatDate(f.lastModifiedDateTime)}</span>
                           </a>
+                          <button
+                            type="button"
+                            onClick={() => openCloudFileInNewBrowserTab(f.id, { cloud: 'onedrive' })}
+                            className="p-2 rounded-lg text-amber-700 dark:text-white/80 hover:bg-amber-100 dark:hover:bg-white/15 shrink-0"
+                            title={t['mywork.openFileNewTab']}
+                            aria-label={t['mywork.openFileNewTab']}
+                          >
+                            <ExternalLink className="w-4 h-4" aria-hidden />
+                          </button>
                         </li>
                       ))}
                     </ul>
