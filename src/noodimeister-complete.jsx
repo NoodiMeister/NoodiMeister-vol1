@@ -1866,6 +1866,7 @@ function NoodiMeisterCore({ icons }) {
   }, [newWorkSetupOpen, saveCloudDialogOpen, settingsOpen, shortcutsOpen, showPdfExportPreview]);
 
   const urlFileIdForWizard = searchParams?.get?.('fileId') || '';
+  const urlNewParam = searchParams?.get?.('new') || '';
   useEffect(() => {
     // Kui avatakse pilvefail (?fileId=...), ei tohi "Uue töö seadistuse" modaal jääda ette (nt pärast
     // eelmist /app?new=1 sessiooni jääb newWorkSetupOpen=true ja peidab laaditud faili).
@@ -1876,6 +1877,22 @@ function NoodiMeisterCore({ icons }) {
     if (isNewWorkFlow) setNewWorkSetupOpen(true);
     else setNewWorkSetupOpen(false);
   }, [isNewWorkFlow, urlFileIdForWizard]);
+
+  // Sünkroonne: enne esimest värvimist sulge viisard ja eemalda ?new=1, kui URL-is on fileId (SPA nav / kombineeritud parameetrid).
+  useLayoutEffect(() => {
+    if (!urlFileIdForWizard) return;
+    setNewWorkSetupOpen(false);
+    if (urlNewParam === '1') {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          next.delete('new');
+          return next;
+        },
+        { replace: true }
+      );
+    }
+  }, [urlFileIdForWizard, urlNewParam, setSearchParams]);
 
   const partWindowStaffIndices = useMemo(() => {
     if (!partStaffId) return null;
@@ -4194,6 +4211,7 @@ function NoodiMeisterCore({ icons }) {
     const loadFromOneDrive = () => {
       const token = authStorage.getStoredMicrosoftTokenFromAuth();
       if (!token) {
+        setNewWorkSetupOpen(false);
         setSaveFeedback('Logi sisse Microsoftiga, et laadida OneDrive\'ist.');
         setTimeout(() => setSaveFeedback(''), 4000);
         done();
@@ -4213,6 +4231,7 @@ function NoodiMeisterCore({ icons }) {
             // Märgi, et praegu avatud fail on OneDrive'i fail – Cmd/Ctrl+S saab selle üle kirjutada sama fileId-ga.
             setOpenedCloudFile(binding);
           } else {
+            setNewWorkSetupOpen(false);
             setSaveFeedback('Vigane projektifail');
             setTimeout(() => setSaveFeedback(''), 3000);
           }
@@ -4220,6 +4239,7 @@ function NoodiMeisterCore({ icons }) {
         })
         .catch((e) => {
           if (!cancelled) {
+            setNewWorkSetupOpen(false);
             setSaveFeedback(e?.message || 'OneDrive\'ist laadimine ebaõnnestus');
             setTimeout(() => setSaveFeedback(''), 4000);
           }
@@ -4229,6 +4249,7 @@ function NoodiMeisterCore({ icons }) {
     const loadFromGoogle = () => {
       const token = googleDrive.getStoredToken();
       if (!token) {
+        setNewWorkSetupOpen(false);
         setSaveFeedback('Logi sisse Google\'iga, et laadida pilvest.');
         setTimeout(() => setSaveFeedback(''), 4000);
         done();
@@ -4248,6 +4269,7 @@ function NoodiMeisterCore({ icons }) {
             // Märgi, et praegu avatud fail on Google Drive'i fail – Cmd/Ctrl+S saab selle üle kirjutada sama fileId-ga.
             setOpenedCloudFile(binding);
           } else {
+            setNewWorkSetupOpen(false);
             setSaveFeedback('Vigane projektifail');
             setTimeout(() => setSaveFeedback(''), 3000);
           }
@@ -4255,6 +4277,7 @@ function NoodiMeisterCore({ icons }) {
         })
         .catch((e) => {
           if (!cancelled) {
+            setNewWorkSetupOpen(false);
             setSaveFeedback(e?.message || 'Pilvest laadimine ebaõnnestus');
             setTimeout(() => setSaveFeedback(''), 4000);
           }
