@@ -54,3 +54,26 @@ Kõik muudatused peavad hoidma kasutaja teekonnad tervena:
   - sisestusvoogudes ei tohi olla märgatavat lag'i, topeltsisestust, vahelejätmisi ega cursor-jitter'it
   - enne sisestusloogika muutmist võrdle käitumist MuseScore/Finale/Sibelius tüüpi töövoogudega
 
+### Filosoofia vs regressioonid (AI jaoks kohustuslik eristus)
+
+- **Filosoofia** (eesmärk, prioriteedid) ütleb *kuhu* liigume ja *mida* ei tohi ohverdada.
+- **Regressioonide vältimine** nõuab *kontrolli*: automaatne või korduv käsitsi-kontroll, mis tõestab, et varem korda tehtud käitumine jääb alles.
+
+Ilma kontrollita võib AI “parandada” ühte kohta ja murda teist — isegi kui tekst reeglites on õige. Seega: **iga kriitiline parandus peab jätma jälje**, mis seda tulevikus kaitseb (vt allpool).
+
+### Kuidas hoida varem korda tehtud funktsioone uuesti murdmata
+
+1. **Enne muudatust — mõõt**: mis käitumine peab kindlasti alles jääma? (kirjuta 1–3 lauset PR-i või commiti kirjelduse juurde).
+2. **Pärast muudatust — tõestus**:
+   - `npm run build`
+   - `npm run test:export-smoke` (eksport / font / determinism)
+   - kui muudatus puudutab noodigraafikat, laadimist või PDF-i: **käsitsi smoke** (vt “Kontrollplaan” üleval).
+3. **Kui viga parandati teist korda** (sama klassi bug): lisa **automaatne kontroll** (nt uus assert `scripts/check-export-determinism.mjs`-is, uus väike testiskript, või dokumenteeritud “ei tohi” koos koodiviitega). Filosoofia üksi ei asenda seda sammu.
+4. **Üks muudatus = üks mure**: ära sega samas PR-is eksporti, auth’t ja noodijoonestiku renderit, kui vältida saab — see on kõige tüüpilisem regressioonide allikas.
+5. **“Kaitstud tõed”** (näited, mida ei tohi ilma põhjendatud refaktorita murda):
+   - scorepage render ei tohi `null` minna, kui projekti andmed on olemas;
+   - `sourceNotationMode` on faili loomisel fikseeritud ja muutumatu;
+   - cloud salvestus ei tohi vaikimisi üle kirjutada väärast failist / valest kontekstist.
+
+**Kokkuvõte AI-le:** loe esmalt filosoofiat ja reegleid, **siis** kontrolli, kas muudatus nõuab uut kaitset (test/assert/smoke). Kui ei nõua — küsi, kas see on tõesti “ohutu kosmeetika”.
+

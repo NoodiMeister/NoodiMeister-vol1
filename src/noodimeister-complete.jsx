@@ -1683,7 +1683,7 @@ function NoodiMeisterCore({ icons }) {
       staffLineColor: isDark ? '#ffffff' : '#000000',
       noteFill: isDark ? '#ffffff' : '#1a1a1a',
       textColor: isDark ? '#ffffff' : '#1a1a1a',
-      scoreBg: isDark ? '#0a0a0a' : '#fffbf0',
+      scoreBg: isDark ? '#0a0a0a' : '#ffffff',
       isDark,
     };
   }, [themeMode]);
@@ -1865,13 +1865,17 @@ function NoodiMeisterCore({ icons }) {
     };
   }, [newWorkSetupOpen, saveCloudDialogOpen, settingsOpen, shortcutsOpen, showPdfExportPreview]);
 
+  const urlFileIdForWizard = searchParams?.get?.('fileId') || '';
   useEffect(() => {
+    // Kui avatakse pilvefail (?fileId=...), ei tohi "Uue töö seadistuse" modaal jääda ette (nt pärast
+    // eelmist /app?new=1 sessiooni jääb newWorkSetupOpen=true ja peidab laaditud faili).
+    if (urlFileIdForWizard) {
+      setNewWorkSetupOpen(false);
+      return;
+    }
     if (isNewWorkFlow) setNewWorkSetupOpen(true);
-  }, [isNewWorkFlow]);
-
-  useEffect(() => {
-    if (!setupCompleted) setNewWorkSetupOpen(true);
-  }, [setupCompleted]);
+    else setNewWorkSetupOpen(false);
+  }, [isNewWorkFlow, urlFileIdForWizard]);
 
   const partWindowStaffIndices = useMemo(() => {
     if (!partStaffId) return null;
@@ -3581,6 +3585,13 @@ function NoodiMeisterCore({ icons }) {
       if (data.staffRowAlignment === 'left' || data.staffRowAlignment === 'center' || data.staffRowAlignment === 'right') setStaffRowAlignment(data.staffRowAlignment);
       if (data.lyricLineIndex === 0 || data.lyricLineIndex === 1) setLyricLineIndex(data.lyricLineIndex);
       if (typeof data.lyricLineYOffset === 'number') setLyricLineYOffset(Math.max(-40, Math.min(40, data.lyricLineYOffset)));
+      // Sulge "uue töö" viisard alati, kui tõeline projekt on sisse loetud (sh failimenüü / pilv / sync).
+      setNewWorkSetupOpen(false);
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete('new');
+        return next;
+      });
       clearDirty();
       setSaveFeedback(t('feedback.projectLoaded'));
       setTimeout(() => setSaveFeedback(''), 1800);
@@ -3588,7 +3599,7 @@ function NoodiMeisterCore({ icons }) {
     } catch (_) {
       return false;
     }
-  }, [clearDirty, getNotationStyleForSourceMode, getUiNotationModeForSourceMode, normalizeSourceNotationModeValue, resetLoadedProjectViewState, t]);
+  }, [clearDirty, getNotationStyleForSourceMode, getUiNotationModeForSourceMode, normalizeSourceNotationModeValue, resetLoadedProjectViewState, setSearchParams, setNewWorkSetupOpen, t]);
 
   // Cross-window sync (main score <-> part windows). Two-way, last-write-wins, avoids loops via sourceId+revision.
   useEffect(() => {
@@ -11095,8 +11106,8 @@ function getFingeringForNote(pitch, octave, instrumentId) {
 
 // Timeline Component – multi-system layout (VexFlow loogika). (PAGE_BREAK_GAP on defineeritud üleval.)
 function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, pageWidth, cursorPosition, notationMode, staffLines, clefType, keySignature = 'C', relativeNotationShowKeySignature = false, relativeNotationShowTraditionalClef = false, onJoClefPositionChange, joClefFocused = false, onJoClefFocus, instrument = 'single-staff-treble', instrumentNotationVariant = 'standard', instrumentConfig = {}, showBarNumbers = true, barNumberSize = 11, showRhythmSyllables = false, joClefStaffPosition: joClefStaffPositionProp, showAllNoteLabels = false, enableEmojiOverlays = true, noteheadShape = 'oval', noteheadEmoji = '♪', onNoteTeacherLabelChange, onNoteLabelClick, chords = [], isDotted, isRest, selectedDuration, noteInputMode, selectedNoteIndex, isNoteSelected, notes: allNotes, onStaffAddNote, onNoteClick, onNoteMouseDown, onNoteMouseEnter, onNotePitchChange, onNoteBeatChange, canHandDragNotes = false, ghostPitch, ghostOctave, onFigureBeatClick, onChordLineMouseMove, onChordLineClick, notationStyle, layoutMeasuresPerLine = 4, layoutLineBreakBefore = [], layoutPageBreakBefore = [], layoutSystemGap = 120, layoutPartsGap, layoutConnectedBarlines = false, staffRowAlignment = 'center', staffIndexInScore = 0, systemTotalHeight, layoutGlobalSpacingMultiplier = 1, systems: systemsProp, baseYOffset = 0, isActiveStaff = true, staffCount = 1, staffHeight: staffHeightProp, figurenotesSize = 16, figurenotesStems = false, figurenotesChordLineGap = 6, figurenotesChordBlocks = false, figurenotesChordBlocksShowTones = true, figurenotesMelodyShowNoteNames = true, figurenotesRowHeight: figurenotesRowHeightProp, figurenotesChordLineHeight: figurenotesChordLineHeightProp, timeSignatureSize = 16, themeColors: themeColorsProp, pedagogicalPlayheadStyle = 'line', pedagogicalPlayheadEmoji = '🎵', pedagogicalPlayheadEmojiSize = 32, cursorSizePx, cursorLineStrokeWidth = 4, cursorSubRow = 0, pedagogicalPlayheadMovement = 'arch', isPedagogicalAudioPlaying = false, isExportingAnimation = false, exportCursorRef, scoreContainerRef, exportSvgRef, pageFlowDirection = 'vertical', pageOrientation = 'portrait', paperSize = 'a4', isFirstInBraceGroup = false, braceGroupSize = 0, lyricFontFamily = 'sans-serif', lyricFontSize = 12, lyricLineYOffset = 0, translateLabel, showLayoutBreakIcons = false, showStaffSpacerHandles = false, onSystemYOffsetChange, onToggleLineBreakAfter, activeLyricNoteIndex = null, physicalPageGapPx = 3, disablePhysicalPageGaps = false, hideCursorOverlay = false, svgWidthOverride = null }) {
-  if (typeof GLOBAL_NOTATION_CONFIG === 'undefined' || !GLOBAL_NOTATION_CONFIG || GLOBAL_NOTATION_CONFIG.EMOJIS === false) return null;
-  const themeColors = themeColorsProp || { staffLineColor: '#000', noteFill: '#1a1a1a', textColor: '#1a1a1a', scoreBg: '#fffbf0', isDark: false };
+  if (typeof GLOBAL_NOTATION_CONFIG === 'undefined' || !GLOBAL_NOTATION_CONFIG) return null;
+  const themeColors = themeColorsProp || { staffLineColor: '#000', noteFill: '#1a1a1a', textColor: '#1a1a1a', scoreBg: '#ffffff', isDark: false };
   const safeKey = keySignature ?? 'C';
   const joClefStaffPosition = typeof joClefStaffPositionProp === 'number' ? joClefStaffPositionProp : getTonicStaffPosition(safeKey);
   if (typeof joClefStaffPosition !== 'number') return null;
