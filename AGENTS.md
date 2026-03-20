@@ -41,6 +41,7 @@ Kõik muudatused peavad hoidma kasutaja teekonnad tervena:
 - **Kiirklahvid**: 1–5 rütm, A–G noot; ei tohi häirida input‑välju
 - **Errorid**: auth ja eksport peavad andma arusaadava sõnumi + taastumisjuhise
 - **Build**: `npm run build` peab läbi minema
+- **Kohalik tootmise eelvaade (sama port mis tavaliselt):** `npm run preview:full` → `http://127.0.0.1:4173` (build + `vite preview` + brauser avaneb). Cursor/VS Code: **Tasks → Run Task → “Noodimeister: build + preview …”**.
 
 ### Noodimeistri standardid (elav dokument)
 
