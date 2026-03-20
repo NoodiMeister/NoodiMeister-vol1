@@ -3452,7 +3452,10 @@ function NoodiMeisterCore({ icons }) {
       setNotationMode(getUiNotationModeForSourceMode(restoredSourceNotationMode));
       if (data.noteheadShape) setNoteheadShape(data.noteheadShape);
       if (data.noteheadEmoji != null) setNoteheadEmoji(data.noteheadEmoji);
-      if (data.pixelsPerBeat != null) setPixelsPerBeat(data.pixelsPerBeat);
+      if (data.pixelsPerBeat != null) {
+        const ppb = Number(data.pixelsPerBeat);
+        setPixelsPerBeat(Number.isFinite(ppb) && ppb > 0 ? Math.max(16, Math.min(240, ppb)) : 92);
+      }
       if (data.figurenotesSize != null) setFigurenotesSize(Math.max(12, Math.min(500, data.figurenotesSize)));
       if (data.figurenotesStems != null) setFigurenotesStems(!!data.figurenotesStems);
       if (data.figurenotesChordLineGap != null) setFigurenotesChordLineGap(Math.max(0, Math.min(20, Number(data.figurenotesChordLineGap))));
@@ -6857,14 +6860,16 @@ function NoodiMeisterCore({ icons }) {
         const pw = getFullPageLayoutWidth(pageOrientation);
         const pageHeight = pw * pageHeightRatio;
         setFitPageDisplayWidth(pw);
-        setFitPageScale(Math.min(1, availW / pw, availH / pageHeight));
+        const raw = Math.min(1, availW / pw, availH / pageHeight);
+        setFitPageScale(Number.isFinite(raw) && raw > 0 ? Math.max(0.05, raw) : 1);
       } else {
         // Tark lehe vaade: ainult noteeritud ala mahub ekraanile
         setFitPageDisplayWidth(0);
         const pw = basePageWidth;
         const contentH = logicalContentHeight || 800;
         const scale = Math.min(1, availW / pw, availH / contentH);
-        setFitPageScale(scale);
+        const safe = Number.isFinite(scale) && scale > 0 ? Math.max(0.05, scale) : 1;
+        setFitPageScale(safe);
       }
     };
     const scheduleUpdate = () => {
@@ -10410,7 +10415,11 @@ function NoodiMeisterCore({ icons }) {
               <div
                 ref={scoreContentRef}
                 className="relative"
-                style={{ zIndex: pageDesignLayer === 'inFront' ? 0 : 1, cursor: cursorTool === 'hand' ? (isHandPanning ? 'grabbing' : 'grab') : undefined }}
+                style={{
+                  // Alati kõrgem kui lehekülje kujunduse kiht — muidu võib "inFront" täisekraaniline pilt katta noodijoonestiku (andmed + heli töötavad, pilti pole).
+                  zIndex: 2,
+                  cursor: cursorTool === 'hand' ? (isHandPanning ? 'grabbing' : 'grab') : undefined,
+                }}
                 onClick={handleScoreContentClick}
                 onMouseDown={(e) => {
                   // Text tool: create text box immediately on mousedown.
