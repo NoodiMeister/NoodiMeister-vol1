@@ -886,7 +886,8 @@ function getAccidentalForPianoKey(midiNumber, keySignature) {
 }
 // FINGERING_TIN_WHISTLE, FINGERING_RECORDER on faili alguses var'iga
 function NoodiMeisterCore({ icons }) {
-  if (typeof GLOBAL_NOTATION_CONFIG === 'undefined' || !GLOBAL_NOTATION_CONFIG || GLOBAL_NOTATION_CONFIG.EMOJIS === undefined) return null;
+  // Ära nõua EMOJIS välja olemasolu — vanad embed'id / tühi window.NOODIMEISTER_CONFIG ei tohi kogu rakendust nullida.
+  if (typeof GLOBAL_NOTATION_CONFIG === 'undefined' || !GLOBAL_NOTATION_CONFIG) return null;
 
   // Kaitse renderdamist: sisselogimise järel anna brauserile 50ms, et konstandid mällu laadida (Safe Initialization)
   const [isReady, setIsReady] = useState(false);
@@ -10603,11 +10604,14 @@ function getFingeringForNote(pitch, octave, instrumentId) {
 
 // Timeline Component – multi-system layout (VexFlow loogika). (PAGE_BREAK_GAP on defineeritud üleval.)
 function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, pageWidth, cursorPosition, notationMode, staffLines, clefType, keySignature = 'C', relativeNotationShowKeySignature = false, relativeNotationShowTraditionalClef = false, onJoClefPositionChange, joClefFocused = false, onJoClefFocus, instrument = 'single-staff-treble', instrumentNotationVariant = 'standard', instrumentConfig = {}, showBarNumbers = true, barNumberSize = 11, showRhythmSyllables = false, joClefStaffPosition: joClefStaffPositionProp, showAllNoteLabels = false, enableEmojiOverlays = true, noteheadShape = 'oval', noteheadEmoji = '♪', onNoteTeacherLabelChange, onNoteLabelClick, chords = [], isDotted, isRest, selectedDuration, noteInputMode, selectedNoteIndex, isNoteSelected, notes: allNotes, onStaffAddNote, onNoteClick, onNoteMouseDown, onNoteMouseEnter, onNotePitchChange, onNoteBeatChange, canHandDragNotes = false, ghostPitch, ghostOctave, onFigureBeatClick, onChordLineMouseMove, onChordLineClick, notationStyle, layoutMeasuresPerLine = 4, layoutLineBreakBefore = [], layoutPageBreakBefore = [], layoutSystemGap = 120, layoutPartsGap, layoutConnectedBarlines = false, staffRowAlignment = 'center', staffIndexInScore = 0, systemTotalHeight, layoutGlobalSpacingMultiplier = 1, systems: systemsProp, baseYOffset = 0, isActiveStaff = true, staffCount = 1, staffHeight: staffHeightProp, figurenotesSize = 16, figurenotesStems = false, figurenotesChordLineGap = 6, figurenotesChordBlocks = false, figurenotesChordBlocksShowTones = true, figurenotesMelodyShowNoteNames = true, figurenotesRowHeight: figurenotesRowHeightProp, figurenotesChordLineHeight: figurenotesChordLineHeightProp, timeSignatureSize = 16, themeColors: themeColorsProp, pedagogicalPlayheadStyle = 'line', pedagogicalPlayheadEmoji = '🎵', pedagogicalPlayheadEmojiSize = 32, cursorSizePx, cursorLineStrokeWidth = 4, cursorSubRow = 0, pedagogicalPlayheadMovement = 'arch', isPedagogicalAudioPlaying = false, isExportingAnimation = false, exportCursorRef, scoreContainerRef, pageFlowDirection = 'vertical', pageOrientation = 'portrait', isFirstInBraceGroup = false, braceGroupSize = 0, lyricFontFamily = 'sans-serif', lyricFontSize = 12, lyricLineYOffset = 0, translateLabel, showLayoutBreakIcons = false, showStaffSpacerHandles = false, onSystemYOffsetChange, onToggleLineBreakAfter, activeLyricNoteIndex = null, physicalPageGapPx = 3, disablePhysicalPageGaps = false, hideCursorOverlay = false }) {
-  if (typeof GLOBAL_NOTATION_CONFIG === 'undefined' || !GLOBAL_NOTATION_CONFIG) return null;
   const themeColors = themeColorsProp || { staffLineColor: '#000', noteFill: '#1a1a1a', textColor: '#1a1a1a', scoreBg: '#fffbf0', isDark: false };
   const safeKey = keySignature ?? 'C';
-  const joClefStaffPosition = typeof joClefStaffPositionProp === 'number' ? joClefStaffPositionProp : getTonicStaffPosition(safeKey);
-  if (typeof joClefStaffPosition !== 'number') return null;
+  // Alati lõplik number (mitte NaN) — varajane `return null` enne hookide kasutamist rikkus Reacti hookide reeglid ja võis jätta noodiala tühjaks.
+  const joClefStaffPosition = (() => {
+    if (typeof joClefStaffPositionProp === 'number' && Number.isFinite(joClefStaffPositionProp)) return joClefStaffPositionProp;
+    const t = getTonicStaffPosition(safeKey);
+    return Number.isFinite(t) ? t : getTonicStaffPosition('C');
+  })();
   const isFigurenotesMode = notationStyle === 'FIGURENOTES';
   const instCfg = instrumentConfig[instrument];
   const isTabMode = instCfg?.type === 'tab' && instrumentNotationVariant === 'tab';
@@ -10731,6 +10735,8 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
       window.removeEventListener('mouseup', onUp);
     };
   }, [staffSpacerDrag.systemIndex, onSystemYOffsetChange]);
+
+  if (typeof GLOBAL_NOTATION_CONFIG === 'undefined' || !GLOBAL_NOTATION_CONFIG) return null;
 
   // Helistiku toonika (I aste) noodijoonestiku positsiooni jaoks: [pitch, octave]. Kõik helistikud.
   const KEY_TONIC_FOR_STAFF = { C: ['C', 4], G: ['G', 4], D: ['D', 4], A: ['A', 4], E: ['E', 4], B: ['B', 4], F: ['F', 4], Bb: ['B', 4], Eb: ['E', 4] };
@@ -11089,7 +11095,7 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
   };
 
   const beatsPerMeasure = timeSignature.beats;
-  const getSystemTotalBeats = (sys) => sys.measureIndices.reduce((sum, i) => sum + (effectiveMeasures[i].beatCount ?? beatsPerMeasure), 0);
+  const getSystemTotalBeats = (sys) => sys.measureIndices.reduce((sum, i) => sum + (effectiveMeasures[i]?.beatCount ?? beatsPerMeasure), 0);
   const findCursorSystem = () => {
     let beatAcc = 0;
     for (let s = 0; s < systems.length; s++) {
@@ -11108,7 +11114,7 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
     let beatLeft = cursorInfo.localBeat;
     for (let j = 0; j < sys.measureIndices.length; j++) {
       const m = effectiveMeasures[sys.measureIndices[j]];
-      const beatCount = m.beatCount ?? beatsPerMeasure;
+      const beatCount = m?.beatCount ?? beatsPerMeasure;
       const mw = widths[j] ?? 80 * beatCount;
       const beatWidth = mw / beatCount;
       if (beatLeft < beatCount)
@@ -11168,7 +11174,7 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
       let xEnd = marginLeft;
       for (let j = 0; j < sys.measureIndices.length; j += 1) {
         const m = effectiveMeasures[sys.measureIndices[j]];
-        const beatCount = m.beatCount ?? beatsPerMeasure;
+        const beatCount = m?.beatCount ?? beatsPerMeasure;
         const mw = widths[j] ?? 80 * beatCount;
         const beatWidth = mw / beatCount;
         if (localStart > 0) {
