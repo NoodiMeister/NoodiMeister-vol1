@@ -3124,7 +3124,12 @@ function NoodiMeisterCore({ icons }) {
       if (data.keySignature) setKeySignature(data.keySignature);
       if (data.staffLines != null) setStaffLines(data.staffLines);
       if (data.notationStyle) setNotationStyle(data.notationStyle);
-      if (data.notationMode) setNotationMode(data.notationMode);
+      else if (data.gridOnlyMode != null) setNotationStyle(data.gridOnlyMode ? 'FIGURENOTES' : 'TRADITIONAL');
+      {
+        const resolvedStyleImport = data.notationStyle ?? (data.gridOnlyMode != null ? (data.gridOnlyMode ? 'FIGURENOTES' : 'TRADITIONAL') : null);
+        if (resolvedStyleImport === 'FIGURENOTES') setNotationMode('figurenotes');
+        else if (data.notationMode) setNotationMode(data.notationMode);
+      }
       if (data.noteheadShape) setNoteheadShape(data.noteheadShape);
       if (data.noteheadEmoji != null) setNoteheadEmoji(data.noteheadEmoji);
       if (data.pixelsPerBeat != null) setPixelsPerBeat(data.pixelsPerBeat);
@@ -3421,7 +3426,11 @@ function NoodiMeisterCore({ icons }) {
       if ('figurenotesChordBlocksShowTones' in data) setFigurenotesChordBlocksShowTones(!!data.figurenotesChordBlocksShowTones);
       if ('figurenotesMelodyShowNoteNames' in data) setFigurenotesMelodyShowNoteNames(!!data.figurenotesMelodyShowNoteNames);
       if (data.timeSignatureSize != null) setTimeSignatureSize(Math.max(12, Math.min(48, data.timeSignatureSize)));
-      if (data.notationMode) setNotationMode(data.notationMode);
+      {
+        const resolvedStyleStorage = data.notationStyle ?? (data.gridOnlyMode != null ? (data.gridOnlyMode ? 'FIGURENOTES' : 'TRADITIONAL') : null);
+        if (resolvedStyleStorage === 'FIGURENOTES') setNotationMode('figurenotes');
+        else if (data.notationMode) setNotationMode(data.notationMode);
+      }
       if (data.noteheadShape) setNoteheadShape(data.noteheadShape);
       if (data.noteheadEmoji != null) setNoteheadEmoji(data.noteheadEmoji);
       if (data.instrumentNotationVariant) setInstrumentNotationVariant(data.instrumentNotationVariant);
@@ -10484,11 +10493,16 @@ function getFingeringForNote(pitch, octave, instrumentId) {
 
 // Timeline Component – multi-system layout (VexFlow loogika). (PAGE_BREAK_GAP on defineeritud üleval.)
 function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, pageWidth, cursorPosition, notationMode, staffLines, clefType, keySignature = 'C', relativeNotationShowKeySignature = false, relativeNotationShowTraditionalClef = false, onJoClefPositionChange, joClefFocused = false, onJoClefFocus, instrument = 'single-staff-treble', instrumentNotationVariant = 'standard', instrumentConfig = {}, showBarNumbers = true, barNumberSize = 11, showRhythmSyllables = false, joClefStaffPosition: joClefStaffPositionProp, showAllNoteLabels = false, enableEmojiOverlays = true, noteheadShape = 'oval', noteheadEmoji = '♪', onNoteTeacherLabelChange, onNoteLabelClick, chords = [], isDotted, isRest, selectedDuration, noteInputMode, selectedNoteIndex, isNoteSelected, notes: allNotes, onStaffAddNote, onNoteClick, onNoteMouseDown, onNoteMouseEnter, onNotePitchChange, onNoteBeatChange, canHandDragNotes = false, ghostPitch, ghostOctave, onFigureBeatClick, onChordLineMouseMove, onChordLineClick, notationStyle, layoutMeasuresPerLine = 4, layoutLineBreakBefore = [], layoutPageBreakBefore = [], layoutSystemGap = 120, layoutPartsGap, layoutConnectedBarlines = false, staffRowAlignment = 'center', staffIndexInScore = 0, systemTotalHeight, layoutGlobalSpacingMultiplier = 1, systems: systemsProp, baseYOffset = 0, isActiveStaff = true, staffCount = 1, staffHeight: staffHeightProp, figurenotesSize = 16, figurenotesStems = false, figurenotesChordLineGap = 6, figurenotesChordBlocks = false, figurenotesChordBlocksShowTones = true, figurenotesMelodyShowNoteNames = true, figurenotesRowHeight: figurenotesRowHeightProp, figurenotesChordLineHeight: figurenotesChordLineHeightProp, timeSignatureSize = 16, themeColors: themeColorsProp, pedagogicalPlayheadStyle = 'line', pedagogicalPlayheadEmoji = '🎵', pedagogicalPlayheadEmojiSize = 32, cursorSizePx, cursorLineStrokeWidth = 4, cursorSubRow = 0, pedagogicalPlayheadMovement = 'arch', isPedagogicalAudioPlaying = false, isExportingAnimation = false, exportCursorRef, scoreContainerRef, pageFlowDirection = 'vertical', pageOrientation = 'portrait', isFirstInBraceGroup = false, braceGroupSize = 0, lyricFontFamily = 'sans-serif', lyricFontSize = 12, lyricLineYOffset = 0, translateLabel, showLayoutBreakIcons = false, showStaffSpacerHandles = false, onSystemYOffsetChange, onToggleLineBreakAfter, activeLyricNoteIndex = null, physicalPageGapPx = 3, disablePhysicalPageGaps = false, hideCursorOverlay = false }) {
-  if (typeof GLOBAL_NOTATION_CONFIG === 'undefined' || !GLOBAL_NOTATION_CONFIG || GLOBAL_NOTATION_CONFIG.EMOJIS === false) return null;
+  // NB: Ära seo kogu Timeline'i EMOJIS lipuga — väline window.NOODIMEISTER_CONFIG võib määrata EMOJIS:false
+  // (nt emoji välja lülitus) ja siis kaoks kogu noodiala (figuurnoot, taktimõõt, beat-boxid). EMOJIS juhib ainult emoji-overlaide mujal.
+  if (typeof GLOBAL_NOTATION_CONFIG === 'undefined' || !GLOBAL_NOTATION_CONFIG) return null;
   const themeColors = themeColorsProp || { staffLineColor: '#000', noteFill: '#1a1a1a', textColor: '#1a1a1a', scoreBg: '#fffbf0', isDark: false };
-  const safeKey = keySignature ?? 'C';
-  const joClefStaffPosition = typeof joClefStaffPositionProp === 'number' ? joClefStaffPositionProp : getTonicStaffPosition(safeKey);
-  if (typeof joClefStaffPosition !== 'number') return null;
+  const safeKey = (typeof keySignature === 'string' && keySignature.trim()) ? keySignature.trim() : 'C';
+  const rawJo = typeof joClefStaffPositionProp === 'number' && Number.isFinite(joClefStaffPositionProp)
+    ? joClefStaffPositionProp
+    : getTonicStaffPosition(safeKey);
+  const joClefStaffPosition = Number.isFinite(rawJo) ? rawJo : getTonicStaffPosition('C');
+  if (!Number.isFinite(joClefStaffPosition)) return null;
   const isFigurenotesMode = notationStyle === 'FIGURENOTES';
   const instCfg = instrumentConfig[instrument];
   const isTabMode = instCfg?.type === 'tab' && instrumentNotationVariant === 'tab';
@@ -11316,9 +11330,9 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
             (() => {
               const cx = cursorX;
               const pitchY = getPitchY(ghostPitch, ghostOctave);
-              const cy = cursorInfo.system.yOffset + (notationMode === 'figurenotes' ? centerY : pitchY);
+              const cy = cursorInfo.system.yOffset + ((isFigurenotesMode || notationMode === 'figurenotes') ? centerY : pitchY);
               const stemUp = pitchY > middleLineY;
-              if (notationMode === 'figurenotes') {
+              if (isFigurenotesMode || notationMode === 'figurenotes') {
                 const { color, shape } = getFigureSymbol(ghostPitch, ghostOctave);
                 const size = Math.max(8, Math.min(150, emojiSizePx));
                 const r = size / 2;
@@ -11351,7 +11365,7 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
                 }
                 return <g opacity="0.9">{el}</g>;
               }
-              if (notationMode === 'traditional') {
+              if (notationMode === 'traditional' && !isFigurenotesMode) {
                 const rx = getNoteheadRx(spacing);
                 const stemX = stemUp ? cx + rx : cx - rx;
                 const stemY2 = stemUp ? cy - 28 : cy + 28;
@@ -11385,7 +11399,7 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
             </circle>
           )}
           {isDotted && !isRest && ghostPitch && (
-            <circle cx={cursorX + 12} cy={cursorInfo.system.yOffset + (notationMode === 'figurenotes' ? centerY : getPitchY(ghostPitch, ghostOctave))} r="3" fill="#f59e0b" stroke="white" strokeWidth="1">
+            <circle cx={cursorX + 12} cy={cursorInfo.system.yOffset + ((isFigurenotesMode || notationMode === 'figurenotes') ? centerY : getPitchY(ghostPitch, ghostOctave))} r="3" fill="#f59e0b" stroke="white" strokeWidth="1">
               <animate attributeName="opacity" values="1;0.5;1" dur="0.8s" repeatCount="indefinite" />
             </circle>
           )}
