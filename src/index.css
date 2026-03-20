@@ -79,9 +79,12 @@ html, body, #root {
   min-height: 100px;
 }
 
-/* Wrapper for print scaling: invisible for layout on screen */
+/* Wrapper for print scaling: real box so SVG/children paint reliably.
+   (display:contents can break SVG painting in some Chromium builds; keep position static
+   so absolute page-design layers still use the outer .relative A4 container as CB.) */
 .noodimeister-print-scaler {
-  display: contents;
+  display: block;
+  width: 100%;
 }
 
 /* PDF export capture: eemaldab teksti-põhise tühimiku (3–4 px nihe), lukustab tausta. */
