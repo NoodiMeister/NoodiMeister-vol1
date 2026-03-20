@@ -43,6 +43,13 @@ Kõik muudatused peavad hoidma kasutaja teekonnad tervena:
 - **Build**: `npm run build` peab läbi minema
 - **Kohalik tootmise eelvaade (sama port mis tavaliselt):** `npm run preview:full` → `http://127.0.0.1:4173` (build + `vite preview` + brauser avaneb). Cursor/VS Code: **Tasks → Run Task → “Noodimeister: build + preview …”**.
 
+### Testimise ja lingid (õige aadress OAuth jaoks)
+
+- **Ametlik toodang (kasutajad, Google/Microsoft OAuth):** `https://noodimeister.ee` ja `https://www.noodimeister.ee` — need peavad olema **Google Cloud Console** (ja Azure/Microsoft) **Authorized JavaScript origins** + **redirect URI** nimekirjas. Üksikasjad: `docs/GOOGLE-SETUP.md`, `docs/ONEDRIVE-JUHEND.md`.
+- **Verceli tootmise tehniline URL (üks projekt, vt `docs/VERCEL-GITHUB.md`):** `https://noodi-meister-vol1-la-stravaganza.vercel.app` — ära kasuta teist `*.vercel.app` projekti tootmise asemel.
+- **Iga juhuslik Verceli preview URL** (`…-hash-haru.vercel.app`) on **uus päritolu**; Google/Microsoft ei tööta seal, kuni see on **sama käsitsi** konsooli lisatud. Täieliku pilve/auth testi jaoks eelista **noodimeister.ee** või lisa **täpne** preview URL konsooli.
+- **Kohalik:** `http://localhost:5173` / `http://127.0.0.1:5173` (dev), `http://127.0.0.1:4173` (preview pärast `npm run build`) — need tuleb konsoolis samuti lubada, kui testid OAuth kohapeal.
+
 ### Noodimeistri standardid (elav dokument)
 
 - **Standard: veateated kasutajale**
