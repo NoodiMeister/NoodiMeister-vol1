@@ -87,8 +87,7 @@ if (typeof window !== 'undefined') {
 }
 
 // getStaffHeight, LAYOUT, PAGE_BREAK_GAP imporditud layout/LayoutManager.js
-var DEMO_MAX_BEATS = 8;
-var DEMO_MAX_MEASURES = 2;
+var DEMO_MAX_MEASURES = 8;
 var SCORE_ZOOM_MIN = 0.25;
 var SCORE_ZOOM_MAX = 3;
 var KEY_ORDER = ['C', 'G', 'D', 'A', 'E', 'B', 'F', 'Bb', 'Eb'];
@@ -1012,6 +1011,12 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   const store = useNoodimeisterOptional();
   const [searchParamsForAccess] = useSearchParams();
   const hasFullAccess = (store?.hasFullAccess ?? authStorage.isLoggedIn()) || !!(searchParamsForAccess && typeof searchParamsForAccess.get === 'function' && searchParamsForAccess.get('fileId'));
+  const isMacPlatform = useMemo(() => {
+    if (typeof navigator === 'undefined') return false;
+    const platform = String(navigator.platform || '').toUpperCase();
+    return platform.includes('MAC');
+  }, []);
+  const addMeasureShortcutLabel = isMacPlatform ? 'Cmd+B' : 'Ctrl+B';
 
   // JO-võti ja noodigraafika state (GLOBAL_NOTATION_CONFIG on faili alguses)
   const [joClefFocused, setJoClefFocused] = useState(false);
@@ -1877,14 +1882,15 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   const isLoggedIn = () => authStorage.isLoggedIn();
 
   const addMeasure = useCallback(() => {
-    if (!hasFullAccess) {
+    const currentTotalMeasures = Math.max(1, 1 + (addedMeasures || 0));
+    if (!hasFullAccess && currentTotalMeasures >= DEMO_MAX_MEASURES) {
       setSaveFeedback(t('demo.maxMeasures'));
       setTimeout(() => setSaveFeedback(''), 3500);
       return;
     }
     dirtyRef.current = true;
     setAddedMeasures(prev => prev + 1);
-  }, [hasFullAccess]);
+  }, [hasFullAccess, addedMeasures, t]);
 
   // Pedagoogiline notatsioon: salvestatud heli laadimine ja taustamängimine (kursor sünkroonis heliga)
   const handlePedagogicalAudioFile = useCallback((e) => {
@@ -4237,8 +4243,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
 
     // User-driven bar count (1 + addedMeasures), but at least minMeasuresFromNotes so laaditud fail näitab alati kõiki noote.
     let totalMeasures = Math.max(1, Math.max(1 + (addedMeasures || 0), minMeasuresFromNotes));
-    // Apply demo cap only when user has exactly 1 measure (0 added) and notes don't need more. Any 2+ = show all.
-    const applyDemoCap = !hasFullAccess && (addedMeasures || 0) < 1 && minMeasuresFromNotes <= DEMO_MAX_MEASURES && totalMeasures <= DEMO_MAX_MEASURES;
+    const applyDemoCap = !hasFullAccess;
     if (applyDemoCap) {
       totalMeasures = Math.min(DEMO_MAX_MEASURES, totalMeasures);
     }
@@ -4254,7 +4259,14 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     const ms = calculateMeasures();
     return ms.length ? ms[ms.length - 1].endBeat : 0;
   }, [calculateMeasures]);
-  const maxCursor = hasFullAccess ? maxCursorAllowed : Math.min(maxCursorAllowed, DEMO_MAX_BEATS);
+  const demoMaxCursor = useMemo(() => {
+    const beatsPerMeasure = beatsPerMeasureFromTimeSig(timeSignature);
+    const pickupBeats = pickupEnabled
+      ? Math.max(0, Math.min(beatsPerMeasure, durationToBeats(pickupDuration) * (pickupQuantity || 0)))
+      : beatsPerMeasure;
+    return pickupBeats + Math.max(0, DEMO_MAX_MEASURES - 1) * beatsPerMeasure;
+  }, [timeSignature, pickupEnabled, pickupDuration, pickupQuantity, durationToBeats]);
+  const maxCursor = hasFullAccess ? maxCursorAllowed : Math.min(maxCursorAllowed, demoMaxCursor);
   useEffect(() => {
     setCursorPosition(prev => {
       if (prev < 0) return 0;
@@ -4449,7 +4461,8 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       });
       const merged = [...cleaned, newNote].sort((a, b) => (a.beat ?? 0) - (b.beat ?? 0));
       const totalSpan = merged.reduce((max, n) => Math.max(max, (n.beat ?? 0) + (n.duration ?? 1)), 0);
-      if (!hasFullAccess && totalSpan > DEMO_MAX_BEATS) {
+      const demoMaxSpanBeats = beatsPerMeasureFromTimeSig(timeSignature) * DEMO_MAX_MEASURES;
+      if (!hasFullAccess && totalSpan > demoMaxSpanBeats) {
         setSaveFeedback('Demo: max 8 takti (2 rida). Logi sisse või registreeru, et kirjutada edasi.');
         setTimeout(() => setSaveFeedback(''), 3500);
         return null;
@@ -4970,8 +4983,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   // Keyboard handler
   useEffect(() => {
     const handleKeyDown = (e) => {
-      const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
-      const modKey = isMac ? e.metaKey : e.ctrlKey;
+      const modKey = e.metaKey || e.ctrlKey;
 
       // If user is typing in an input/textarea/contenteditable, do NOT globally swallow keystrokes.
       // Otherwise title/author/text fields can appear "disabled", especially if noteInputMode is on.
@@ -8202,7 +8214,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                 title={hasFullAccess ? 'Lisa takt (Cmd+B / Ctrl+B)' : t('measure.demoTitle')}
               >
                 <Plus className="w-4 h-4" />
-                Lisa takt (Cmd+B)
+                {`Lisa takt (${addMeasureShortcutLabel})`}
               </button>
 
               {/* Fail – salvestamine ja laadimine */}

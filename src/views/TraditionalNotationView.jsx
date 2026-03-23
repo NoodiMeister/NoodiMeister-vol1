@@ -42,9 +42,9 @@ const STAFF_SPACE = 10;
 /** Left edge of staff lines: after system bracket + instrument brace (piano). Clef is 1px to the right. */
 const STAFF_LEFT_WITH_BRACE = 44;
 const STAFF_LEFT_WITHOUT_BRACE = 10;
-const GAP_BEFORE_CLEF_PX = 1;
-/** Treble clef anchor: one staff line higher than standard (B line). staffLinePositions[2]. */
-const TREBLE_CLEF_LINE_INDEX = 3; // G4 = 2nd line from bottom (0=top=F5, 4=bottom=E4)
+const GAP_BEFORE_CLEF_PX = 6;
+/** Treble clef anchor moved one staff line upward for current score alignment. */
+const TREBLE_CLEF_LINE_INDEX = 2; // 0=top line ... 4=bottom line
 
 // SMuFL noteheads (Leland)
 const SMUFL = {
@@ -146,12 +146,14 @@ function TimeSigDigits({ x, y, fontSize, number, fill }) {
 
 function renderTimeSignature(timeSignature, timeSignatureMode, centerY, textColor = '#333', noteFill = '#333', x = 45) {
   const L = TIME_SIG_LAYOUT;
-  const y = centerY;
+  const y = centerY - 2;
+  const extraVerticalGapPx = 5;
+  const halfGap = extraVerticalGapPx / 2;
   const yLine = y + L.Y_LINE;
-  const fNum = 18;
-  const fDen = 18;
-  const fDenFallback = 16;
-  const numeratorDigits = <TimeSigDigits x={x} y={y + L.Y_NUM} fontSize={fNum} number={timeSignature.beats} fill={textColor} />;
+  const fNum = 52;
+  const fDen = 52;
+  const fDenFallback = 50;
+  const numeratorDigits = <TimeSigDigits x={x} y={y + L.Y_NUM - halfGap - 10} fontSize={fNum} number={timeSignature.beats} fill={textColor} />;
   if (timeSignatureMode === 'pedagogical') {
     const stemX = x + L.STEM_X_OFFSET;
     const getNoteSymbolForDenominator = () => {
@@ -174,7 +176,7 @@ function renderTimeSignature(timeSignature, timeSignatureMode, centerY, textColo
     <g>
       {numeratorDigits}
       <line x1={x - L.LINE_HALF} y1={yLine} x2={x + L.LINE_HALF} y2={yLine} stroke={textColor} strokeWidth="1.5" />
-      <TimeSigDigits x={x} y={y + L.Y_DEN} fontSize={fDen} number={timeSignature.beatUnit} fill={textColor} />
+      <TimeSigDigits x={x} y={y + L.Y_DEN + halfGap} fontSize={fDen} number={timeSignature.beatUnit} fill={textColor} />
     </g>
   );
 }
@@ -589,15 +591,15 @@ export function TraditionalNotationView({
                     })()
                   )}
 
-                  {/* Taktinumber iga rea esimese takti juures: vasak ja ülemine nurk (üle noodijoonte) */}
+                  {/* Taktinumber rea alguses: clef'i ees ja ülemise noodijoone kohal */}
                   {showBarNumbers && staffIndex === 0 && sys.measureIndices.length > 0 && (
                     <text
-                      x={effectiveMarginLeft}
-                      y={staffY + firstLineY - 10}
-                      fontSize={barNumberSize}
+                      x={Math.max(6, clefX - 8)}
+                      y={staffY + firstLineY - 21}
+                      fontSize={25}
                       fontWeight="bold"
                       fill="#555"
-                      textAnchor="end"
+                      textAnchor="middle"
                       dominantBaseline="hanging"
                       fontFamily="sans-serif"
                     >
