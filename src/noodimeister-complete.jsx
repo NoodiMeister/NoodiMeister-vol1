@@ -10302,8 +10302,8 @@ function NoodiMeisterCore({ icons }) {
             });
           })()}
           </div>
-          {/* Puhkehetkede sildid: suur tekst, kui kursor on antud löökide vahel (video/animatsioon) */}
-          {intermissionLabels.some((lab) => cursorPosition >= lab.startBeat && cursorPosition < lab.endBeat) && (
+          {/* Puhkehetkede sildid: täislehe overlay ainult taasesitusel/animatsioonil — mitte tavalises redigeerimises (muidu katab noodid; pointer-events-none laseb klikid läbi → “nähtamatu aga töötav”). */}
+          {intermissionLabels.some((lab) => cursorPosition >= lab.startBeat && cursorPosition < lab.endBeat) && (isPedagogicalAudioPlaying || isExportingAnimation) && !showPdfExportPreview && !isExportingPdf && (
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none bg-amber-50/95 z-10" aria-hidden="true">
               <p className="text-2xl sm:text-4xl font-bold text-center text-amber-900 px-4 py-6 max-w-2xl" style={{ fontFamily: documentFontFamily }}>
                 {intermissionLabels.find((lab) => cursorPosition >= lab.startBeat && cursorPosition < lab.endBeat)?.text || ''}
@@ -10664,9 +10664,15 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
   const effectiveMeasures = React.useMemo(() => (measures || []).map((m, i) => ({ ...m, notes: notesByMeasure[i] || [] })), [measures, notesByMeasure]);
   const timelineSvgRef = useRef(null);
   const [staffSpacerDrag, setStaffSpacerDrag] = React.useState({ systemIndex: null, startClientY: 0, cumulativeDelta: 0 });
-  const totalHeightLogical = systemsComputed.length > 0
-    ? systemsComputed[systemsComputed.length - 1].yOffset + (staffCount || 1) * timelineHeight + 40
+  // SVG viewBox height must include baseYOffset: each staff Timeline shifts systems down by
+  // visibleIndex * (staffHeight + gap) + staffYOffsets[i]. Omitting it made the SVG too short;
+  // .sheet-music-page overflow:hidden then clipped notation (title/inputs above still visible).
+  const lastSystemLayoutY = systemsComputed.length > 0 ? systemsComputed[systemsComputed.length - 1].yOffset : 0;
+  const contentExtentBelowLayout = systemsComputed.length > 0
+    ? lastSystemLayoutY + (staffCount || 1) * timelineHeight + 40
     : (staffCount || 1) * timelineHeight + 40;
+  const safeBaseYOffset = Number.isFinite(baseYOffset) ? baseYOffset : 0;
+  const totalHeightLogical = safeBaseYOffset + contentExtentBelowLayout;
   const isHorizontal = pageFlowDirection === 'horizontal';
   const a4Ratio = pageOrientation === 'landscape' ? LAYOUT.A4_HEIGHT_RATIO_LANDSCAPE : LAYOUT.A4_HEIGHT_RATIO;
   const a4PageHeight = (pageWidth || LAYOUT.PAGE_WIDTH_MIN) * a4Ratio;
