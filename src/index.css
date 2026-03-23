@@ -4,32 +4,8 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Traditional notation: Leland (symbols) + Leland Text (text glyphs). Only woff2 in repo; .otf would 404. */
-@font-face {
-  font-family: 'Leland';
-  src: url('/fonts/Leland.woff2') format('woff2');
-  font-display: swap;
-}
-
-@font-face {
-  font-family: 'LelandText';
-  src: url('/fonts/LelandText.woff2') format('woff2');
-  font-display: swap;
-}
-
-/* Tin whistle fingering / tab notation (a, b, c, d, e, f, g, c#). */
-@font-face {
-  font-family: 'TinWhistleTab';
-  src: url('/fonts/TinWhistleTab.ttf') format('truetype');
-  font-display: swap;
-}
-
-/* Recorder finger tables (soprano C). */
-@font-face {
-  font-family: 'RecorderFont';
-  src: url('/fonts/RecorderFont-BYDx.ttf') format('truetype');
-  font-display: swap;
-}
+/* Optional fingering fonts are loaded at runtime only when the files actually exist.
+   This avoids build-time broken asset warnings and keeps fallback rendering deterministic. */
 
 html, body, #root {
   margin: 0;
@@ -174,7 +150,8 @@ html, body, #root {
     page-break-after: auto;
     break-after: auto;
   }
-  html.nm-print-svg-mode .nm-print-svg-page img {
+  html.nm-print-svg-mode .nm-print-svg-page img,
+  html.nm-print-svg-mode .nm-print-svg-page svg {
     width: 100%;
     height: auto;
     display: block;

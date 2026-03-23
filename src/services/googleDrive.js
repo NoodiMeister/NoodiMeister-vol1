@@ -273,6 +273,36 @@ export async function getFileContent(accessToken, fileId) {
 }
 
 /**
+ * Loe Google Drive faili metadata, et tuvastada konfliktid ja säilitada sama faili identiteet eri seadmetes.
+ * @param {string} accessToken
+ * @param {string} fileId
+ * @returns {Promise<{ id: string, name: string, modifiedTime?: string, createdTime?: string, parents?: string[], shared?: boolean }>}
+ */
+export async function getFileMetadata(accessToken, fileId) {
+  if (!accessToken) throw new Error('Token aegunud. Logi uuesti sisse.');
+  if (!fileId) throw new Error('Fail puudub');
+  const params = new URLSearchParams({
+    fields: 'id,name,modifiedTime,createdTime,parents,shared',
+  });
+  const res = await fetch(`${DRIVE_API_URL}/${fileId}?${params}`, {
+    headers: { Authorization: `Bearer ${accessToken}` }
+  });
+  if (!res.ok) {
+    if (res.status === 401) throw new Error('Token aegunud. Logi uuesti sisse.');
+    throw new Error('Faili metadata laadimine ebaõnnestus');
+  }
+  const data = await res.json();
+  return {
+    id: data.id,
+    name: data.name || '',
+    modifiedTime: data.modifiedTime || '',
+    createdTime: data.createdTime || '',
+    parents: Array.isArray(data.parents) ? data.parents : [],
+    shared: !!data.shared,
+  };
+}
+
+/**
  * Loetleb Google Drive'ist failid, mille nimi sisaldab ".nm" (või vana ".noodimeister").
  * @param {string} accessToken
  * @param {object} [options] - pageSize, orderBy, folderId (piirdu kaustaga)
@@ -531,8 +561,9 @@ async function updateFileContent(accessToken, fileId, content) {
   });
   if (!res.ok) {
     if (res.status === 401) throw new Error('Token aegunud. Logi uuesti sisse.');
-    throw new Error('Konfiguratsiooni uuendamine ebaõnnestus');
+    throw new Error('Faili uuendamine ebaõnnestus');
   }
+  return res.json().catch(() => ({}));
 }
 
 /**

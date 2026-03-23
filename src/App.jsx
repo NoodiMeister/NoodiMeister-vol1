@@ -54,14 +54,12 @@ function LandingOrRedirect() {
   return <LandingPage />;
 }
 
-/** Login/Registreeru lehel suuna juba sisselogitud kasutaja Minu kontole. */
+/** Login peab avanema alati otse, et kasutaja saaks kontot vahetada ilma vahepealse konto-leheta. */
 function LoginOrRedirect() {
-  if (isLoggedIn()) return <Navigate to="/konto" replace />;
   return <LoginPage />;
 }
 
 function RegisterOrRedirect() {
-  if (isLoggedIn()) return <Navigate to="/konto" replace />;
   return <RegisterPage />;
 }
 

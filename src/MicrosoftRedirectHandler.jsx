@@ -4,9 +4,10 @@ import {
   getStorageForRead,
   getLoggedInUser,
   isLoggedIn,
-  KEY_LOGGED_IN,
   KEY_MICROSOFT_TOKEN,
   KEY_MICROSOFT_EXPIRY,
+  clearGoogleAuthSession,
+  setLoggedInUser,
 } from './services/authStorage';
 import { LOCALE_STORAGE_KEY, DEFAULT_LOCALE, getTranslations } from './i18n';
 
@@ -157,17 +158,16 @@ export default function MicrosoftRedirectHandler() {
               setErrorMessage(t['auth.storageNotAvailable'] || 'Salvestus ei ole saadaval.');
               return;
             }
-            storage.setItem(KEY_LOGGED_IN, JSON.stringify(user));
+            const sessionUser = setLoggedInUser(user, false);
+            if (!sessionUser?.email) {
+              setStatus('error');
+              setErrorMessage(t['auth.storageNotAvailable'] || 'Salvestus ei ole saadaval.');
+              return;
+            }
+            clearGoogleAuthSession();
             storage.setItem(KEY_MICROSOFT_TOKEN, accessToken);
             const expiresAt = result.expiresOn ? result.expiresOn.getTime() : 0;
             storage.setItem(KEY_MICROSOFT_EXPIRY, String(expiresAt));
-            try {
-              const users = JSON.parse(localStorage.getItem('noodimeister-users') || '[]');
-              if (!users.some((u) => u && u.email === email)) {
-                users.push({ ...user });
-                localStorage.setItem('noodimeister-users', JSON.stringify(users));
-              }
-            } catch (_) {}
             if (!getLoggedInUser()?.email || !isLoggedIn()) {
               setStatus('error');
               setErrorMessage(t['auth.confirmationFailed'] || 'Kinnitamine ebaõnnestus.');

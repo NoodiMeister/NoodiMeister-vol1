@@ -142,15 +142,9 @@ export function PianoVisual({
     if (!useFigurenotes) return base;
     const natural = NATURAL_PITCH_BY_MIDI_MOD[midi % 12];
     if (!natural) return base;
-    const octave = midiToOctave(midi);
-    const fillColor = typeof getKeyColor === 'function'
-      ? getKeyColor(natural, octave)
-      : (getFigureStyle(natural, octave).fill ?? figurenotesColors?.[natural]);
-    if (!fillColor) return base;
     const textColor = (natural === 'A' || natural === 'E' || natural === 'B') ? '#000000' : '#ffffff';
     return {
       ...base,
-      ['--piano-figurenotes-color']: fillColor,
       ['--piano-figurenotes-text']: textColor,
     };
   };
@@ -212,14 +206,14 @@ export function PianoVisual({
                 const fig = getWhiteKeyFigure(midi);
                 if (!fig) return null;
                 return (
-                  <>
-                    <FigureKeyPath pitch={fig.pitch} color={fig.color} size={14} className="PianoVisual__key-figure" octave={fig.octave} />
+                  <span className="PianoVisual__white-figure">
+                    <FigureKeyPath pitch={fig.pitch} color={fig.color} size={20} className="PianoVisual__key-figure" octave={fig.octave} />
                     {getKeyLabel(midi) && (
                       <span className="PianoVisual__key-label" style={{ color: 'var(--piano-figurenotes-text)' }}>
                         {getKeyLabel(midi)}
                       </span>
                     )}
-                  </>
+                  </span>
                 );
               })()}
             </button>

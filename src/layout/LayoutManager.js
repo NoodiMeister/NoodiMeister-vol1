@@ -1,36 +1,37 @@
 /**
- * Paigutusmoodul: A4 formaat, takti laiendamine/kokkusurumine ({ }), ridade vertikaalne liigutamine.
- * Ekspordib computeLayout, LAYOUT konstandid ja getStaffHeight.
+ * Paigutusmoodul: noodilehe laius/kõrgus, takti laiendamine/kokkusurumine ({ }),
+ * ridade vertikaalne liigutamine. Ekspordib computeLayout, LAYOUT konstandid ja
+ * getStaffHeight.
  */
 
-/** A4 at 96 DPI: 210mm → 794px, 297mm → 1123px. Ratio 1 : 1.414. */
-const A4_WIDTH_PX_96 = Math.round((210 * 96) / 25.4);   // 794
-const A4_HEIGHT_PX_96 = Math.round((297 * 96) / 25.4);  // 1123
+import { getPaperDimensionsPx } from '../utils/pageGeometry';
+
+const DEFAULT_PAGE_DIMS = getPaperDimensionsPx('a4', 'portrait');
+const DEFAULT_PAGE_DIMS_LANDSCAPE = getPaperDimensionsPx('a4', 'landscape');
+const DEFAULT_HEIGHT_RATIO = DEFAULT_PAGE_DIMS.height / DEFAULT_PAGE_DIMS.width;
+const DEFAULT_HEIGHT_RATIO_LANDSCAPE = DEFAULT_PAGE_DIMS_LANDSCAPE.height / DEFAULT_PAGE_DIMS_LANDSCAPE.width;
 
 /**
  * Noodileht (ScorePage): ala noodi sisestus programmis, kuhu kantakse noodiga seotud kujutised, tekstid ja lehe disainid.
  * Mõõtmed sõltuvad lehe suunast (orientation).
  */
-export function getScorePageDimensions (orientation) {
-  const isLandscape = orientation === 'landscape';
-  return isLandscape
-    ? { width: A4_HEIGHT_PX_96, height: A4_WIDTH_PX_96 }   // horisontaalne A4: 297×210 mm → 1123×794 px
-    : { width: A4_WIDTH_PX_96, height: A4_HEIGHT_PX_96 };  // püstine A4: 210×297 mm → 794×1123 px
+export function getScorePageDimensions (orientation, paperSize = 'a4') {
+  return getPaperDimensionsPx(paperSize, orientation);
 }
 
 export const LAYOUT = {
-  /** Lehe laius/kõrgus px (96 DPI), kasutatakse preview ja paigutuse vaikimisi. */
-  PAGE_WIDTH_PX: A4_WIDTH_PX_96,
-  PAGE_HEIGHT_PX: A4_HEIGHT_PX_96,
-  PAGE_WIDTH_MIN: A4_WIDTH_PX_96,
-  PAGE_WIDTH_MAX: A4_WIDTH_PX_96,
-  PAGE_WIDTH_MAX_LANDSCAPE: A4_HEIGHT_PX_96,
+  /** Lehe laius/kõrgus px (96 DPI), vaikimisi A4 portrait. */
+  PAGE_WIDTH_PX: DEFAULT_PAGE_DIMS.width,
+  PAGE_HEIGHT_PX: DEFAULT_PAGE_DIMS.height,
+  PAGE_WIDTH_MIN: DEFAULT_PAGE_DIMS.width,
+  PAGE_WIDTH_MAX: DEFAULT_PAGE_DIMS.width,
+  PAGE_WIDTH_MAX_LANDSCAPE: DEFAULT_PAGE_DIMS_LANDSCAPE.width,
   /** Portrait: kõrgus/laius = 297/210. Landscape: kõrgus/laius = 210/297. */
-  A4_HEIGHT_RATIO: 297 / 210,
-  A4_HEIGHT_RATIO_LANDSCAPE: 210 / 297,
+  A4_HEIGHT_RATIO: DEFAULT_HEIGHT_RATIO,
+  A4_HEIGHT_RATIO_LANDSCAPE: DEFAULT_HEIGHT_RATIO_LANDSCAPE,
   /** A4 width/height in px at 96dpi (legacy names). */
-  A4_WIDTH_PX_AT_96DPI: A4_WIDTH_PX_96,
-  A4_HEIGHT_PX_AT_96DPI: A4_HEIGHT_PX_96,
+  A4_WIDTH_PX_AT_96DPI: DEFAULT_PAGE_DIMS.width,
+  A4_HEIGHT_PX_AT_96DPI: DEFAULT_PAGE_DIMS.height,
   SYSTEM_GAP: 120,
   MARGIN_LEFT: 60,
   MARGIN_RIGHT: 40,

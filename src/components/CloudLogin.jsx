@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useGoogleLogin } from '@react-oauth/google';
 import { useNavigate } from 'react-router-dom';
-import { getStorageForLogin, getStorageForRead, getLoggedInUser, isLoggedIn } from '../services/authStorage';
+import { getStorageForLogin, getStorageForRead, getLoggedInUser, isLoggedIn, setLoggedInUser, clearMicrosoftAuthSession, KEY_GOOGLE_TOKEN, KEY_GOOGLE_EXPIRY } from '../services/authStorage';
 import { formatAuthError } from '../utils/authError';
 import { LOCALE_STORAGE_KEY, DEFAULT_LOCALE, getTranslations } from '../i18n';
 
@@ -22,12 +22,6 @@ function getMicrosoftTesterEmails() {
   if (!raw || typeof raw !== 'string') return [];
   return raw.split(',').map((e) => e.trim().toLowerCase()).filter(Boolean);
 }
-
-const KEY_LOGGED_IN = 'noodimeister-logged-in';
-const KEY_GOOGLE_TOKEN = 'noodimeister-google-token';
-const KEY_GOOGLE_EXPIRY = 'noodimeister-google-token-expiry';
-const KEY_MICROSOFT_TOKEN = 'noodimeister-microsoft-token';
-const KEY_MICROSOFT_EXPIRY = 'noodimeister-microsoft-token-expiry';
 
 const microsoftClientId = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_MICROSOFT_CLIENT_ID) || '';
 const microsoftTenantId = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_MICROSOFT_TENANT_ID) || 'common';
@@ -341,20 +335,21 @@ function useCloudLoginWithProvider(mode = 'login', stayLoggedIn = false, onError
             if (onError) onError(payload);
             return;
           }
-          storage.setItem(KEY_LOGGED_IN, JSON.stringify(user));
+          const sessionUser = setLoggedInUser(user, stayLoggedIn);
+          if (!sessionUser?.email) {
+            const msg = 'Sisselogimise salvestamine ebaõnnestus. Proovi uuesti või teist brauserit.';
+            const t = getT();
+            alert((t['auth.loginError'] || 'Sisselogimise viga') + ': ' + msg);
+            const payload = formatAuthError('brauser', { message: msg });
+            if (onError) onError(payload);
+            return;
+          }
+          clearMicrosoftAuthSession();
           if (tokenResponse.access_token) {
             storage.setItem(KEY_GOOGLE_TOKEN, tokenResponse.access_token);
             const expiresAt = tokenResponse.expires_in ? Date.now() + tokenResponse.expires_in * 1000 : 0;
             storage.setItem(KEY_GOOGLE_EXPIRY, String(expiresAt));
           }
-          // Always ensure user is in noodimeister-users so the account is "fully registered" (login or register).
-          try {
-            const users = JSON.parse(localStorage.getItem('noodimeister-users') || '[]');
-            if (!users.some(u => u && u.email === profile.email)) {
-              users.push({ ...user });
-              localStorage.setItem('noodimeister-users', JSON.stringify(users));
-            }
-          } catch (_) {}
           // Vercel fix: suuna alles siis, kui auth andmed on kinnitatud (loe tagasi), et /app ei laadi enne kui isLoggedIn() töötab.
           // COOP: ära kasuta window.close() – sisselogimine suunab /app poole; close() põhjustaks Cross-Origin-Opener-Policy vigu.
           const readStorage = getStorageForRead();

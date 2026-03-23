@@ -6,6 +6,7 @@ import { AuthErrorBlock } from '../components/AuthErrorBlock';
 import { AppLogo } from '../components/AppLogo';
 import { formatAuthError } from '../utils/authError';
 import { useForceLightTheme } from '../hooks/useForceLightTheme';
+import { getStoredUsers, upsertUserAccount } from '../services/authStorage';
 
 export default function RegisterPage() {
   useForceLightTheme();
@@ -55,8 +56,13 @@ export default function RegisterPage() {
       return;
     }
     try {
-      const users = JSON.parse(localStorage.getItem('noodimeister-users') || '[]');
-      if (users.some(u => u.email === form.email)) {
+      const users = getStoredUsers();
+      const normalizedEmail = String(form.email || '').trim().toLowerCase();
+      if (users.some((u) => {
+        const sameEmail = String(u?.email || '').trim().toLowerCase() === normalizedEmail;
+        const isLocalAccount = String(u?.provider || 'local').trim().toLowerCase() === 'local';
+        return sameEmail && isLocalAccount;
+      })) {
         const payload = formatAuthError('registreerimine', {
           code: 'email_exists',
           message: 'Selle e-mailiga konto on juba olemas. Suuname sisselogimise lehele.'
@@ -65,8 +71,12 @@ export default function RegisterPage() {
         setTimeout(() => navigate('/login'), 1500);
         return;
       }
-      users.push({ name: form.name, email: form.email, password: form.password });
-      localStorage.setItem('noodimeister-users', JSON.stringify(users));
+      upsertUserAccount({
+        name: form.name,
+        email: normalizedEmail,
+        password: form.password,
+        provider: 'local',
+      }, { provider: 'local' });
       setMessage('Registreerumine õnnestus! Konto on loodud. Suuname sisselogimise lehele…');
       setErrorDetail(null);
       setTimeout(() => navigate('/login'), 2200);

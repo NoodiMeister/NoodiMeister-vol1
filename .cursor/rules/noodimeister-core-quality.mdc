@@ -34,6 +34,7 @@ alwaysApply: true
 ## “Do not break teacher flow” kontrollnimekiri
 
 - Klaviatuuri sisestus ja kiirklahvid ei tohi hakata konflikti minema input-väljadega.
+- Tekstikasti sisestus, noodi sisestus ja TAB/fingering-sisestus peavad tunduma kasutajale sama töökindlad ja sujuvad nagu tugevates noodiprogrammides; sisestus ei tohi “neelata” klikke, tekitada topeltsisestust ega põhjustada märgatavat lag'i.
 - Notatsiooni render ei tohi tekitada tühje/katkiseid SVG-e.
 - Eksport (PNG/PDF/SVG) ei tohi katki minna vaikimisi seadistustega.
 - Auth (Google/Microsoft) vead peavad andma kasutajale selge info, mitte “unknown error”.

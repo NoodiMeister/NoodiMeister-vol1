@@ -4,7 +4,7 @@ import { LogIn, Mail, Lock } from 'lucide-react';
 import { CloudLoginButtons } from '../components/CloudLogin';
 import { AuthErrorBlock } from '../components/AuthErrorBlock';
 import { AppLogo } from '../components/AppLogo';
-import { getStorageForLogin, getLoggedInUser, isLoggedIn } from '../services/authStorage';
+import { getStorageForLogin, getLoggedInUser, getStoredUsers, isLoggedIn, setLoggedInUser } from '../services/authStorage';
 import { formatAuthError } from '../utils/authError';
 import { useForceLightTheme } from '../hooks/useForceLightTheme';
 
@@ -54,12 +54,10 @@ export default function LoginPage() {
         return;
       }
       let users = [];
-      let raw;
       try {
-        raw = localStorage.getItem('noodimeister-users');
-        users = JSON.parse(raw || '[]');
+        users = getStoredUsers();
       } catch (parseErr) {
-        console.error('[LoginPage] localStorage.getItem või JSON.parse viga:', parseErr?.message, { rawType: typeof raw });
+        console.error('[LoginPage] localStorage.getItem või JSON.parse viga:', parseErr?.message);
         const payload = formatAuthError('e-mail/parool', { message: 'Andmeid ei saanud lugeda. Proovi uuesti või tühjenda brauseri andmed.' });
         setError(payload.fullMessage, payload);
         return;
@@ -68,20 +66,25 @@ export default function LoginPage() {
         console.error('[LoginPage] users ei ole massiiv:', typeof users);
         users = [];
       }
-      const user = users.find(u => u && u.email === email && u.password === password);
+      const normalizedEmail = String(email || '').trim().toLowerCase();
+      const user = users.find((u) =>
+        u &&
+        String(u.email || '').trim().toLowerCase() === normalizedEmail &&
+        String(u.provider || 'local').trim().toLowerCase() === 'local' &&
+        u.password === password
+      );
       if (!user) {
         const payload = formatAuthError('e-mail/parool', { code: 'invalid_credentials', message: 'Vale e-mail või parool.' });
         setError(payload.fullMessage, payload);
         return;
       }
-      const storage = getStorageForLogin(stayLoggedIn);
-      if (!storage) {
-        console.error('[LoginPage] getStorageForLogin tagastas null. stayLoggedIn:', stayLoggedIn, 'window:', typeof window);
+      const loggedInUser = setLoggedInUser({ email: user.email, name: user.name, provider: 'local' }, stayLoggedIn);
+      if (!loggedInUser) {
+        console.error('[LoginPage] setLoggedInUser tagastas null. stayLoggedIn:', stayLoggedIn, 'window:', typeof window);
         const payload = formatAuthError('brauser', { message: 'Salvestamine ebaõnnestus (brauser võib blokeerida andmeid). Proovi teist brauserit või lülita privaatse režiimi välja.' });
         setError(payload.fullMessage, payload);
         return;
       }
-      storage.setItem('noodimeister-logged-in', JSON.stringify({ email: user.email, name: user.name }));
       // Vercel fix: suuna alles siis, kui auth on kinnitatud (loe tagasi), et /app ei laadi enne kui isLoggedIn() töötab
       const confirmedUser = getLoggedInUser();
       const loggedIn = isLoggedIn();

@@ -51,12 +51,55 @@ function formatOneDriveDate(item, locale) {
   return formatDate(item?.lastModifiedDateTime, locale);
 }
 
+function getProjectSummaryStamp(file) {
+  return file?.modifiedTime || file?.lastModifiedDateTime || '';
+}
+
+function getProjectSummaryStateKey(provider, fileId) {
+  return `${provider}:${fileId || ''}`;
+}
+
+function getProjectSummaryCacheKey(provider, file) {
+  return `${getProjectSummaryStateKey(provider, file?.id)}:${getProjectSummaryStamp(file)}`;
+}
+
+function stripProjectExtension(name) {
+  return String(name || '').replace(/\.(nm|noodimeister)$/i, '');
+}
+
+function extractProjectSummary(rawContent) {
+  try {
+    const data = JSON.parse(rawContent);
+    if (!data || typeof data !== 'object') return null;
+    const notationStyle = data.notationStyle || (data.gridOnlyMode ? 'FIGURENOTES' : data.gridOnlyMode === false ? 'TRADITIONAL' : '');
+    const notationMode = data.notationMode || '';
+    const beats = Number(data?.timeSignature?.beats);
+    const beatUnit = Number(data?.timeSignature?.beatUnit);
+    const staffCount = Array.isArray(data.staves)
+      ? data.staves.length
+      : (Array.isArray(data.notes) || Array.isArray(data.scoreData) ? 1 : 0);
+    return {
+      title: typeof data.songTitle === 'string' ? data.songTitle.trim() : '',
+      notationStyle,
+      notationMode,
+      paperSize: typeof data.paperSize === 'string' ? data.paperSize.toUpperCase() : '',
+      pageOrientation: data.pageOrientation === 'landscape' ? 'landscape' : data.pageOrientation === 'portrait' ? 'portrait' : '',
+      timeSignatureLabel: beats > 0 && beatUnit > 0 ? `${beats}/${beatUnit}` : '',
+      staffCount,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export default function MinuTöödPage() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [oneDriveLoading, setOneDriveLoading] = useState(false);
   const [error, setError] = useState(null);
   const [oneDriveError, setOneDriveError] = useState(null);
+  const [googleNotice, setGoogleNotice] = useState(null);
+  const [oneDriveNotice, setOneDriveNotice] = useState(null);
   const [user, setUser] = useState(null);
   const [authReady, setAuthReady] = useState(false);
   const [locale, setLocaleState] = useState(() => {
@@ -94,7 +137,9 @@ export default function MinuTöödPage() {
   const [sharedOneDriveFiles, setSharedOneDriveFiles] = useState([]);
   const [sharedGoogleLoading, setSharedGoogleLoading] = useState(false);
   const [sharedOneDriveLoading, setSharedOneDriveLoading] = useState(false);
+  const [projectSummaries, setProjectSummaries] = useState({});
   const settingsRef = useRef(null);
+  const projectSummaryCacheRef = useRef(new Map());
   const store = useNoodimeisterOptional();
   const themeMode = store?.theme?.mode ?? 'light';
   const setThemeMode = (mode) => { if (store?.setTheme) store.setTheme(mode); };
@@ -158,7 +203,10 @@ export default function MinuTöödPage() {
           const local = authStorage.getGoogleSaveFolders();
           if (local.length > 0) await googleDrive.setSaveFoldersConfig(token, local);
         }
-      } catch (_) { /* jäta lokaal nimekiri alles */ }
+        setGoogleNotice(null);
+      } catch (e) {
+        setGoogleNotice(e?.message || (t['mywork.worksLoadError'] || 'Google Drive sünkroonimine ebaõnnestus. Kontrolli ühendust või logi uuesti sisse.'));
+      }
     }
     if (microsoftToken) {
       try {
@@ -169,10 +217,13 @@ export default function MinuTöödPage() {
           const local = authStorage.getOneDriveSaveFolders();
           if (local.length > 0) await oneDrive.setSaveFoldersConfig(microsoftToken, local);
         }
-      } catch (_) { /* jäta lokaal nimekiri alles */ }
+        setOneDriveNotice(null);
+      } catch (e) {
+        setOneDriveNotice(e?.message || (t['mywork.oneDriveLoadError'] || 'OneDrive sünkroonimine ebaõnnestus. Kontrolli ühendust või logi uuesti sisse.'));
+      }
     }
     refreshFolders();
-  }, [token, microsoftToken, refreshFolders]);
+  }, [token, microsoftToken, refreshFolders, t]);
 
   /** Salvesta praegune kaustade nimekiri pilve (sünkroonimiseks teise seadmega). */
   const syncFoldersToCloud = useCallback(async () => {
@@ -188,6 +239,80 @@ export default function MinuTöödPage() {
     }
   }, [token, microsoftToken]);
 
+  const loadProjectSummaries = useCallback(async (providerName, files, fetchContent) => {
+    if (!Array.isArray(files) || files.length === 0 || typeof fetchContent !== 'function') return;
+    const seen = new Set();
+    const uniqueFiles = files.filter((file) => {
+      const fileId = file?.id;
+      if (!fileId || seen.has(fileId)) return false;
+      seen.add(fileId);
+      return true;
+    });
+    if (uniqueFiles.length === 0) return;
+
+    const cachedEntries = {};
+    const missingFiles = [];
+    uniqueFiles.forEach((file) => {
+      const stateKey = getProjectSummaryStateKey(providerName, file.id);
+      const cacheKey = getProjectSummaryCacheKey(providerName, file);
+      if (projectSummaryCacheRef.current.has(cacheKey)) cachedEntries[stateKey] = projectSummaryCacheRef.current.get(cacheKey);
+      else missingFiles.push(file);
+    });
+
+    if (Object.keys(cachedEntries).length > 0) {
+      setProjectSummaries((prev) => ({ ...prev, ...cachedEntries }));
+    }
+    if (missingFiles.length === 0) return;
+
+    const fetchedEntries = await Promise.all(
+      missingFiles.map(async (file) => {
+        const stateKey = getProjectSummaryStateKey(providerName, file.id);
+        const cacheKey = getProjectSummaryCacheKey(providerName, file);
+        try {
+          const rawContent = await fetchContent(file.id);
+          const summary = extractProjectSummary(rawContent);
+          projectSummaryCacheRef.current.set(cacheKey, summary);
+          return [stateKey, summary];
+        } catch {
+          projectSummaryCacheRef.current.set(cacheKey, null);
+          return [stateKey, null];
+        }
+      })
+    );
+
+    setProjectSummaries((prev) => {
+      const next = { ...prev };
+      fetchedEntries.forEach(([stateKey, summary]) => {
+        next[stateKey] = summary;
+      });
+      return next;
+    });
+  }, []);
+
+  const getProjectSummaryText = useCallback((providerName, file) => {
+    const summary = projectSummaries[getProjectSummaryStateKey(providerName, file?.id)];
+    if (!summary) return '';
+    const parts = [];
+    const fileBaseName = stripProjectExtension(file?.name).trim().toLowerCase();
+    const title = String(summary.title || '').trim();
+    if (title && title.toLowerCase() !== fileBaseName) parts.push(title);
+    if (summary.notationStyle === 'FIGURENOTES') parts.push(locale === 'en' ? 'Figurenotes' : 'Figuurnoodid');
+    else if (summary.notationMode === 'figurenotes') parts.push(locale === 'en' ? 'Figurenotes' : 'Figuurnoodid');
+    else if (summary.notationMode === 'pedagogical' || summary.notationMode === 'vabanotatsioon') parts.push(locale === 'en' ? 'Pedagogical' : 'Vabanotatsioon');
+    else parts.push(locale === 'en' ? 'Traditional' : 'Tavanoodistus');
+    if (summary.paperSize || summary.pageOrientation) {
+      const orientationLabel = summary.pageOrientation === 'landscape'
+        ? (locale === 'en' ? 'landscape' : 'rohtne')
+        : summary.pageOrientation === 'portrait'
+          ? (locale === 'en' ? 'portrait' : 'pustine')
+          : '';
+      parts.push([summary.paperSize, orientationLabel].filter(Boolean).join(' '));
+    }
+    if (summary.timeSignatureLabel) parts.push(summary.timeSignatureLabel);
+    if (summary.staffCount > 0) parts.push(locale === 'en' ? `${summary.staffCount} staves` : `${summary.staffCount} noodirida`);
+    return parts.filter(Boolean).join(' · ');
+  }, [locale, projectSummaries]);
+
   const loadFiles = useCallback(async () => {
     if (!token) {
       setFilesByGoogleFolderId({});
@@ -202,8 +327,10 @@ export default function MinuTöödPage() {
     }
     setLoading(true);
     setError(null);
+    setGoogleNotice(null);
     try {
       const byId = {};
+      const failedFolders = [];
       await Promise.all(
         folders.map(async (f) => {
           try {
@@ -211,17 +338,22 @@ export default function MinuTöödPage() {
             byId[f.id] = list;
           } catch {
             byId[f.id] = [];
+            failedFolders.push(f.name || f.id);
           }
         })
       );
       setFilesByGoogleFolderId(byId);
+      loadProjectSummaries('google', Object.values(byId).flat(), (fileId) => googleDrive.getFileContent(token, fileId));
+      if (failedFolders.length > 0) {
+        setGoogleNotice(`Mõne Google Drive kausta sisu ei laaditud: ${failedFolders.join(', ')}. Kontrolli õigusi või logi uuesti sisse.`);
+      }
     } catch (e) {
       setError(e?.message || (t['mywork.worksLoadError'] || 'Tööde laadimine ebaõnnestus'));
       setFilesByGoogleFolderId({});
     } finally {
       setLoading(false);
     }
-  }, [token, t]);
+  }, [token, t, loadProjectSummaries]);
 
   const loadOneDriveFiles = useCallback(async () => {
     if (!microsoftToken) {
@@ -237,26 +369,34 @@ export default function MinuTöödPage() {
     }
     setOneDriveLoading(true);
     setOneDriveError(null);
+    setOneDriveNotice(null);
     try {
       const byId = {};
+      const failedFolders = [];
       await Promise.all(
         folders.map(async (f) => {
           try {
             const result = await oneDrive.listNoodimeisterFilesFromOneDrive(microsoftToken, f.id);
             byId[f.id] = result.ok ? (result.files || []) : [];
+            if (!result.ok) failedFolders.push(f.name || f.id);
           } catch {
             byId[f.id] = [];
+            failedFolders.push(f.name || f.id);
           }
         })
       );
       setFilesByOneDriveFolderId(byId);
+      loadProjectSummaries('onedrive', Object.values(byId).flat(), (fileId) => oneDrive.getFileContent(microsoftToken, fileId));
+      if (failedFolders.length > 0) {
+        setOneDriveNotice(`Mõne OneDrive kausta sisu ei laaditud: ${failedFolders.join(', ')}. Kontrolli õigusi või logi uuesti sisse.`);
+      }
     } catch (e) {
       setOneDriveError(e?.message || (t['mywork.oneDriveLoadError'] || 'OneDrive laadimine ebaõnnestus'));
       setFilesByOneDriveFolderId({});
     } finally {
       setOneDriveLoading(false);
     }
-  }, [microsoftToken, t]);
+  }, [microsoftToken, t, loadProjectSummaries]);
 
   const loadSharedFiles = useCallback(async () => {
     if (token) {
@@ -264,6 +404,7 @@ export default function MinuTöödPage() {
       try {
         const list = await googleDrive.listNoodimeisterFilesSharedWithMe(token);
         setSharedGoogleFiles(list);
+        loadProjectSummaries('google', list, (fileId) => googleDrive.getFileContent(token, fileId));
       } catch {
         setSharedGoogleFiles([]);
       } finally {
@@ -277,6 +418,7 @@ export default function MinuTöödPage() {
       try {
         const result = await oneDrive.listNoodimeisterFilesSharedWithMe(microsoftToken);
         setSharedOneDriveFiles(result.ok ? (result.files || []) : []);
+        if (result.ok) loadProjectSummaries('onedrive', result.files || [], (fileId) => oneDrive.getFileContent(microsoftToken, fileId));
       } catch {
         setSharedOneDriveFiles([]);
       } finally {
@@ -285,7 +427,7 @@ export default function MinuTöödPage() {
     } else {
       setSharedOneDriveFiles([]);
     }
-  }, [token, microsoftToken]);
+  }, [token, microsoftToken, loadProjectSummaries]);
 
   useEffect(() => {
     refreshFolders();
@@ -767,6 +909,11 @@ export default function MinuTöödPage() {
                 {error}
               </div>
             )}
+            {googleNotice && (
+              <div className="rounded-lg bg-amber-50 border border-amber-200 text-amber-900 p-4 mb-4">
+                {googleNotice}
+              </div>
+            )}
             {!loading && !error && googleFolders.length === 0 && (
               <p className="text-amber-700/90 dark:text-white/80 py-6">{t["mywork.noGoogleFilesHint"]}</p>
             )}
@@ -851,7 +998,12 @@ export default function MinuTöödPage() {
                               className="flex-1 min-w-0 text-left flex items-center gap-3 px-4 py-3 rounded-xl bg-white dark:bg-zinc-900 border border-amber-200/60 dark:border-white/20 shadow-sm hover:bg-amber-50 dark:hover:bg-white/10 hover:border-amber-300 dark:hover:border-white/30 transition-colors no-underline text-inherit text-amber-900 dark:text-white"
                             >
                               <AppLogo variant="iconMd" alt="" />
-                              <span className="font-medium text-amber-900 dark:text-white truncate flex-1">{f.name}</span>
+                              <span className="min-w-0 flex-1">
+                                <span className="block font-medium text-amber-900 dark:text-white truncate">{f.name}</span>
+                                {getProjectSummaryText('google', f) && (
+                                  <span className="block text-xs text-amber-700/90 dark:text-white/70 truncate">{getProjectSummaryText('google', f)}</span>
+                                )}
+                              </span>
                               <span className="text-sm text-amber-600 dark:text-white/70 flex-shrink-0">{formatDate(f.modifiedTime, locale)}</span>
                             </a>
                             <button
@@ -912,6 +1064,11 @@ export default function MinuTöödPage() {
             {oneDriveError && (
               <div className="rounded-lg bg-red-50 border border-red-200 text-red-800 p-4 mb-4">
                 {oneDriveError}
+              </div>
+            )}
+            {oneDriveNotice && (
+              <div className="rounded-lg bg-amber-50 border border-amber-200 text-amber-900 p-4 mb-4">
+                {oneDriveNotice}
               </div>
             )}
             {!oneDriveLoading && !oneDriveError && oneDriveFolders.length === 0 && (
@@ -998,7 +1155,12 @@ export default function MinuTöödPage() {
                               className="flex-1 min-w-0 text-left flex items-center gap-3 px-4 py-3 rounded-xl bg-white dark:bg-zinc-900 border border-amber-200/60 dark:border-white/20 shadow-sm hover:bg-amber-50 dark:hover:bg-white/10 hover:border-amber-300 dark:hover:border-white/30 transition-colors no-underline text-inherit text-amber-900 dark:text-white"
                             >
                               <AppLogo variant="iconMd" alt="" />
-                              <span className="font-medium text-amber-900 dark:text-white truncate flex-1">{f.name}</span>
+                              <span className="min-w-0 flex-1">
+                                <span className="block font-medium text-amber-900 dark:text-white truncate">{f.name}</span>
+                                {getProjectSummaryText('onedrive', f) && (
+                                  <span className="block text-xs text-amber-700/90 dark:text-white/70 truncate">{getProjectSummaryText('onedrive', f)}</span>
+                                )}
+                              </span>
                               <span className="text-sm text-amber-600 dark:text-white/70 flex-shrink-0">{formatOneDriveDate(f, locale)}</span>
                             </a>
                             <button
@@ -1072,7 +1234,12 @@ export default function MinuTöödPage() {
                           className="flex-1 min-w-0 flex items-center gap-3 px-4 py-3 rounded-xl bg-white dark:bg-zinc-900 border border-amber-200/60 dark:border-white/20 shadow-sm hover:bg-amber-50 dark:hover:bg-white/10 hover:border-amber-300 dark:hover:border-white/30 transition-colors no-underline text-inherit text-amber-900 dark:text-white"
                         >
                           <AppLogo variant="iconMd" alt="" />
-                          <span className="font-medium truncate flex-1">{f.name}</span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block font-medium truncate">{f.name}</span>
+                            {getProjectSummaryText('google', f) && (
+                              <span className="block text-xs text-amber-700/90 dark:text-white/70 truncate">{getProjectSummaryText('google', f)}</span>
+                            )}
+                          </span>
                           <span className="text-sm text-amber-600 dark:text-white/70 flex-shrink-0">{formatDate(f.modifiedTime, locale)}</span>
                         </a>
                         <button
@@ -1108,7 +1275,12 @@ export default function MinuTöödPage() {
                           className="flex-1 min-w-0 flex items-center gap-3 px-4 py-3 rounded-xl bg-white dark:bg-zinc-900 border border-amber-200/60 dark:border-white/20 shadow-sm hover:bg-amber-50 dark:hover:bg-white/10 hover:border-amber-300 dark:hover:border-white/30 transition-colors no-underline text-inherit text-amber-900 dark:text-white"
                         >
                           <AppLogo variant="iconMd" alt="" />
-                          <span className="font-medium truncate flex-1">{f.name}</span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block font-medium truncate">{f.name}</span>
+                            {getProjectSummaryText('onedrive', f) && (
+                              <span className="block text-xs text-amber-700/90 dark:text-white/70 truncate">{getProjectSummaryText('onedrive', f)}</span>
+                            )}
+                          </span>
                           <span className="text-sm text-amber-600 dark:text-white/70 flex-shrink-0">{formatOneDriveDate(f, locale)}</span>
                         </a>
                         <button
