@@ -46,7 +46,7 @@ export default function LandingPage() {
           </p>
           <div className="flex flex-col items-center justify-center gap-4">
             <Link
-              to="/app"
+              to="/demo-noodid"
               className="inline-flex items-center gap-2 px-8 py-4 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 text-white font-bold text-lg shadow-lg hover:shadow-xl hover:from-amber-500 hover:to-orange-500 transition-all"
             >
               <FileMusic className="w-5 h-5" /> {t['landing.demoVersion']}
