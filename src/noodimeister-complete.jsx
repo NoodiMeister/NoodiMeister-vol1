@@ -1457,7 +1457,6 @@ function NoodiMeisterCore({ icons }) {
   const [pageDesignDataUrl, setPageDesignDataUrl] = useState(null);
   const [pageDesignOpacity, setPageDesignOpacity] = useState(0.25);
   const [pageDesignFit, setPageDesignFit] = useState('cover'); // 'cover' | 'contain'
-  const [pageDesignLayer, setPageDesignLayer] = useState('behind'); // 'behind' = background behind notation (default); 'inFront' = background covers notation
   const [pageDesignPositionX, setPageDesignPositionX] = useState(50); // 0–100, backgroundPosition %
   const [pageDesignPositionY, setPageDesignPositionY] = useState(50);
   const [pageDesignCrop, setPageDesignCrop] = useState({ top: 0, right: 0, bottom: 0, left: 0 }); // 0–50 % inset per edge
@@ -1807,7 +1806,6 @@ function NoodiMeisterCore({ icons }) {
     setPageDesignDataUrl(null);
     setPageDesignOpacity(0.25);
     setPageDesignFit('cover');
-    setPageDesignLayer('behind');
     setPageDesignPositionX(50);
     setPageDesignPositionY(50);
     setPageDesignCrop({ top: 0, right: 0, bottom: 0, left: 0 });
@@ -2940,7 +2938,7 @@ function NoodiMeisterCore({ icons }) {
     pageDesignDataUrl: pageDesignDataUrl || undefined,
     pageDesignOpacity,
     pageDesignFit,
-    pageDesignLayer,
+    pageDesignLayer: 'behind',
     pageDesignPositionX,
     pageDesignPositionY,
     pageDesignCrop,
@@ -3069,7 +3067,7 @@ function NoodiMeisterCore({ icons }) {
     pageDesignDataUrl: pageDesignDataUrl || undefined,
     pageDesignOpacity,
     pageDesignFit,
-    pageDesignLayer,
+    pageDesignLayer: 'behind',
     pageDesignPositionX,
     pageDesignPositionY,
     pageDesignCrop,
@@ -3248,7 +3246,7 @@ function NoodiMeisterCore({ icons }) {
       if (data.pageDesignDataUrl != null) setPageDesignDataUrl(data.pageDesignDataUrl || null);
       if (data.pageDesignOpacity != null) setPageDesignOpacity(clampNumber(Number(data.pageDesignOpacity) || 0.25, 0, 1));
       if (data.pageDesignFit === 'cover' || data.pageDesignFit === 'contain') setPageDesignFit(data.pageDesignFit);
-      if (data.pageDesignLayer === 'behind' || data.pageDesignLayer === 'inFront') setPageDesignLayer(data.pageDesignLayer);
+      // pageDesignLayer: alati 'behind' — ignoreeri vanu faile, kus oli 'inFront'
       if (typeof data.pageDesignPositionX === 'number') setPageDesignPositionX(clampNumber(data.pageDesignPositionX, 0, 100));
       if (typeof data.pageDesignPositionY === 'number') setPageDesignPositionY(clampNumber(data.pageDesignPositionY, 0, 100));
       if (data.pageDesignCrop && typeof data.pageDesignCrop.top === 'number' && typeof data.pageDesignCrop.right === 'number' && typeof data.pageDesignCrop.bottom === 'number' && typeof data.pageDesignCrop.left === 'number') {
@@ -3510,7 +3508,6 @@ function NoodiMeisterCore({ icons }) {
         if (data.pageDesignDataUrl != null) setPageDesignDataUrl(data.pageDesignDataUrl || null);
         if (data.pageDesignOpacity != null) setPageDesignOpacity(clampNumber(Number(data.pageDesignOpacity) || 0.25, 0, 1));
         if (data.pageDesignFit === 'cover' || data.pageDesignFit === 'contain') setPageDesignFit(data.pageDesignFit);
-        if (data.pageDesignLayer === 'behind' || data.pageDesignLayer === 'inFront') setPageDesignLayer(data.pageDesignLayer);
         if (typeof data.pageDesignPositionX === 'number') setPageDesignPositionX(clampNumber(data.pageDesignPositionX, 0, 100));
         if (typeof data.pageDesignPositionY === 'number') setPageDesignPositionY(clampNumber(data.pageDesignPositionY, 0, 100));
         if (data.pageDesignCrop && typeof data.pageDesignCrop.top === 'number' && typeof data.pageDesignCrop.right === 'number' && typeof data.pageDesignCrop.bottom === 'number' && typeof data.pageDesignCrop.left === 'number') {
@@ -9454,10 +9451,6 @@ function NoodiMeisterCore({ icons }) {
                         <div className="mt-4 pt-4 border-t-2 border-amber-200">
                           <h4 className="text-xs font-bold text-amber-900 uppercase mb-2">{t('layout.pageDesignLayerTitle')}</h4>
                           <p className="text-xs text-amber-700 mb-2">{t('layout.pageDesignLayerHint')}</p>
-                          <div className="flex gap-2">
-                            <button type="button" onClick={() => { dirtyRef.current = true; setPageDesignLayer('behind'); }} className={`flex-1 py-1.5 px-2 rounded text-sm font-medium ${pageDesignLayer === 'behind' ? 'bg-amber-600 text-white' : 'bg-amber-100 text-amber-800 hover:bg-amber-200'}`}>{t('layout.pageDesignLayerBehind')}</button>
-                            <button type="button" onClick={() => { dirtyRef.current = true; setPageDesignLayer('inFront'); }} className={`flex-1 py-1.5 px-2 rounded text-sm font-medium ${pageDesignLayer === 'inFront' ? 'bg-amber-600 text-white' : 'bg-amber-100 text-amber-800 hover:bg-amber-200'}`}>{t('layout.pageDesignLayerInFront')}</button>
-                          </div>
                         </div>
                       </>
                     )}
@@ -9850,24 +9843,15 @@ function NoodiMeisterCore({ icons }) {
                 const hasCrop = pageDesignCrop.top > 0 || pageDesignCrop.right > 0 || pageDesignCrop.bottom > 0 || pageDesignCrop.left > 0;
                 const clipStyle = hasCrop ? { clipPath: `inset(${pageDesignCrop.top}% ${pageDesignCrop.right}% ${pageDesignCrop.bottom}% ${pageDesignCrop.left}%)` } : {};
                 const tileStyle = { backgroundRepeat: 'no-repeat', backgroundPosition: pos };
-                const designZ = pageDesignLayer === 'inFront' ? 1 : 0;
-                const handOnDesign = cursorTool === 'hand';
-                const onDesignMouseDown = handOnDesign ? (e) => {
-                  if (e.button !== 0) return;
-                  e.preventDefault();
-                  e.stopPropagation();
-                  pageDesignDragRef.current = { active: true, startX: e.clientX, startY: e.clientY, startPosX: pageDesignPositionX, startPosY: pageDesignPositionY };
-                } : undefined;
                 const designWrapperStyle = {
                   position: 'absolute', top: 0, left: 0, width: '100%', height: '100%',
-                  zIndex: handOnDesign ? 2 : designZ,
-                  pointerEvents: handOnDesign ? 'auto' : 'none',
-                  cursor: handOnDesign ? 'grab' : undefined,
+                  zIndex: 0,
+                  pointerEvents: 'none',
                 };
                 if (isHorizontalFlow) {
                   return (
-                    <div aria-hidden="true" className="absolute inset-0" style={{ ...designWrapperStyle, ...clipStyle }} onMouseDown={onDesignMouseDown}>
-                      <div className="absolute inset-0 pointer-events-none" style={{ backgroundImage: `url(${pageDesignDataUrl})`, backgroundRepeat: 'repeat-x', backgroundPosition: pos, backgroundSize: `${pw}px ${a4PageHeightVal}px`, opacity: clampNumber(Number(pageDesignOpacity) || 0.25, 0, 1) }} />
+                    <div aria-hidden="true" className="absolute inset-0" style={designWrapperStyle}>
+                      <div className="absolute inset-0 pointer-events-none" style={{ backgroundImage: `url(${pageDesignDataUrl})`, backgroundRepeat: 'repeat-x', backgroundPosition: pos, backgroundSize: `${pw}px ${a4PageHeightVal}px`, opacity: clampNumber(Number(pageDesignOpacity) || 0.25, 0, 1), ...clipStyle }} />
                     </div>
                   );
                 }
@@ -9875,7 +9859,7 @@ function NoodiMeisterCore({ icons }) {
                 if (numPagesVertical <= 0) return null;
                 if ((pageDesignFit === 'cover' || pageDesignFit === 'contain') && numPagesVertical >= 1) {
                   return (
-                    <div aria-hidden="true" className="absolute inset-0" style={designWrapperStyle} onMouseDown={onDesignMouseDown}>
+                    <div aria-hidden="true" className="absolute inset-0" style={designWrapperStyle}>
                       {Array.from({ length: numPagesVertical }, (_, i) => (
                         <div
                           key={i}
@@ -9897,15 +9881,15 @@ function NoodiMeisterCore({ icons }) {
                   );
                 }
                 return (
-                  <div aria-hidden="true" className="absolute inset-0" style={{ ...designWrapperStyle, ...clipStyle }} onMouseDown={onDesignMouseDown}>
-                    <div className="absolute inset-0 pointer-events-none" style={{ backgroundImage: `url(${pageDesignDataUrl})`, backgroundRepeat: 'repeat-y', backgroundPosition: pos, backgroundSize: `${pw}px ${a4PageHeightVal}px`, opacity: clampNumber(Number(pageDesignOpacity) || 0.25, 0, 1) }} />
+                  <div aria-hidden="true" className="absolute inset-0" style={designWrapperStyle}>
+                    <div className="absolute inset-0 pointer-events-none" style={{ backgroundImage: `url(${pageDesignDataUrl})`, backgroundRepeat: 'repeat-y', backgroundPosition: pos, backgroundSize: `${pw}px ${a4PageHeightVal}px`, opacity: clampNumber(Number(pageDesignOpacity) || 0.25, 0, 1), ...clipStyle }} />
                   </div>
                 );
               })()}
               <div
                 ref={scoreContentRef}
                 className="relative"
-                style={{ zIndex: pageDesignLayer === 'inFront' ? 0 : 1, cursor: cursorTool === 'hand' ? (isHandPanning ? 'grabbing' : 'grab') : undefined }}
+                style={{ zIndex: 1, cursor: cursorTool === 'hand' ? (isHandPanning ? 'grabbing' : 'grab') : undefined }}
                 onClick={handleScoreContentClick}
                 onMouseDown={(e) => {
                   // Text tool: create text box immediately on mousedown.
@@ -9914,6 +9898,13 @@ function NoodiMeisterCore({ icons }) {
                     e.preventDefault();
                     e.stopPropagation();
                     handleScoreContentClick(e);
+                    return;
+                  }
+                  if (cursorTool === 'hand' && pageDesignDataUrl && e.altKey && e.button === 0) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    pageDesignDragRef.current = { active: true, startX: e.clientX, startY: e.clientY, startPosX: pageDesignPositionX, startPosY: pageDesignPositionY };
+                    dirtyRef.current = true;
                     return;
                   }
                   if (cursorTool === 'hand' && e.button === 0 && mainRef?.current) {

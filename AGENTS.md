@@ -60,6 +60,13 @@ Kõik muudatused peavad hoidma kasutaja teekonnad tervena:
   - **Kriitiline nõue:** kui scorepage on **tühi või nähtamatu**, on rakendus **kasutu** — selliseid regressioone ei tohi merge’ida ilma paranduseta.
   - **Overflow:** ära pane vanem-konteineritele **`overflow: hidden`** ilma kontrollimata, et noodileht (sh vertikaalne/horisontaalne sisu) **mahuks** vaatesse või oleks mõistlikult **scrollitav**; muidu võib “olemas olev” score jääda lõigatuks või nähtamatuks.
 
+- **Standard: lehe taust vs noodigraafika kiht (toote eristus, mitte kloon)**
+  - **Eesmärk:** Noodimeister ei ole eesmärgipäraselt järjekordne MuseScore’i või Sibeliuse “kloon”; õpetaja peab saama **lehte kujundada** (sh imporditud kujundus) nii, et **noodigraafika** jääb **kasutatavaks ja loetavaks** — nii **sisestusvaates** kui **kõigis eelvaadetes** (PDF, print, muud preview’d), ilma et dekoratiivne kiht **noodisid kattaks** või “klikitav, aga nähtamatu” olukorda looks.
+  - **Imporditav kujundus:** eelistatud vorming **SVG** (skaalautuv, selge piir joonise ja noodikihi vahel). Taust/dekoor joonistatakse **alati noodigraafika alla** (stacking order), kuni eraldi otsus ja tehniline kontroll ei luba teisiti.
+  - **Keeld kuni edasise otsuseni:** valikut “kujundus noodistuse **ees**” (watermark / demo-lehe katmine) **ei taasta**, kuni **noodileht + kõik preview-vood** on ühtlustatud ja testitud — varem olnud “ees” režiim oli mõeldud pigem demo/watermark stsenaariumile, aga põhjustas noodikihi peitmist ja ebaühtlasi eelvaateid.
+  - **Tausta nihutamine:** kasutaja saab tausta asukohta muuta **ohutult** (nt paigutuspaneeli juhtnupud, käetööriist + Alt + lohistamine score alal), **ilma** noodikihi z-index’i taustaga vahetamata.
+  - **Regressioon:** kui imporditud kujundus või CSS **peidab noodid** või **lõikab** need ebaühtlaselt võrreldes pealkirjaga, on see **P0** (sama klass mis nähtamatu scorepage).
+
 - **Standard: veateated kasutajale**
   - kasutajale: inimkeelne selgitus + järgmine samm
   - arendajale: struktureeritud info (allikas, kood, kirjeldus)
