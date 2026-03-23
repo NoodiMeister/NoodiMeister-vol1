@@ -1030,7 +1030,8 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   const [searchParamsForAccess] = useSearchParams();
   const hasFullAccess = (store?.hasFullAccess ?? authStorage.isLoggedIn()) || !!(searchParamsForAccess && typeof searchParamsForAccess.get === 'function' && searchParamsForAccess.get('fileId'));
   const activeAuthProvider = String(store?.user?.provider || authStorage.getLoggedInUser?.()?.provider || '').trim().toLowerCase();
-  const allowBrowserProjectPersistence = activeAuthProvider !== 'google' && activeAuthProvider !== 'microsoft';
+  // Demo view must always start from a fresh project and never read/write browser project storage.
+  const allowBrowserProjectPersistence = !demoVisibility && activeAuthProvider !== 'google' && activeAuthProvider !== 'microsoft';
 
   // JO-võti ja noodigraafika state (GLOBAL_NOTATION_CONFIG on faili alguses)
   const [joClefFocused, setJoClefFocused] = useState(false);
@@ -1860,7 +1861,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   const [setupCompleted, setSetupCompleted] = useState(() => {
     try {
       const provider = String(authStorage.getLoggedInUser?.()?.provider || '').trim().toLowerCase();
-      if (provider === 'google' || provider === 'microsoft') return false;
+      if (demoVisibility || provider === 'google' || provider === 'microsoft') return false;
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) {
         const d = JSON.parse(raw);
