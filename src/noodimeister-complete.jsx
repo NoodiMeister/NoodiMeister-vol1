@@ -1662,6 +1662,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   const [pageDesignFit, setPageDesignFit] = useState('cover'); // 'cover' | 'contain'
   const [pageDesignPositionX, setPageDesignPositionX] = useState(50); // 0–100, backgroundPosition %
   const [pageDesignPositionY, setPageDesignPositionY] = useState(50);
+  const [pageDesignLayer, setPageDesignLayer] = useState('behind'); // fixed to behind for score visibility safety
   const [pageDesignCrop, setPageDesignCrop] = useState({ top: 0, right: 0, bottom: 0, left: 0 }); // 0–50 % inset per edge
   const pageDesignDragRef = useRef(null); // { active, startX, startY, startPosX, startPosY }
   const pageDesignDimensionsRef = useRef({ pw: 1000, a4: 1414 }); // updated for delta→% conversion
