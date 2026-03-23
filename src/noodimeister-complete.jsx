@@ -93,6 +93,62 @@ var SCORE_ZOOM_MIN = 0.25;
 var SCORE_ZOOM_MAX = 3;
 var KEY_ORDER = ['C', 'G', 'D', 'A', 'E', 'B', 'F', 'Bb', 'Eb'];
 
+/**
+ * Avalik /demo-noodid — minimaalne partituur noodijoonte ja figuurnootide nähtavuse kontrolliks (ei sõltu pilvest ega localStorage restore’ist).
+ */
+function buildDemoVisibilityProject({ figurenotes, grandStaff }) {
+  const demoNotes = [
+    { id: 'd1', pitch: 'C', octave: 4, duration: 1, durationLabel: '1/4', isDotted: false, isRest: false },
+    { id: 'd2', pitch: 'D', octave: 4, duration: 1, durationLabel: '1/4', isDotted: false, isRest: false },
+    { id: 'd3', pitch: 'E', octave: 4, duration: 1, durationLabel: '1/4', isDotted: false, isRest: false },
+    { id: 'd4', pitch: 'F', octave: 4, duration: 1, durationLabel: '1/4', isDotted: false, isRest: false },
+    { id: 'd5', pitch: 'G', octave: 4, duration: 1, durationLabel: '1/4', isDotted: false, isRest: false },
+    { id: 'd6', pitch: 'A', octave: 4, duration: 1, durationLabel: '1/4', isDotted: false, isRest: false },
+    { id: 'd7', pitch: 'B', octave: 4, duration: 1, durationLabel: '1/4', isDotted: false, isRest: false },
+    { id: 'd8', pitch: 'C', octave: 5, duration: 1, durationLabel: '1/4', isDotted: false, isRest: false },
+  ];
+  const braceId = 'demo-grand-staff';
+  let staves;
+  if (grandStaff && !figurenotes) {
+    staves = [
+      { id: 'demo-treble', instrumentId: 'piano', clefType: 'treble', notes: demoNotes, braceGroupId: braceId, notationMode: 'traditional' },
+      { id: 'demo-bass', instrumentId: 'piano', clefType: 'bass', notes: [], braceGroupId: braceId, notationMode: 'traditional' },
+    ];
+  } else {
+    staves = [
+      { id: 'demo-single', instrumentId: 'single-staff-treble', clefType: 'treble', notes: demoNotes, notationMode: figurenotes ? 'figurenotes' : 'traditional' },
+    ];
+  }
+  return {
+    setupCompleted: true,
+    songTitle: figurenotes ? 'Demo — figuurnoot' : grandStaff ? 'Demo — klaver (2 rida)' : 'Demo — noodijooned',
+    author: 'Noodimeister',
+    timeSignature: { beats: 4, beatUnit: 4 },
+    timeSignatureMode: 'standard',
+    keySignature: 'C',
+    staffLines: 5,
+    notationStyle: figurenotes ? 'FIGURENOTES' : 'TRADITIONAL',
+    notationMode: figurenotes ? 'figurenotes' : 'traditional',
+    pixelsPerBeat: 92,
+    figurenotesSize: 92,
+    figurenotesStems: true,
+    figurenotesMelodyShowNoteNames: true,
+    layoutMeasuresPerLine: 4,
+    addedMeasures: 0,
+    viewFitPage: true,
+    viewSmartPage: false,
+    pageOrientation: 'portrait',
+    paperSize: 'a4',
+    pageFlowDirection: 'vertical',
+    cursorPosition: 0,
+    staves,
+    activeStaffIndex: 0,
+    staffYOffsets: staves.map(() => 0),
+    systemYOffsets: [],
+    pageDesignDataUrl: null,
+  };
+}
+
 // Graafika ja app konstandid var'iga faili alguses (GLOBAL_NOTATION_CONFIG on noodijoonestiku seaded)
 var LUCIDE_ICONS = [
   'Music2', 'Clock', 'Hash', 'Type', 'Piano', 'Palette', 'Layout', 'Check', 'Save', 'FolderOpen',
@@ -885,7 +941,7 @@ function getAccidentalForPianoKey(midiNumber, keySignature) {
   return useFlat ? -1 : 1;
 }
 // FINGERING_TIN_WHISTLE, FINGERING_RECORDER on faili alguses var'iga
-function NoodiMeisterCore({ icons }) {
+function NoodiMeisterCore({ icons, demoVisibility = false }) {
   // Ära nõua EMOJIS välja olemasolu — vanad embed'id / tühi window.NOODIMEISTER_CONFIG ei tohi kogu rakendust nullida.
   if (typeof GLOBAL_NOTATION_CONFIG === 'undefined' || !GLOBAL_NOTATION_CONFIG) return null;
 
@@ -2949,7 +3005,7 @@ function NoodiMeisterCore({ icons }) {
     lyricFontSize,
     noteheadShape,
     noteheadEmoji
-  }), [staves, activeStaffIndex, staffYOffsets, measureStretchFactors, systemYOffsets, visibleStaves, intermissionLabels, timeSignature, timeSignatureMode, keySignature, staffLines, notationStyle, pixelsPerBeat, notationMode, instrumentNotationVariant, cursorPosition, addedMeasures, measureRepeatMarks, setupCompleted, songTitle, author, pickupEnabled, pickupQuantity, pickupDuration, pageOrientation, paperSize, layoutMeasuresPerLine, layoutLineBreakBefore, layoutPageBreakBefore, layoutExtraPages, layoutSystemGap, layoutPartsGap, layoutConnectedBarlines, layoutGlobalSpacingMultiplier, viewMode, partLayoutMeasuresPerLine, partLayoutLineBreakBefore, partLayoutPageBreakBefore, partLayoutExtraPages, showPageNavigator, pageFlowDirection, viewFitPage, viewSmartPage, visibleToolIds, tuningReferenceNote, tuningReferenceOctave, tuningReferenceHz, playNoteOnInsert, figurenotesSize, figurenotesStems, figurenotesChordLineGap, figurenotesChordBlocks, figurenotesChordBlocksShowTones, figurenotesMelodyShowNoteNames, timeSignatureSize, showBarNumbers, barNumberSize, showRhythmSyllables, showAllNoteLabels, enableEmojiOverlays, joClefStaffPosition, relativeNotationShowKeySignature, relativeNotationShowTraditionalClef, isPedagogicalProject, pedagogicalAudioBpm, pedagogicalAudioPlaybackRate, pedagogicalPlayheadStyle, pedagogicalPlayheadEmoji, pedagogicalPlayheadEmojiSize, cursorLineStrokeWidth, pedagogicalPlayheadMovement, chords, textBoxes, documentFontFamily, lyricFontFamily, titleFontSize, authorFontSize, titleFontFamily, authorFontFamily, titleBold, titleItalic, authorBold, authorItalic, titleAlignment, authorAlignment, staffRowAlignment, pageDesignDataUrl, pageDesignOpacity, pageDesignFit, pageDesignLayer, pageDesignPositionX, pageDesignPositionY, pageDesignCrop, lyricLineIndex, lyricLineYOffset, lyricFontSize, noteheadShape, noteheadEmoji]);
+  }), [staves, activeStaffIndex, staffYOffsets, measureStretchFactors, systemYOffsets, visibleStaves, intermissionLabels, timeSignature, timeSignatureMode, keySignature, staffLines, notationStyle, pixelsPerBeat, notationMode, instrumentNotationVariant, cursorPosition, addedMeasures, measureRepeatMarks, setupCompleted, songTitle, author, pickupEnabled, pickupQuantity, pickupDuration, pageOrientation, paperSize, layoutMeasuresPerLine, layoutLineBreakBefore, layoutPageBreakBefore, layoutExtraPages, layoutSystemGap, layoutPartsGap, layoutConnectedBarlines, layoutGlobalSpacingMultiplier, viewMode, partLayoutMeasuresPerLine, partLayoutLineBreakBefore, partLayoutPageBreakBefore, partLayoutExtraPages, showPageNavigator, pageFlowDirection, viewFitPage, viewSmartPage, visibleToolIds, tuningReferenceNote, tuningReferenceOctave, tuningReferenceHz, playNoteOnInsert, figurenotesSize, figurenotesStems, figurenotesChordLineGap, figurenotesChordBlocks, figurenotesChordBlocksShowTones, figurenotesMelodyShowNoteNames, timeSignatureSize, showBarNumbers, barNumberSize, showRhythmSyllables, showAllNoteLabels, enableEmojiOverlays, joClefStaffPosition, relativeNotationShowKeySignature, relativeNotationShowTraditionalClef, isPedagogicalProject, pedagogicalAudioBpm, pedagogicalAudioPlaybackRate, pedagogicalPlayheadStyle, pedagogicalPlayheadEmoji, pedagogicalPlayheadEmojiSize, cursorLineStrokeWidth, pedagogicalPlayheadMovement, chords, textBoxes, documentFontFamily, lyricFontFamily, titleFontSize, authorFontSize, titleFontFamily, authorFontFamily, titleBold, titleItalic, authorBold, authorItalic, titleAlignment, authorAlignment, staffRowAlignment, pageDesignDataUrl, pageDesignOpacity, pageDesignFit, pageDesignPositionX, pageDesignPositionY, pageDesignCrop, lyricLineIndex, lyricLineYOffset, lyricFontSize, noteheadShape, noteheadEmoji]);
 
   const saveToStorageSync = useCallback(() => {
     try {
@@ -3073,7 +3129,7 @@ function NoodiMeisterCore({ icons }) {
     pageDesignCrop,
     visibleStaves: visibleStaves.length === staves.length ? visibleStaves : staves.map(() => true),
     intermissionLabels
-  }), [songTitle, author, notationStyle, notationMode, isPedagogicalProject, timeSignature, timeSignatureMode, keySignature, staffLines, pixelsPerBeat, instrumentNotationVariant, pickupEnabled, pickupQuantity, pickupDuration, setupCompleted, cursorPosition, addedMeasures, pageOrientation, paperSize, layoutMeasuresPerLine, layoutLineBreakBefore, layoutPageBreakBefore, layoutSystemGap, layoutPartsGap, layoutConnectedBarlines, layoutGlobalSpacingMultiplier, viewMode, partLayoutMeasuresPerLine, partLayoutLineBreakBefore, partLayoutPageBreakBefore, showPageNavigator, pageFlowDirection, viewFitPage, viewSmartPage, visibleToolIds, tuningReferenceNote, tuningReferenceOctave, tuningReferenceHz, playNoteOnInsert, figurenotesSize, figurenotesStems, figurenotesChordLineGap, figurenotesChordBlocks, figurenotesChordBlocksShowTones, figurenotesMelodyShowNoteNames, timeSignatureSize, showBarNumbers, barNumberSize, showRhythmSyllables, showAllNoteLabels, enableEmojiOverlays, joClefStaffPosition, relativeNotationShowKeySignature, relativeNotationShowTraditionalClef, pedagogicalAudioBpm, pedagogicalAudioPlaybackRate, pedagogicalPlayheadStyle, pedagogicalPlayheadEmoji, pedagogicalPlayheadEmojiSize, cursorLineStrokeWidth, pedagogicalPlayheadMovement, staves, activeStaffIndex, staffYOffsets, measureStretchFactors, systemYOffsets, visibleStaves, intermissionLabels, chords, textBoxes, documentFontFamily, lyricFontFamily, lyricFontSize, lyricLineIndex, lyricLineYOffset, titleFontSize, authorFontSize, titleFontFamily, authorFontFamily, titleBold, titleItalic, authorBold, authorItalic, titleAlignment, authorAlignment, staffRowAlignment, pageDesignDataUrl, pageDesignOpacity, pageDesignFit, pageDesignLayer, pageDesignPositionX, pageDesignPositionY, pageDesignCrop]);
+  }), [songTitle, author, notationStyle, notationMode, isPedagogicalProject, timeSignature, timeSignatureMode, keySignature, staffLines, pixelsPerBeat, instrumentNotationVariant, pickupEnabled, pickupQuantity, pickupDuration, setupCompleted, cursorPosition, addedMeasures, pageOrientation, paperSize, layoutMeasuresPerLine, layoutLineBreakBefore, layoutPageBreakBefore, layoutSystemGap, layoutPartsGap, layoutConnectedBarlines, layoutGlobalSpacingMultiplier, viewMode, partLayoutMeasuresPerLine, partLayoutLineBreakBefore, partLayoutPageBreakBefore, showPageNavigator, pageFlowDirection, viewFitPage, viewSmartPage, visibleToolIds, tuningReferenceNote, tuningReferenceOctave, tuningReferenceHz, playNoteOnInsert, figurenotesSize, figurenotesStems, figurenotesChordLineGap, figurenotesChordBlocks, figurenotesChordBlocksShowTones, figurenotesMelodyShowNoteNames, timeSignatureSize, showBarNumbers, barNumberSize, showRhythmSyllables, showAllNoteLabels, enableEmojiOverlays, joClefStaffPosition, relativeNotationShowKeySignature, relativeNotationShowTraditionalClef, pedagogicalAudioBpm, pedagogicalAudioPlaybackRate, pedagogicalPlayheadStyle, pedagogicalPlayheadEmoji, pedagogicalPlayheadEmojiSize, cursorLineStrokeWidth, pedagogicalPlayheadMovement, staves, activeStaffIndex, staffYOffsets, measureStretchFactors, systemYOffsets, visibleStaves, intermissionLabels, chords, textBoxes, documentFontFamily, lyricFontFamily, lyricFontSize, lyricLineIndex, lyricLineYOffset, titleFontSize, authorFontSize, titleFontFamily, authorFontFamily, titleBold, titleItalic, authorBold, authorItalic, titleAlignment, authorAlignment, staffRowAlignment, pageDesignDataUrl, pageDesignOpacity, pageDesignFit, pageDesignPositionX, pageDesignPositionY, pageDesignCrop]);
 
   // Download project file (future: replace with upload to Google Drive / OneDrive)
   const downloadProject = useCallback(() => {
@@ -3862,6 +3918,7 @@ function NoodiMeisterCore({ icons }) {
   // Load from localStorage on mount (skip when opening as new work /app?new=1 or /app?fileId=...)
   // Use importProject so both staves and legacy notes format load in full (taktid, lehekülje disain jms).
   useEffect(() => {
+    if (demoVisibility) return;
     if (searchParams?.get?.('new') === '1') return;
     if (searchParams?.get?.('fileId')) return; // laaditakse Drive'ist eraldi effect'iga
     try {
@@ -3877,7 +3934,20 @@ function NoodiMeisterCore({ icons }) {
         }
       }
     } catch (_) { /* ignore */ }
-  }, [importProject]);
+  }, [importProject, demoVisibility, searchParams]);
+
+  const demoSeedKeyRef = useRef('');
+  useEffect(() => {
+    if (!demoVisibility || !isReady) return;
+    const styleRaw = (searchParams.get('style') || '').toLowerCase();
+    const figurenotes = styleRaw === 'figurenotes' || styleRaw === 'figure';
+    const grandStaff = searchParams.get('piano') === '1' || searchParams.get('piano') === 'true';
+    const key = `${figurenotes}|${grandStaff}`;
+    if (demoSeedKeyRef.current === key) return;
+    demoSeedKeyRef.current = key;
+    setOpenedCloudFile(null);
+    importProject(buildDemoVisibilityProject({ figurenotes, grandStaff: grandStaff && !figurenotes }));
+  }, [demoVisibility, isReady, importProject, searchParams]);
 
   // Load from Google Drive or OneDrive when opening /app?fileId=... [&cloud=onedrive]
   const driveFileId = searchParams?.get?.('fileId');
@@ -6196,22 +6266,6 @@ function NoodiMeisterCore({ icons }) {
   const figurenotesTotalRowHeight = figurenotesChordBlocks
     ? figurenotesRowHeight + effectiveChordLineGap + figurenotesChordLineHeight
     : figurenotesRowHeight;
-  const logicalContentHeight = useMemo(() => {
-    if (notationStyle === 'FIGURENOTES') {
-      const data = { measures, timeSignature, pixelsPerBeat, staffSpacing: figurenotesTotalRowHeight + layoutSystemGap, globalSpacingMultiplier: layoutGlobalSpacingMultiplier, boxesPerRow: effectiveLayoutMeasuresPerLine || 4, pageWidth: effectiveLayoutPageWidth, pageHeight: a4PageHeightPx, lineBreakBefore: effectiveLayoutLineBreakBefore, pageBreakBefore: effectiveLayoutPageBreakBefore };
-      const sys = calculateLayout('figure', pageOrientation === 'landscape' ? 'landscape' : 'portrait', data);
-      const lastY = sys.length > 0 ? sys[sys.length - 1].yOffset + (systemYOffsets[sys.length - 1] ?? 0) : 0;
-      return sys.length > 0 ? lastY + figurenotesTotalRowHeight + 40 : figurenotesTotalRowHeight + 40;
-    }
-    const opts = { measuresPerLine: effectiveLayoutMeasuresPerLine, lineBreakBefore: effectiveLayoutLineBreakBefore, pageBreakBefore: effectiveLayoutPageBreakBefore, systemGap: layoutSystemGap, staffCount: staves.length, measureStretchFactors, globalSpacingMultiplier: layoutGlobalSpacingMultiplier, pageHeight: a4PageHeightPx };
-    const sys = computeLayout(measures, timeSignature, pixelsPerBeat, effectiveLayoutPageWidth, opts);
-    const n = staves.length || 1;
-    const lastY = sys.length > 0 ? sys[sys.length - 1].yOffset + (systemYOffsets[sys.length - 1] ?? 0) : 0;
-    return sys.length > 0 ? lastY + n * getStaffHeight() + 40 : n * getStaffHeight() + 40;
-  }, [notationStyle, measures, timeSignature, pixelsPerBeat, effectiveLayoutPageWidth, pageOrientation, effectiveLayoutMeasuresPerLine, effectiveLayoutLineBreakBefore, effectiveLayoutPageBreakBefore, layoutSystemGap, layoutGlobalSpacingMultiplier, staves.length, measureStretchFactors, systemYOffsets, a4PageHeightPx, figurenotesRowHeight, figurenotesTotalRowHeight, figurenotesSize, figurenotesChordBlocks, figurenotesChordLineGap, figurenotesChordLineHeight]);
-  useEffect(() => {
-    exportContentBoundsRef.current = { width: basePageWidth, height: logicalContentHeight };
-  }, [basePageWidth, logicalContentHeight]);
   const systemsForScore = useMemo(() => {
     if (notationStyle === 'FIGURENOTES') {
       const data = { measures, timeSignature, pixelsPerBeat, staffSpacing: figurenotesTotalRowHeight + layoutSystemGap, globalSpacingMultiplier: layoutGlobalSpacingMultiplier, boxesPerRow: effectiveLayoutMeasuresPerLine || 4, pageWidth: effectiveLayoutPageWidth, pageHeight: a4PageHeightPx, lineBreakBefore: effectiveLayoutLineBreakBefore, pageBreakBefore: effectiveLayoutPageBreakBefore };
@@ -6237,6 +6291,34 @@ function NoodiMeisterCore({ icons }) {
     : (visibleStaffList.length > 0 && visibleStaffList.length < staves.length
       ? FOCUS_STAFF_HEIGHT
       : getStaffHeight());
+  /** Pealkiri/autor (pt-6, mb-4, kaks rida) — pole süsteemide lastY sees; zoom/absolute kõrgus peab seda arvestama. */
+  const scoreHeadBlockReservePx = notationMode === 'vabanotatsioon' ? 220 : 140;
+  const logicalContentHeight = useMemo(() => {
+    const entries = visibleStaffList.length > 0
+      ? visibleStaffList
+      : staves.map((staff, staffIdx) => ({ staff, staffIdx, visibleIndex: staffIdx }));
+    const nVis = Math.max(1, entries.length);
+    let sumBaseYOffset = 0;
+    entries.forEach(({ staffIdx, visibleIndex }) => {
+      sumBaseYOffset += visibleIndex * (effectiveStaffHeight + layoutPartsGap) + (staffYOffsets[staffIdx] ?? 0);
+    });
+    const layoutStaffCount = staves.length || 1;
+    if (notationStyle === 'FIGURENOTES') {
+      const data = { measures, timeSignature, pixelsPerBeat, staffSpacing: figurenotesTotalRowHeight + layoutSystemGap, globalSpacingMultiplier: layoutGlobalSpacingMultiplier, boxesPerRow: effectiveLayoutMeasuresPerLine || 4, pageWidth: effectiveLayoutPageWidth, pageHeight: a4PageHeightPx, lineBreakBefore: effectiveLayoutLineBreakBefore, pageBreakBefore: effectiveLayoutPageBreakBefore };
+      const sys = calculateLayout('figure', pageOrientation === 'landscape' ? 'landscape' : 'portrait', data);
+      const lastY = sys.length > 0 ? sys[sys.length - 1].yOffset + (systemYOffsets[sys.length - 1] ?? 0) : 0;
+      const perStaffCore = sys.length > 0 ? lastY + figurenotesTotalRowHeight + 40 : figurenotesTotalRowHeight + 40;
+      return scoreHeadBlockReservePx + nVis * perStaffCore + sumBaseYOffset;
+    }
+    const opts = { measuresPerLine: effectiveLayoutMeasuresPerLine, lineBreakBefore: effectiveLayoutLineBreakBefore, pageBreakBefore: effectiveLayoutPageBreakBefore, systemGap: layoutSystemGap, staffCount: layoutStaffCount, measureStretchFactors, globalSpacingMultiplier: layoutGlobalSpacingMultiplier, pageHeight: a4PageHeightPx };
+    const sys = computeLayout(measures, timeSignature, pixelsPerBeat, effectiveLayoutPageWidth, opts);
+    const lastY = sys.length > 0 ? sys[sys.length - 1].yOffset + (systemYOffsets[sys.length - 1] ?? 0) : 0;
+    const perStaffCore = sys.length > 0 ? lastY + layoutStaffCount * getStaffHeight() + 40 : layoutStaffCount * getStaffHeight() + 40;
+    return scoreHeadBlockReservePx + nVis * perStaffCore + sumBaseYOffset;
+  }, [notationStyle, notationMode, visibleStaffList, staves, effectiveStaffHeight, layoutPartsGap, staffYOffsets, measures, timeSignature, pixelsPerBeat, effectiveLayoutPageWidth, pageOrientation, effectiveLayoutMeasuresPerLine, effectiveLayoutLineBreakBefore, effectiveLayoutPageBreakBefore, layoutSystemGap, layoutGlobalSpacingMultiplier, measureStretchFactors, systemYOffsets, a4PageHeightPx, figurenotesRowHeight, figurenotesTotalRowHeight, figurenotesSize, figurenotesChordBlocks, figurenotesChordLineGap, figurenotesChordLineHeight, scoreHeadBlockReservePx]);
+  useEffect(() => {
+    exportContentBoundsRef.current = { width: basePageWidth, height: logicalContentHeight };
+  }, [basePageWidth, logicalContentHeight]);
   const cursorMeasureIndex = measures.length > 0
     ? (() => {
         const i = measures.findIndex(m => cursorPosition >= m.startBeat && cursorPosition < m.endBeat);
@@ -6835,6 +6917,19 @@ function NoodiMeisterCore({ icons }) {
 
   return (
     <div className="min-h-screen flex flex-col relative bg-[var(--bg-color)]">
+      {demoVisibility && (
+        <div className="flex-shrink-0 z-40 border-b-2 border-amber-400 bg-amber-100 dark:bg-amber-950/90 dark:border-amber-600 px-3 py-2 text-sm text-amber-950 dark:text-amber-100">
+          <span className="font-semibold">Demo: noodigraafika nähtavus</span>
+          <span className="text-amber-800 dark:text-amber-200/90 mx-2">—</span>
+          <Link to="/demo-noodid" className="underline font-medium hover:text-amber-700 dark:hover:text-amber-50">Traditsiooniline</Link>
+          <span className="mx-1.5 text-amber-600 dark:text-amber-400">·</span>
+          <Link to="/demo-noodid?style=figurenotes" className="underline font-medium hover:text-amber-700 dark:hover:text-amber-50">Figuurnoot</Link>
+          <span className="mx-1.5 text-amber-600 dark:text-amber-400">·</span>
+          <Link to="/demo-noodid?piano=1" className="underline font-medium hover:text-amber-700 dark:hover:text-amber-50">Klaver (2 rida)</Link>
+          <span className="mx-1.5 text-amber-600 dark:text-amber-400">·</span>
+          <Link to="/app?new=1" className="underline font-medium hover:text-amber-700 dark:hover:text-amber-50">Uus töö (/app)</Link>
+        </div>
+      )}
       {floatingTextToolPopup}
       {/* New Project Setup Wizard – overlay until mode selected */}
       {!setupCompleted && (
@@ -11546,7 +11641,7 @@ class AppRunErrorBoundary extends React.Component {
   }
 }
 
-function NoodiMeister() {
+function NoodiMeister({ demoVisibility = false }) {
   const [icons, setIcons] = useState(null);
   useEffect(() => {
     import('lucide-react').then((mod) => {
@@ -11560,7 +11655,7 @@ function NoodiMeister() {
   }
   return (
     <AppRunErrorBoundary>
-      <NoodiMeisterCore icons={icons} />
+      <NoodiMeisterCore icons={icons} demoVisibility={demoVisibility} />
     </AppRunErrorBoundary>
   );
 }

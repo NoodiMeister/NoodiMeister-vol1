@@ -240,6 +240,7 @@ function AppRoutes() {
       <Suspense fallback={<div style={{ padding: 24, textAlign: 'center' }}>Laen…</div>}>
         <Routes>
           <Route path="/app" element={<AppOrRedirect />} />
+          <Route path="/demo-noodid" element={<NoodiMeister demoVisibility />} />
           {/* Part window (separate browser tab/window): renders editor, filtered by ?staffId=... */}
           <Route path="/part" element={<NoodiMeister />} />
           <Route path="/gallery/figurenotes" element={<FigurenotesSymbolGalleryPage />} />
