@@ -58,7 +58,6 @@ function getSharedFontFaceCss({ includeTextFamilyOverrides = false, fontDisplay 
 @font-face { font-family: 'ExportBody'; font-style: italic; font-weight: 400; src: url("${urls.notoSerifItalic}") format("woff2");${fontDisplayRule} }
 @font-face { font-family: 'ExportSans'; font-style: normal; font-weight: 400; src: url("${urls.notoSansRegular}") format("woff2");${fontDisplayRule} }
 @font-face { font-family: 'ExportSans'; font-style: normal; font-weight: 700; src: url("${urls.notoSansBold}") format("woff2");${fontDisplayRule} }
-${getOptionalInstrumentFontFaceCss(fontDisplay)}
 `.trim();
   if (!includeTextFamilyOverrides) return fontFaces;
   return `
@@ -124,6 +123,13 @@ export async function loadOptionalInstrumentFonts(targetDocument = typeof docume
   if (!targetDocument?.fonts?.add || typeof FontFace === 'undefined') return optionalInstrumentFontStatus;
   await Promise.allSettled(Object.entries(OPTIONAL_INSTRUMENT_FONT_SOURCES).map(async ([family, url]) => {
     try {
+      // Avoid noisy OTS decode errors when optional font files are missing or mapped to HTML.
+      const probe = await fetch(url, { method: 'GET', cache: 'no-store' });
+      const contentType = String(probe.headers.get('content-type') || '').toLowerCase();
+      if (!probe.ok || contentType.includes('text/html')) {
+        optionalInstrumentFontStatus[family] = false;
+        return;
+      }
       const face = new FontFace(family, `url("${url}") format("truetype")`, { style: 'normal', weight: '400' });
       const loadedFace = await face.load();
       targetDocument.fonts.add(loadedFace);

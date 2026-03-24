@@ -87,9 +87,22 @@ function spaFallbackPlugin() {
     configurePreviewServer(server) {
       server.middlewares.use((req, res, next) => {
         const url = req.url?.split('?')[0] ?? '/';
-        // Kui ei ole päring staatilisele failile (assets), anna index.html (SPA fallback)
-        const isAsset = url.startsWith('/assets/') || url.includes('.');
-        if (!isAsset) {
+        const hasExtension = url.includes('.');
+        // Ära suuna puuduvaid faili-URL-e index.html peale; vasta 404-ga.
+        // Muidu üritab brauser HTML-i fondina/parsitava failina dekodeerida (OTS vead + aeglane laadimine).
+        if (hasExtension) {
+          const localPath = url.startsWith('/') ? url.slice(1) : url;
+          const distFilePath = resolve(process.cwd(), 'dist', localPath);
+          if (!existsSync(distFilePath)) {
+            res.statusCode = 404;
+            res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+            res.end('Not Found');
+            return;
+          }
+          next();
+          return;
+        }
+        if (!hasExtension) {
           try {
             const index = resolve(process.cwd(), 'dist', 'index.html');
             const html = readFileSync(index, 'utf-8');
@@ -138,6 +151,6 @@ export default defineConfig({
   },
   preview: {
     host: '127.0.0.1',  // vältib uv_interface_addresses viga (Node/OS)
-    port: 4173,
+    port: 4177,
   },
 });

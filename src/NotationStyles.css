@@ -4,12 +4,13 @@
 /* --- Teema: vaikimisi hele režiim, oranž aktsent --- */
 :root {
   --primary-color: #FF8C00;
+  /* Rakenduse koorik (ümbritsev töölaud); noodilehe pind jääb heledas režiimis ilma lehe kujunduseta alati valge (vt noodimeister-complete.jsx). */
   --bg-color: #fef3c7;
   --text-color: #1a1a1a;
   --staff-line-color: #000000;
   --note-fill: #1a1a1a;
   --jo-clef-inverted: #ffffff; /* opposite of note-fill for JO-clef inverted variant */
-  --score-bg: #fffbf0;
+  --score-bg: #ffffff;
 }
 
 /* Põhivärvid (aktsent) */

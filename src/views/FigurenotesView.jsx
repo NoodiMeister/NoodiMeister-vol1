@@ -20,6 +20,34 @@ const PAGE_BREAK_GAP = 80;
 /** Reference size (px) for which bar line and padding design values were chosen. */
 const NOTATION_SIZE_REF = 75;
 
+/**
+ * Lõputaktijoon (topelt): õhukese joone vasak serv = takti/löögikasti parem serv (measureRightX);
+ * paks joon paremal, vahe nende vahel — topeltjoon ei tungi kasti sisse (varem paks keskendus servale).
+ * Vertikaalselt taktikasti sisemised ülemine/alumine äär; akordirea korral kuni akordirea alumise servani.
+ */
+function getFinalDoubleBarlineGeometry({
+  measureRightX,
+  notationScale,
+  figurenotesSize,
+  yOffset,
+  melodyRowHeight,
+  padVertical,
+  chordLineHeight,
+  chordLineGap,
+}) {
+  const barLineWidth = Math.max(2, Math.round(5 * notationScale));
+  const thinW = Math.max(1, barLineWidth);
+  const gap = Math.max(2, Math.round(4 * (figurenotesSize / NOTATION_SIZE_REF)));
+  const thickW = Math.max(2, Math.round(barLineWidth * 1.8));
+  const thinX = measureRightX + thinW / 2;
+  const thickX = measureRightX + thinW + gap + thickW / 2;
+  const topY = yOffset + padVertical;
+  const bottomY = chordLineHeight > 0
+    ? yOffset + melodyRowHeight + chordLineGap + chordLineHeight - padVertical
+    : yOffset + melodyRowHeight - padVertical;
+  return { thinX, thickX, thinW, thickW, topY, bottomY };
+}
+
 function getFigurenoteTextColor(pitch) {
   const p = String(pitch || '').toUpperCase();
   return (p === 'A' || p === 'E' || p === 'B') ? '#000000' : '#ffffff';
@@ -478,7 +506,7 @@ export function FigurenotesView({
                     {showMelodyNoteNames && (
                       <text
                         x={figureCenterX}
-                        y={y}
+                        y={y + 10}
                         textAnchor="middle"
                         dominantBaseline="middle"
                         alignmentBaseline="middle"
@@ -526,7 +554,11 @@ export function FigurenotesView({
                         </g>
                       );
                     })()}
-                    {isSelected && <circle cx={figureCenterX} cy={y} r={size / 2 + 4} fill="none" stroke="#2563eb" strokeWidth="2" opacity="0.5" />}
+                    {isSelected && (
+                      <g className="nm-note-selection-glow">
+                        <circle cx={figureCenterX} cy={y} r={size / 2 + 4} fill="none" stroke="#2563eb" strokeWidth="2" opacity="0.5" />
+                      </g>
+                    )}
                   </g>
                 );
               };
@@ -588,22 +620,29 @@ export function FigurenotesView({
                     const isRightBarlineOfSystem = measureIdx === sys.measureIndices[sys.measureIndices.length - 1];
                     const isLastMeasureOfScore = measureIdx === effectiveMeasures.length - 1;
                     const showFinalBar = isLastMeasureOfScore || measure.barlineFinal;
-                    const thinW = Math.max(1, barLineWidth);
-                    const gap = Math.max(2, Math.round(4 * (figurenotesSize / NOTATION_SIZE_REF)));
-                    const thickW = Math.max(2, Math.round(barLineWidth * 1.8));
                     const xRight = measureX + measureWidth;
-                    const thickX = xRight - thickW / 2;
-                    const thinX = xRight - thickW - gap - thinW / 2;
+                    const finalGeom = showFinalBar
+                      ? getFinalDoubleBarlineGeometry({
+                        measureRightX: xRight,
+                        notationScale,
+                        figurenotesSize,
+                        yOffset: sys.yOffset,
+                        melodyRowHeight,
+                        padVertical,
+                        chordLineHeight,
+                        chordLineGap,
+                      })
+                      : null;
                     return (
                       <>
                         {j !== 0 && <line x1={measureX} y1={barLineTopY} x2={measureX} y2={barLineBottomY} stroke="#1a1a1a" strokeWidth={barLineWidth} />}
                         {isRightBarlineOfSystem && !showFinalBar && (
                           <line x1={xRight} y1={barLineTopY} x2={xRight} y2={barLineBottomY} stroke="#1a1a1a" strokeWidth={barLineWidth} />
                         )}
-                        {showFinalBar && (
+                        {showFinalBar && finalGeom && (
                           <g>
-                            <line x1={thinX} y1={barLineTopY} x2={thinX} y2={barLineBottomY} stroke="#1a1a1a" strokeWidth={thinW} />
-                            <line x1={thickX} y1={barLineTopY} x2={thickX} y2={barLineBottomY} stroke="#1a1a1a" strokeWidth={thickW} />
+                            <line x1={finalGeom.thinX} y1={finalGeom.topY} x2={finalGeom.thinX} y2={finalGeom.bottomY} stroke="#1a1a1a" strokeWidth={finalGeom.thinW} />
+                            <line x1={finalGeom.thickX} y1={finalGeom.topY} x2={finalGeom.thickX} y2={finalGeom.bottomY} stroke="#1a1a1a" strokeWidth={finalGeom.thickW} />
                           </g>
                         )}
                       </>
@@ -703,13 +742,8 @@ export function FigurenotesView({
                       });
                     }
 
-                    // Akordiplokid: 4/4 korral kaks võrdset ristkülikut takti kohta, muul taktimõõdul üks ristkülik takti kohta.
-                    const is44 = timeSignature?.beats === 4 && timeSignature?.beatUnit === 4;
-                    const slotsPerMeasure = is44 ? 2 : 1;
-                    const slotBeats = beatsPerMeasure / slotsPerMeasure;
                     const rectGap = 2;
-                    const slotGap = is44 ? 2 : 0;
-                    const rectWidth = Math.max(0, (measureWidth - rectGap - (slotsPerMeasure - 1) * slotGap) / slotsPerMeasure);
+                    const slotGap = 2;
                     const rectY = chordRowTop + 2;
                     const rectH = Math.max(0, chordLineHeight - 4);
                     const mainTextY = chordRowTop + chordLineHeight * 0.45;
@@ -717,14 +751,52 @@ export function FigurenotesView({
                     const figSize = Math.min(chordFontSize * 0.9, Math.max(6, rectH * 0.38));
                     const figGap = 2;
                     const figuresY = chordRowTop + chordLineHeight * 0.72;
+                    const measureStart = measure.startBeat;
+                    const measureEnd = measure.endBeat ?? (measure.startBeat + beatsInMeasure);
+
+                    // Dynamic chord segments with optional duration:
+                    // segment end = min(start + durationBeats, nextChordStart, measureEnd)
+                    // fallback (no durationBeats) => nextChordStart/measureEnd.
+                    const chordSpans = chordsInMeasure.map((ch, idx) => {
+                      const start = Number(ch.beatPosition);
+                      const nextStart = idx < chordsInMeasure.length - 1
+                        ? Number(chordsInMeasure[idx + 1].beatPosition)
+                        : measureEnd;
+                      const durationBeats = Number(ch.durationBeats);
+                      const durationEnd = Number.isFinite(durationBeats) && durationBeats > 0
+                        ? (start + durationBeats)
+                        : measureEnd;
+                      const end = Math.max(start, Math.min(durationEnd, nextStart, measureEnd));
+                      return { chord: ch, start, end };
+                    }).filter((s) => Number.isFinite(s.start) && Number.isFinite(s.end) && s.end > s.start);
+                    const boundaries = (() => {
+                      const points = [measureStart, measureEnd];
+                      chordSpans.forEach((s) => { points.push(s.start, s.end); });
+                      return Array.from(new Set(points))
+                        .filter((p) => Number.isFinite(p) && p >= measureStart && p <= measureEnd)
+                        .sort((a, b) => a - b);
+                    })();
+                    const segments = boundaries.slice(0, -1).map((start, idx) => ({
+                      start,
+                      end: boundaries[idx + 1]
+                    })).filter((seg) => seg.end > seg.start);
 
                     return (
                       <g key={`chord-blocks-${measureIdx}-${measure.startBeat}`}>
-                        {Array.from({ length: slotsPerMeasure }, (_, slotIndex) => {
-                          const slotStart = measure.startBeat + slotIndex * slotBeats;
-                          const slotEnd = measure.startBeat + (slotIndex + 1) * slotBeats;
-                          const slotChord = chordsInMeasure.find((c) => c.beatPosition >= slotStart && c.beatPosition < slotEnd);
-                          const rectX = measureX + rectGap / 2 + slotIndex * (rectWidth + slotGap);
+                        {segments.map((segment, slotIndex) => {
+                          const slotStart = segment.start;
+                          const slotEnd = segment.end;
+                          const slotChord = chordSpans
+                            .filter((span) => slotStart >= span.start && slotStart < span.end)
+                            .sort((a, b) => b.start - a.start)[0]?.chord;
+                          const leftInset = slotIndex === 0 ? rectGap / 2 : slotGap / 2;
+                          const rightInset = slotIndex === (segments.length - 1) ? rectGap / 2 : slotGap / 2;
+                          const startRatio = (slotStart - measureStart) / beatsInMeasure;
+                          const endRatio = (slotEnd - measureStart) / beatsInMeasure;
+                          const rawX = measureX + startRatio * measureWidth;
+                          const rawW = (endRatio - startRatio) * measureWidth;
+                          const rectX = rawX + leftInset;
+                          const rectWidth = Math.max(0, rawW - leftInset - rightInset);
                           const fill = slotChord ? getChordColor(slotChord.chord) : '#e5e7eb';
                           const chordRoot = slotChord ? getChordRootLetter(slotChord.chord) : null;
                           const chordTextColor = chordRoot ? getFigurenoteTextColor(chordRoot) : '#1a1a1a';
@@ -901,7 +973,9 @@ export function FigurenotesView({
                       let globalNoteIndex = 0;
                       for (let i = 0; i < measureIdx; i++) globalNoteIndex += effectiveMeasures[i].notes.length;
                       globalNoteIndex += noteIdx;
-                      const noteY = sys.yOffset + centerY;
+                      // Keep short durations (< 1/4) visually anchored to the same beat-box bottom line as quarter notes.
+                      const anchorBottomOffset = (figureSizeBaseForMeasure - figureSize) / 2;
+                      const noteY = sys.yOffset + centerY + anchorBottomOffset;
                       const canDragBeat = canHandDragNotes && typeof onNoteBeatChange === 'function';
                       const noteGroupProps = {
                         onClick: (e) => { e.stopPropagation(); onNoteClick?.(globalNoteIndex); },
@@ -1005,19 +1079,20 @@ export function FigurenotesView({
               if (j < 0) return null;
               const mw = sys.measureWidths ?? sys.measureIndices.map(() => sys.measureWidth ?? beatsPerMeasure * 80);
               const xRight = marginLeft + mw.slice(0, j + 1).reduce((a, b) => a + b, 0);
-              const barLineBottomY = chordLineHeight > 0
-                ? sys.yOffset + melodyRowHeight + chordLineGap + chordLineHeight - barLineInset
-                : sys.yOffset + melodyRowHeight - barLineInset;
-              const barLineTopY = sys.yOffset + barLineInset;
-              const thinW = Math.max(1, barLineWidth);
-              const gap = Math.max(2, Math.round(4 * (figurenotesSize / NOTATION_SIZE_REF)));
-              const thickW = Math.max(2, Math.round(barLineWidth * 1.8));
-              const thickX = xRight - thickW / 2;
-              const thinX = xRight - thickW - gap - thinW / 2;
+              const fg = getFinalDoubleBarlineGeometry({
+                measureRightX: xRight,
+                notationScale,
+                figurenotesSize,
+                yOffset: sys.yOffset,
+                melodyRowHeight,
+                padVertical,
+                chordLineHeight,
+                chordLineGap,
+              });
               return (
                 <g>
-                  <line x1={thinX} y1={barLineTopY} x2={thinX} y2={barLineBottomY} stroke="#1a1a1a" strokeWidth={thinW} />
-                  <line x1={thickX} y1={barLineTopY} x2={thickX} y2={barLineBottomY} stroke="#1a1a1a" strokeWidth={thickW} />
+                  <line x1={fg.thinX} y1={fg.topY} x2={fg.thinX} y2={fg.bottomY} stroke="#1a1a1a" strokeWidth={fg.thinW} />
+                  <line x1={fg.thickX} y1={fg.topY} x2={fg.thickX} y2={fg.bottomY} stroke="#1a1a1a" strokeWidth={fg.thickW} />
                 </g>
               );
             })()}

@@ -8,3 +8,4 @@ logs/
 *.pkg
 *.dmg
 *.pdf
+.vercel

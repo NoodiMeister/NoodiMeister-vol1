@@ -26,7 +26,7 @@ import {
   getStemThickness,
   getThinBarlineThickness,
 } from '../notation/StaffConstants';
-import { getGlyphFontSize, TEXT_FONT_FAMILY } from '../notation/musescoreStyle';
+import { getGlyphFontSize, TEXT_FONT_FAMILY, getThickBarlineThickness, BARLINE_SEPARATION } from '../notation/musescoreStyle';
 import {
   computeBeamGroups,
   computeBeamGeometry,
@@ -37,6 +37,16 @@ import { renderFiguredBassFigurations } from '../notation/figuredBassFigurations
 import { hasBundledOptionalFont } from '../export/exportFontAssets';
 
 const LAYOUT = { MARGIN_LEFT: 60, CLEF_WIDTH: 45, MEASURE_MIN_WIDTH: 28 };
+
+/** Leland thinThickBarlineSeparation: kaks selget joont (õhuke, siis paks), keskpunktid taktirea lõpus. */
+function getFinalDoubleBarlineCentersX (rightEdgeX, staffSpace) {
+  const thinW = getThinBarlineThickness(staffSpace);
+  const thickW = getThickBarlineThickness(staffSpace);
+  const gap = BARLINE_SEPARATION * staffSpace;
+  const thickCx = rightEdgeX;
+  const thinCx = thickCx - (thickW / 2 + gap + thinW / 2);
+  return { thinCx, thickCx, thinW, thickW };
+}
 const PAGE_BREAK_GAP = 80;
 const STAFF_SPACE = 10;
 /** Left edge of staff lines: after system bracket + instrument brace (piano). Clef is 1px to the right. */
@@ -741,14 +751,31 @@ export function TraditionalNotationView({
                           </g>
                         ) : measureIdx === sys.measureIndices[sys.measureIndices.length - 1] ? (
                           (measureIdx === instMeasures.length - 1 || measure.barlineFinal) ? (
-                            <SmuflGlyph
-                              glyph={SMUFL_GLYPH.barlineFinal}
-                              x={measureX + measureWidth}
-                              y={connectedBarlines && staffIndexInScore === 0 ? (systemTotalHeight ?? (staffY + lastLineY)) / 2 : staffY + (firstLineY + lastLineY) / 2}
-                              fontSize={getGlyphFontSize(spacing) * (connectedBarlines && staffIndexInScore === 0 ? (systemTotalHeight ?? (staffY + lastLineY - firstLineY)) / (lastLineY - firstLineY) : 1)}
-                              fill="#1a1a1a"
-                              textAnchor="start"
-                            />
+                            (() => {
+                              const { thinCx, thickCx, thinW, thickW } = getFinalDoubleBarlineCentersX(measureX + measureWidth, spacing);
+                              const y1b = connectedBarlines && staffIndexInScore === 0 ? 0 : staffY + firstLineY;
+                              const y2b = connectedBarlines && staffIndexInScore === 0 ? (systemTotalHeight ?? (staffY + lastLineY)) : staffY + lastLineY;
+                              return (
+                            <g>
+                              <line
+                                x1={thinCx}
+                                y1={y1b}
+                                x2={thinCx}
+                                y2={y2b}
+                                stroke="#1a1a1a"
+                                strokeWidth={thinW}
+                              />
+                              <line
+                                x1={thickCx}
+                                y1={y1b}
+                                x2={thickCx}
+                                y2={y2b}
+                                stroke="#1a1a1a"
+                                strokeWidth={thickW}
+                              />
+                            </g>
+                              );
+                            })()
                           ) : (
                             <line
                               x1={measureX + measureWidth}
@@ -760,14 +787,31 @@ export function TraditionalNotationView({
                             />
                           )
                         ) : measure.barlineFinal ? (
-                          <SmuflGlyph
-                            glyph={SMUFL_GLYPH.barlineFinal}
-                            x={measureX + measureWidth}
-                            y={connectedBarlines && staffIndexInScore === 0 ? (systemTotalHeight ?? (staffY + lastLineY)) / 2 : staffY + (firstLineY + lastLineY) / 2}
-                            fontSize={getGlyphFontSize(spacing) * (connectedBarlines && staffIndexInScore === 0 ? (systemTotalHeight ?? (staffY + lastLineY - firstLineY)) / (lastLineY - firstLineY) : 1)}
-                            fill="#1a1a1a"
-                            textAnchor="start"
-                          />
+                          (() => {
+                            const { thinCx, thickCx, thinW, thickW } = getFinalDoubleBarlineCentersX(measureX + measureWidth, spacing);
+                            const y1b = connectedBarlines && staffIndexInScore === 0 ? 0 : staffY + firstLineY;
+                            const y2b = connectedBarlines && staffIndexInScore === 0 ? (systemTotalHeight ?? (staffY + lastLineY)) : staffY + lastLineY;
+                            return (
+                          <g>
+                            <line
+                              x1={thinCx}
+                              y1={y1b}
+                              x2={thinCx}
+                              y2={y2b}
+                              stroke="#1a1a1a"
+                              strokeWidth={thinW}
+                            />
+                            <line
+                              x1={thickCx}
+                              y1={y1b}
+                              x2={thickCx}
+                              y2={y2b}
+                              stroke="#1a1a1a"
+                              strokeWidth={thickW}
+                            />
+                          </g>
+                            );
+                          })()
                         ) : null}
                       </>
                     )}
@@ -1059,17 +1103,6 @@ export function TraditionalNotationView({
               });
             })()}
 
-                  {/* Rea lõpu taktijoon (topelt) */}
-                  {sys.measureIndices.length > 0 && (
-                    <line
-                      x1={effectiveMarginLeft + (sys.measureWidths ?? []).reduce((a, b) => a + b, 0)}
-                      y1={staffY + firstLineY - 5}
-                      x2={effectiveMarginLeft + (sys.measureWidths ?? []).reduce((a, b) => a + b, 0)}
-                      y2={staffY + lastLineY + 5}
-                      stroke="#333"
-                      strokeWidth="2"
-                    />
-                  )}
                 </g>
               );
             })}

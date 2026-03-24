@@ -7,6 +7,9 @@ import { getExportOrientation, getPageCount, getPageMetrics } from './pageGeomet
 import { getExportFontFaceCss, resolveExportTextFamily } from '../export/exportFontAssets';
 
 const XMLNS = 'http://www.w3.org/2000/svg';
+const DEFAULT_PAGE_MARGIN_PX = 0;
+/** Parem serv: topelt-taktijoone paks joon + anti-alias; vältimaks clipPath/svg2pdf lõikamist. */
+const EXPORT_RIGHT_EDGE_PAD_PX = 14;
 
 function hasSmuflTimeSigDigits (text) {
   if (!text) return false;
@@ -18,9 +21,10 @@ function hasSmuflTimeSigDigits (text) {
 }
 
 /**
- * svg2pdf/jsPDF Windows: SMuFL PUA digits (U+E080–U+E089) can fall back to a wrong font,
- * rendering as random letters/diacritics. For export SVG only, convert those glyphs to
- * plain ASCII digits and force a system font.
+ * Legacy helper: asendas SMuFL taktimõõdu numbrid ASCII-ga (sans-serif), et vältida
+ * vanemates svg2pdf/Windows kombinatsioonides vigase fonti. PDF-ekspordi põhitee kasutab
+ * nüüd otse ekspordi @font-face (Leland → Bravura woff2), et eelvaade ja fail ühtiksid.
+ * Seda funktsiooni võib kasutada ainult kui konkreetses keskkonnas SMuFL PDF-is ikka läheb katki.
  */
 export function rewriteSmuflTimeSigDigitsToAscii (svgInnerHtml) {
   try {
@@ -73,29 +77,49 @@ ${getExportFontFaceCss()}
 }
 
 /**
- * Leiab konteinerist noodistiku SVG (suurim viewBox-iga svg).
+ * Leiab konteinerist noodistiku SVG (eelista suurimat partituuri-SVG-d).
  */
 function findNotationSvg (container, preferredSvg = null) {
-  if (preferredSvg && typeof preferredSvg.getAttribute === 'function' && preferredSvg.getAttribute('viewBox')) {
+  if (preferredSvg && typeof preferredSvg.getAttribute === 'function') {
     return preferredSvg;
   }
-  const svgs = container.querySelectorAll('svg[viewBox]');
+  const svgs = container.querySelectorAll('svg');
   let best = null;
-  let maxArea = 0;
+  let bestScore = -1;
+  let richest = null;
+  let richestLen = -1;
   svgs.forEach((el) => {
+    let w = 0;
+    let h = 0;
     const vb = el.getAttribute('viewBox');
-    if (!vb) return;
-    const parts = vb.trim().split(/\s+/);
-    if (parts.length >= 4) {
-      const w = parseFloat(parts[2]) || 0;
-      const h = parseFloat(parts[3]) || 0;
-      if (w > 300 && h > 200 && w * h > maxArea) {
-        maxArea = w * h;
-        best = el;
+    if (vb) {
+      const parts = vb.trim().split(/\s+/);
+      if (parts.length >= 4) {
+        w = parseFloat(parts[2]) || 0;
+        h = parseFloat(parts[3]) || 0;
       }
     }
+    if (!(w > 0 && h > 0)) {
+      const widthAttr = parseFloat(el.getAttribute('width') || '0');
+      const heightAttr = parseFloat(el.getAttribute('height') || '0');
+      w = widthAttr > 0 ? widthAttr : (el.getBoundingClientRect?.().width || 0);
+      h = heightAttr > 0 ? heightAttr : (el.getBoundingClientRect?.().height || 0);
+    }
+    const area = w * h;
+    const contentLen = (el.innerHTML?.length || 0);
+    const complexityBoost = Math.min(400000, contentLen * 6) + Math.min(120000, (el.childElementCount || 0) * 80);
+    const score = area + complexityBoost;
+    if (contentLen > richestLen) {
+      richestLen = contentLen;
+      richest = el;
+    }
+    if (score > bestScore) {
+      bestScore = score;
+      best = el;
+    }
   });
-  return best;
+  if (best) return best;
+  return richest;
 }
 
 function getRelativePosition (container, element) {
@@ -119,6 +143,72 @@ function getRelativePosition (container, element) {
   return { x, y };
 }
 
+/**
+ * Timeline SVG: width="100%" + viewBox (fikseeritud noodikoordinaadid). getBoundingClientRect().width
+ * sõltub vaateakna laiusest — PDF/print eelvaade (nt kitsas Cursor Simple Browser) moonutaks geomeetriat
+ * ja võib lõigata parema serva (sh topelt-taktijoon).
+ */
+function getSvgIntrinsicDimensions (svg, pageWidthFallback = 794) {
+  const viewBoxRaw = svg.getAttribute('viewBox');
+  let vbW = 0;
+  let vbH = 0;
+  if (viewBoxRaw) {
+    const p = viewBoxRaw.trim().split(/[\s,]+/);
+    if (p.length >= 4) {
+      vbW = Math.max(1, parseFloat(p[2]) || 0);
+      vbH = Math.max(1, parseFloat(p[3]) || 0);
+    }
+  }
+  const wa = svg.getAttribute('width');
+  const ha = svg.getAttribute('height');
+  const widthIsPercent = wa == null || String(wa).includes('%');
+  const heightIsPercent = ha == null || String(ha).includes('%');
+  const wAttr = !widthIsPercent && wa != null ? parseFloat(wa) : NaN;
+  const hAttr = !heightIsPercent && ha != null ? parseFloat(ha) : NaN;
+  const rect = svg.getBoundingClientRect?.();
+  const width = (Number.isFinite(wAttr) && wAttr > 0)
+    ? wAttr
+    : (vbW > 0 ? vbW : (rect?.width || pageWidthFallback));
+  const height = (Number.isFinite(hAttr) && hAttr > 0)
+    ? hAttr
+    : (vbH > 0 ? vbH : (rect?.height || 500));
+  const viewBox = (viewBoxRaw && viewBoxRaw.trim()) || `0 0 ${width} ${height}`;
+  return { width, height, viewBox };
+}
+
+/**
+ * Ekspordi/print SVG innerHTML sisaldab ka UI-kihte, mida ekraanil peidetakse CSS-iga — eraldi SVG-s (PDF, print)
+ * need reeglid ei kehti. Eemaldame need klasside järgi.
+ */
+const EXPORT_STRIP_SELECTORS = [
+  '.nm-cursor',
+  '.staff-spacer-handle',
+  '.nm-selection-highlight',
+  '.nm-note-selection-glow',
+];
+
+function stripExportUiFromSvgInnerHtml (innerHtml) {
+  const raw = innerHtml == null ? '' : String(innerHtml);
+  const needsStrip = EXPORT_STRIP_SELECTORS.some((sel) => {
+    const token = sel.slice(1);
+    return raw.includes(token);
+  });
+  if (!needsStrip) return raw;
+  try {
+    const doc = new DOMParser().parseFromString(
+      `<svg xmlns="${XMLNS}">${raw}</svg>`,
+      'image/svg+xml'
+    );
+    const root = doc.documentElement;
+    EXPORT_STRIP_SELECTORS.forEach((sel) => {
+      root.querySelectorAll(sel).forEach((el) => el.remove());
+    });
+    return Array.from(root.childNodes).map((n) => new XMLSerializer().serializeToString(n)).join('');
+  } catch (_) {
+    return raw;
+  }
+}
+
 function normalizePageModel (pageModel = {}) {
   const pageMetrics = pageModel.pageMetrics || getPageMetrics({
     paperSize: pageModel.paperSize,
@@ -134,6 +224,88 @@ function normalizePageModel (pageModel = {}) {
     contentWidth,
     contentHeight,
     pageCount: getPageCount(flowDirection === 'horizontal' ? contentWidth : contentHeight, pageExtent),
+  };
+}
+
+function clampScale (value) {
+  return Math.max(0.25, Math.min(3, Number(value) || 1));
+}
+
+/**
+ * Canonical export/print layout snapshot.
+ * All page renderers (preview, pdf, print) must derive geometry from this single model.
+ */
+function buildLayoutSnapshot ({
+  pageMetrics,
+  headerHeight,
+  sceneX = 0,
+  sceneY = 0,
+  sceneWidth = 0,
+  sceneHeight = 0,
+  exportScaleFactor = 1,
+  explicitContentWidth,
+  explicitContentHeight,
+  /** Vertikaalvoog + ühe lehe laiune stseen: ära luba exportScaleFactor suurendada stseeni lehest laiemaks (muidu pageClip lõikab parema serva). */
+  clampScoreWidthToContent = false,
+}) {
+  const pageWidth = Number(pageMetrics?.widthPx) || 0;
+  const pageHeight = Number(pageMetrics?.heightPx) || 0;
+  const marginTop = DEFAULT_PAGE_MARGIN_PX;
+  const marginRight = DEFAULT_PAGE_MARGIN_PX;
+  const marginBottom = DEFAULT_PAGE_MARGIN_PX;
+  const marginLeft = DEFAULT_PAGE_MARGIN_PX;
+  const contentX = marginLeft;
+  const contentY = marginTop + Math.max(0, Number(headerHeight) || 0);
+  const contentWidth = Math.max(1, pageWidth - marginLeft - marginRight);
+  const contentHeight = Math.max(1, pageHeight - marginTop - marginBottom - Math.max(0, Number(headerHeight) || 0));
+  let scale = clampScale(exportScaleFactor);
+  const sourceW = Math.max(1, Number(sceneWidth) || contentWidth);
+  const sourceH = Math.max(1, Number(sceneHeight) || contentHeight);
+  if (clampScoreWidthToContent && sourceW > 0) {
+    const ox = Math.max(0, Number(sceneX) || 0);
+    const maxW = Math.max(1, contentWidth - EXPORT_RIGHT_EDGE_PAD_PX - ox);
+    const maxScaleW = maxW / sourceW;
+    if (Number.isFinite(maxScaleW) && maxScaleW > 0) {
+      scale = Math.min(scale, maxScaleW);
+    }
+  }
+  const scoreW = sourceW * scale;
+  const scoreH = sourceH * scale;
+  const scoreOffsetX = Number(sceneX) || 0;
+  const scoreOffsetY = Number(sceneY) || 0;
+  const finalContentWidth = Math.max(pageWidth, Number(explicitContentWidth) || (contentX + scoreOffsetX + scoreW + marginRight));
+  const finalContentHeight = Math.max(pageHeight, Number(explicitContentHeight) || (contentY + scoreOffsetY + scoreH + marginBottom));
+  return {
+    page: {
+      widthPx: pageWidth,
+      heightPx: pageHeight,
+      marginTopPx: marginTop,
+      marginRightPx: marginRight,
+      marginBottomPx: marginBottom,
+      marginLeftPx: marginLeft,
+    },
+    header: {
+      totalHeightPx: Math.max(0, Number(headerHeight) || 0),
+    },
+    content: {
+      xPx: contentX,
+      yPx: contentY,
+      widthPx: contentWidth,
+      heightPx: contentHeight,
+    },
+    score: {
+      sourceWidthPx: sourceW,
+      sourceHeightPx: sourceH,
+      scale,
+      offsetXPx: scoreOffsetX,
+      offsetYPx: scoreOffsetY,
+      widthPx: scoreW,
+      heightPx: scoreH,
+    },
+    output: {
+      contentWidth: finalContentWidth,
+      contentHeight: finalContentHeight,
+    },
   };
 }
 
@@ -161,10 +333,13 @@ function buildScoreTextMarkup (pageWidth, options = {}) {
   const authorFamily = resolveExportTextFamily(authorFontFamily || documentFontFamily, 'ExportBody');
   const titleStyle = `font-family: ${titleFamily}; font-size: ${titleFontSize}px; font-weight: ${titleBold ? '700' : '400'}; font-style: ${titleItalic ? 'italic' : 'normal'}; fill: #1c1917;`;
   const authorStyle = `font-family: ${authorFamily}; font-size: ${authorFontSize}px; font-weight: ${authorBold ? '700' : '400'}; font-style: ${authorItalic ? 'italic' : 'normal'}; fill: #78716c;`;
+  // Avoid dominant-baseline clipping differences across SVG/PDF engines.
+  const titleY = Math.max(56, 24 + Number(titleFontSize || 55));
+  const authorY = titleY + Math.max(26, Number(authorFontSize || 14) + 16);
   return {
-    headerHeight: Math.max(160, 120 + 40),
-    titleText: `<text x="${titleX}" y="80" text-anchor="${anchor}" dominant-baseline="middle" style="${titleStyle}">${escapeXml(songTitle) || 'Nimetu'}</text>`,
-    authorText: `<text x="${authorX}" y="120" text-anchor="${authorAnchor}" dominant-baseline="middle" style="${authorStyle}">${escapeXml(author)}</text>`,
+    headerHeight: Math.max(160, authorY + 36),
+    titleText: `<text x="${titleX}" y="${titleY}" text-anchor="${anchor}" style="${titleStyle}">${escapeXml(songTitle) || 'Nimetu'}</text>`,
+    authorText: `<text x="${authorX}" y="${authorY}" text-anchor="${authorAnchor}" style="${authorStyle}">${escapeXml(author)}</text>`,
   };
 }
 
@@ -195,24 +370,36 @@ export function buildScoreSceneSnapshot (options = {}) {
     sceneHeight = 0,
     sceneViewBox = '',
     overlayMarkup = '',
+    exportScaleFactor = 1,
   } = options;
+  const scaleFactor = clampScale(exportScaleFactor);
   const defsString = buildFontDefs();
   const textMarkup = buildScoreTextMarkup(pageWidth, options);
-  const effectiveSceneY = Number.isFinite(Number(sceneY)) ? Number(sceneY) : textMarkup.headerHeight;
   const sceneW = Math.max(1, Number(sceneWidth) || pageWidth);
   const sceneH = Math.max(1, Number(sceneHeight) || 1);
-  const contentWidth = Math.max(pageWidth, Number(explicitContentWidth) || sceneW);
-  const contentHeight = Math.max(pageHeight, Number(explicitContentHeight) || (effectiveSceneY + sceneH + 40));
+  const singlePageWideScene = flowDirection === 'vertical' && sceneW <= pageWidth * 1.06;
+  const snapshot = buildLayoutSnapshot({
+    pageMetrics,
+    headerHeight: textMarkup.headerHeight,
+    sceneX: Number(sceneX || 0),
+    sceneY: Number(sceneY || 0),
+    sceneWidth: sceneW,
+    sceneHeight: sceneH,
+    exportScaleFactor: scaleFactor,
+    explicitContentWidth,
+    explicitContentHeight,
+    clampScoreWidthToContent: singlePageWideScene,
+  });
   const viewBox = escapeXml(sceneViewBox || `0 0 ${sceneW} ${sceneH}`);
   const sceneSvg = sceneMarkup
-    ? `<g transform="translate(${sceneX}, ${effectiveSceneY})"><svg xmlns="${XMLNS}" x="0" y="0" width="${sceneW}" height="${sceneH}" viewBox="${viewBox}" preserveAspectRatio="xMidYMin meet">${sceneMarkup}</svg></g>`
+    ? `<g transform="translate(${snapshot.content.xPx + snapshot.score.offsetXPx}, ${snapshot.content.yPx + snapshot.score.offsetYPx}) scale(${snapshot.score.scale})"><svg xmlns="${XMLNS}" x="0" y="0" width="${sceneW}" height="${sceneH}" viewBox="${viewBox}" preserveAspectRatio="xMidYMin meet" overflow="visible">${sceneMarkup}</svg></g>`
     : '';
   const contentString = `<g id="scoreContent">${textMarkup.titleText}${textMarkup.authorText}${sceneSvg}${overlayMarkup || ''}</g>`;
   const pageModel = normalizePageModel({
     pageMetrics,
     flowDirection,
-    contentWidth,
-    contentHeight,
+    contentWidth: snapshot.output.contentWidth,
+    contentHeight: snapshot.output.contentHeight,
   });
   return {
     defsString,
@@ -277,14 +464,18 @@ export function scoreToSvg (container, options = {}) {
 
   const notationSvg = findNotationSvg(container, notationSvgElement);
   if (!notationSvg) {
-    throw new Error('Notation SVG not found');
+    const svgCount = container?.querySelectorAll?.('svg')?.length || 0;
+    throw new Error(`Notation SVG not found (svgCount=${svgCount})`);
   }
-  const { x: tx, y: ty } = getRelativePosition(container, notationSvg);
-  const w = notationSvg.getAttribute('width');
-  const h = notationSvg.getAttribute('height');
-  const width = (w != null && w !== '100%') ? parseFloat(w) : (notationSvg.getBoundingClientRect().width || pageWidth);
-  const height = (h != null && h !== '100%') ? parseFloat(h) : (notationSvg.getBoundingClientRect().height || 500);
-  const viewBox = notationSvg.getAttribute('viewBox') || `0 0 ${width} ${height}`;
+  // If caller passes an explicit notation SVG, use stable origin from SVG coordinates
+  // instead of DOM rect/scroll math (which can drift between preview/print captures).
+  const useStableNotationOrigin = Boolean(notationSvgElement);
+  const { x: tx, y: ty } = useStableNotationOrigin
+    ? { x: 0, y: 0 }
+    : getRelativePosition(container, notationSvg);
+  const { width, height, viewBox } = getSvgIntrinsicDimensions(notationSvg, pageWidth);
+  const sourceContentWidth = useStableNotationOrigin ? width : (container.scrollWidth || pageWidth);
+  const sourceContentHeight = useStableNotationOrigin ? height : (container.scrollHeight || pageHeight);
   return buildScoreSceneSnapshot({
     ...options,
     pageDesignDataUrl,
@@ -302,14 +493,16 @@ export function scoreToSvg (container, options = {}) {
     authorItalic,
     titleAlignment,
     authorAlignment,
-    contentWidth: Math.max(pageWidth, Number(explicitContentWidth) || container.scrollWidth || pageWidth),
-    contentHeight: Math.max(pageHeight, Number(explicitContentHeight) || container.scrollHeight || pageHeight),
-    sceneMarkup: notationSvg.innerHTML,
+    // Ära korruta suumiga enne layoutSnapshot’i: tegelik skaala (sh laiuse piirang) rakendatakse buildLayoutSnapshot’is.
+    contentWidth: Math.max(pageWidth, Number(explicitContentWidth) || sourceContentWidth),
+    contentHeight: Math.max(pageHeight, Number(explicitContentHeight) || sourceContentHeight),
+    sceneMarkup: stripExportUiFromSvgInnerHtml(notationSvg.innerHTML),
     sceneX: tx,
     sceneY: ty,
     sceneWidth: width,
     sceneHeight: height,
     sceneViewBox: viewBox,
+    exportScaleFactor: options.exportScaleFactor,
   });
 }
 
@@ -334,9 +527,9 @@ export function getPageSvgString (defsString, contentString, pageModel, pageInde
   };
   const x = flowDirection === 'horizontal' ? -pageIndex * PAGE_W : 0;
   const y = flowDirection === 'vertical' ? -pageIndex * PAGE_H : 0;
-  // Avoid 1–3 px clipping at page edges (strokes/markers), which can differ by OS/browser.
-  // Keep the page size exact, but allow a tiny bleed inside the page clip.
-  const BLEED = 2;
+  // Parema serva lõikamine (clipPath) võib lõigata topelt-taktijoone paksust joont; lisa horisontaalne padi.
+  const BLEED = 0;
+  const clipPadRight = flowDirection === 'vertical' ? 32 : 12;
   const pageDesignMarkup = (() => {
     const href = typeof mergedOverlays.pageDesignDataUrl === 'string' ? mergedOverlays.pageDesignDataUrl.trim() : '';
     if (!href) return { behind: '', front: '' };
@@ -382,9 +575,12 @@ export function getPageSvgString (defsString, contentString, pageModel, pageInde
     const yPos = PAGE_H - 26;
     return `<text x="${x}" y="${yPos}" text-anchor="${anchor}" dominant-baseline="middle" style="${style}">${escapeXml(text)}</text>`;
   })();
+  // Valge paber: PDF/print/eelvaade; ei sõltu rakenduse taustast ega teemast. Lehe kujundus joonistatakse peale (behind/front).
+  const paperRect = `<rect x="0" y="0" width="${PAGE_W}" height="${PAGE_H}" fill="#ffffff"/>`;
   return `<svg xmlns="${XMLNS}" viewBox="0 0 ${PAGE_W} ${PAGE_H}" width="${PAGE_W}" height="${PAGE_H}" overflow="visible">
 ${defsString}
-<defs><clipPath id="pageClip"><rect x="${BLEED}" y="${BLEED}" width="${PAGE_W - 2 * BLEED}" height="${PAGE_H - 2 * BLEED}"/></clipPath></defs>
+<defs><clipPath id="pageClip"><rect x="${BLEED}" y="${BLEED}" width="${PAGE_W - 2 * BLEED + clipPadRight}" height="${PAGE_H - 2 * BLEED}"/></clipPath></defs>
+${paperRect}
 ${pageDesignMarkup.behind}
 <g transform="translate(${x}, ${y})" clip-path="url(#pageClip)">${contentString}</g>
 ${pageDesignMarkup.front}

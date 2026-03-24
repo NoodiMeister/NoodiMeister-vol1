@@ -46,7 +46,7 @@ export function computeScaleForA4(staffCount, systemCount, orientation = 'portra
 }
 
 const DEFAULT_BOXES_PER_ROW = 4;
-const PIXELS_PER_BEAT_DEFAULT = 80;
+const PIXELS_PER_BEAT_DEFAULT = 85;
 const SYSTEM_GAP = 120;
 
 /** Vaikimisi laius ühe veerandnooti (1/4) kohta figuurnotatsioonis (px). */
