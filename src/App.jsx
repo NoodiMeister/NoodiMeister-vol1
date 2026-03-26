@@ -17,7 +17,6 @@ const PianoDemoPage = lazyWithRetry(() => import('./pages/PianoDemoPage'));
 const SymbolGalleryPage = lazyWithRetry(() => import('./pages/SymbolGalleryPage'));
 const FigurenotesSymbolGalleryPage = lazyWithRetry(() => import('./pages/FigurenotesSymbolGalleryPage'));
 const DemoIntroPage = lazyWithRetry(() => import('./pages/DemoIntroPage'));
-const ClefLabPage = lazyWithRetry(() => import('./pages/ClefLabPage'));
 
 import * as authStorage from './services/authStorage';
 import { IntroCrossfadeProvider } from './context/IntroCrossfadeContext';
@@ -243,7 +242,6 @@ function AppRoutes() {
           <Route path="/app" element={<AppOrRedirect />} />
           <Route path="/demo-noodid" element={<NoodiMeister demoVisibility />} />
           <Route path="/demo-intro" element={<DemoIntroPage />} />
-          <Route path="/clef-lab" element={<ClefLabPage />} />
           {/* Part window (separate browser tab/window): renders editor, filtered by ?staffId=... */}
           <Route path="/part" element={<NoodiMeister />} />
           <Route path="/gallery/figurenotes" element={<FigurenotesSymbolGalleryPage />} />
