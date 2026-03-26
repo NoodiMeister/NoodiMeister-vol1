@@ -89,7 +89,7 @@ html, body, #root {
 .nm-demo-intro--exit-crossfade .nm-demo-intro__logo {
   animation: none !important;
   opacity: 1;
-  transform: translate3d(0, calc(9vh - 10px), 0) scale(1);
+  transform: translate3d(0, calc(9vh - 10px), 0) scale(1.052);
 }
 .nm-demo-intro__bg {
   position: absolute;
@@ -379,7 +379,7 @@ html, body, #root {
   }
   100% {
     opacity: 1;
-    transform: translate3d(0, calc(9vh - 10px), 0) scale(1);
+    transform: translate3d(0, calc(9vh - 10px), 0) scale(1.052);
   }
 }
 @keyframes nmInlineClefOrbit {
