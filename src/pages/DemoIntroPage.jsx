@@ -200,17 +200,18 @@ export default function DemoIntroPage() {
         ))}
       </div>
 
+      <button
+        type="button"
+        className="nm-demo-intro__sound-btn"
+        onMouseDown={(e) => e.stopPropagation()}
+        onTouchStart={(e) => e.stopPropagation()}
+        onClick={handleSoundButton}
+        aria-label={isMuted || !audioPlaying ? 'Lülita heli sisse' : 'Lülita heli välja'}
+      >
+        {isMuted || !audioPlaying ? 'Heli sisse' : 'Mute'}
+      </button>
+
       <div className="nm-demo-intro__content">
-        <button
-          type="button"
-          className="nm-demo-intro__sound-btn"
-          onMouseDown={(e) => e.stopPropagation()}
-          onTouchStart={(e) => e.stopPropagation()}
-          onClick={handleSoundButton}
-          aria-label={isMuted || !audioPlaying ? 'Lülita heli sisse' : 'Lülita heli välja'}
-        >
-          {isMuted || !audioPlaying ? 'Heli sisse' : 'Mute'}
-        </button>
         {projectorDebug && (
           <div
             style={{
