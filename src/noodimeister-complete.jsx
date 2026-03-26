@@ -8221,7 +8221,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                 className="inline-flex items-center gap-2 px-3 py-2 rounded-lg font-semibold text-sm bg-slate-600 text-white shadow-md hover:bg-slate-500 border border-slate-700/50"
                 title="Peata ja vii kursor algusesse"
               >
-                <X className="w-4 h-4" />
+                {icons?.X ? <icons.X className="w-4 h-4" /> : null}
                 Stop
               </button>
 
