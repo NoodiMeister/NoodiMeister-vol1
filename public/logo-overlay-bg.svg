@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Intro background logo without treble clef; 3D clef is rendered by three.js -->
+<svg viewBox="0 0 1024 558" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Noodimeister">
+  <defs>
+    <linearGradient id="nmGold" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ffe8a8"/>
+      <stop offset="36%" stop-color="#f2be59"/>
+      <stop offset="72%" stop-color="#c6841f"/>
+      <stop offset="100%" stop-color="#7a4a0b"/>
+    </linearGradient>
+    <linearGradient id="nmGoldStroke" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fff3c2"/>
+      <stop offset="100%" stop-color="#b87418"/>
+    </linearGradient>
+    <filter id="nmShadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="12" stdDeviation="12" flood-opacity="0.35"/>
+    </filter>
+  </defs>
+
+  <g stroke="#c88a2e" stroke-opacity="0.78" stroke-width="4.5" stroke-linecap="round">
+    <line x1="120" y1="136" x2="904" y2="136"/>
+    <line x1="120" y1="168" x2="904" y2="168"/>
+    <line x1="120" y1="200" x2="904" y2="200"/>
+    <line x1="120" y1="232" x2="904" y2="232"/>
+    <line x1="120" y1="264" x2="904" y2="264"/>
+  </g>
+
+  <text
+    x="512"
+    y="384"
+    text-anchor="middle"
+    font-family="Georgia, Times New Roman, serif"
+    font-weight="700"
+    font-size="88"
+    letter-spacing="4"
+    fill="url(#nmGold)"
+    stroke="url(#nmGoldStroke)"
+    stroke-width="5"
+    paint-order="stroke"
+    filter="url(#nmShadow)"
+  >NOODIMEISTER</text>
+</svg>
+

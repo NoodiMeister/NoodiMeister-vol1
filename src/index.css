@@ -49,6 +49,382 @@ html, body, #root {
   background: var(--bg-color);
 }
 
+/* Demo intro overlay (presentation mode). Hidden in print/export by default. */
+.nm-demo-intro {
+  position: fixed;
+  inset: 0;
+  z-index: 99990;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: #050505;
+  color: rgba(255, 255, 255, 0.92);
+  user-select: none;
+  perspective: 1200px;
+}
+/* Intro → landing: lineaarne crossfade (t=50% mõlemad ~0.5); kestus --nm-demo-crossfade-ms. */
+.nm-intro-crossfade-underlay {
+  position: fixed;
+  inset: 0;
+  z-index: 99980;
+  pointer-events: none;
+}
+.nm-intro-crossfade-underlay__scroll {
+  min-height: 100%;
+  overflow: auto;
+  pointer-events: none;
+}
+.nm-landing--crossfade-in {
+  opacity: 0;
+  animation: nmLandingCrossfadeIn var(--nm-demo-crossfade-ms, 1000ms) linear forwards;
+}
+.nm-demo-intro.nm-demo-intro--exit-crossfade {
+  animation: nmDemoIntroCrossfadeOut var(--nm-demo-crossfade-ms, 1000ms) linear forwards;
+}
+.nm-demo-intro--exit-crossfade .nm-demo-intro__bg,
+.nm-demo-intro--exit-crossfade .nm-demo-intro__stage-glow {
+  animation: none !important;
+  opacity: 1;
+}
+.nm-demo-intro--exit-crossfade .nm-demo-intro__logo {
+  animation: none !important;
+  opacity: 1;
+  transform: translate3d(0, 9vh, 0) scale(1);
+}
+.nm-demo-intro__bg {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(1200px 700px at 50% 45%, rgba(255, 200, 120, 0.24), rgba(20, 12, 0, 0.95) 60%, rgba(0, 0, 0, 0.99) 100%),
+    linear-gradient(180deg, rgba(30, 18, 0, 0.35), rgba(0, 0, 0, 0.85));
+  opacity: 0;
+  animation: nmIntroBgIn 10000ms ease-out forwards;
+}
+.nm-demo-intro__stage-glow {
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 42vh;
+  background: radial-gradient(65% 95% at 50% 100%, rgba(255, 188, 90, 0.30), rgba(0, 0, 0, 0) 68%);
+  opacity: 0;
+  animation: nmStageRise 10000ms ease-out forwards;
+}
+.nm-demo-intro__projector {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  /* Cinematic projector beam trapezoid (Hollywood-style depth). */
+  background:
+    radial-gradient(1200px 430px at 50% 9%, rgba(255, 236, 190, 0.38), rgba(255, 187, 90, 0.2) 35%, rgba(0, 0, 0, 0) 74%),
+    linear-gradient(90deg, rgba(255,255,255,0.00), rgba(255,255,255,0.18), rgba(255,255,255,0.00)),
+    repeating-linear-gradient(
+      90deg,
+      rgba(255,255,255,0.00) 0 36px,
+      rgba(255,255,255,0.032) 36px 56px
+    );
+  opacity: 0;
+  filter: blur(0.25px);
+  transform-origin: top center;
+  clip-path: polygon(47.5% 0%, 52.5% 0%, 94% 94%, 6% 94%);
+  transform: perspective(1200px) rotateX(58deg) translateY(-15vh) scale(1.12);
+  mix-blend-mode: screen;
+  animation: nmProjectorIn 5800ms ease-out forwards, nmProjectorShimmer 2100ms ease-in-out infinite;
+}
+.nm-demo-intro__projector-rig {
+  position: absolute;
+  inset: 0;
+  /* Above .nm-demo-intro__content so lt/rt/tc beams paint over logo (screen = illuminate, not hide). */
+  z-index: 3;
+  pointer-events: none;
+  mix-blend-mode: screen;
+}
+.nm-demo-intro__beam {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  filter: blur(0.8px);
+  animation: nmProjectorIn 5800ms ease-out forwards, nmBeamPulse 27200ms linear infinite;
+}
+.nm-demo-intro__beam--lb {
+  background: linear-gradient(38deg, rgba(255, 234, 184, 0.46), rgba(255, 194, 112, 0.14) 42%, rgba(0, 0, 0, 0) 78%);
+  clip-path: polygon(0% 100%, 0% 78%, 52% 53%, 60% 66%);
+}
+.nm-demo-intro__beam--lt {
+  background: linear-gradient(18deg, rgba(255, 236, 196, 0.44), rgba(255, 202, 126, 0.13) 42%, rgba(0, 0, 0, 0) 78%);
+  clip-path: polygon(0% 0%, 0% 22%, 50% 48%, 57% 38%);
+  animation-delay: 240ms;
+}
+.nm-demo-intro__beam--tc {
+  background: linear-gradient(180deg, rgba(255, 245, 214, 0.52), rgba(255, 209, 134, 0.16) 45%, rgba(0, 0, 0, 0) 80%);
+  clip-path: polygon(48% 0%, 52% 0%, 58% 55%, 42% 55%);
+  animation-delay: 480ms;
+}
+.nm-demo-intro__beam--rt {
+  background: linear-gradient(342deg, rgba(255, 236, 196, 0.44), rgba(255, 202, 126, 0.13) 42%, rgba(0, 0, 0, 0) 78%);
+  clip-path: polygon(100% 0%, 100% 22%, 43% 38%, 50% 48%);
+  animation-delay: 720ms;
+}
+.nm-demo-intro__beam--rb {
+  background: linear-gradient(322deg, rgba(255, 234, 184, 0.46), rgba(255, 194, 112, 0.14) 42%, rgba(0, 0, 0, 0) 78%);
+  clip-path: polygon(100% 100%, 100% 78%, 40% 66%, 48% 53%);
+  animation-delay: 960ms;
+}
+.nm-demo-intro__projector::before,
+.nm-demo-intro__projector::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  mix-blend-mode: screen;
+}
+.nm-demo-intro__projector::before {
+  background:
+    radial-gradient(900px 160px at 50% 3%, rgba(255, 244, 210, 0.55), rgba(255, 227, 170, 0.0) 72%),
+    linear-gradient(180deg, rgba(255, 216, 140, 0.28), rgba(0, 0, 0, 0));
+  clip-path: polygon(48.2% 0%, 51.8% 0%, 72% 62%, 28% 62%);
+  opacity: 0.7;
+}
+.nm-demo-intro__projector::after {
+  background: radial-gradient(70% 64% at 50% 96%, rgba(255, 178, 85, 0.24), rgba(255, 178, 85, 0) 72%);
+  opacity: 0.55;
+  animation: nmProjectorBloom 2600ms ease-in-out infinite;
+}
+.nm-demo-intro__spotlight {
+  position: absolute;
+  top: -18vh;
+  width: 38vw;
+  height: 95vh;
+  background: linear-gradient(180deg, rgba(255, 235, 190, 0.28), rgba(255, 180, 70, 0.06) 55%, rgba(0, 0, 0, 0));
+  filter: blur(1px);
+  opacity: 0;
+  transform-origin: top center;
+  animation: nmSpotSweep 9s ease-in-out infinite alternate;
+}
+.nm-demo-intro__spotlight--left {
+  left: 8vw;
+  transform: rotate(22deg);
+}
+.nm-demo-intro__spotlight--right {
+  right: 8vw;
+  transform: rotate(-22deg);
+  animation-delay: 900ms;
+}
+.nm-demo-intro__content {
+  position: relative;
+  /* Below projector rig: beams use screen blend to light the mark; logo/hint stay readable. */
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  padding: 24px;
+  text-align: center;
+  transform-style: preserve-3d;
+}
+.nm-demo-intro__logo-stage {
+  position: relative;
+  width: min(580px, 77vw);
+  display: grid;
+  place-items: center;
+  transform-style: preserve-3d;
+}
+.nm-demo-intro__clef3d {
+  display: none !important;
+}
+.nm-demo-intro__logo {
+  width: 100%;
+  height: auto;
+  filter: drop-shadow(0 14px 44px rgba(0, 0, 0, 0.45)) saturate(1.1);
+  transform: translate3d(0, 0, 0) scale(0.25);
+  opacity: 0;
+  animation: nmIntroLogoFly 16000ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  will-change: transform, opacity, filter;
+  position: relative;
+  z-index: 1;
+}
+.nm-demo-intro__logo-embed {
+  display: block;
+  border: 0;
+  width: 100%;
+  aspect-ratio: 1024 / 558;
+  height: auto;
+  background: transparent;
+}
+.nm-demo-intro__logo .nm-logo-svg__clef {
+  transform-box: fill-box;
+  transform-origin: center;
+  filter: drop-shadow(0 8px 12px rgba(0, 0, 0, 0.45));
+}
+.nm-demo-intro--playing .nm-demo-intro__logo .nm-logo-svg__clef,
+.nm-demo-intro--enter .nm-demo-intro__logo .nm-logo-svg__clef {
+  animation: none;
+}
+.nm-demo-intro--ended .nm-demo-intro__logo .nm-logo-svg__clef,
+.nm-demo-intro--exit .nm-demo-intro__logo .nm-logo-svg__clef {
+  animation: none;
+}
+.nm-demo-intro--playing .nm-demo-intro__clef3d,
+.nm-demo-intro--enter .nm-demo-intro__clef3d {
+  display: none !important;
+}
+.nm-demo-intro--ended .nm-demo-intro__clef3d,
+.nm-demo-intro--exit .nm-demo-intro__clef3d {
+  display: none !important;
+}
+.nm-demo-intro__hint {
+  font-size: 14px;
+  letter-spacing: 0.02em;
+  opacity: 0.85;
+  padding: 10px 14px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(6px);
+  max-width: min(560px, 90vw);
+}
+
+@keyframes nmDemoIntroCrossfadeOut {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+@keyframes nmLandingCrossfadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes nmIntroBgIn {
+  0% { opacity: 0; }
+  100% { opacity: 1; }
+}
+@keyframes nmStageRise {
+  0% { opacity: 0; transform: translateY(8vh); }
+  30% { opacity: 0.42; transform: translateY(0); }
+  100% { opacity: 0.52; transform: translateY(0); }
+}
+@keyframes nmProjectorIn {
+  0% { opacity: 0; transform: perspective(1200px) rotateX(64deg) translateY(-18vh) scale(1.02); }
+  35% { opacity: 0.22; }
+  100% { opacity: 0.5; transform: perspective(1200px) rotateX(58deg) translateY(-15vh) scale(1.12); }
+}
+@keyframes nmProjectorShimmer {
+  0% { background-position: 0% 0%, 0% 0%, 0% 0%; opacity: 0.30; }
+  50% { background-position: 0% 0%, 100% 0%, 50% 0%; opacity: 0.50; }
+  100% { background-position: 0% 0%, 0% 0%, 0% 0%; opacity: 0.30; }
+}
+@keyframes nmProjectorBloom {
+  0% { opacity: 0.42; transform: scale(0.98); }
+  50% { opacity: 0.68; transform: scale(1.03); }
+  100% { opacity: 0.42; transform: scale(0.98); }
+}
+/* 0–20%: rise / fall (linear). JS delays step 0.1·T → mid-rise (5%) meets mid-fall (15%) at same opacity. 20–100%: stable dim (matches 0% for seamless loop). */
+@keyframes nmBeamPulse {
+  0% {
+    opacity: 0.26;
+  }
+  10% {
+    opacity: 0.94;
+  }
+  20% {
+    opacity: 0.26;
+  }
+  100% {
+    opacity: 0.26;
+  }
+}
+@keyframes nmSpotSweep {
+  0% { opacity: 0.18; }
+  100% { opacity: 0.35; }
+}
+@keyframes nmIntroLogoFly {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 16vh, -260px) scale(0.08);
+    filter: drop-shadow(0 10px 30px rgba(0, 0, 0, 0.8));
+  }
+  /* Slower reveal vs 10s version (was 28%). */
+  40% {
+    opacity: 1;
+  }
+  82% {
+    opacity: 1;
+    transform: translate3d(0, 9vh, 0) scale(1.08);
+    filter: drop-shadow(0 26px 80px rgba(0, 0, 0, 0.55));
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 9vh, 0) scale(1);
+  }
+}
+@keyframes nmInlineClefOrbit {
+  0% {
+    transform: rotate(0deg) scale(1.02);
+  }
+  25% {
+    transform: rotate(90deg) scale(1.08);
+  }
+  50% {
+    transform: rotate(180deg) scale(1.02);
+  }
+  75% {
+    transform: rotate(270deg) scale(1.08);
+  }
+  100% {
+    transform: rotate(360deg) scale(1.02);
+  }
+}
+@keyframes nmInlineClefSettle {
+  0% {
+    transform: rotate(0deg) scale(1.06);
+  }
+  100% {
+    transform: rotate(0deg) scale(1);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .nm-demo-intro__bg,
+  .nm-demo-intro__logo,
+  .nm-demo-intro__stage-glow,
+  .nm-demo-intro__spotlight {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+  .nm-demo-intro__clef3d { transform: translate3d(-50%, -50%, 140px) scale(1.12) !important; }
+  .nm-demo-intro.nm-demo-intro--exit-crossfade {
+    animation: nmDemoIntroCrossfadeOutReduced var(--nm-demo-crossfade-ms, 1000ms) linear forwards !important;
+  }
+  .nm-landing--crossfade-in {
+    animation: nmLandingCrossfadeInReduced var(--nm-demo-crossfade-ms, 1000ms) linear forwards !important;
+  }
+}
+@keyframes nmDemoIntroCrossfadeOutReduced {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+@keyframes nmLandingCrossfadeInReduced {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media print {
+  .nm-demo-intro { display: none !important; }
+}
+
 /* Klaveri klaviatuuri wrapper (allriba) */
 .NoodiMeisterPianoWrapper {
   display: block;
@@ -148,6 +524,12 @@ html, body, #root {
     page-break-after: always;
     break-after: page;
   }
+  html.nm-print-svg-mode .nm-print-svg-page.print-page-a4-portrait { page: a4-portrait; }
+  html.nm-print-svg-mode .nm-print-svg-page.print-page-a4-landscape { page: a4-landscape; }
+  html.nm-print-svg-mode .nm-print-svg-page.print-page-a3-portrait { page: a3-portrait; }
+  html.nm-print-svg-mode .nm-print-svg-page.print-page-a3-landscape { page: a3-landscape; }
+  html.nm-print-svg-mode .nm-print-svg-page.print-page-a5-portrait { page: a5-portrait; }
+  html.nm-print-svg-mode .nm-print-svg-page.print-page-a5-landscape { page: a5-landscape; }
   html.nm-print-svg-mode .nm-print-svg-page:last-child {
     page-break-after: auto;
     break-after: auto;
