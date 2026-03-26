@@ -4304,7 +4304,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
 
   const startScorePlayback = useCallback(() => {
     if (scorePlaybackIntervalRef.current) return;
-    const withBeats = notesWithExplicitBeats(notes)
+    const withBeats = notesWithExplicitBeatsEarly(notes)
       .map((n) => ({ ...n, beat: Number(n.beat) || 0, duration: noteDurationInQuarterBeats(n) }))
       .sort((a, b) => a.beat - b.beat);
     if (!withBeats.length) return;
@@ -4333,7 +4333,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       setCursorPosition(Math.min(totalBeats, beatNow));
       if (beatNow >= totalBeats) stopScorePlayback(false);
     }, 25);
-  }, [notes, notesWithExplicitBeats, getEffectivePlaybackBpm, cursorPosition, playPianoNote, stopScorePlayback, noteDurationInQuarterBeats]);
+  }, [notes, notesWithExplicitBeatsEarly, getEffectivePlaybackBpm, cursorPosition, playPianoNote, stopScorePlayback, noteDurationInQuarterBeats]);
 
   const seekPedagogicalAudio = useCallback((deltaSeconds) => {
     if (!pedagogicalAudioUrl) return;
