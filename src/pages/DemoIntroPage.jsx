@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { INTRO_TO_LANDING_CROSSFADE_MS, useIntroCrossfade } from '../context/IntroCrossfadeContext';
 
 const BUILD_TAG = '20260326-demo-intro-sound-button-v31';
@@ -66,14 +66,6 @@ export default function DemoIntroPage() {
 
   const isExiting = phase === 'exit';
   const showTapToStart = needsGesture && (phase === 'enter' || phase === 'playing');
-
-  const helpText = useMemo(() => {
-    if (error) return error;
-    if (isExiting) return '...';
-    if (phase === 'ended') return 'Vajuta SPACE, ENTER või klõpsa, et jätkata';
-    if (showTapToStart || !audioPlaying) return 'Vajuta SPACE/ENTER või klõpsa, et minna esilehele';
-    return 'Intro…';
-  }, [audioPlaying, error, isExiting, phase, showTapToStart]);
 
   const startPlayback = async () => {
     const el = audioRef.current;
@@ -244,9 +236,6 @@ export default function DemoIntroPage() {
             title="Noodimeister"
             aria-label="Noodimeister"
           />
-        </div>
-        <div className="nm-demo-intro__hint" aria-live="polite">
-          {helpText}
         </div>
       </div>
     </div>

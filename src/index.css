@@ -224,7 +224,7 @@ html, body, #root {
 .nm-demo-intro__sound-btn {
   position: fixed;
   left: 50%;
-  bottom: max(22px, env(safe-area-inset-bottom, 0px) + 10px);
+  bottom: 20px;
   transform: translateX(-50%);
   z-index: 6;
   border: 1px solid rgba(255, 255, 255, 0.22);
