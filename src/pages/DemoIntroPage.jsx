@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { INTRO_TO_LANDING_CROSSFADE_MS, useIntroCrossfade } from '../context/IntroCrossfadeContext';
 
-const BUILD_TAG = '20260326-demo-intro-crossfade-space-enter-click-v30';
+const BUILD_TAG = '20260326-demo-intro-sound-button-v31';
 const AUDIO_SRC = `/demo-intro.mp3?v=${BUILD_TAG}`;
 const LOGO_SRC = `/logo-overlay.html?v=${BUILD_TAG}`;
 /**
@@ -59,6 +59,7 @@ export default function DemoIntroPage() {
   const audioRef = useRef(null);
   const [phase, setPhase] = useState('enter'); // enter -> playing -> ended -> exit
   const [needsGesture, setNeedsGesture] = useState(false);
+  const [isMuted, setIsMuted] = useState(false);
   const [error, setError] = useState('');
   const [audioPlaying, setAudioPlaying] = useState(false);
   const projectorDebug = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('verifyProjector') === '1';
@@ -102,6 +103,31 @@ export default function DemoIntroPage() {
     startCrossfade(INTRO_TO_LANDING_CROSSFADE_MS);
   }, [phase, startCrossfade]);
 
+  const handleSoundButton = useCallback(async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const el = audioRef.current;
+    if (!el) return;
+    try {
+      setError('');
+      setNeedsGesture(false);
+      if (el.paused) {
+        el.muted = false;
+        setIsMuted(false);
+        await el.play();
+        setAudioPlaying(true);
+        return;
+      }
+      const nextMuted = !el.muted;
+      el.muted = nextMuted;
+      setIsMuted(nextMuted);
+    } catch (_) {
+      setNeedsGesture(true);
+      setAudioPlaying(false);
+      setError('Heli käivitamiseks vajuta heli nuppu uuesti');
+    }
+  }, []);
+
   useEffect(() => {
     // Try autoplay on mount; if blocked, we’ll show a tap-to-start hint.
     startPlayback();
@@ -131,10 +157,12 @@ export default function DemoIntroPage() {
       style={{ '--nm-demo-crossfade-ms': `${INTRO_TO_LANDING_CROSSFADE_MS}ms` }}
       role="dialog"
       aria-label="Demo intro"
-      onMouseDown={() => {
+      onMouseDown={(e) => {
+        if (e.target?.closest?.('.nm-demo-intro__sound-btn')) return;
         beginExit();
       }}
-      onTouchStart={() => {
+      onTouchStart={(e) => {
+        if (e.target?.closest?.('.nm-demo-intro__sound-btn')) return;
         beginExit();
       }}
     >
@@ -149,6 +177,7 @@ export default function DemoIntroPage() {
         onError={() => setError('Intro heli ei õnnestunud laadida. Kontrolli, et fail oleks public kaustas nimega demo-intro.mp3')}
         onPlay={() => setAudioPlaying(true)}
         onPause={() => setAudioPlaying(false)}
+        onVolumeChange={() => setIsMuted(Boolean(audioRef.current?.muted))}
         onEnded={() => {
           setAudioPlaying(false);
           setPhase('ended');
@@ -180,6 +209,16 @@ export default function DemoIntroPage() {
       </div>
 
       <div className="nm-demo-intro__content">
+        <button
+          type="button"
+          className="nm-demo-intro__sound-btn"
+          onMouseDown={(e) => e.stopPropagation()}
+          onTouchStart={(e) => e.stopPropagation()}
+          onClick={handleSoundButton}
+          aria-label={isMuted || !audioPlaying ? 'Lülita heli sisse' : 'Lülita heli välja'}
+        >
+          {isMuted || !audioPlaying ? 'Heli sisse' : 'Mute'}
+        </button>
         {projectorDebug && (
           <div
             style={{
