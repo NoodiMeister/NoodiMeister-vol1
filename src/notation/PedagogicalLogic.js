@@ -18,6 +18,46 @@ const PEDAGOGICAL_COLORS = {
   6: '#7b1fa2', // B – lilla
 };
 
+/**
+ * Chroma-Notes / Boomwhackers (diatooniline) värvikaart.
+ * Allikas (värvinimed): Soundslice "Using Boomwhackers colors".
+ * - C red, D orange, E yellow, F green, G teal, A indigo, B violet
+ * - kromaatika (♯/♭) on paljudes klassiruumi komplektides musta markeeringuga → kasutame musta.
+ */
+const CHROMA_NOTES_COLORS = {
+  C: '#e53935', // red
+  D: '#fb8c00', // orange
+  E: '#f9a825', // yellow
+  F: '#43a047', // green
+  G: '#00897b', // teal
+  A: '#3949ab', // indigo
+  B: '#8e24aa', // violet
+};
+
+export function getChromaNotesColor(pitch, accidental = 0) {
+  if (accidental && accidental !== 0) return '#111827'; // near-black (chromatic add-on convention)
+  return CHROMA_NOTES_COLORS[pitch] || CHROMA_NOTES_COLORS.C;
+}
+
+/**
+ * Kooli käsikellade värvikaart (kasutaja antud):
+ * C red, D orange, E yellow, F green, G light blue, A dark blue, B purple.
+ */
+const SCHOOL_HANDBELL_COLORS = {
+  C: '#e53935', // punane
+  D: '#fb8c00', // oranž
+  E: '#f9a825', // kollane
+  F: '#43a047', // roheline
+  G: '#4fc3f7', // hele sinine
+  A: '#1e3a8a', // tume sinine
+  B: '#7b1fa2', // lilla
+};
+
+export function getSchoolHandbellColor(pitch, accidental = 0) {
+  if (accidental && accidental !== 0) return '#111827';
+  return SCHOOL_HANDBELL_COLORS[pitch] || SCHOOL_HANDBELL_COLORS.C;
+}
+
 /** Kujund oktaavivahemiku järgi (relatiivne JO-st: 0 = sama oktaav kui JO). */
 const SHAPE_BY_RELATIVE_OCTAVE = {
   0: 'square',       // JO oktaav = ruut

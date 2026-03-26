@@ -8,8 +8,14 @@ import { getExportFontFaceCss, resolveExportTextFamily } from '../export/exportF
 
 const XMLNS = 'http://www.w3.org/2000/svg';
 const DEFAULT_PAGE_MARGIN_PX = 0;
-/** Parem serv: topelt-taktijoone paks joon + anti-alias; vältimaks clipPath/svg2pdf lõikamist. */
-const EXPORT_RIGHT_EDGE_PAD_PX = 14;
+/** Parem serv: hoia nähtav valge "paberi riba" + väldi topelt-taktijoone lõikamist.
+ *  Landscape'is vajab suuremat puhvrit, muidu lõpujoon jääb visuaalselt liiga serva.
+ */
+function getExportRightEdgePadPx (pageWidthPx) {
+  const w = Math.max(1, Number(pageWidthPx) || 1);
+  // ~5% lehe laiusest (A4 portrait ≈ 40px, landscape ≈ 56px), miinimum 14px.
+  return Math.max(14, Math.round(w * 0.05));
+}
 
 function hasSmuflTimeSigDigits (text) {
   if (!text) return false;
@@ -263,7 +269,7 @@ function buildLayoutSnapshot ({
   const sourceH = Math.max(1, Number(sceneHeight) || contentHeight);
   if (clampScoreWidthToContent && sourceW > 0) {
     const ox = Math.max(0, Number(sceneX) || 0);
-    const maxW = Math.max(1, contentWidth - EXPORT_RIGHT_EDGE_PAD_PX - ox);
+    const maxW = Math.max(1, contentWidth - getExportRightEdgePadPx(pageWidth) - ox);
     const maxScaleW = maxW / sourceW;
     if (Number.isFinite(maxScaleW) && maxScaleW > 0) {
       scale = Math.min(scale, maxScaleW);
@@ -467,15 +473,12 @@ export function scoreToSvg (container, options = {}) {
     const svgCount = container?.querySelectorAll?.('svg')?.length || 0;
     throw new Error(`Notation SVG not found (svgCount=${svgCount})`);
   }
-  // If caller passes an explicit notation SVG, use stable origin from SVG coordinates
-  // instead of DOM rect/scroll math (which can drift between preview/print captures).
-  const useStableNotationOrigin = Boolean(notationSvgElement);
-  const { x: tx, y: ty } = useStableNotationOrigin
-    ? { x: 0, y: 0 }
-    : getRelativePosition(container, notationSvg);
+  // Always capture notation position relative to score container so preview/print
+  // reflects user-selected horizontal alignment and other layout offsets.
+  const { x: tx, y: ty } = getRelativePosition(container, notationSvg);
   const { width, height, viewBox } = getSvgIntrinsicDimensions(notationSvg, pageWidth);
-  const sourceContentWidth = useStableNotationOrigin ? width : (container.scrollWidth || pageWidth);
-  const sourceContentHeight = useStableNotationOrigin ? height : (container.scrollHeight || pageHeight);
+  const sourceContentWidth = container.scrollWidth || pageWidth;
+  const sourceContentHeight = container.scrollHeight || pageHeight;
   return buildScoreSceneSnapshot({
     ...options,
     pageDesignDataUrl,

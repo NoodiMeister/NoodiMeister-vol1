@@ -373,7 +373,7 @@ export function FigurenotesView({
 
               const boxHeight = timelineHeight - 2 * padVertical;
               /** User-chosen notation size (px). Shapes are never stretched or capped by beat width — kept intact. */
-              const figureSizeBase = Math.max(12, Math.min(96, figurenotesSize));
+              const figureSizeBase = Math.max(12, Math.min(100, figurenotesSize));
               const figureSizeBaseForMeasure = figureSizeBase;
 
               /** Scale figure when shorter than quarter so multiple notes fit in one beat: eighth = 0.5, 16th/32nd = 0.25. */

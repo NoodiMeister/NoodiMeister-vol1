@@ -113,6 +113,8 @@ export function calculateLayout(mode, orientation, data) {
 function calculateFigureGrid(data, availableWidth, availablePageHeight = 0) {
   const measures = data?.measures ?? [];
   const mult = Math.max(0.25, Math.min(3, Number(data?.globalSpacingMultiplier) || 1));
+  const figureSizeBase = Math.max(12, Math.min(96, Number(data?.figurenotesSize) || 85));
+  const figureScale = Math.max(0.5, figureSizeBase / 75);
   const rawBoxesPerRow = data?.boxesPerRow ?? DEFAULT_BOXES_PER_ROW;
   const boxesPerRow = Math.max(1, Math.round(rawBoxesPerRow / mult));
   const lineBreakBefore = new Set(Array.isArray(data?.lineBreakBefore) ? data.lineBreakBefore : []);
@@ -121,9 +123,12 @@ function calculateFigureGrid(data, availableWidth, availablePageHeight = 0) {
   const beatsPerMeasure = timeSignature?.beats ?? 4;
   const staffSpacing = Math.max(FIGURE_ROW_HEIGHT, Number(data?.staffSpacing) || SYSTEM_GAP);
 
-  const effectiveWidth = typeof data?.pageWidth === 'number' && data.pageWidth > 0
+  // Reserve a small right-edge safety area so larger figure symbols never render past the page stripe.
+  const edgeSafetyPadPx = Math.max(0, Math.round(figureSizeBase * 0.6));
+  const rawEffectiveWidth = typeof data?.pageWidth === 'number' && data.pageWidth > 0
     ? Math.max(200, data.pageWidth - LAYOUT.MARGIN_LEFT - LAYOUT.MARGIN_RIGHT)
     : availableWidth;
+  const effectiveWidth = Math.max(200, rawEffectiveWidth - edgeSafetyPadPx);
 
   const pageHeight = availablePageHeight > 0 ? availablePageHeight : null;
 
@@ -188,7 +193,7 @@ function calculateFigureGrid(data, availableWidth, availablePageHeight = 0) {
 
   const minMeasureWidth = Math.max(
     LAYOUT.MEASURE_MIN_WIDTH ?? 28,
-    beatsPerMeasure * FIGURE_BASE_WIDTH
+    beatsPerMeasure * (FIGURE_BASE_WIDTH * figureScale)
   );
 
   for (let i = 0; i < measures.length; i++) {

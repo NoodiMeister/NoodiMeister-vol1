@@ -43,7 +43,7 @@ import {
 } from './utils/notationConstants';
 import { FIGURENOTES_COLORS, getFigureSymbol } from './utils/figurenotes';
 import { getOctave2CrossStyle } from './constants/FigureNotesLibrary';
-import { getPedagogicalSymbol } from './notation/PedagogicalLogic';
+import { getChromaNotesColor, getPedagogicalSymbol, getSchoolHandbellColor } from './notation/PedagogicalLogic';
 import { FigurenotesBlockIcon, RhythmIcon, RhythmPatternIcon, MeterIcon, PedagogicalMeterIcon } from './toolboxes';
 import { SmuflGlyph } from './notation/smufl/SmuflGlyph';
 import { SMUFL_GLYPH, NOTEHEAD_SHAPE_GLYPH } from './notation/smufl/glyphs';
@@ -129,7 +129,7 @@ function buildDemoVisibilityProject({ figurenotes, grandStaff }) {
     notationStyle: figurenotes ? 'FIGURENOTES' : 'TRADITIONAL',
     notationMode: figurenotes ? 'figurenotes' : 'traditional',
     pixelsPerBeat: 85,
-    figurenotesSize: 85,
+    figurenotesSize: 65,
     figurenotesStems: true,
     figurenotesMelodyShowNoteNames: true,
     layoutMeasuresPerLine: 4,
@@ -204,6 +204,7 @@ var PITCH_NAME_TO_NATURAL = { C: 'C', 'C#': 'C', Db: 'C', D: 'D', 'D#': 'D', Eb:
 // Joonestiku/instrumentide konstandid var'iga faili alguses
 var INSTRUMENT_CATEGORIES = [
   { id: 'singleStaff', labelKey: 'cat.singleStaff', instruments: ['single-staff-treble', 'single-staff-bass'] },
+  { id: 'classroom', labelKey: 'cat.classroom', instruments: ['boomwhackers', 'handbells'] },
   { id: 'keyboard', labelKey: 'cat.keyboard', instruments: ['piano', 'organ', 'harpsichord', 'accordion'] },
   { id: 'stringsPlucked', labelKey: 'cat.stringsPlucked', instruments: ['guitar', 'ukulele-sopran', 'ukulele-tenor', 'ukulele-bariton', 'ukulele-bass'] },
   { id: 'stringsBowed', labelKey: 'cat.stringsBowed', instruments: ['violin', 'viola', 'cello', 'double-bass'] },
@@ -215,6 +216,8 @@ var INSTRUMENT_CATEGORIES = [
 var INSTRUMENT_CONFIG_BASE = {
   'single-staff-treble': { value: 'single-staff-treble', range: 'E3-A7', type: 'standard', defaultClef: 'treble' },
   'single-staff-bass':   { value: 'single-staff-bass', range: 'E2-G4', type: 'standard', defaultClef: 'bass' },
+  boomwhackers: { value: 'boomwhackers', range: 'C4-C6', type: 'standard', defaultClef: 'treble', colorSystem: 'chromaNotes' },
+  handbells:    { value: 'handbells', range: 'C4-C6', type: 'standard', defaultClef: 'treble', colorSystem: 'schoolHandbells' },
   organ:      { value: 'organ', range: 'C2-C6', type: 'figuredBass', defaultClef: 'treble' },
   harpsichord:{ value: 'harpsichord', range: 'F1-F6', type: 'figuredBass', defaultClef: 'treble' },
   accordion:  { value: 'accordion', range: 'F3-C6', type: 'accordion', defaultClef: 'treble' },
@@ -243,6 +246,8 @@ var INSTRUMENT_CONFIG_BASE = {
 };
 var INSTRUMENT_I18N_KEYS = {
   'single-staff-treble': 'inst.singleStaffTreble', 'single-staff-bass': 'inst.singleStaffBass',
+  boomwhackers: 'inst.boomwhackers',
+  handbells: 'inst.handbells',
   organ: 'inst.organ', harpsichord: 'inst.harpsichord', accordion: 'inst.accordion', piano: 'inst.piano',
   guitar: 'inst.guitar', 'ukulele-sopran': 'inst.ukuleleSopran', 'ukulele-tenor': 'inst.ukuleleTenor',
   'ukulele-bariton': 'inst.ukuleleBariton', 'ukulele-bass': 'inst.ukuleleBass',
@@ -1303,15 +1308,27 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     dirtyRef.current = true;
   }, [notes, setNotes]);
 
+  const durationLabelToQuarterBeats = useCallback((durationLabel) => {
+    const denom = parseInt(String(durationLabel || '1/4').split('/')[1], 10) || 4;
+    return 4 / denom;
+  }, []);
+
+  const noteDurationInQuarterBeats = useCallback((note) => {
+    const direct = Number(note?.duration);
+    if (Number.isFinite(direct) && direct > 0) return direct;
+    const base = durationLabelToQuarterBeats(note?.durationLabel || '1/4');
+    return (note?.isDotted ? base * 1.5 : base);
+  }, [durationLabelToQuarterBeats]);
+
   // Resolve explicit beat for each note (used by onNoteBeatChange and addNoteAtCursor; must be defined before first use).
   const notesWithExplicitBeatsEarly = useCallback((noteList) => {
     let runningBeat = 0;
     return (noteList || []).map((n) => {
       const beat = typeof n.beat === 'number' ? n.beat : runningBeat;
-      runningBeat = beat + (n.duration ?? 1);
+      runningBeat = beat + noteDurationInQuarterBeats(n);
       return { ...n, beat };
     });
-  }, []);
+  }, [noteDurationInQuarterBeats]);
 
   /** Hand tool: move note to a new beat. Re-sorts notes by beat. */
   const onNoteBeatChange = useCallback((noteIndex, newBeat) => {
@@ -1412,7 +1429,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   const [tuningReferenceOctave, setTuningReferenceOctave] = useState(3);
   const [tuningReferenceHz, setTuningReferenceHz] = useState(440);
   const [playNoteOnInsert, setPlayNoteOnInsert] = useState(true);
-  const [figurenotesSize, setFigurenotesSize] = useState(85); // Noodigraafika suurus (figuurid ja noodid), 12–500 px (vaikimisi 85)
+  const [figurenotesSize, setFigurenotesSize] = useState(65); // Noodigraafika suurus (figuurid ja noodid), 12–100 px (vaikimisi 65)
   const [figurenotesStems, setFigurenotesStems] = useState(false); // Figuurnotatsioonis rütmi näitamine noodivartega (vaikimisi välja)
   const [figurenotesChordLineGap, setFigurenotesChordLineGap] = useState(6); // Akordirida figuurnotatsioonis: vahe meloodiareal ja akordirea vahel 0–20 px
   const [figurenotesChordBlocks, setFigurenotesChordBlocks] = useState(false); // Akordirežiim figuurnotatsioonis: värvilised akordiplokid akordireal
@@ -1422,7 +1439,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   // Hoia rütmiboksi (pixelsPerBeat) laius kooskõlas noodigraafika suurusega – magneetiline seos
   useEffect(() => {
     setPixelsPerBeat((prev) => {
-      const target = Math.max(40, Math.min(500, figurenotesSize));
+      const target = Math.max(40, Math.min(100, figurenotesSize));
       return target;
     });
   }, [figurenotesSize]);
@@ -1470,6 +1487,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   const [pedagogicalAudioBpm, setPedagogicalAudioBpm] = useState(120);
   const [pedagogicalAudioDuration, setPedagogicalAudioDuration] = useState(0); // sekundites
   const [isPedagogicalAudioPlaying, setIsPedagogicalAudioPlaying] = useState(false);
+  const [isScorePlaybackPlaying, setIsScorePlaybackPlaying] = useState(false);
   const [pedagogicalAudioPlaybackRate, setPedagogicalAudioPlaybackRate] = useState(1.0); // 0.5–2.0
   const [pedagogicalAudioCurrentTime, setPedagogicalAudioCurrentTime] = useState(0);
   // Animeeritud notatsioon: nooti lugeva kursori kuju (püstine joon, emoji)
@@ -1484,7 +1502,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   const [showPdfExportPreview, setShowPdfExportPreview] = useState(false);
   const [pdfPreviewDataUrl, setPdfPreviewDataUrl] = useState(null);
   const [pdfPreviewSize, setPdfPreviewSize] = useState({ w: 0, h: 0 });
-  /** SVG-põhine eksport: { defsString, contentString, contentHeight } – kasutatakse eelvaate ja PDF vektorite jaoks. */
+  /** SVG-põhine eksport: täielik score snapshot (sh pageDesign*), et getPageSvgString ei kaotaks tausta. */
   const [pdfPreviewSvgData, setPdfPreviewSvgData] = useState(null);
   const [pdfPreviewError, setPdfPreviewError] = useState('');
   const [pdfPreviewPageIndex, setPdfPreviewPageIndex] = useState(0);
@@ -1502,6 +1520,9 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   const [pdfExportChosenPath, setPdfExportChosenPath] = useState('');
   const pedagogicalAudioRef = useRef(null); // HTMLAudioElement
   const pedagogicalPlaybackIntervalRef = useRef(null);
+  const scorePlaybackIntervalRef = useRef(null);
+  const scorePlaybackLastBeatRef = useRef(0);
+  const scorePlaybackStartedAtRef = useRef(0);
   const pedagogicalAudioDataRef = useRef(null); // base64 string (salvestamiseks)
   const pedagogicalAudioUrlRef = useRef(null); // object URL (revoke vahetusel)
   const pedagogicalAudioInputRef = useRef(null);
@@ -1684,6 +1705,9 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   const syncBroadcastTimeoutRef = useRef(null);
   const audioContextRef = useRef(null);
   const soundfontCacheRef = useRef(Object.create(null)); // instrumentId -> Soundfont player (MuseScore-style GM)
+  const activeSoundfontVoiceRef = useRef(null);
+  const activeOscillatorStopRef = useRef(null);
+  const activePreviewStopTimeoutRef = useRef(null);
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const isNewWorkFlow = (searchParams && typeof searchParams.get === 'function' && searchParams.get('new')) === '1';
@@ -1702,7 +1726,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   const isPartWindow = !!partStaffId;
   const [newWorkSetupOpen, setNewWorkSetupOpen] = useState(false);
   // Uue töö seadistuse vormi väljad (küsitakse enne töö loomist)
-  const [wizardNotationMethod, setWizardNotationMethod] = useState('traditional'); // 'traditional' | 'figurenotes' | 'vabanotatsioon' | 'pedagogical'
+  const [wizardNotationMethod, setWizardNotationMethod] = useState('traditional'); // 'traditional' | 'figurenotes' | 'pedagogical'
   const [wizardTimeSignature, setWizardTimeSignature] = useState([4, 4]);
   const [wizardSongTitle, setWizardSongTitle] = useState('');
   const [wizardAuthor, setWizardAuthor] = useState('');
@@ -1807,7 +1831,8 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   }, []);
 
   const applyNewWorkSetup = useCallback(() => {
-    const pedagogical = wizardNotationMethod === 'pedagogical';
+    // Backward-compatible guard: old state could still contain 'vabanotatsioon'.
+    const pedagogical = wizardNotationMethod === 'pedagogical' || wizardNotationMethod === 'vabanotatsioon';
     setIsPedagogicalProject(pedagogical);
     // Pedagoogiline notatsioon kasutab JO võtit (vabanotatsioon) ja võib näidata võtmemärki ning traditsioonilist võtit
     if (pedagogical) {
@@ -2492,13 +2517,15 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         const orient = (orientation ?? pageOrientation) === 'landscape' ? 'landscape' : 'portrait';
         const pageH = orient === 'landscape' ? 794 : 1123;
         const numPages = Math.max(1, Math.ceil((Number(contentHeight) || pageH) / pageH));
+        const paper = (pageModel?.paperSize || paperSize || 'a4').toLowerCase();
+        const printPageClass = `print-page-${paper}-${orient}`;
 
         const wrapper = document.createElement('div');
         wrapper.className = 'nm-print-svg-pages';
         for (let p = 0; p < numPages; p++) {
           const pageSvg = getPageSvgString(defsString, contentString, pageModel, p, { footerText });
           const pageDiv = document.createElement('div');
-          pageDiv.className = 'nm-print-svg-page';
+          pageDiv.className = `nm-print-svg-page ${printPageClass}`;
           // Inline SVG avoids image decoding race in browser print preview.
           pageDiv.innerHTML = pageSvg;
           wrapper.appendChild(pageDiv);
@@ -2525,7 +2552,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       window.removeEventListener('beforeprint', onBeforePrint);
       window.removeEventListener('afterprint', onAfterPrint);
     };
-  }, [buildScoreExportSnapshot, pageOrientation, t]);
+  }, [buildScoreExportSnapshot, pageOrientation, paperSize, t]);
 
   useEffect(() => {
     if (!showPdfExportPreview || !scoreContainerRef?.current) return;
@@ -2549,13 +2576,13 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       /* Proovime esmalt SVG-põhist eelvaadet (viewBox 0 0 794 1123, vektorid, ilma mastaabikadudeta). */
       try {
         const pageModel = buildScoreExportSnapshot(el);
-        const { defsString, contentString, contentHeight, orientation, footerText } = pageModel;
+        const { defsString, contentString, orientation, footerText } = pageModel;
         const firstPageSvg = getPageSvgString(defsString, contentString, pageModel, 0, { footerText });
         const dataUrl = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(firstPageSvg)));
         setPdfPreviewDataUrl(dataUrl);
         const dims = getScorePageDimensions(orientation);
         setPdfPreviewSize({ w: dims.width, h: dims.height });
-        setPdfPreviewSvgData({ defsString, contentString, contentHeight, orientation, footerText });
+        setPdfPreviewSvgData(pageModel);
         setPdfPreviewError('');
         cleanup();
       } catch (e) {
@@ -2949,7 +2976,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       if (data.noteheadShape) setNoteheadShape(data.noteheadShape);
       if (data.noteheadEmoji != null) setNoteheadEmoji(data.noteheadEmoji);
       if (data.pixelsPerBeat != null) setPixelsPerBeat(data.pixelsPerBeat);
-      if (data.figurenotesSize != null) setFigurenotesSize(Math.max(12, Math.min(500, data.figurenotesSize)));
+      if (data.figurenotesSize != null) setFigurenotesSize(Math.max(12, Math.min(100, data.figurenotesSize)));
       if (data.figurenotesStems != null) setFigurenotesStems(!!data.figurenotesStems);
       if (data.figurenotesChordLineGap != null) setFigurenotesChordLineGap(Math.max(0, Math.min(20, Number(data.figurenotesChordLineGap))));
       if ('figurenotesChordBlocks' in data) setFigurenotesChordBlocks(!!data.figurenotesChordBlocks);
@@ -3059,12 +3086,17 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       if (data.relativeNotationShowTraditionalClef != null) setRelativeNotationShowTraditionalClef(data.relativeNotationShowTraditionalClef);
       if (data.isPedagogicalProject != null) setIsPedagogicalProject(!!data.isPedagogicalProject);
       if (Array.isArray(data.chords)) setChords(normalizeLoadedChords(data.chords));
-      if (data.pageDesignDataUrl != null) setPageDesignDataUrl(data.pageDesignDataUrl || null);
-      if (data.pageDesignOpacity != null) setPageDesignOpacity(clampNumber(Number(data.pageDesignOpacity) || 0.25, 0, 1));
+      if ('pageDesignDataUrl' in data) setPageDesignDataUrl(data.pageDesignDataUrl || null);
+      else setPageDesignDataUrl(null);
+      if ('pageDesignOpacity' in data) setPageDesignOpacity(clampNumber(Number(data.pageDesignOpacity) || 0.25, 0, 1));
+      else setPageDesignOpacity(0.25);
       if (data.pageDesignFit === 'cover' || data.pageDesignFit === 'contain') setPageDesignFit(data.pageDesignFit);
+      else setPageDesignFit('cover');
       // pageDesignLayer: alati 'behind' — ignoreeri vanu faile, kus oli 'inFront'
       if (typeof data.pageDesignPositionX === 'number') setPageDesignPositionX(clampNumber(data.pageDesignPositionX, 0, 100));
+      else setPageDesignPositionX(50);
       if (typeof data.pageDesignPositionY === 'number') setPageDesignPositionY(clampNumber(data.pageDesignPositionY, 0, 100));
+      else setPageDesignPositionY(50);
       if (data.pageDesignCrop && typeof data.pageDesignCrop.top === 'number' && typeof data.pageDesignCrop.right === 'number' && typeof data.pageDesignCrop.bottom === 'number' && typeof data.pageDesignCrop.left === 'number') {
         setPageDesignCrop({
           top: clampNumber(data.pageDesignCrop.top, 0, 50),
@@ -3072,7 +3104,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
           bottom: clampNumber(data.pageDesignCrop.bottom, 0, 50),
           left: clampNumber(data.pageDesignCrop.left, 0, 50)
         });
-      }
+      } else setPageDesignCrop({ top: 0, right: 0, bottom: 0, left: 0 });
       if (Array.isArray(data.textBoxes)) setTextBoxes(data.textBoxes);
       if (Array.isArray(data.visibleStaves)) setVisibleStaves(data.visibleStaves);
       if (Array.isArray(data.intermissionLabels)) setIntermissionLabels(data.intermissionLabels);
@@ -3235,7 +3267,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         if (data.notationStyle) setNotationStyle(data.notationStyle);
         else if (data.gridOnlyMode != null) setNotationStyle(data.gridOnlyMode ? 'FIGURENOTES' : 'TRADITIONAL');
         if (data.pixelsPerBeat != null) setPixelsPerBeat(data.pixelsPerBeat);
-        if (data.figurenotesSize != null) setFigurenotesSize(Math.max(12, Math.min(500, data.figurenotesSize)));
+        if (data.figurenotesSize != null) setFigurenotesSize(Math.max(12, Math.min(100, data.figurenotesSize)));
         if (data.figurenotesStems != null) setFigurenotesStems(!!data.figurenotesStems);
       if (data.figurenotesChordLineGap != null) setFigurenotesChordLineGap(Math.max(0, Math.min(20, Number(data.figurenotesChordLineGap))));
       if ('figurenotesChordBlocks' in data) setFigurenotesChordBlocks(!!data.figurenotesChordBlocks);
@@ -3321,14 +3353,19 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         }
         if (Array.isArray(data.chords)) setChords(normalizeLoadedChords(data.chords));
         if (Array.isArray(data.textBoxes)) setTextBoxes(data.textBoxes);
-        if (data.pageDesignDataUrl != null) setPageDesignDataUrl(data.pageDesignDataUrl || null);
-        if (data.pageDesignOpacity != null) setPageDesignOpacity(clampNumber(Number(data.pageDesignOpacity) || 0.25, 0, 1));
+        if ('pageDesignDataUrl' in data) setPageDesignDataUrl(data.pageDesignDataUrl || null);
+        else setPageDesignDataUrl(null);
+        if ('pageDesignOpacity' in data) setPageDesignOpacity(clampNumber(Number(data.pageDesignOpacity) || 0.25, 0, 1));
+        else setPageDesignOpacity(0.25);
         if (data.pageDesignFit === 'cover' || data.pageDesignFit === 'contain') setPageDesignFit(data.pageDesignFit);
+        else setPageDesignFit('cover');
         if (typeof data.pageDesignPositionX === 'number') setPageDesignPositionX(clampNumber(data.pageDesignPositionX, 0, 100));
+        else setPageDesignPositionX(50);
         if (typeof data.pageDesignPositionY === 'number') setPageDesignPositionY(clampNumber(data.pageDesignPositionY, 0, 100));
+        else setPageDesignPositionY(50);
         if (data.pageDesignCrop && typeof data.pageDesignCrop.top === 'number' && typeof data.pageDesignCrop.right === 'number' && typeof data.pageDesignCrop.bottom === 'number' && typeof data.pageDesignCrop.left === 'number') {
           setPageDesignCrop({ top: clampNumber(data.pageDesignCrop.top, 0, 50), right: clampNumber(data.pageDesignCrop.right, 0, 50), bottom: clampNumber(data.pageDesignCrop.bottom, 0, 50), left: clampNumber(data.pageDesignCrop.left, 0, 50) });
-        }
+        } else setPageDesignCrop({ top: 0, right: 0, bottom: 0, left: 0 });
         if (Array.isArray(data.visibleStaves)) setVisibleStaves(data.visibleStaves);
         if (Array.isArray(data.intermissionLabels)) setIntermissionLabels(data.intermissionLabels);
         if (data.documentFontFamily) setDocumentFontFamily(data.documentFontFamily);
@@ -4132,7 +4169,31 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     });
   }, [maxCursor]);
 
-  const playPianoNote = useCallback((pitch, octave, semitonesOffset = 0) => {
+  const getEffectivePlaybackBpm = useCallback(() => {
+    const tempoBox = (textBoxes || []).find((tb) => Number.isFinite(tb?.tempoBpm) && tb.tempoBpm > 0);
+    if (tempoBox) return Math.max(20, Math.min(300, Number(tempoBox.tempoBpm) || 120));
+    return 120;
+  }, [textBoxes]);
+
+  const stopPreviewNote = useCallback(() => {
+    if (activePreviewStopTimeoutRef.current) {
+      clearTimeout(activePreviewStopTimeoutRef.current);
+      activePreviewStopTimeoutRef.current = null;
+    }
+    if (activeSoundfontVoiceRef.current && typeof activeSoundfontVoiceRef.current.stop === 'function') {
+      try { activeSoundfontVoiceRef.current.stop(); } catch (_) {}
+    }
+    activeSoundfontVoiceRef.current = null;
+    if (activeOscillatorStopRef.current) {
+      try { activeOscillatorStopRef.current(); } catch (_) {}
+    }
+    activeOscillatorStopRef.current = null;
+  }, []);
+
+  const playPianoNote = useCallback((pitch, octave, semitonesOffset = 0, options = {}) => {
+    const durationMs = Math.max(40, Number(options.durationMs) || 280);
+    const cutPrevious = options.cutPrevious !== false;
+    if (cutPrevious) stopPreviewNote();
     // accidental: -2 = double flat, -1 = flat, 0 = natural, 1 = sharp, 2 = double sharp. Võtab arvud ja stringid (salvestatud andmed).
     const raw = typeof semitonesOffset === 'number' && Number.isFinite(semitonesOffset)
       ? semitonesOffset
@@ -4155,11 +4216,26 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     const cached = ctx && soundfontCacheRef.current[instrument];
     if (cached) {
       try {
-        cached.play(midiNote, ctx.currentTime, { duration: 0.28 });
+        const voice = cached.play(midiNote, ctx.currentTime, { duration: durationMs / 1000 });
+        activeSoundfontVoiceRef.current = voice || null;
+        activePreviewStopTimeoutRef.current = setTimeout(() => {
+          if (activeSoundfontVoiceRef.current && typeof activeSoundfontVoiceRef.current.stop === 'function') {
+            try { activeSoundfontVoiceRef.current.stop(); } catch (_) {}
+          }
+          activeSoundfontVoiceRef.current = null;
+          activePreviewStopTimeoutRef.current = null;
+        }, durationMs + 40);
         return;
       } catch (_) {}
     }
-    playTone(audioContextRef, freq);
+    activeOscillatorStopRef.current = playTone(audioContextRef, freq, durationMs);
+    activePreviewStopTimeoutRef.current = setTimeout(() => {
+      if (activeOscillatorStopRef.current) {
+        try { activeOscillatorStopRef.current(); } catch (_) {}
+      }
+      activeOscillatorStopRef.current = null;
+      activePreviewStopTimeoutRef.current = null;
+    }, durationMs + 40);
     if (ctx && !soundfontCacheRef.current[instrument]) {
       Soundfont.instrument(ctx, soundfontName, { soundfont: 'FluidR3_GM' })
         .then((player) => {
@@ -4167,7 +4243,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         })
         .catch(() => {});
     }
-  }, [tuningReferenceNote, tuningReferenceOctave, tuningReferenceHz, instrument]);
+  }, [tuningReferenceNote, tuningReferenceOctave, tuningReferenceHz, instrument, stopPreviewNote]);
 
   const startPedagogicalPlayback = useCallback(() => {
     if (!pedagogicalAudioUrl) return;
@@ -4216,6 +4292,49 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     };
   }, [pedagogicalAudioUrl, pedagogicalAudioBpm, notes, stopPedagogicalPlayback, pedagogicalAudioPlaybackRate, playPianoNote]);
 
+  const stopScorePlayback = useCallback((resetCursor = false) => {
+    if (scorePlaybackIntervalRef.current) {
+      clearInterval(scorePlaybackIntervalRef.current);
+      scorePlaybackIntervalRef.current = null;
+    }
+    setIsScorePlaybackPlaying(false);
+    stopPreviewNote();
+    if (resetCursor) setCursorPosition(0);
+  }, [stopPreviewNote]);
+
+  const startScorePlayback = useCallback(() => {
+    if (scorePlaybackIntervalRef.current) return;
+    const withBeats = notesWithExplicitBeats(notes)
+      .map((n) => ({ ...n, beat: Number(n.beat) || 0, duration: noteDurationInQuarterBeats(n) }))
+      .sort((a, b) => a.beat - b.beat);
+    if (!withBeats.length) return;
+
+    const bpm = getEffectivePlaybackBpm();
+    const beatMs = 60000 / bpm;
+    const totalBeats = withBeats.reduce((max, n) => Math.max(max, n.beat + n.duration), 0);
+    const startBeat = Math.max(0, Math.min(totalBeats, Number(cursorPosition) || 0));
+    scorePlaybackStartedAtRef.current = performance.now() - startBeat * beatMs;
+    scorePlaybackLastBeatRef.current = startBeat;
+    setIsScorePlaybackPlaying(true);
+
+    scorePlaybackIntervalRef.current = setInterval(() => {
+      const now = performance.now();
+      const beatNow = Math.max(0, (now - scorePlaybackStartedAtRef.current) / beatMs);
+      const prevBeat = scorePlaybackLastBeatRef.current;
+      for (const n of withBeats) {
+        if (!n.isRest && n.beat > prevBeat && n.beat <= beatNow) {
+          playPianoNote(n.pitch, n.octave ?? 4, n.accidental ?? 0, {
+            durationMs: n.duration * beatMs,
+            cutPrevious: false,
+          });
+        }
+      }
+      scorePlaybackLastBeatRef.current = beatNow;
+      setCursorPosition(Math.min(totalBeats, beatNow));
+      if (beatNow >= totalBeats) stopScorePlayback(false);
+    }, 25);
+  }, [notes, notesWithExplicitBeats, getEffectivePlaybackBpm, cursorPosition, playPianoNote, stopScorePlayback, noteDurationInQuarterBeats]);
+
   const seekPedagogicalAudio = useCallback((deltaSeconds) => {
     if (!pedagogicalAudioUrl) return;
     const audio = pedagogicalAudioRef.current || new Audio(pedagogicalAudioUrl);
@@ -4229,13 +4348,15 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   useEffect(() => {
     return () => {
       if (pedagogicalPlaybackIntervalRef.current) clearInterval(pedagogicalPlaybackIntervalRef.current);
+      if (scorePlaybackIntervalRef.current) clearInterval(scorePlaybackIntervalRef.current);
       if (pedagogicalAudioRef.current) {
         pedagogicalAudioRef.current.pause();
         pedagogicalAudioRef.current = null;
       }
+      stopPreviewNote();
       if (pedagogicalAudioUrlRef.current) URL.revokeObjectURL(pedagogicalAudioUrlRef.current);
     };
-  }, []);
+  }, [stopPreviewNote]);
 
   // Lisa uus noodirida valitud instrumendiga (noodivõti instrumendi konfiguratsioonist). Igal real oma notationMode (T/F/P).
   const addStaff = useCallback((instId) => {
@@ -4828,8 +4949,15 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   const playNoteAtBeatIfEnabled = useCallback((beat) => {
     if (!playNoteOnInsert) return;
     const note = getNoteAtBeat(beat);
-    if (note && !note.isRest) playPianoNote(note.pitch, note.octave ?? 4, note.accidental ?? 0);
-  }, [playNoteOnInsert, getNoteAtBeat, playPianoNote]);
+    if (note && !note.isRest) {
+      const bpm = getEffectivePlaybackBpm();
+      const beatMs = 60000 / bpm;
+      playPianoNote(note.pitch, note.octave ?? 4, note.accidental ?? 0, {
+        durationMs: noteDurationInQuarterBeats(note) * beatMs,
+        cutPrevious: true,
+      });
+    }
+  }, [playNoteOnInsert, getNoteAtBeat, playPianoNote, getEffectivePlaybackBpm, noteDurationInQuarterBeats]);
 
   // Laulutekst: ära luba kursoril jääda nootide vahele – põrka tagasi viimasele kehtivale noodi beat'ile.
   // NB! N-režiimis peab kursor saama liikuda ka tühjale kohale (noodi sisestus), seega seda kaitset seal ei rakenda.
@@ -4855,6 +4983,9 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       const active = document.activeElement;
       const tag = (active?.tagName || '').toLowerCase();
       const isTypingInInput = tag === 'input' || tag === 'textarea' || (active?.getAttribute?.('contenteditable') === 'true');
+      if (isScorePlaybackPlaying && ['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.code)) {
+        stopScorePlayback(false);
+      }
 
       // SEL-mode: brauseri ja süsteemiga seotud võtmed on avatud (kasutaja saab vajadusel teha brauseri/süsteemi toimetusi).
       // N-mode: kursor loeb ainult noodi / laulusõnade / akordi ridu; kõik klahvid blokeeritakse – keskendutakse noodi sisestusele, parandamisele, kustutamisele.
@@ -6063,7 +6194,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     cursorOnMelodyRow, noteIndexAtCursor, playNoteAtBeatIfEnabled,
     joClefFocused, joClefStaffPosition, keySignature, setNotes, setKeySignature, notationMode, addNoteOnTopOfCursor,
     handleSaveShortcut, handlePrint, addedMeasures, timeSignature, setAddedMeasures, setCursorPosition, measureRepeatMarks, setMeasureRepeatMarks,
-    maxCursor, setScoreZoomLevel, durationToBeats, hasFullAccess, pickupEnabled, pickupQuantity, pickupDuration
+    maxCursor, setScoreZoomLevel, durationToBeats, hasFullAccess, pickupEnabled, pickupQuantity, pickupDuration, isScorePlaybackPlaying, stopScorePlayback
   ]);
 
   // JO-võti: klõps väljaspool võtit lõpetab valiku
@@ -6113,8 +6244,22 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   const a4HeightRatio = pageOrientation === 'landscape' ? LAYOUT.A4_HEIGHT_RATIO_LANDSCAPE : LAYOUT.A4_HEIGHT_RATIO;
   // A4 page height for layout (no PAGE_WIDTH_MIN fallback so portrait/landscape proportions are exact).
   const a4PageHeightPx = effectiveLayoutPageWidth * a4HeightRatio;
-  /** Figurenotes row height (beat-box / line) scales with Noodigraafika suurus so barlines and box match note size. */
-  const figurenotesRowHeight = Math.max(FIGURE_ROW_HEIGHT, Math.round(FIGURE_ROW_HEIGHT * figurenotesSize / 75));
+  /**
+   * Figuurnotatsiooni "fit-to-row" kaitse:
+   * Kui kasutaja lukustab nt "4 takti reas", peab ka suur noodigraafika mahtuma lehe piiridesse (portrait/landscape),
+   * muidu jookseb viimane takt visuaalselt üle lehe riba.
+   *
+   * Kui rida on lukustatud (nt 4 takti reas), vähendame vajadusel figuuri suurust automaatselt,
+   * et viimane takt ei läheks üle scorepage piiri.
+   */
+  const figurenotesSizeClamped = Math.max(12, Math.min(100, Number(figurenotesSize) || 65));
+  const effectiveFigurenotesSize = (() => {
+    // Keep user-selected figure size (with hard safety clamp only).
+    return figurenotesSizeClamped;
+  })();
+
+  /** Figurenotes row height (beat-box / line) scales with effective notation size so barlines and box match note size. */
+  const figurenotesRowHeight = Math.max(FIGURE_ROW_HEIGHT, Math.round(FIGURE_ROW_HEIGHT * effectiveFigurenotesSize / 75));
   /** Chord line in figurenotes: only when user has enabled it in chord toolbox; half height of beat-box + 5px, below melody row; gap 0–20 px. */
   const figurenotesChordLineHeight = Math.round(figurenotesRowHeight / 2) + 5;
   /** Vahe meloodia ja akordirea vahel: kasutaja seade (0–20 px) või vähemalt lauluteksti fondi suuruse suhtes (et tekstid ei jookse kokku). */
@@ -6126,7 +6271,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     : figurenotesRowHeight;
   const systemsForScore = useMemo(() => {
     if (notationStyle === 'FIGURENOTES') {
-      const data = { measures, timeSignature, pixelsPerBeat, staffSpacing: figurenotesTotalRowHeight + layoutSystemGap, globalSpacingMultiplier: layoutGlobalSpacingMultiplier, boxesPerRow: effectiveLayoutMeasuresPerLine || 4, pageWidth: effectiveLayoutPageWidth, pageHeight: a4PageHeightPx, lineBreakBefore: effectiveLayoutLineBreakBefore, pageBreakBefore: effectiveLayoutPageBreakBefore };
+      const data = { measures, timeSignature, pixelsPerBeat, staffSpacing: figurenotesTotalRowHeight + layoutSystemGap, globalSpacingMultiplier: layoutGlobalSpacingMultiplier, boxesPerRow: effectiveLayoutMeasuresPerLine || 4, pageWidth: effectiveLayoutPageWidth, pageHeight: a4PageHeightPx, lineBreakBefore: effectiveLayoutLineBreakBefore, pageBreakBefore: effectiveLayoutPageBreakBefore, figurenotesSize: effectiveFigurenotesSize };
       const raw = calculateLayout('figure', pageOrientation === 'landscape' ? 'landscape' : 'portrait', data);
       return raw.map((s, i) => ({ ...s, yOffset: s.yOffset + (systemYOffsets[i] ?? 0) }));
     }
@@ -6162,7 +6307,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     });
     const layoutStaffCount = staves.length || 1;
     if (notationStyle === 'FIGURENOTES') {
-      const data = { measures, timeSignature, pixelsPerBeat, staffSpacing: figurenotesTotalRowHeight + layoutSystemGap, globalSpacingMultiplier: layoutGlobalSpacingMultiplier, boxesPerRow: effectiveLayoutMeasuresPerLine || 4, pageWidth: effectiveLayoutPageWidth, pageHeight: a4PageHeightPx, lineBreakBefore: effectiveLayoutLineBreakBefore, pageBreakBefore: effectiveLayoutPageBreakBefore };
+      const data = { measures, timeSignature, pixelsPerBeat, staffSpacing: figurenotesTotalRowHeight + layoutSystemGap, globalSpacingMultiplier: layoutGlobalSpacingMultiplier, boxesPerRow: effectiveLayoutMeasuresPerLine || 4, pageWidth: effectiveLayoutPageWidth, pageHeight: a4PageHeightPx, lineBreakBefore: effectiveLayoutLineBreakBefore, pageBreakBefore: effectiveLayoutPageBreakBefore, figurenotesSize: effectiveFigurenotesSize };
       const sys = calculateLayout('figure', pageOrientation === 'landscape' ? 'landscape' : 'portrait', data);
       const lastY = sys.length > 0 ? sys[sys.length - 1].yOffset + (systemYOffsets[sys.length - 1] ?? 0) : 0;
       const perStaffCore = sys.length > 0 ? lastY + figurenotesTotalRowHeight + 40 : figurenotesTotalRowHeight + 40;
@@ -6974,10 +7119,6 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                     <input type="radio" name="wizardNotation" checked={wizardNotationMethod === 'figurenotes'} onChange={() => setWizardNotationMethod('figurenotes')} className="w-4 h-4 text-amber-600" />
                     <span className="font-medium text-amber-900">Figuurnotatsioon (värvid ja kujundid)</span>
                   </label>
-                  <label className="flex items-center gap-3 p-3 rounded-lg border-2 border-amber-200 hover:bg-amber-50 cursor-pointer">
-                    <input type="radio" name="wizardNotation" checked={wizardNotationMethod === 'vabanotatsioon'} onChange={() => setWizardNotationMethod('vabanotatsioon')} className="w-4 h-4 text-amber-600" />
-                    <span className="font-medium text-amber-900">Pedagoogiline notatsioon (solfeeg)</span>
-                  </label>
                   <label className="flex items-center gap-3 p-3 rounded-lg border-2 border-amber-300 bg-amber-50/60 hover:bg-amber-100 cursor-pointer">
                     <input type="radio" name="wizardNotation" checked={wizardNotationMethod === 'pedagogical'} onChange={() => setWizardNotationMethod('pedagogical')} className="w-4 h-4 text-amber-600" />
                     <span className="font-medium text-amber-900">
@@ -6995,7 +7136,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                 <p className="text-xs text-amber-700 mb-2">
                   {wizardNotationMethod === 'traditional' && 'Traditsioonilises notatsioonis kuvatakse võtmemärgid (♯ diees, ♭ bemoll).'}
                   {wizardNotationMethod === 'figurenotes' && 'Figuurnotatsioonis noodi sisestus reageerib helistikule: dieesiga toonid (nt D-duur F♯, C♯) = diagonaal paremale üles, bemoliga toonid (nt B-duur E♭, B♭) = diagonaal vasakule üles.'}
-                  {(wizardNotationMethod === 'pedagogical' || wizardNotationMethod === 'vabanotatsioon') && 'Pedagoogilises režiimis JO-võti asetatakse notatsioonivaates vastavalt helistiku toonika asukohale.'}
+                  {wizardNotationMethod === 'pedagogical' && 'Pedagoogilises režiimis JO-võti asetatakse notatsioonivaates vastavalt helistiku toonika asukohale.'}
                 </p>
                 <select
                   value={wizardKeySignature}
@@ -7234,8 +7375,8 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                   className="relative bg-white dark:bg-gray-100 rounded-sm shadow-lg box-border"
                   style={{
                     width: '100%',
-                    maxWidth: getScorePageDimensions(pageOrientation).width,
-                    aspectRatio: pageOrientation === 'landscape' ? '297/210' : '210/297',
+                    maxWidth: getScorePageDimensions(pdfPreviewSvgData?.orientation === 'landscape' ? 'landscape' : pageOrientation).width,
+                    aspectRatio: (pdfPreviewSvgData?.orientation === 'landscape' ? 'landscape' : pageOrientation) === 'landscape' ? '297/210' : '210/297',
                     border: '3px solid #b45309',
                     boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.08)',
                     overflow: 'auto',
@@ -7269,7 +7410,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                     </span>
                   )}
                   <span className="absolute bottom-1 right-1 px-1.5 py-0.5 rounded text-xs font-medium bg-amber-200/95 dark:bg-amber-800/95 text-amber-900 dark:text-amber-100 pointer-events-none" aria-hidden="true">
-                    A4 {pageOrientation === 'landscape' ? '297×210' : '210×297'} mm
+                    A4 {(pdfPreviewSvgData?.orientation === 'landscape' ? 'landscape' : pageOrientation) === 'landscape' ? '297×210' : '210×297'} mm
                   </span>
                 </div>
               </div>
@@ -7538,7 +7679,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                     id="cursor-size-px"
                     type="range"
                     min={1}
-                    max={500}
+                    max={100}
                     value={cursorSizePx}
                     onChange={(e) => { dirtyRef.current = true; setCursorSizePx(Math.max(1, Math.min(500, Number(e.target.value)))); }}
                     className="flex-1 h-2 rounded-lg appearance-none bg-amber-200 accent-amber-600"
@@ -7685,7 +7826,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                     value={figurenotesSize}
                     onChange={(e) => {
                       const v = parseInt(e.target.value, 10);
-                      if (!isNaN(v)) { dirtyRef.current = true; setFigurenotesSize(Math.max(12, Math.min(500, v))); }
+                      if (!isNaN(v)) { dirtyRef.current = true; setFigurenotesSize(Math.max(12, Math.min(100, v))); }
                     }}
                     className="w-16 px-2 py-1.5 rounded border-2 border-amber-200 bg-amber-50 text-amber-900"
                   />
@@ -8059,6 +8200,27 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
               >
                 <Plus className="w-4 h-4" />
                 {`Lisa takt (${addMeasureShortcutLabel})`}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (isScorePlaybackPlaying) stopScorePlayback(false);
+                  else startScorePlayback();
+                }}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg font-semibold text-sm bg-slate-600 text-white shadow-md hover:bg-slate-500 border border-slate-700/50"
+                title="Esita nootidest taasesitus"
+              >
+                {isScorePlaybackPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+                {isScorePlaybackPlaying ? 'Paus' : 'Play'}
+              </button>
+              <button
+                type="button"
+                onClick={() => stopScorePlayback(true)}
+                className="inline-flex items-center gap-2 px-3 py-2 rounded-lg font-semibold text-sm bg-slate-600 text-white shadow-md hover:bg-slate-500 border border-slate-700/50"
+                title="Peata ja vii kursor algusesse"
+              >
+                <X className="w-4 h-4" />
+                Stop
               </button>
 
               {/* Fail – salvestamine ja laadimine */}
@@ -9252,12 +9414,12 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                           <input
                             type="number"
                             min={12}
-                          max={500}
+                          max={100}
                             step={1}
                             value={figurenotesSize}
                             onChange={(e) => {
                               const v = parseInt(e.target.value, 10);
-                            if (!isNaN(v)) { dirtyRef.current = true; setFigurenotesSize(Math.max(12, Math.min(500, v))); }
+                            if (!isNaN(v)) { dirtyRef.current = true; setFigurenotesSize(Math.max(12, Math.min(100, v))); }
                             }}
                             className="w-20 px-2 py-1.5 rounded border-2 border-amber-200 bg-amber-50 text-amber-900"
                           />
@@ -10200,7 +10362,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                   } : undefined}
                   translateLabel={t}
                   chords={chords}
-                  figurenotesSize={figurenotesSize}
+                  figurenotesSize={effectiveFigurenotesSize}
                   figurenotesStems={figurenotesStems}
                   figurenotesChordLineGap={figurenotesChordBlocks ? effectiveChordLineGap : 0}
                   figurenotesChordBlocks={figurenotesChordBlocks}
@@ -10434,7 +10596,14 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                       showMidiSelect={true}
                       onNotePlay={handleNotePlay}
                       figurenotesColors={notationStyle === 'FIGURENOTES' ? FIGURENOTES_COLORS : null}
-                      getKeyColor={notationMode === 'vabanotatsioon' ? (pitch, oct) => getPedagogicalSymbol(keySignature, joClefStaffPosition, pitch, oct).color : null}
+                      getKeyColor={notationMode === 'vabanotatsioon'
+                        ? (pitch, oct) => {
+                          const cfg = instrumentConfig?.[instrument];
+                          if (cfg?.colorSystem === 'chromaNotes') return getChromaNotesColor(pitch, 0);
+                          if (cfg?.colorSystem === 'schoolHandbells') return getSchoolHandbellColor(pitch, 0);
+                          return getPedagogicalSymbol(keySignature, joClefStaffPosition, pitch, oct).color;
+                        }
+                        : null}
                       keySignature={keySignature}
                       keyboardPlaysPiano={pianoStripVisible && (notationStyle === 'FIGURENOTES' || notationMode === 'vabanotatsioon')}
                       ignoreKeyboardWhenModalOpen={newWorkSetupOpen || saveCloudDialogOpen || googleLoadPickerOpen || settingsOpen || shortcutsOpen || showPdfExportPreview}
@@ -10498,7 +10667,11 @@ function playTone(audioContextRef, frequency, durationMs = 280) {
     gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + durationMs / 1000);
     osc.start(ctx.currentTime);
     osc.stop(ctx.currentTime + durationMs / 1000);
+    return () => {
+      try { osc.stop(); } catch (_) {}
+    };
   } catch (_) { /* ignore */ }
+  return null;
 }
 
 // For TAB: given pitch+octave and tuning array (low to high), return { stringIndex (0=low), fret } with lowest fret preferred.
