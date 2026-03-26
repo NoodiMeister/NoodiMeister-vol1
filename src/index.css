@@ -89,7 +89,7 @@ html, body, #root {
 .nm-demo-intro--exit-crossfade .nm-demo-intro__logo {
   animation: none !important;
   opacity: 1;
-  transform: translate3d(0, 9vh, 0) scale(1);
+  transform: translate3d(0, calc(9vh - 10px), 0) scale(1);
 }
 .nm-demo-intro__bg {
   position: absolute;
@@ -374,12 +374,12 @@ html, body, #root {
   }
   82% {
     opacity: 1;
-    transform: translate3d(0, 9vh, 0) scale(1.08);
+    transform: translate3d(0, calc(9vh - 10px), 0) scale(1.08);
     filter: drop-shadow(0 26px 80px rgba(0, 0, 0, 0.55));
   }
   100% {
     opacity: 1;
-    transform: translate3d(0, 9vh, 0) scale(1);
+    transform: translate3d(0, calc(9vh - 10px), 0) scale(1);
   }
 }
 @keyframes nmInlineClefOrbit {

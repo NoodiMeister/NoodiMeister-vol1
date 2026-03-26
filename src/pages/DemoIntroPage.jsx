@@ -1,9 +1,14 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { INTRO_TO_LANDING_CROSSFADE_MS, useIntroCrossfade } from '../context/IntroCrossfadeContext';
 
-const BUILD_TAG = '20260326-demo-intro-sound-button-v31';
-const AUDIO_SRC = `/demo-intro.mp3?v=${BUILD_TAG}`;
-const LOGO_SRC = `/logo-overlay.html?v=${BUILD_TAG}`;
+const BUILD_TAG = '20260326-demo-intro-cache-bust-v32';
+const runtimeNoCache =
+  typeof window !== 'undefined'
+    ? new URLSearchParams(window.location.search).get('nocache') || ''
+    : '';
+const CACHE_TAG = runtimeNoCache ? `${BUILD_TAG}-${runtimeNoCache}` : BUILD_TAG;
+const AUDIO_SRC = `/demo-intro.mp3?v=${CACHE_TAG}`;
+const LOGO_SRC = `/logo-overlay.html?v=${CACHE_TAG}`;
 /**
  * Crossfade: delay step 0.1·T so at global t=k·T+0.15T fading beam is at 15% (mid-fall) and next at 5% (mid-rise) → same opacity (linear).
  * Pulse first 20% of T; 20–100% stable dim (keyframes 0%/20%/100% same opacity → seamless infinite loop). +2s per beam → T = 17200 + 5×2000. Order 1→4→2→5→3.
@@ -35,7 +40,7 @@ const BEAM_STYLES = [
     key: 'tc',
     background:
       'linear-gradient(180deg, rgba(255,252,240,0) 0%, rgba(255,252,240,0) 36%, rgba(28,18,8,0.12) 72%, rgba(14,9,4,0.34) 100%), radial-gradient(ellipse 120% 70% at 50% 0%, rgba(255,252,232,0.55) 0%, rgba(255,220,160,0.24) 38%, transparent 72%), linear-gradient(180deg, rgba(255,250,226,0) 0%, rgba(255,250,226,0.68) 18%, rgba(255,220,152,0.36) 52%, rgba(255,185,95,0.14) 76%, rgba(0,0,0,0) 100%)',
-    clipPath: 'polygon(49.4% 0%, 50.6% 0%, 74% 62%, 26% 62%)'
+    clipPath: 'polygon(49.2% 0%, 50.8% 0%, 90% 76%, 10% 76%)'
   },
   {
     key: 'rt',
@@ -149,13 +154,13 @@ export default function DemoIntroPage() {
       style={{ '--nm-demo-crossfade-ms': `${INTRO_TO_LANDING_CROSSFADE_MS}ms` }}
       role="dialog"
       aria-label="Demo intro"
-      onMouseDown={(e) => {
+      onClick={(e) => {
         if (e.target?.closest?.('.nm-demo-intro__sound-btn')) return;
         beginExit();
       }}
-      onTouchStart={(e) => {
-        if (e.target?.closest?.('.nm-demo-intro__sound-btn')) return;
-        beginExit();
+      onContextMenu={(e) => {
+        // Allow opening browser context menu / DevTools without triggering intro exit.
+        e.stopPropagation();
       }}
     >
       <audio

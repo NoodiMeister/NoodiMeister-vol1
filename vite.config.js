@@ -144,13 +144,27 @@ export default defineConfig({
     },
   },
   server: {
-    host: '127.0.0.1',  // vältib uv_interface_addresses viga (nagu preview)
-    port: 5173,
-    strictPort: false, // use next free port if 5173 is taken
-    open: true,   // open browser automatically
+    host: '127.0.0.1', // vältib uv_interface_addresses viga (nagu preview)
+    // Fikseeritud port — sama mis AGENTS.md / demo-intro (ära lase Vitel vaikimisi 5173 peale hüpata).
+    port: 5197,
+    strictPort: true,
+    open: '/demo-intro',
+    // Devis ära kasuta browser cache'i, et iga muudatus tuleks kohe nähtavale.
+    headers: {
+      'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+      Pragma: 'no-cache',
+      Expires: '0',
+      'Surrogate-Control': 'no-store',
+    },
   },
   preview: {
     host: '127.0.0.1',  // vältib uv_interface_addresses viga (Node/OS)
     port: 4177,
+    headers: {
+      'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+      Pragma: 'no-cache',
+      Expires: '0',
+      'Surrogate-Control': 'no-store',
+    },
   },
 });

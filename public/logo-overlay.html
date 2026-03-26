@@ -58,6 +58,9 @@
 
     <script type="module">
       const stageEl = document.getElementById('clefStage');
+      const bgEl = document.getElementById('bg');
+      const cacheBust = new URLSearchParams(window.location.search).get('v');
+      if (bgEl && cacheBust) bgEl.src = `/logo-overlay-bg.svg?v=${encodeURIComponent(cacheBust)}`;
 
       try {
         const [THREE, { SVGLoader }] = await Promise.all([
