@@ -25,7 +25,7 @@ export function IntroCrossfadeProvider({ children }) {
   useEffect(() => {
     if (!crossfade) return undefined;
     const id = window.setTimeout(() => {
-      navigate('/', { replace: true });
+      navigate('/landing', { replace: true });
       setCrossfade(null);
     }, crossfade.durationMs);
     return () => window.clearTimeout(id);

@@ -50,12 +50,6 @@ function isLoggedIn() {
   return authStorage.isLoggedIn();
 }
 
-/** Esilehe asemel suuna sisselogitud kasutaja otse Minu kontole. */
-function LandingOrRedirect() {
-  if (isLoggedIn()) return <Navigate to="/konto" replace />;
-  return <LandingPage />;
-}
-
 /** Login peab avanema alati otse, et kasutaja saaks kontot vahetada ilma vahepealse konto-leheta. */
 function LoginOrRedirect() {
   return <LoginPage />;
@@ -257,7 +251,8 @@ function AppRoutes() {
           <Route path="/administraator/register" element={<AdminRegistrationPage />} />
           <Route path="/administraator-registreerimine" element={<Navigate to="/administraator/register" replace />} />
           <Route path="/admin" element={<Navigate to="/administraator" replace />} />
-          <Route path="/" element={<LandingOrRedirect />} />
+          <Route path="/landing" element={<LandingPage />} />
+          <Route path="/" element={<Navigate to="/demo-intro" replace />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Suspense>
