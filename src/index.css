@@ -222,9 +222,10 @@ html, body, #root {
   transform-style: preserve-3d;
 }
 .nm-demo-intro__sound-btn {
-  position: absolute;
-  top: 0;
-  right: 0;
+  position: fixed;
+  left: 50%;
+  bottom: max(22px, env(safe-area-inset-bottom, 0px) + 10px);
+  transform: translateX(-50%);
   z-index: 6;
   border: 1px solid rgba(255, 255, 255, 0.22);
   background: rgba(0, 0, 0, 0.28);
