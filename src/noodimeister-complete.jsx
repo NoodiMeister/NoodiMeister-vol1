@@ -8210,7 +8210,9 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                 className="inline-flex items-center gap-2 px-4 py-2 rounded-lg font-semibold text-sm bg-slate-600 text-white shadow-md hover:bg-slate-500 border border-slate-700/50"
                 title="Esita nootidest taasesitus"
               >
-                {isScorePlaybackPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+                {isScorePlaybackPlaying
+                  ? (icons?.Pause ? <icons.Pause className="w-4 h-4" /> : null)
+                  : (icons?.Play ? <icons.Play className="w-4 h-4" /> : null)}
                 {isScorePlaybackPlaying ? 'Paus' : 'Play'}
               </button>
               <button
