@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { INTRO_TO_LANDING_CROSSFADE_MS, useIntroCrossfade } from '../context/IntroCrossfadeContext';
 
-const BUILD_TAG = '20260325-demo-intro-beam5-mirror-lb-v29';
+const BUILD_TAG = '20260326-demo-intro-crossfade-space-enter-click-v30';
 const AUDIO_SRC = `/demo-intro.mp3?v=${BUILD_TAG}`;
 const LOGO_SRC = `/logo-overlay.html?v=${BUILD_TAG}`;
 /**
@@ -69,8 +69,8 @@ export default function DemoIntroPage() {
   const helpText = useMemo(() => {
     if (error) return error;
     if (isExiting) return '...';
-    if (phase === 'ended') return 'Vajuta SPACE, et jätkata';
-    if (showTapToStart || !audioPlaying) return 'Klõpsa või vajuta SPACE, et alustada heli';
+    if (phase === 'ended') return 'Vajuta SPACE, ENTER või klõpsa, et jätkata';
+    if (showTapToStart || !audioPlaying) return 'Vajuta SPACE/ENTER või klõpsa, et minna esilehele';
     return 'Intro…';
   }, [audioPlaying, error, isExiting, phase, showTapToStart]);
 
@@ -92,7 +92,12 @@ export default function DemoIntroPage() {
   };
 
   const beginExit = useCallback(() => {
-    if (phase !== 'ended') return;
+    if (phase === 'exit') return;
+    const el = audioRef.current;
+    if (el && !el.paused) {
+      el.pause();
+      el.currentTime = 0;
+    }
     setPhase('exit');
     startCrossfade(INTRO_TO_LANDING_CROSSFADE_MS);
   }, [phase, startCrossfade]);
@@ -111,17 +116,14 @@ export default function DemoIntroPage() {
       const isTypingTarget = tag === 'INPUT' || tag === 'TEXTAREA' || el?.isContentEditable;
       if (isTypingTarget) return;
 
-      if (e.code === 'Space' || e.key === ' ') {
+      if (e.code === 'Space' || e.key === ' ' || e.code === 'Enter' || e.key === 'Enter') {
         e.preventDefault();
-        if (phase === 'ended') {
-          beginExit();
-        }
-        else startPlayback();
+        beginExit();
       }
     };
     window.addEventListener('keydown', onKeyDown, { passive: false });
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [beginExit, phase, showTapToStart]);
+  }, [beginExit]);
 
   return (
     <div
@@ -130,12 +132,10 @@ export default function DemoIntroPage() {
       role="dialog"
       aria-label="Demo intro"
       onMouseDown={() => {
-        const el = audioRef.current;
-        if (showTapToStart || (el && el.paused && (phase === 'enter' || phase === 'playing'))) startPlayback();
+        beginExit();
       }}
       onTouchStart={() => {
-        const el = audioRef.current;
-        if (showTapToStart || (el && el.paused && (phase === 'enter' || phase === 'playing'))) startPlayback();
+        beginExit();
       }}
     >
       <audio
