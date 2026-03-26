@@ -269,6 +269,8 @@ html, body, #root {
   aspect-ratio: 1024 / 558;
   height: auto;
   background: transparent;
+  /* Iframe can swallow click/touch events; keep intro exit gestures on the parent layer. */
+  pointer-events: none;
 }
 .nm-demo-intro__logo .nm-logo-svg__clef {
   transform-box: fill-box;

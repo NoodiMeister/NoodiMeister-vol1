@@ -139,7 +139,14 @@ export default function DemoIntroPage() {
       const isTypingTarget = tag === 'INPUT' || tag === 'TEXTAREA' || el?.isContentEditable;
       if (isTypingTarget) return;
 
-      if (e.code === 'Space' || e.key === ' ' || e.code === 'Enter' || e.key === 'Enter') {
+      if (
+        e.code === 'Space' ||
+        e.key === ' ' ||
+        e.code === 'Enter' ||
+        e.key === 'Enter' ||
+        e.code === 'Escape' ||
+        e.key === 'Escape'
+      ) {
         e.preventDefault();
         beginExit();
       }
@@ -155,6 +162,10 @@ export default function DemoIntroPage() {
       role="dialog"
       aria-label="Demo intro"
       onClick={(e) => {
+        if (e.target?.closest?.('.nm-demo-intro__sound-btn')) return;
+        beginExit();
+      }}
+      onTouchStart={(e) => {
         if (e.target?.closest?.('.nm-demo-intro__sound-btn')) return;
         beginExit();
       }}
