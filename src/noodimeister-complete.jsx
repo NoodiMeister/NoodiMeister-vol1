@@ -6,6 +6,7 @@ import { InteractivePiano } from './piano';
 import * as googleDrive from './services/googleDrive';
 import * as oneDrive from './services/oneDrive';
 import * as authStorage from './services/authStorage';
+import { refreshGoogleTokenSilently, refreshMicrosoftTokenSilently } from './services/cloudTokenRefresh';
 import { JoClefSymbol, TrebleClefSymbol, BassClefSymbol } from './components/ClefSymbols';
 import { AppLogo } from './components/AppLogo';
 import { NoteHead } from './components/NoteHead';
@@ -3394,14 +3395,31 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     }
   }, [clearDirty]);
 
+  const isAuthTokenError = useCallback((err) => {
+    const msg = String(err?.message || '').toLowerCase();
+    return msg.includes('token')
+      || msg.includes('401')
+      || msg.includes('unauthorized')
+      || msg.includes('invalid_grant')
+      || msg.includes('aegunud');
+  }, []);
+
   // Salvesta pilve: kui on salvestuskaust seadistatud, salvesta otse sinna; vastasel juhul ava dialoog.
   const saveToCloud = useCallback(async () => {
-    const token = googleDrive.getStoredToken();
-    if (!token) {
-      setSaveFeedback('Logi sisse Google\'iga (Drive luba)');
-      setTimeout(() => setSaveFeedback(''), 3000);
-      return;
-    }
+    const run = async (allowTokenRefresh = true) => {
+      let token = googleDrive.getStoredToken();
+      if (!token && allowTokenRefresh) {
+        try {
+          token = await refreshGoogleTokenSilently();
+        } catch (_) {
+          token = null;
+        }
+      }
+      if (!token) {
+        setSaveFeedback('Logi sisse Google\'iga (Drive luba)');
+        setTimeout(() => setSaveFeedback(''), 3000);
+        return;
+      }
     const data = exportScoreToJSON();
     const json = JSON.stringify(data, null, 2);
     // Ära salvesta tühja või vigast sisu (vältib faili tühjendamist Drive'is).
@@ -3437,6 +3455,12 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         setSaveFeedback('Salvestatud pilve (sama fail)!');
         setTimeout(() => setSaveFeedback(''), 2500);
       } catch (e) {
+        if (allowTokenRefresh && isAuthTokenError(e)) {
+          try {
+            await refreshGoogleTokenSilently();
+            return run(false);
+          } catch (_) {}
+        }
         setSaveFeedback(e?.message || 'Pilve salvestamine ebaõnnestus');
         setTimeout(() => setSaveFeedback(''), 3000);
       }
@@ -3457,13 +3481,21 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         setSaveFeedback('Salvestatud pilve!');
         setTimeout(() => setSaveFeedback(''), 2500);
       } catch (e) {
+        if (allowTokenRefresh && isAuthTokenError(e)) {
+          try {
+            await refreshGoogleTokenSilently();
+            return run(false);
+          } catch (_) {}
+        }
         setSaveFeedback(e?.message || 'Pilve salvestamine ebaõnnestus');
         setTimeout(() => setSaveFeedback(''), 3000);
       }
       return;
     }
     setSaveCloudDialogOpen(true);
-  }, [exportScoreToJSON, sessionSaveFolderId, openedCloudFile, t]);
+    };
+    return run(true);
+  }, [exportScoreToJSON, sessionSaveFolderId, openedCloudFile, t, isAuthTokenError]);
 
   // Vali olemasolev kaust (Picker) ja salvesta sinna. Lisa kaust nimekirja, et järgmine salvestamine kasutaks sama kausta.
   const saveToCloudPickExisting = useCallback(async () => {
@@ -3531,12 +3563,20 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
 
   // Salvesta OneDrive'i (Microsoft): kui fail on avatud pilvest, kirjuta sama fileId üle; muidu uus fail kausta/juurkausta.
   const saveToOneDrive = useCallback(async () => {
-    const token = authStorage.getStoredMicrosoftTokenFromAuth();
-    if (!token) {
-      setSaveFeedback(t('feedback.loginMicrosoft') || 'Logi sisse Microsoftiga (OneDrive luba)');
-      setTimeout(() => setSaveFeedback(''), 3000);
-      return;
-    }
+    const run = async (allowTokenRefresh = true) => {
+      let token = authStorage.getStoredMicrosoftTokenFromAuth();
+      if (!token && allowTokenRefresh) {
+        try {
+          token = await refreshMicrosoftTokenSilently();
+        } catch (_) {
+          token = null;
+        }
+      }
+      if (!token) {
+        setSaveFeedback(t('feedback.loginMicrosoft') || 'Logi sisse Microsoftiga (OneDrive luba)');
+        setTimeout(() => setSaveFeedback(''), 3000);
+        return;
+      }
     const data = exportScoreToJSON();
     const json = JSON.stringify(data, null, 2);
     if (!json || json.length < 50 || !Array.isArray(data?.staves) || data.staves.length === 0) {
@@ -3572,6 +3612,12 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         setSaveFeedback(t('feedback.savedToCloud') || 'Salvestatud pilve (sama fail)!');
         setTimeout(() => setSaveFeedback(''), 2500);
       } catch (e) {
+        if (allowTokenRefresh && isAuthTokenError(e)) {
+          try {
+            await refreshMicrosoftTokenSilently();
+            return run(false);
+          } catch (_) {}
+        }
         setSaveFeedback(e?.message || 'Pilve salvestamine ebaõnnestus');
         setTimeout(() => setSaveFeedback(''), 3000);
       }
@@ -3594,10 +3640,18 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       setSaveFeedback(t('feedback.savedToCloud') || 'Salvestatud pilve!');
       setTimeout(() => setSaveFeedback(''), 2500);
     } catch (e) {
+      if (allowTokenRefresh && isAuthTokenError(e)) {
+        try {
+          await refreshMicrosoftTokenSilently();
+          return run(false);
+        } catch (_) {}
+      }
       setSaveFeedback(e?.message || 'Pilve salvestamine ebaõnnestus');
       setTimeout(() => setSaveFeedback(''), 3000);
     }
-  }, [exportScoreToJSON, sessionSaveFolderId, openedCloudFile, t]);
+    };
+    return run(true);
+  }, [exportScoreToJSON, sessionSaveFolderId, openedCloudFile, t, isAuthTokenError]);
 
   const setDocumentNotationMode = useCallback((nextMode) => {
     if (nextMode === 'figurenotes') {
@@ -3647,19 +3701,34 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   }, [openedCloudFile, songTitle, t, sessionSaveFolderId]);
 
   /** Cmd/Ctrl+S: alati uuenda localStorage (brauser); kui sisse logitud, salvesta ka pilve. Avatud pilve fail uuendatakse sama fileId-ga (mitte uut koopiat). */
-  const handleSaveShortcut = useCallback(() => {
-    saveToStorageSync(); // alati brauseri salvestus üle, et kohalik ja pilv oleks sünkroonis
+  const handleSaveShortcut = useCallback(async () => {
     if (!isLoggedIn()) {
       saveToStorage(); // tagasiside
       return;
     }
     const user = authStorage.getLoggedInUser();
     const provider = user?.provider;
-    if (provider === 'google' && googleDrive.getStoredToken()) {
+    if (provider === 'google') {
+      if (!googleDrive.getStoredToken()) {
+        try { await refreshGoogleTokenSilently(); } catch (_) {}
+      }
+      if (!googleDrive.getStoredToken()) {
+        setSaveFeedback(t('feedback.loginGoogle') || 'Logi sisse Google\'iga (Drive luba)');
+        setTimeout(() => setSaveFeedback(''), 3000);
+        return;
+      }
       saveToCloud();
       return;
     }
-    if (provider === 'microsoft' && authStorage.getStoredMicrosoftTokenFromAuth()) {
+    if (provider === 'microsoft') {
+      if (!authStorage.getStoredMicrosoftTokenFromAuth()) {
+        try { await refreshMicrosoftTokenSilently(); } catch (_) {}
+      }
+      if (!authStorage.getStoredMicrosoftTokenFromAuth()) {
+        setSaveFeedback(t('feedback.loginMicrosoft') || 'Logi sisse Microsoftiga (OneDrive luba)');
+        setTimeout(() => setSaveFeedback(''), 3000);
+        return;
+      }
       saveToOneDrive();
       return;
     }
@@ -3668,9 +3737,9 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       setTimeout(() => setSaveFeedback(''), 1800);
       return;
     }
-    setSaveFeedback(t('feedback.saved') || 'Salvestatud!');
-    setTimeout(() => setSaveFeedback(''), 1800);
-  }, [isLoggedIn, saveToStorageSync, saveToStorage, saveToCloud, saveToOneDrive]);
+    setSaveFeedback(t('feedback.cloudError') || 'Pilve salvestamine ebaõnnestus');
+    setTimeout(() => setSaveFeedback(''), 3000);
+  }, [isLoggedIn, saveToStorage, saveToCloud, saveToOneDrive, t]);
 
   const loadGoogleDriveProjectById = useCallback(async (fileId) => {
     const token = googleDrive.getStoredToken?.();
