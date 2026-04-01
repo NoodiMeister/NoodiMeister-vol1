@@ -432,7 +432,7 @@ export function TraditionalNotationView({
   const tinWhistleFontFamily = hasBundledOptionalFont('TinWhistleTab') ? 'TinWhistleTab' : 'Noto Sans';
   const recorderFontFamily = hasBundledOptionalFont('RecorderFont') ? 'RecorderFont' : 'Noto Sans';
   const tinWhistleFingeringScale = typeof tinWhistleLinkedFingeringScale === 'number' && Number.isFinite(tinWhistleLinkedFingeringScale) && tinWhistleLinkedFingeringScale > 0
-    ? Math.min(3, Math.max(0.35, tinWhistleLinkedFingeringScale))
+    ? Math.min(20, Math.max(0.35, tinWhistleLinkedFingeringScale))
     : 1;
   const instrumentRangeMidi = React.useMemo(() => {
     return resolveInstrumentRangeMidi(instrument, keySignature, instrumentRange);

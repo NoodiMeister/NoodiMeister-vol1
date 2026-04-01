@@ -1117,8 +1117,8 @@ function resolveSpellingForMidiInKey(midiNumber, keySignature = 'C') {
 /** Lingitud iirivile SVG (A-variant): 50% = vana 200%; igal +5% sammul suureneb diagramm veel. */
 function tinWhistleFingeringUiPercentToScale(uiPercent) {
   const p = typeof uiPercent === 'number' && Number.isFinite(uiPercent) ? uiPercent : 50;
-  const s = 2 + ((p - 50) / 150);
-  return Math.max(2, Math.min(3, s));
+  const s = p / 25;
+  return Math.max(2, Math.min(20, s));
 }
 
 /** Laadimine: uus võti `tinWhistleLinkedFingeringUiPercent`; vana lineaarne % migreeritakse nii, et vana 200% = uus 50%. */
@@ -1127,12 +1127,12 @@ function readTinWhistleFingeringUiPercentFromPersisted(data) {
   if (data.tinWhistleLinkedFingeringUiPercent != null) {
     const p = Number(data.tinWhistleLinkedFingeringUiPercent);
     if (!Number.isFinite(p)) return null;
-    return Math.round(Math.max(50, Math.min(200, p)));
+    return Math.round(Math.max(50, Math.min(500, p)));
   }
   if (data.tinWhistleLinkedFingeringScalePercent != null) {
     const pOld = Number(data.tinWhistleLinkedFingeringScalePercent);
     if (!Number.isFinite(pOld)) return null;
-    return Math.round(Math.max(50, Math.min(200, 250 - pOld)));
+    return Math.round(Math.max(50, Math.min(500, 250 - pOld)));
   }
   return null;
 }
@@ -10753,14 +10753,14 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                         id="tw-linked-fingering-size"
                         type="number"
                         min={50}
-                        max={200}
+                        max={500}
                         step={1}
                         value={tinWhistleLinkedFingeringScalePercent}
                         onChange={(e) => {
                           const raw = Number(e.target.value);
                           if (!Number.isFinite(raw)) return;
                           dirtyRef.current = true;
-                          setTinWhistleLinkedFingeringScalePercent(Math.round(Math.max(50, Math.min(200, raw))));
+                          setTinWhistleLinkedFingeringScalePercent(Math.round(Math.max(50, Math.min(500, raw))));
                         }}
                         className="w-20 px-2 py-1.5 rounded border border-slate-300 text-slate-900 text-sm font-medium tabular-nums"
                       />
@@ -10770,7 +10770,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                         className="px-2 py-1 rounded border border-slate-300 text-slate-800 text-sm font-semibold hover:bg-slate-50"
                         onClick={() => {
                           dirtyRef.current = true;
-                          setTinWhistleLinkedFingeringScalePercent((p) => Math.min(200, Math.round(p) + 5));
+                          setTinWhistleLinkedFingeringScalePercent((p) => Math.min(500, Math.round(p) + 5));
                         }}
                         aria-label={t('inst.tinWhistleLinkedFingeringSizeInc')}
                       >
