@@ -80,6 +80,21 @@ const RHYTHM_PATTERN_ICONS = {
       <line x1="5" y1="5" x2="19" y2="5" strokeWidth="1.5" strokeLinecap="round"/>
     </svg>
   ),
+  '2/8+2/8': (
+    <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5" stroke="currentColor" strokeWidth="1.15">
+      {[3.5, 8.5, 15.5, 20.5].map((cx, i) => <ellipse key={i} cx={cx} cy="17" rx="1.8" ry="1.5" fill="currentColor"/>)}
+      {[4.7, 9.7, 16.7, 21.7].map((x, i) => <line key={i} x1={x} y1="17" x2={x} y2="5" strokeWidth="1.15"/>)}
+      <line x1="2.2" y1="5" x2="10.4" y2="5" strokeWidth="1.35" strokeLinecap="round"/>
+      <line x1="14.2" y1="5" x2="22.4" y2="5" strokeWidth="1.35" strokeLinecap="round"/>
+    </svg>
+  ),
+  '4/8': (
+    <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5" stroke="currentColor" strokeWidth="1.15">
+      {[3.5, 8.5, 15.5, 20.5].map((cx, i) => <ellipse key={i} cx={cx} cy="17" rx="1.8" ry="1.5" fill="currentColor"/>)}
+      {[4.7, 9.7, 16.7, 21.7].map((x, i) => <line key={i} x1={x} y1="17" x2={x} y2="5" strokeWidth="1.15"/>)}
+      <line x1="2.2" y1="5" x2="22.4" y2="5" strokeWidth="1.35" strokeLinecap="round"/>
+    </svg>
+  ),
   '4/16': (
     <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5" stroke="currentColor" strokeWidth="1.1">
       {[4, 8, 14, 20].map((cx, i) => <ellipse key={i} cx={cx} cy="17" rx="1.8" ry="1.5" fill="currentColor"/>)}
@@ -134,6 +149,43 @@ const RHYTHM_PATTERN_ICONS = {
       <line x1="7" y1="17" x2="7" y2="5" strokeWidth="1.1"/><line x1="12" y1="17" x2="12" y2="5" strokeWidth="1.1"/><line x1="17" y1="17" x2="17" y2="5" strokeWidth="1.1"/>
       <line x1="4" y1="5" x2="20" y2="5" strokeWidth="1.3" strokeLinecap="round"/>
       <text x="12" y="2" textAnchor="middle" fontSize="5.5" fontWeight="bold" fill="currentColor">3</text>
+    </svg>
+  ),
+  'beam:auto': (
+    <svg viewBox="0 0 24 24" fill="none" className="w-5 h-5" stroke="currentColor" strokeWidth="1.2">
+      <line x1="3" y1="16" x2="21" y2="16" />
+      <line x1="3" y1="8" x2="21" y2="8" />
+      <text x="12" y="13" textAnchor="middle" fontSize="5" fill="currentColor">A</text>
+    </svg>
+  ),
+  'beam:2/8': (
+    <svg viewBox="0 0 24 24" fill="none" className="w-5 h-5" stroke="currentColor" strokeWidth="1.2">
+      <line x1="2" y1="8" x2="10" y2="8" />
+      <line x1="14" y1="8" x2="22" y2="8" />
+      <line x1="3" y1="16" x2="21" y2="16" />
+      <text x="12" y="13" textAnchor="middle" fontSize="5" fill="currentColor">2</text>
+    </svg>
+  ),
+  'beam:3/8': (
+    <svg viewBox="0 0 24 24" fill="none" className="w-5 h-5" stroke="currentColor" strokeWidth="1.2">
+      <line x1="2" y1="8" x2="22" y2="8" />
+      <line x1="3" y1="16" x2="21" y2="16" />
+      <text x="12" y="13" textAnchor="middle" fontSize="5" fill="currentColor">3</text>
+    </svg>
+  ),
+  'beam:4/8': (
+    <svg viewBox="0 0 24 24" fill="none" className="w-5 h-5" stroke="currentColor" strokeWidth="1.2">
+      <line x1="2" y1="8" x2="22" y2="8" />
+      <line x1="3" y1="16" x2="21" y2="16" />
+      <text x="12" y="13" textAnchor="middle" fontSize="5" fill="currentColor">4</text>
+    </svg>
+  ),
+  'beam:3/16': (
+    <svg viewBox="0 0 24 24" fill="none" className="w-5 h-5" stroke="currentColor" strokeWidth="1.2">
+      <line x1="2" y1="7" x2="22" y2="7" />
+      <line x1="2" y1="10" x2="22" y2="10" />
+      <line x1="3" y1="16" x2="21" y2="16" />
+      <text x="12" y="13" textAnchor="middle" fontSize="4.3" fill="currentColor">3/16</text>
     </svg>
   ),
 };

@@ -35,6 +35,13 @@ import {
 } from '../notation/BeamCalculation';
 import { renderFiguredBassFigurations } from '../notation/figuredBassFigurations';
 import { hasBundledOptionalFont } from '../export/exportFontAssets';
+import { getAccidentalForPitchInKey } from '../utils/notationConstants';
+import {
+  resolveInstrumentRangeMidi,
+  toNoteMidi,
+  isMidiOutOfInstrumentRange,
+} from '../notation/instrumentRangeRules';
+import { getRepeatMarkPlacement } from '../notation/repeatMarksEngine';
 
 const LAYOUT = { MARGIN_LEFT: 60, CLEF_WIDTH: 45, MEASURE_MIN_WIDTH: 28 };
 
@@ -55,6 +62,8 @@ const STAFF_LEFT_WITHOUT_BRACE = 10;
 const GAP_BEFORE_CLEF_PX = 6;
 /** Treble clef anchor moved one staff line upward for current score alignment. */
 const TREBLE_CLEF_LINE_INDEX = 2; // 0=top line ... 4=bottom line
+const OUT_OF_RANGE_COLOR = '#dc2626';
+
 
 // SMuFL noteheads (Leland)
 const SMUFL = {
@@ -260,10 +269,13 @@ export function TraditionalNotationView({
   showStaffSpacerHandles = false,
   onStaffSpacerMouseDown, // (systemIndex) => (e) => { ... } – ridade vertikaalne liigutamine (Layout)
   instrument = 'piano',
+  instrumentRange = null,
   instrumentNotationVariant = 'standard',
   connectedBarlines = false,
   staffIndexInScore = 0,
   systemTotalHeight,
+  connectedBarlineY1Offset = null,
+  connectedBarlineY2Offset = null,
   themeColors,
   onRemoveRepeatMark, // (measureIndex, markType: 'repeatStart'|'repeatEnd'|'segno'|'coda'|'volta1'|'volta2') => void
 }) {
@@ -277,6 +289,9 @@ export function TraditionalNotationView({
   const lastPitchRef = useRef(null); // avoid duplicate updates when pitch unchanged
   const tinWhistleFontFamily = hasBundledOptionalFont('TinWhistleTab') ? 'TinWhistleTab' : 'Noto Sans';
   const recorderFontFamily = hasBundledOptionalFont('RecorderFont') ? 'RecorderFont' : 'Noto Sans';
+  const instrumentRangeMidi = React.useMemo(() => {
+    return resolveInstrumentRangeMidi(instrument, keySignature, instrumentRange);
+  }, [instrument, keySignature, instrumentRange]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return undefined;
@@ -669,24 +684,45 @@ export function TraditionalNotationView({
                 const noteheadRx = getNoteheadRx(spacing);
                 const beamGroupsRaw = computeBeamGroups(measure.notes, measure.startBeat, timeSignature);
                 const beamGroups = beamGroupsRaw.map((gr) => {
-                  const noteXs = [];
-                  const noteCys = [];
+                  const noteXs = new Array(measure.notes.length);
+                  const noteCys = new Array(measure.notes.length);
                   for (let k = gr.start; k <= gr.end; k++) {
                     const n = measure.notes[k];
-                    noteXs.push(getNoteSlotCenterX(n));
+                    noteXs[k] = getNoteSlotCenterX(n);
                     const py = n.pitch && typeof n.octave === 'number' ? staffResolvePitchY(n.pitch, n.octave) : staffCenterY;
-                    noteCys.push(py);
+                    noteCys[k] = py;
                   }
                   // VexFlow/MuseScore reegel: alla keskmise joone = vars üles; üle keskmise joone = vars alla.
-                  let stemUp = noteCys[0] > middleLineY;
-                  if (noteCys.length > 0) {
-                    const avg = noteCys.reduce((s, cy) => s + cy, 0) / noteCys.length;
+                  let stemUp = noteCys[gr.start] > middleLineY;
+                  if (gr.end >= gr.start) {
+                    let sum = 0;
+                    let count = 0;
+                    for (let k = gr.start; k <= gr.end; k++) {
+                      if (typeof noteCys[k] === 'number') {
+                        sum += noteCys[k];
+                        count++;
+                      }
+                    }
+                    const avg = count > 0 ? (sum / count) : middleLineY;
                     stemUp = avg > middleLineY;
                   }
                   const geom = computeBeamGeometry(gr, measure.notes, noteXs, noteCys, stemUp, spacing);
                   return { ...gr, ...geom, noteXs, noteCys };
                 });
                 const getBeamGroup = (noteIdx) => beamGroups.find(g => noteIdx >= g.start && noteIdx <= g.end);
+                const connectedSpan = Math.max(0, Number(systemTotalHeight) || 0);
+                const connectedY1 = Number.isFinite(connectedBarlineY1Offset)
+                  ? (sys.yOffset + connectedBarlineY1Offset)
+                  : (staffY + firstLineY);
+                const connectedY2 = Number.isFinite(connectedBarlineY2Offset)
+                  ? (sys.yOffset + connectedBarlineY2Offset)
+                  : (connectedY1 + connectedSpan);
+                const barY1 = connectedBarlines && staffIndexInScore === 0 ? connectedY1 : staffY + firstLineY;
+                const barY2 = connectedBarlines && staffIndexInScore === 0 ? connectedY2 : staffY + lastLineY;
+                const barCenterY = (barY1 + barY2) / 2;
+                const connectedScale = connectedBarlines && staffIndexInScore === 0
+                  ? Math.max(1, connectedSpan / Math.max(1, (lastLineY - firstLineY)))
+                  : 1;
 
                 return (
                   <g key={measureIdx}>
@@ -699,8 +735,7 @@ export function TraditionalNotationView({
                         <path d={`M ${measureX + measureWidth / 2 - 4} ${staffY - 10} L ${measureX + measureWidth / 2} ${staffY - 14} L ${measureX + measureWidth / 2 + 4} ${staffY - 10}`} fill="none" stroke="#92400e" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
                       </g>
                     )}
-                    {!(connectedBarlines && staffIndexInScore > 0) && (
-                      <>
+                    <>
                         {/* Left barline: turn into repeat-start symbol when measure.repeatStart (including first bar of line) */}
                         {measure.repeatStart ? (
                           <g
@@ -711,8 +746,8 @@ export function TraditionalNotationView({
                             <SmuflGlyph
                               glyph={SMUFL_GLYPH.repeatLeft}
                               x={measureX}
-                              y={connectedBarlines && staffIndexInScore === 0 ? (systemTotalHeight ?? (staffY + lastLineY)) / 2 : staffY + (firstLineY + lastLineY) / 2}
-                              fontSize={getGlyphFontSize(spacing) * (connectedBarlines && staffIndexInScore === 0 ? (systemTotalHeight ?? (staffY + lastLineY - firstLineY)) / (lastLineY - firstLineY) : 1)}
+                              y={barCenterY}
+                              fontSize={getGlyphFontSize(spacing) * connectedScale}
                               fill="#1a1a1a"
                               textAnchor="end"
                             />
@@ -723,9 +758,9 @@ export function TraditionalNotationView({
                         ) : j !== 0 ? (
                           <line
                             x1={measureX}
-                            y1={connectedBarlines && staffIndexInScore === 0 ? 0 : staffY + firstLineY}
+                            y1={barY1}
                             x2={measureX}
-                            y2={connectedBarlines && staffIndexInScore === 0 ? (systemTotalHeight ?? (staffY + lastLineY)) : staffY + lastLineY}
+                            y2={barY2}
                             stroke="#1a1a1a"
                             strokeWidth={getThinBarlineThickness(spacing)}
                           />
@@ -740,8 +775,8 @@ export function TraditionalNotationView({
                             <SmuflGlyph
                               glyph={SMUFL_GLYPH.repeatRight}
                               x={measureX + measureWidth}
-                              y={connectedBarlines && staffIndexInScore === 0 ? (systemTotalHeight ?? (staffY + lastLineY)) / 2 : staffY + (firstLineY + lastLineY) / 2}
-                              fontSize={getGlyphFontSize(spacing) * (connectedBarlines && staffIndexInScore === 0 ? (systemTotalHeight ?? (staffY + lastLineY - firstLineY)) / (lastLineY - firstLineY) : 1)}
+                              y={barCenterY}
+                              fontSize={getGlyphFontSize(spacing) * connectedScale}
                               fill="#1a1a1a"
                               textAnchor="start"
                             />
@@ -753,8 +788,8 @@ export function TraditionalNotationView({
                           (measureIdx === instMeasures.length - 1 || measure.barlineFinal) ? (
                             (() => {
                               const { thinCx, thickCx, thinW, thickW } = getFinalDoubleBarlineCentersX(measureX + measureWidth, spacing);
-                              const y1b = connectedBarlines && staffIndexInScore === 0 ? 0 : staffY + firstLineY;
-                              const y2b = connectedBarlines && staffIndexInScore === 0 ? (systemTotalHeight ?? (staffY + lastLineY)) : staffY + lastLineY;
+                              const y1b = barY1;
+                              const y2b = barY2;
                               return (
                             <g>
                               <line
@@ -779,9 +814,9 @@ export function TraditionalNotationView({
                           ) : (
                             <line
                               x1={measureX + measureWidth}
-                              y1={connectedBarlines && staffIndexInScore === 0 ? 0 : staffY + firstLineY}
+                              y1={barY1}
                               x2={measureX + measureWidth}
-                              y2={connectedBarlines && staffIndexInScore === 0 ? (systemTotalHeight ?? (staffY + lastLineY)) : staffY + lastLineY}
+                              y2={barY2}
                               stroke="#1a1a1a"
                               strokeWidth={getThinBarlineThickness(spacing)}
                             />
@@ -789,8 +824,8 @@ export function TraditionalNotationView({
                         ) : measure.barlineFinal ? (
                           (() => {
                             const { thinCx, thickCx, thinW, thickW } = getFinalDoubleBarlineCentersX(measureX + measureWidth, spacing);
-                            const y1b = connectedBarlines && staffIndexInScore === 0 ? 0 : staffY + firstLineY;
-                            const y2b = connectedBarlines && staffIndexInScore === 0 ? (systemTotalHeight ?? (staffY + lastLineY)) : staffY + lastLineY;
+                            const y1b = barY1;
+                            const y2b = barY2;
                             return (
                           <g>
                             <line
@@ -814,15 +849,9 @@ export function TraditionalNotationView({
                           })()
                         ) : null}
                       </>
-                    )}
                     {/* Segno, coda: 1px above barline; volta. All clickable to remove. */}
                     {staffIndexInScore === 0 && (() => {
-                      const fs = getGlyphFontSize(spacing);
-                      const barlineTopY = staffY + firstLineY;
-                      const gapPx = 1;
-                      const segnoCodaY = barlineTopY - gapPx - (fs * 0.9 * 0.5);
-                      const hitW = spacing * 2.5;
-                      const hitH = spacing * 2;
+                      const placement = getRepeatMarkPlacement({ measureX, staffY, firstLineY, spacing });
                       const parts = [];
                       if (measure.segno) {
                         parts.push(
@@ -832,8 +861,8 @@ export function TraditionalNotationView({
                             style={{ cursor: onRemoveRepeatMark ? 'pointer' : undefined }}
                             pointerEvents={onRemoveRepeatMark ? 'auto' : 'none'}
                           >
-                            <SmuflGlyph glyph={SMUFL_GLYPH.segno} x={measureX + spacing * 0.5} y={segnoCodaY} fontSize={fs * 0.9} fill="#1a1a1a" />
-                            {onRemoveRepeatMark && <rect x={measureX} y={segnoCodaY - hitH / 2} width={hitW} height={hitH} fill="transparent" />}
+                            <SmuflGlyph glyph={SMUFL_GLYPH.segno} x={measureX + spacing * 0.5} y={placement.segnoCodaY} fontSize={placement.fontSize} fill="#1a1a1a" />
+                            {onRemoveRepeatMark && <rect x={measureX} y={placement.segnoCodaY - placement.hitH / 2} width={placement.hitW} height={placement.hitH} fill="transparent" />}
                           </g>
                         );
                       }
@@ -845,8 +874,8 @@ export function TraditionalNotationView({
                             style={{ cursor: onRemoveRepeatMark ? 'pointer' : undefined }}
                             pointerEvents={onRemoveRepeatMark ? 'auto' : 'none'}
                           >
-                            <SmuflGlyph glyph={SMUFL_GLYPH.coda} x={measureX + spacing * 0.5} y={segnoCodaY} fontSize={fs * 0.9} fill="#1a1a1a" />
-                            {onRemoveRepeatMark && <rect x={measureX} y={segnoCodaY - hitH / 2} width={hitW} height={hitH} fill="transparent" />}
+                            <SmuflGlyph glyph={SMUFL_GLYPH.coda} x={measureX + spacing * 0.5} y={placement.segnoCodaY} fontSize={placement.fontSize} fill="#1a1a1a" />
+                            {onRemoveRepeatMark && <rect x={measureX} y={placement.segnoCodaY - placement.hitH / 2} width={placement.hitW} height={placement.hitH} fill="transparent" />}
                           </g>
                         );
                       }
@@ -860,8 +889,8 @@ export function TraditionalNotationView({
                             style={{ cursor: onRemoveRepeatMark ? 'pointer' : undefined }}
                             pointerEvents={onRemoveRepeatMark ? 'auto' : 'none'}
                           >
-                            <text x={measureX + spacing * 0.3} y={staffY + firstLineY - spacing * 1.2} textAnchor="start" fontSize={Math.round(spacing * 1.1)} fontWeight="bold" fill="#1a1a1a" fontFamily={TEXT_FONT_FAMILY}>{num}.</text>
-                            {onRemoveRepeatMark && <rect x={measureX} y={staffY + firstLineY - spacing * 2} width={hitW} height={hitH} fill="transparent" />}
+                            <text x={placement.voltaTextX} y={placement.voltaTextY} textAnchor="start" fontSize={Math.round(spacing * 1.1)} fontWeight="bold" fill="#1a1a1a" fontFamily={TEXT_FONT_FAMILY}>{num}.</text>
+                            {onRemoveRepeatMark && <rect x={measureX} y={placement.voltaTextY - spacing * 0.8} width={placement.hitW} height={placement.hitH} fill="transparent" />}
                           </g>
                         );
                       }
@@ -932,6 +961,12 @@ export function TraditionalNotationView({
                       }
 
                       const isSelected = isNoteSelected ? isNoteSelected(globalNoteIndex) : false;
+                      const resolvedAccidental = (note.accidental !== undefined && note.accidental !== null)
+                        ? note.accidental
+                        : getAccidentalForPitchInKey(note.pitch, keySignature);
+                      const noteMidi = toNoteMidi(note.pitch, note.octave, resolvedAccidental);
+                      const isOutOfRange = isMidiOutOfInstrumentRange(noteMidi, instrumentRangeMidi);
+                      const noteFillColor = isOutOfRange ? OUT_OF_RANGE_COLOR : 'var(--note-fill, #1a1a1a)';
                       const ledgerHalfWidth = getLedgerHalfWidth(spacing);
                       const { above: nLedgerAbove, below: nLedgerBelow } = getLedgerLineCountExact(pitchY, firstLineY, lastLineY, spacing);
                       const glyph = getNoteheadGlyph(note.durationLabel, noteheadShape, noteheadEmoji);
@@ -954,7 +989,7 @@ export function TraditionalNotationView({
                           ))}
                           {isSelected && <rect x={noteX - 18} y={noteY - 22} width={36} height={44} fill="#93c5fd" opacity="0.3" rx="4" />}
                           {(note.accidental === 1 || note.accidental === -1) && (
-                            <text x={noteX - (noteheadRx + spacing * 0.5)} y={noteY} textAnchor="middle" dominantBaseline="central" fontSize={Math.round(spacing * 1.4)} fill="#1a1a1a" fontFamily="serif">{note.accidental === 1 ? '♯' : '♭'}</text>
+                            <text x={noteX - (noteheadRx + spacing * 0.5)} y={noteY} textAnchor="middle" dominantBaseline="central" fontSize={Math.round(spacing * 1.4)} fill={noteFillColor} fontFamily="serif">{note.accidental === 1 ? '♯' : '♭'}</text>
                           )}
                           {glyph ? (
                             <SmuflGlyph
@@ -962,11 +997,11 @@ export function TraditionalNotationView({
                               y={noteY}
                               glyph={glyph}
                               fontSize={lelandSize}
-                              fill="var(--note-fill, #1a1a1a)"
+                              fill={noteFillColor}
                               dominantBaseline="central"
                             />
                           ) : (
-                            <text x={noteX} y={noteY} textAnchor="middle" dominantBaseline="central" fontSize={lelandSize} fill="var(--note-fill, #1a1a1a)">{noteheadEmoji}</text>
+                            <text x={noteX} y={noteY} textAnchor="middle" dominantBaseline="central" fontSize={lelandSize} fill={noteFillColor}>{noteheadEmoji}</text>
                           )}
                           {/* Vars + lipud (talatud nootidel lipud peidetud, vars ulatub talani) */}
                           {note.durationLabel !== '1/1' && (
@@ -1057,7 +1092,7 @@ export function TraditionalNotationView({
                               </g>
                             );
                           })()}
-                          {instrument === 'tin-whistle' && instrumentNotationVariant === 'fingering' && note.pitch && typeof note.octave === 'number' && (() => {
+                          {(instrument === 'tin-whistle' || String(instrument || '').startsWith('tin-whistle-')) && instrumentNotationVariant === 'fingering' && note.pitch && typeof note.octave === 'number' && (() => {
                             const name = getTinWhistleNotationName(note.pitch, note.octave);
                             if (!name) return null;
                             const fingeringLabelY = staffY + lastLineY + spacing * (showRhythmSyllables ? 2.6 : 1.8);
