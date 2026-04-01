@@ -8,7 +8,7 @@ import { RhythmSyllableLabel } from '../components/RhythmSyllableLabel';
 import { getRhythmSyllableForNote } from '../notation/rhythmSyllables';
 import { getFigureNoteWidth, FIGURE_BASE_WIDTH } from '../layout/LayoutEngine';
 import { SmuflGlyph } from '../notation/smufl/SmuflGlyph';
-import { smuflNoteheadForType, smuflTimeSigDigitsForNumber, SMUFL_GLYPH } from '../notation/smufl/glyphs';
+import { smuflNoteheadForType, smuflTimeSigDigitsForNumber, SMUFL_GLYPH, SMUFL_MUSIC_FONT_FAMILY } from '../notation/smufl/glyphs';
 import { getShapePathsByOctave, getFigureStyle } from '../constants/FigureNotesLibrary';
 import { getChordMidiNotes } from '../musical/chordPlayback';
 import { getAccidentalForPitchInKey } from '../utils/notationConstants';
@@ -116,7 +116,15 @@ function TimeSigDigits({ x, y, fontSize, number, fill }) {
   return (
     <g>
       {digits.map((glyph, i) => (
-        <SmuflGlyph key={i} x={startX + i * spacing} y={y} glyph={glyph} fontSize={fontSize} fill={fill} />
+        <SmuflGlyph
+          key={i}
+          x={startX + i * spacing}
+          y={y}
+          glyph={glyph}
+          fontSize={fontSize}
+          fill={fill}
+          fontFamily={SMUFL_MUSIC_FONT_FAMILY}
+        />
       ))}
     </g>
   );
@@ -619,8 +627,9 @@ export function FigurenotesView({
                     const barLineHeight = barLineBottomY - barLineTopY;
                     const isRightBarlineOfSystem = measureIdx === sys.measureIndices[sys.measureIndices.length - 1];
                     const isLastMeasureOfScore = measureIdx === effectiveMeasures.length - 1;
-                    const showFinalBar = isLastMeasureOfScore || measure.barlineFinal;
+                    const showFinalBar = (isLastMeasureOfScore || measure.barlineFinal) && !measure.repeatEnd;
                     const xRight = measureX + measureWidth;
+                    const repeatGlyphSize = Math.max(18, Math.round(barLineHeight * 0.95));
                     const finalGeom = showFinalBar
                       ? getFinalDoubleBarlineGeometry({
                         measureRightX: xRight,
@@ -635,10 +644,30 @@ export function FigurenotesView({
                       : null;
                     return (
                       <>
-                        {j !== 0 && <line x1={measureX} y1={barLineTopY} x2={measureX} y2={barLineBottomY} stroke="#1a1a1a" strokeWidth={barLineWidth} />}
-                        {isRightBarlineOfSystem && !showFinalBar && (
-                          <line x1={xRight} y1={barLineTopY} x2={xRight} y2={barLineBottomY} stroke="#1a1a1a" strokeWidth={barLineWidth} />
+                        {measure.repeatStart ? (
+                          <SmuflGlyph
+                            glyph={SMUFL_GLYPH.repeatLeft}
+                            x={measureX}
+                            y={barLineCenterY}
+                            fontSize={repeatGlyphSize}
+                            fill="#1a1a1a"
+                            textAnchor="end"
+                          />
+                        ) : (
+                          j !== 0 && <line x1={measureX} y1={barLineTopY} x2={measureX} y2={barLineBottomY} stroke="#1a1a1a" strokeWidth={barLineWidth} />
                         )}
+                        {measure.repeatEnd ? (
+                          <SmuflGlyph
+                            glyph={SMUFL_GLYPH.repeatRight}
+                            x={xRight}
+                            y={barLineCenterY}
+                            fontSize={repeatGlyphSize}
+                            fill="#1a1a1a"
+                            textAnchor="start"
+                          />
+                        ) : (isRightBarlineOfSystem && !showFinalBar && (
+                          <line x1={xRight} y1={barLineTopY} x2={xRight} y2={barLineBottomY} stroke="#1a1a1a" strokeWidth={barLineWidth} />
+                        ))}
                         {showFinalBar && finalGeom && (
                           <g>
                             <line x1={finalGeom.thinX} y1={finalGeom.topY} x2={finalGeom.thinX} y2={finalGeom.bottomY} stroke="#1a1a1a" strokeWidth={finalGeom.thinW} />

@@ -70,6 +70,8 @@ export const SMUFL_GLYPH = Object.freeze({
   timeSig9: '\uE089',
 });
 
+export const SMUFL_MUSIC_FONT_FAMILY = 'Leland';
+
 /** Leland time signature digit glyph for 0–9. */
 export function smuflTimeSigDigit(digit) {
   const n = Math.floor(Number(digit));

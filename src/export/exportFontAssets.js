@@ -6,12 +6,16 @@ import notoSerifBoldItalicWoff2Url from '@fontsource/noto-serif/files/noto-serif
 import notoSansRegularWoff2Url from '@fontsource/noto-sans/files/noto-sans-latin-400-normal.woff2?url';
 import notoSansBoldWoff2Url from '@fontsource/noto-sans/files/noto-sans-latin-700-normal.woff2?url';
 
+const CANONICAL_SMUFL_FONT_FAMILY = 'Leland';
+const CANONICAL_SMUFL_FONT_SOURCE = 'Bravura';
+const CANONICAL_SMUFL_FONT_URL = escapeCssUrl(bravuraWoff2Url);
+
 function escapeCssUrl(url) {
   return String(url || '').replace(/"/g, '%22');
 }
 
 export const EXPORT_FONT_URLS = {
-  bravura: escapeCssUrl(bravuraWoff2Url),
+  bravura: CANONICAL_SMUFL_FONT_URL,
   notoSerifRegular: escapeCssUrl(notoSerifRegularWoff2Url),
   notoSerifItalic: escapeCssUrl(notoSerifItalicWoff2Url),
   notoSerifBold: escapeCssUrl(notoSerifBoldWoff2Url),
@@ -50,7 +54,7 @@ function getSharedFontFaceCss({ includeTextFamilyOverrides = false, fontDisplay 
 @font-face { font-family: 'Noto Sans'; font-style: normal; font-weight: 400; src: url("${urls.notoSansRegular}") format("woff2");${fontDisplayRule} }
 @font-face { font-family: 'Noto Sans'; font-style: normal; font-weight: 700; src: url("${urls.notoSansBold}") format("woff2");${fontDisplayRule} }
 
-@font-face { font-family: 'Leland'; font-style: normal; font-weight: 400; src: url("${urls.bravura}") format("woff2");${fontDisplayRule} }
+@font-face { font-family: '${CANONICAL_SMUFL_FONT_FAMILY}'; font-style: normal; font-weight: 400; src: url("${urls.bravura}") format("woff2");${fontDisplayRule} }
 @font-face { font-family: 'LelandText'; font-style: normal; font-weight: 400; src: url("${urls.notoSerifRegular}") format("woff2");${fontDisplayRule} }
 @font-face { font-family: 'ExportTitle'; font-style: normal; font-weight: 700; src: url("${urls.notoSerifBold}") format("woff2");${fontDisplayRule} }
 @font-face { font-family: 'ExportTitle'; font-style: italic; font-weight: 700; src: url("${urls.notoSerifBoldItalic}") format("woff2");${fontDisplayRule} }
@@ -89,6 +93,15 @@ tspan[font-family="serif"],
 
 export function getExportFontFaceCss() {
   return getSharedFontFaceCss({ includeTextFamilyOverrides: true, fontDisplay: 'swap' });
+}
+
+export function getCanonicalSmuflFontMeta() {
+  return Object.freeze({
+    family: CANONICAL_SMUFL_FONT_FAMILY,
+    source: CANONICAL_SMUFL_FONT_SOURCE,
+    url: EXPORT_FONT_URLS.bravura,
+    format: 'woff2',
+  });
 }
 
 export function getRuntimeFontFaceCss() {

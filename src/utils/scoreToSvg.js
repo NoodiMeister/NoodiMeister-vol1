@@ -4,7 +4,7 @@
  */
 
 import { getExportOrientation, getPageCount, getPageMetrics } from './pageGeometry';
-import { getExportFontFaceCss, resolveExportTextFamily } from '../export/exportFontAssets';
+import { getCanonicalSmuflFontMeta, getExportFontFaceCss, resolveExportTextFamily } from '../export/exportFontAssets';
 
 const XMLNS = 'http://www.w3.org/2000/svg';
 const DEFAULT_PAGE_MARGIN_PX = 0;
@@ -24,6 +24,32 @@ function hasSmuflTimeSigDigits (text) {
     if (code >= 0xE080 && code <= 0xE089) return true;
   }
   return false;
+}
+
+function hasCanonicalSmuflFaceDefinition (defsString = '') {
+  const defs = String(defsString || '');
+  const canonical = getCanonicalSmuflFontMeta();
+  return defs.includes(`font-family: '${canonical.family}'`) && defs.includes(`url("${canonical.url}")`);
+}
+
+function hasLelandFamilyUsage (svgString = '') {
+  const text = String(svgString || '');
+  return (
+    text.includes(`font-family: Leland`) ||
+    text.includes(`font-family='Leland'`) ||
+    text.includes(`font-family="Leland"`) ||
+    text.includes(`fontFamily: 'Leland'`)
+  );
+}
+
+function createSmuflExportError (message, details = {}) {
+  return {
+    message,
+    source: 'scoreToSvg',
+    code: 'SMUFL_EXPORT_PREFLIGHT_FAILED',
+    nextStep: 'Kontrolli, et ekspordi SVG sisaldab Leland @font-face definitsiooni ja et taktimõõdu glüüfid kasutavad Leland font-family väärtust.',
+    details,
+  };
 }
 
 /**
@@ -62,6 +88,34 @@ export function rewriteSmuflTimeSigDigitsToAscii (svgInnerHtml) {
   } catch (_) {
     return svgInnerHtml;
   }
+}
+
+export function validateSmuflTimeSigExport ({ defsString = '', contentString = '' } = {}) {
+  const hasDigits = hasSmuflTimeSigDigits(String(contentString || ''));
+  if (!hasDigits) {
+    return { ok: true, hasSmuflTimeSigDigits: false };
+  }
+  const canonical = getCanonicalSmuflFontMeta();
+  if (!hasCanonicalSmuflFaceDefinition(defsString)) {
+    return {
+      ok: false,
+      hasSmuflTimeSigDigits: true,
+      error: createSmuflExportError('SMuFL time-signature digits found, but canonical Leland @font-face definition is missing from export defs.', {
+        canonicalFamily: canonical.family,
+        canonicalSource: canonical.source,
+      }),
+    };
+  }
+  if (!hasLelandFamilyUsage(contentString)) {
+    return {
+      ok: false,
+      hasSmuflTimeSigDigits: true,
+      error: createSmuflExportError('SMuFL time-signature digits found, but export content does not reference Leland font-family.', {
+        canonicalFamily: canonical.family,
+      }),
+    };
+  }
+  return { ok: true, hasSmuflTimeSigDigits: true };
 }
 
 function escapeXml (str) {
