@@ -1,9 +1,14 @@
+import { getAccidentalForPitchInKey } from '../utils/notationConstants';
+
 /**
  * Kõrguse sisestuse loogika: klaviatuuri klahv (MIDI) → noodimeistri noot (pitch, octave, accidental).
  * Mootor kasutab seda, kui kasutaja vajutab PianoKeyboard peal klahvi.
  */
 const MIDI_PITCH_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 const PITCH_NAME_TO_NATURAL = { C: 'C', 'C#': 'C', Db: 'C', D: 'D', 'D#': 'D', Eb: 'D', E: 'E', F: 'F', 'F#': 'F', Gb: 'F', G: 'G', 'G#': 'G', Ab: 'G', A: 'A', 'A#': 'A', Bb: 'A', B: 'B' };
+const PITCH_CLASS = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
+const PITCH_ORDER = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
+const ACCIDENTAL_CANDIDATES = [null, 0, 1, -1];
 
 function getMidiAttributes(midiNumber) {
   const n = Number(midiNumber);
@@ -38,6 +43,37 @@ export function getAccidentalForPianoKey(midiNumber, keySignature) {
   return useFlat ? -1 : 1;
 }
 
+function toPitchClass(letter, accidental) {
+  const base = PITCH_CLASS[letter];
+  if (base == null) return 0;
+  return ((base + accidental) % 12 + 12) % 12;
+}
+
+function resolveSpellingForMidiInKey(midiNumber, keySignature = 'C') {
+  const n = Number(midiNumber);
+  const midiPc = ((n % 12) + 12) % 12;
+  let best = null;
+  for (const letter of PITCH_ORDER) {
+    const keyAcc = getAccidentalForPitchInKey(letter, keySignature);
+    for (const explicitAcc of ACCIDENTAL_CANDIDATES) {
+      const effectiveAcc = explicitAcc == null ? keyAcc : explicitAcc;
+      const pc = toPitchClass(letter, effectiveAcc);
+      if (pc !== midiPc) continue;
+      const octave = Math.floor((n - pc) / 12) - 1;
+      if (!Number.isFinite(octave)) continue;
+      const isImplicit = explicitAcc == null;
+      const needsNatural = explicitAcc === 0 && keyAcc !== 0;
+      const score =
+        (isImplicit ? 0 : needsNatural ? 1 : 2) * 10 +
+        (letter === 'F' || letter === 'C' ? 0 : 1);
+      if (!best || score < best.score) {
+        best = { pitch: letter, octave, accidental: explicitAcc, score };
+      }
+    }
+  }
+  return best;
+}
+
 /**
  * Ühene API mootorile: klahvi vajutus → õige kõrgus noodijoonestiku jaoks.
  * @param {number} midiNumber - klaviatuuri klahvi MIDI number
@@ -45,6 +81,10 @@ export function getAccidentalForPianoKey(midiNumber, keySignature) {
  * @returns {{ pitch: string, octave: number, accidental: number }}
  */
 export function getPitchFromMidi(midiNumber, keySignature = 'C') {
+  const resolved = resolveSpellingForMidiInKey(midiNumber, keySignature);
+  if (resolved) {
+    return { pitch: resolved.pitch, octave: resolved.octave, accidental: resolved.accidental };
+  }
   const { pitch, octave } = midiToPitchOctave(midiNumber);
   const accidental = getAccidentalForPianoKey(midiNumber, keySignature);
   return { pitch, octave, accidental };

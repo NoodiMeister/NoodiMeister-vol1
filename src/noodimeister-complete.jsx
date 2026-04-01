@@ -1085,6 +1085,33 @@ function getAccidentalForPianoKey(midiNumber, keySignature) {
   const useFlat = keySignature === 'F' || keySignature === 'Bb' || keySignature === 'Eb';
   return useFlat ? -1 : 1;
 }
+
+function resolveSpellingForMidiInKey(midiNumber, keySignature = 'C') {
+  const n = Number(midiNumber);
+  if (!Number.isFinite(n) || n < 0 || n > 127) return null;
+  const midiPc = ((n % 12) + 12) % 12;
+  const letters = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
+  const pitchClass = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
+  const candidates = [null, 0, 1, -1];
+  let best = null;
+  for (const letter of letters) {
+    const keyAcc = getAccidentalForPitchInKey(letter, keySignature);
+    for (const explicitAcc of candidates) {
+      const effAcc = explicitAcc == null ? keyAcc : explicitAcc;
+      const pc = ((pitchClass[letter] + effAcc) % 12 + 12) % 12;
+      if (pc !== midiPc) continue;
+      const octave = Math.floor((n - pc) / 12) - 1;
+      if (!Number.isFinite(octave)) continue;
+      const isImplicit = explicitAcc == null;
+      const needsNatural = explicitAcc === 0 && keyAcc !== 0;
+      const score =
+        (isImplicit ? 0 : needsNatural ? 1 : 2) * 10 +
+        (letter === 'F' || letter === 'C' ? 0 : 1);
+      if (!best || score < best.score) best = { pitch: letter, octave, accidental: explicitAcc, score };
+    }
+  }
+  return best;
+}
 // FINGERING_TIN_WHISTLE, FINGERING_RECORDER on faili alguses var'iga
 
 /** Lingitud iirivile SVG (A-variant): 50% = vana 200%; igal +5% sammul suureneb diagramm veel. */
@@ -11902,8 +11929,9 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
             const handleNotePlay = (midiNumber) => {
               /* N-režiim: MIDI klaviatuur reageerib noodi sisestusele (noot lisatakse kursori juurde). SEL-režiim: mitte. */
               if (!noteInputMode) return;
-              const { pitch, octave } = midiToPitchOctave(midiNumber);
-              const accidental = getAccidentalForPianoKey(midiNumber, keySignature);
+              const resolved = resolveSpellingForMidiInKey(midiNumber, keySignature);
+              const { pitch, octave } = resolved || midiToPitchOctave(midiNumber);
+              const accidental = resolved ? resolved.accidental : getAccidentalForPianoKey(midiNumber, keySignature);
               setGhostPitch(pitch);
               setGhostOctave(octave);
               addNoteAtCursor(pitch, octave, accidental, { skipPlay: true });

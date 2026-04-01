@@ -77,6 +77,36 @@ const GAP_BEFORE_CLEF_PX = 6;
 const TREBLE_CLEF_LINE_INDEX = 2; // 0=top line ... 4=bottom line
 const OUT_OF_RANGE_COLOR = '#dc2626';
 
+const KEY_SIGNATURE_SHARPS = { G: 1, D: 2, A: 3, E: 4, B: 5 };
+const KEY_SIGNATURE_FLATS = { F: 1, Bb: 2, Eb: 3 };
+const SHARP_POSITIONS_BY_CLEF = {
+  treble: [3, 0, 4, 1, 5],
+  bass: [4, 1, 5, 2, 6],
+  alto: [0, 4, 1, 5, 2],
+  tenor: [1, 5, 2, 6, 3],
+};
+const FLAT_POSITIONS_BY_CLEF = {
+  treble: [1, 4, 0],
+  bass: [2, 5, 1],
+  alto: [5, 1, 4],
+  tenor: [6, 2, 5],
+};
+
+function getKeySignatureInfo(keySignature) {
+  if (!keySignature || keySignature === 'C') return { count: 0, symbol: null };
+  const sharpCount = KEY_SIGNATURE_SHARPS[keySignature] || 0;
+  if (sharpCount > 0) return { count: sharpCount, symbol: '♯' };
+  const flatCount = KEY_SIGNATURE_FLATS[keySignature] || 0;
+  if (flatCount > 0) return { count: flatCount, symbol: '♭' };
+  return { count: 0, symbol: null };
+}
+
+function getKeySignatureStaffPosition(clef, symbol, idx) {
+  const safeClef = clef === 'bass' || clef === 'alto' || clef === 'tenor' ? clef : 'treble';
+  if (symbol === '♯') return (SHARP_POSITIONS_BY_CLEF[safeClef] || SHARP_POSITIONS_BY_CLEF.treble)[idx] ?? 0;
+  return (FLAT_POSITIONS_BY_CLEF[safeClef] || FLAT_POSITIONS_BY_CLEF.treble)[idx] ?? 0;
+}
+
 
 // SMuFL noteheads (Leland)
 const SMUFL = {
@@ -514,6 +544,10 @@ export function TraditionalNotationView({
   // JO-võti: ankur ja abijooned. Kordub IGA rea alguses.
   const joKeyY = getYFromStaffPosition(joClefStaffPosition, centerY, 5, spacing);
   const isVabanotatsioon = notationMode === 'vabanotatsioon';
+  const showTraditionalKeySignature = !isVabanotatsioon && !!keySignature && keySignature !== 'C';
+  const showRelativeKeySignature = isVabanotatsioon && relativeNotationShowKeySignature && !!keySignature && keySignature !== 'C';
+  const shouldDrawAnyKeySignature = showTraditionalKeySignature || showRelativeKeySignature;
+  const keySignatureInfo = getKeySignatureInfo(keySignature);
 
   const staffList = multiStaff ? instruments : [{ id: '_single', name: '', clef: clefType }];
 
@@ -734,7 +768,8 @@ export function TraditionalNotationView({
                         return <g>{g}</g>;
                       }
                       const clefY = clefType === 'treble' ? staffY + trebleGLine : clefType === 'bass' ? staffY + bassFLine : clefType === 'tenor' ? staffY + cClefTenorLine : staffY + cClefAltoLine;
-                      return (
+                      const symbols = [];
+                      symbols.push(
                         <StaffClefSymbol
                           key={`clef-${sys.systemIndex}-${staffIndex}-${clefType}`}
                           x={clefX}
@@ -745,6 +780,29 @@ export function TraditionalNotationView({
                           staffSpace={spacing}
                         />
                       );
+                      if (showTraditionalKeySignature && keySignatureInfo.count > 0 && keySignatureInfo.symbol) {
+                        const keySigStartX = clefX + LAYOUT.CLEF_WIDTH;
+                        const keySigDx = Math.max(8, spacing * 1.0);
+                        for (let i = 0; i < keySignatureInfo.count; i += 1) {
+                          const staffPos = getKeySignatureStaffPosition(clefType, keySignatureInfo.symbol, i);
+                          const glyphY = staffY + getYFromStaffPosition(staffPos, centerY, staffLines, spacing);
+                          symbols.push(
+                            <text
+                              key={`ks-trad-${sys.systemIndex}-${staffIndex}-${i}`}
+                              x={keySigStartX + i * keySigDx}
+                              y={glyphY}
+                              fontSize={Math.round(spacing * 1.8)}
+                              fontFamily="serif"
+                              fill="#333"
+                              textAnchor="middle"
+                              dominantBaseline="middle"
+                            >
+                              {keySignatureInfo.symbol}
+                            </text>
+                          );
+                        }
+                      }
+                      return <g>{symbols}</g>;
                     })()
                   )}
 
@@ -767,9 +825,7 @@ export function TraditionalNotationView({
                   {/* Time signature only on first system (first bar); after clef and key marks */}
                   {sys.systemIndex === 0 && staffIndex === 0 && (
                     (() => {
-                      const sharpCount = (relativeNotationShowKeySignature && keySignature && keySignature !== 'C') ? ({ G: 1, D: 2, A: 3, E: 4, B: 5 }[keySignature] || 0) : 0;
-                      const flatCount = (relativeNotationShowKeySignature && keySignature && keySignature !== 'C') ? ({ F: 1, Bb: 2, Eb: 3 }[keySignature] || 0) : 0;
-                      const keySigCount = Math.max(sharpCount, flatCount);
+                      const keySigCount = shouldDrawAnyKeySignature ? keySignatureInfo.count : 0;
                       const timeSigX = getTraditionalTimeSignatureX({
                         staffLeft,
                         clefWidth: LAYOUT.CLEF_WIDTH,
