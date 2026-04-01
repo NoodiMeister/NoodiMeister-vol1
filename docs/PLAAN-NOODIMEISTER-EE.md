@@ -89,7 +89,7 @@ Täpsemalt: **docs/DOOMEEN-NOODIMEISTER-EE.md** (sh veebimajutus.ee sammud).
   - `https://noodimeister.ee`
   - `https://www.noodimeister.ee`
   - `https://noodimeister-xxx.vercel.app` (sinu tegelik Vercel production URL)
-  - `http://localhost:5173` (arenduse jaoks)
+  - `http://127.0.0.1:5197` (arenduse jaoks)
 - **Authorized redirect URIs** – lisa **samad** read (https ja http localhost).
 - **Save** → oota mõni minut, siis proovi uuesti.
 

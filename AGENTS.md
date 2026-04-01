@@ -42,14 +42,14 @@ Kõik muudatused peavad hoidma kasutaja teekonnad tervena:
 - **Kiirklahvid**: 1–5 rütm, A–G noot; ei tohi häirida input‑välju
 - **Errorid**: auth ja eksport peavad andma arusaadava sõnumi + taastumisjuhise
 - **Build**: `npm run build` peab läbi minema
-- **Kohalik tootmise eelvaade (sama port mis tavaliselt):** `npm run preview:full` → `http://127.0.0.1:4173` (build + `vite preview` + brauser avaneb). Cursor/VS Code: **Tasks → Run Task → “Noodimeister: build + preview …”**.
+- **Kohalik tootmise eelvaade:** `npm run preview:full` → `http://127.0.0.1:4177` (build + `vite preview` + brauser avaneb; port `vite.config.js` → `preview.port`). Cursor/VS Code: **Tasks → Run Task → “Noodimeister: build + preview …”**.
 
 ### Testimise ja lingid (õige aadress OAuth jaoks)
 
 - **Ametlik toodang (kasutajad, Google/Microsoft OAuth):** `https://noodimeister.ee` ja `https://www.noodimeister.ee` — need peavad olema **Google Cloud Console** (ja Azure/Microsoft) **Authorized JavaScript origins** + **redirect URI** nimekirjas. Üksikasjad: `docs/GOOGLE-SETUP.md`, `docs/ONEDRIVE-JUHEND.md`.
 - **Verceli tootmise tehniline URL (üks projekt, vt `docs/VERCEL-GITHUB.md`):** `https://noodi-meister-vol1-la-stravaganza.vercel.app` — ära kasuta teist `*.vercel.app` projekti tootmise asemel.
 - **Iga juhuslik Verceli preview URL** (`…-hash-haru.vercel.app`) on **uus päritolu**; Google/Microsoft ei tööta seal, kuni see on **sama käsitsi** konsooli lisatud. Täieliku pilve/auth testi jaoks eelista **noodimeister.ee** või lisa **täpne** preview URL konsooli.
-- **Kohalik:** `http://localhost:5173` / `http://127.0.0.1:5173` (dev), `http://127.0.0.1:4173` (preview pärast `npm run build`) — need tuleb konsoolis samuti lubada, kui testid OAuth kohapeal.
+- **Kohalik dev (fikseeritud):** `http://127.0.0.1:5197` — **`npm run dev`** avab vaikimisi **demo intro**: `http://127.0.0.1:5197/demo-intro`. Preview pärast build’i: `http://127.0.0.1:4177` (vt `npm run preview:full`). OAuth (Google/Microsoft) jaoks lisa konsooli need päritolud, kui testid kohapeal.
 
 ### Noodimeistri standardid (elav dokument)
 
@@ -67,6 +67,12 @@ Kõik muudatused peavad hoidma kasutaja teekonnad tervena:
   - **Keeld kuni edasise otsuseni:** valikut “kujundus noodistuse **ees**” (watermark / demo-lehe katmine) **ei taasta**, kuni **noodileht + kõik preview-vood** on ühtlustatud ja testitud — varem olnud “ees” režiim oli mõeldud pigem demo/watermark stsenaariumile, aga põhjustas noodikihi peitmist ja ebaühtlasi eelvaateid.
   - **Tausta nihutamine:** kasutaja saab tausta asukohta muuta **ohutult** (nt paigutuspaneeli juhtnupud, käetööriist + Alt + lohistamine score alal), **ilma** noodikihi z-index’i taustaga vahetamata.
   - **Regressioon:** kui imporditud kujundus või CSS **peidab noodid** või **lõikab** need ebaühtlaselt võrreldes pealkirjaga, on see **P0** (sama klass mis nähtamatu scorepage).
+
+- **Standard: figuurnotatsiooni multi-staff süsteem (klaver + lisapillid)**
+  - kui pill on **klaver (piano)**, siis sama takti **meloodia- ja bassirida** peavad jääma **sama süsteemi** sisse (vertikaalselt kohakuti), mitte minema järgmisse süsteemi
+  - kui kasutaja lisab klaveri kõrvale veel pille/hääli, siis sama takti read paigutatakse **samasse süsteemi üksteise alla**
+  - süsteemivahetus tohib toimuda alles pärast seda, kui **kõik sama süsteemi read** (kõik nähtavad stavid) on paigutatud
+  - figuurnotatsiooni süsteemi vertikaalne samm arvutatakse kui: kõigi nähtavate staffide kogukõrgus + staffidevahelised vahed + süsteemivahe
 
 - **Standard: veateated kasutajale**
   - kasutajale: inimkeelne selgitus + järgmine samm

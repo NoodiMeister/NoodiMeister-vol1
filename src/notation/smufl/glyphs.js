@@ -128,6 +128,26 @@ export function smuflRestForDurationLabel(durationLabel) {
   }
 }
 
+/** Map editor duration label to precomposed SMuFL note type (Leland U+E1D0–E1DC). */
+export function smuflPrecomposedTypeForDurationLabel(durationLabel) {
+  switch (durationLabel || '1/4') {
+    case '1/1':
+      return 'whole';
+    case '1/2':
+      return 'half';
+    case '1/4':
+      return 'quarter';
+    case '1/8':
+      return 'eighth';
+    case '1/16':
+      return 'sixteenth';
+    case '1/32':
+      return 'thirtySecond';
+    default:
+      return 'quarter';
+  }
+}
+
 /** Precomposed note glyph (note+stem+flag from font). Returns null if we should draw head+stem+flag ourselves (e.g. beamed). */
 export function smuflPrecomposedNote(type, stemUp = true, usePrecomposed = true) {
   if (!usePrecomposed) return null;

@@ -1,4 +1,8 @@
 # Staatile failid (JS, CSS) – Netlify/Cloudflare ei tohi neid index.html-iga asendada
 /assets/*  /assets/:splat  200
+# Clef lab static failid peavad avanema otse, mitte SPA fallbackina
+/extrudedtrebleclef-spin-controls.html  /extrudedtrebleclef-spin-controls.html  200
+/extrudedtrebleclef-spin.svg            /extrudedtrebleclef-spin.svg            200
+/extrudedtrebleclef-yspin.gif           /extrudedtrebleclef-yspin.gif           200
 # SPA: ülejäänud teed → index.html
 /*         /index.html     200

@@ -47,10 +47,10 @@ Järgnevalt sammud, et NoodiMeisteris töötaks:
 5. **Application type:** jäta või vali **Web application**.
 6. **Name:** nt `NoodiMeister Web`.
 7. **Authorized JavaScript origins** – lisa **täpselt** need aadressid, kust rakendus töötab (protokoll + domeen + port, **ilma** teekonnata nagu `/registreeru`):
-   - `http://localhost:5173` (kohalik arendus)
+   - `http://127.0.0.1:5197` (kohalik arendus)
    - **Iga toodangu domeen eraldi:** nt `https://noodi-meister-vol1-la-stravaganza.vercel.app` ja `https://www.noodimeister.ee` (kui Vercelil on mitu domeeni, lisa **mõlemad**).
 8. **Authorized redirect URIs** – **peab** sisaldama **sama** päritolu. Lisa **iga** domeen, mida kasutad:
-   - `http://localhost:5173`
+   - `http://127.0.0.1:5197`
    - `https://noodi-meister-vol1-la-stravaganza.vercel.app`
    - `https://www.noodimeister.ee`
    Kui kasutad kahte (või enamat) domeeni, aga Google Console’is on ainult üks, siis **teisel domeenil** Google sisselogimine ebaõnnestub (Error 400: redirect_uri_mismatch). Lisa alati **kõik** rakenduse domeenid.
@@ -85,7 +85,7 @@ Projekti **Settings** → **Environment Variables** → lisa muutuja **VITE_GOOG
    ```bash
    npm run dev
    ```
-2. Ava brauseris: `http://localhost:5173`.
+2. Ava brauseris: `http://127.0.0.1:5197` (demo intro: `/demo-intro`).
 3. **Registreerimine:** klõpsa **Registreeru** → **Google** → logi Google kontoga sisse ja anna lubadused (sh Drive). Peaks suunama tööriista (/app).
 4. **Sisselogimine:** logi välja, mine **Logi sisse** → **Google** → peaks uuesti sisse logima ja suunama /app.
 5. **Salvestamine Drivesse:** tööriistas klõpsa **Pilve salvesta** → vali kaust Google Drivest → projekt salvestatakse failina `.noodimeister`.

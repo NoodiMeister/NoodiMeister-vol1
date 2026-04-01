@@ -11,7 +11,14 @@ import { getJoName } from '../notation/joNames';
 import { getRhythmSyllableForNote } from '../notation/rhythmSyllables';
 import { expandEmojiShortcuts } from '../utils/emojiShortcuts';
 import { SmuflGlyph } from '../notation/smufl/SmuflGlyph';
-import { SMUFL_GLYPH, NOTEHEAD_SHAPE_GLYPH, smuflRestForDurationLabel, smuflTimeSigDigitsForNumber } from '../notation/smufl/glyphs';
+import {
+  SMUFL_GLYPH,
+  NOTEHEAD_SHAPE_GLYPH,
+  smuflRestForDurationLabel,
+  smuflTimeSigDigitsForNumber,
+  smuflPrecomposedNote,
+  smuflPrecomposedTypeForDurationLabel,
+} from '../notation/smufl/glyphs';
 import { TIME_SIG_LAYOUT, getTraditionalTimeSignatureX } from '../notation/TimeSignatureLayout';
 import {
   getStaffLinePositions,
@@ -26,7 +33,13 @@ import {
   getStemThickness,
   getThinBarlineThickness,
 } from '../notation/StaffConstants';
-import { getGlyphFontSize, TEXT_FONT_FAMILY, getThickBarlineThickness, BARLINE_SEPARATION } from '../notation/musescoreStyle';
+import {
+  getGlyphFontSize,
+  getRestFontSize,
+  TEXT_FONT_FAMILY,
+  getThickBarlineThickness,
+  BARLINE_SEPARATION,
+} from '../notation/musescoreStyle';
 import {
   computeBeamGroups,
   computeBeamGeometry,
@@ -108,12 +121,107 @@ function getFlagCount(durationLabel) {
   return 0;
 }
 
-/** Tin whistle fingering: note name for tab (a, b, c, d, e, f, g, c#). */
-function getTinWhistleNotationName(pitch, octave) {
-  if (!pitch || typeof octave !== 'number') return '';
-  const letter = pitch.replace(/[#b]/, '');
-  const lower = { C: 'c', D: 'd', E: 'e', F: 'f', G: 'g', A: 'a', B: 'b' }[letter] || 'c';
-  return pitch.includes('#') ? lower + '#' : lower;
+/** Tin whistle (D) fingering pattern; true=covered hole, false=open hole. */
+/** Map a 6-char code (bottom hole first → top / mouthpiece last; 1=covered) to holes top→bottom for drawing (index 0 = top / cy smallest). */
+function tinWhistleCodeBottomFirstToHolesTopFirst(code) {
+  const s = String(code || '').replace(/\s/g, '');
+  if (s.length !== 6) return null;
+  const holes = [];
+  for (let topIdx = 0; topIdx < 6; topIdx += 1) {
+    const ch = s[5 - topIdx];
+    if (ch !== '0' && ch !== '1') return null;
+    holes.push(ch === '1');
+  }
+  return holes;
+}
+
+/** D tin whistle: written pitch D4 = bottom note; C5/C#5 close low octave; D5+ overblow register (hole codes bottom→top). */
+function getTinWhistleFingeringPattern(pitch, octave) {
+  if (!pitch || typeof octave !== 'number') return null;
+  const sharpFromFlat = { Db: 'C#', Eb: 'D#', Gb: 'F#', Ab: 'G#', Bb: 'A#' };
+  const normalized = sharpFromFlat[pitch] || pitch;
+  const codeNaturalC = '000110';
+  const codeCSharp = '000000';
+  const lowDEFGAB = { D: '111111', E: '011111', 'F#': '001111', G: '000111', A: '000011', B: '000001' };
+  const highD = '111110';
+
+  if (normalized === 'C' && !String(pitch).includes('#')) {
+    if (octave < 5) return null;
+    if (octave === 5) {
+      const holes = tinWhistleCodeBottomFirstToHolesTopFirst(codeNaturalC);
+      return holes ? { holes, overblow: false } : null;
+    }
+    const holes = tinWhistleCodeBottomFirstToHolesTopFirst(codeNaturalC);
+    return holes ? { holes, overblow: true } : null;
+  }
+  if (normalized === 'C#') {
+    if (octave < 5) return null;
+    if (octave === 5) {
+      const holes = tinWhistleCodeBottomFirstToHolesTopFirst(codeCSharp);
+      return holes ? { holes, overblow: false } : null;
+    }
+    const holes = tinWhistleCodeBottomFirstToHolesTopFirst(codeCSharp);
+    return holes ? { holes, overblow: true } : null;
+  }
+
+  const lowCode = lowDEFGAB[normalized];
+  if (!lowCode) return null;
+  if (octave === 4) {
+    const holes = tinWhistleCodeBottomFirstToHolesTopFirst(lowCode);
+    return holes ? { holes, overblow: false } : null;
+  }
+  if (octave >= 5) {
+    const codeStr = normalized === 'D' ? highD : lowCode;
+    const holes = tinWhistleCodeBottomFirstToHolesTopFirst(codeStr);
+    return holes ? { holes, overblow: true } : null;
+  }
+  return null;
+}
+
+function pitchWithAccidental(pitch, accidental) {
+  if (!pitch) return '';
+  const letter = String(pitch).replace(/[#b]/g, '');
+  if (accidental === 1) return `${letter}#`;
+  if (accidental === -1) return `${letter}b`;
+  return letter;
+}
+
+function TinWhistleFingeringSvg({ x, y, staffSpace, pattern, scale = 1 }) {
+  if (!pattern?.holes || pattern.holes.length !== 6) return null;
+  const s = typeof scale === 'number' && Number.isFinite(scale) && scale > 0 ? scale : 1;
+  const ss = staffSpace * s;
+  const radius = Math.max(1.6, ss * 0.22);
+  const gap = Math.max(3, ss * 0.75);
+  const plusY = y + gap * 6 + radius * 1.5;
+  return (
+    <g transform={`translate(${x}, ${y})`} aria-hidden="true">
+      {pattern.holes.map((covered, i) => (
+        <circle
+          key={i}
+          cx={0}
+          cy={i * gap}
+          r={radius}
+          fill={covered ? '#111' : '#fff'}
+          stroke="#111"
+          strokeWidth={Math.max(0.8, radius * 0.3)}
+        />
+      ))}
+      {pattern.overblow && (
+        <text
+          x={0}
+          y={plusY}
+          textAnchor="middle"
+          dominantBaseline="middle"
+          fontFamily="sans-serif"
+          fontWeight="700"
+          fontSize={Math.max(7, ss * 0.9)}
+          fill="#111"
+        >
+          +
+        </text>
+      )}
+    </g>
+  );
 }
 
 /** Recorder (soprano C) fingering: note name for RecorderFont finger table (C, D, E, F, G, A, B, C#, etc.). */
@@ -207,8 +315,9 @@ function renderStandardRest(note, x, y, staffSpace) {
       x={x}
       y={y}
       glyph={glyph}
-      fontSize={staffSpace * 4.5}
+      fontSize={getRestFontSize(staffSpace)}
       fill="var(--note-fill, #1a1a1a)"
+      dominantBaseline="central"
     />
   );
 }
@@ -271,11 +380,14 @@ export function TraditionalNotationView({
   instrument = 'piano',
   instrumentRange = null,
   instrumentNotationVariant = 'standard',
+  instrumentConfig = {},
+  linkedNotationByStaffId = null,
+  /** Lingitud iirivile augudiagramm: 1 = vaikimisi, suurem = suurem (projekti seade). */
+  tinWhistleLinkedFingeringScale = 1,
   connectedBarlines = false,
   staffIndexInScore = 0,
+  /** Traditsioonivaates: süsteemi kõrgus (ühendusjooned) — arvutusallikas `src/layout/traditionalMultiStaffGeometry.js`. */
   systemTotalHeight,
-  connectedBarlineY1Offset = null,
-  connectedBarlineY2Offset = null,
   themeColors,
   onRemoveRepeatMark, // (measureIndex, markType: 'repeatStart'|'repeatEnd'|'segno'|'coda'|'volta1'|'volta2') => void
 }) {
@@ -289,6 +401,9 @@ export function TraditionalNotationView({
   const lastPitchRef = useRef(null); // avoid duplicate updates when pitch unchanged
   const tinWhistleFontFamily = hasBundledOptionalFont('TinWhistleTab') ? 'TinWhistleTab' : 'Noto Sans';
   const recorderFontFamily = hasBundledOptionalFont('RecorderFont') ? 'RecorderFont' : 'Noto Sans';
+  const tinWhistleFingeringScale = typeof tinWhistleLinkedFingeringScale === 'number' && Number.isFinite(tinWhistleLinkedFingeringScale) && tinWhistleLinkedFingeringScale > 0
+    ? Math.min(3, Math.max(0.35, tinWhistleLinkedFingeringScale))
+    : 1;
   const instrumentRangeMidi = React.useMemo(() => {
     return resolveInstrumentRangeMidi(instrument, keySignature, instrumentRange);
   }, [instrument, keySignature, instrumentRange]);
@@ -402,21 +517,64 @@ export function TraditionalNotationView({
 
   const staffList = multiStaff ? instruments : [{ id: '_single', name: '', clef: clefType }];
 
+  const showTinWhistleLinkedFingeringForInst = (instRow) => {
+    if (!multiStaff) {
+      const tw = instrument === 'tin-whistle' || String(instrument || '').startsWith('tin-whistle-');
+      return tw && instrumentNotationVariant === 'fingering';
+    }
+    const iid = instRow?.instrumentId;
+    if (!iid) return false;
+    const tw = iid === 'tin-whistle' || String(iid).startsWith('tin-whistle-');
+    if (!tw) return false;
+    const cfg = instrumentConfig?.[iid];
+    return !!(cfg?.type === 'wind' && cfg?.fingering && linkedNotationByStaffId?.[instRow.id]);
+  };
+  const showRecorderLinkedFingeringForInst = (instRow) => {
+    if (!multiStaff) {
+      return instrument === 'recorder' && instrumentNotationVariant === 'fingering';
+    }
+    const iid = instRow?.instrumentId;
+    if (iid !== 'recorder') return false;
+    const cfg = instrumentConfig?.[iid];
+    return !!(cfg?.type === 'wind' && cfg?.fingering && linkedNotationByStaffId?.[instRow.id]);
+  };
+
   /** System bracket (Leland): bracketTop + vertical line + bracketBottom when multiple staves and connected barlines */
   const showSystemBracket = connectedBarlines && staffIndexInScore === 0 && typeof systemTotalHeight === 'number' && systemTotalHeight > 0;
-  const systemBracketX = 10;
+  /** Right of staff-spacer handle (14px) so bracket is not covered when handles are shown. */
+  const systemBracketX = 17;
   const systemBracketCapSize = 14;
+  const smuflMusicFontStack = "'Leland', 'Bravura', serif";
 
   return (
     <g className="traditional-notation">
       {systems.map((sys) => {
         const pageIndex = isHorizontal ? Math.floor(sys.yOffset / a4PageHeight) : 0;
         const groupTransform = isHorizontal && pageWidth ? `translate(${pageIndex * pageWidth}, ${-pageIndex * a4PageHeight})` : undefined;
-        const bracketTopY = sys.yOffset;
-        const bracketBottomY = sys.yOffset + systemTotalHeight;
+        /** Top/bottom staff lines for full system (all staves); used for bracket + connected barlines — not per-row `staffY`. */
+        const systemTopStaffLineY = sys.yOffset + firstLineY;
+        const systemBottomStaffLineY =
+          sys.yOffset + (staffList.length - 1) * timelineHeight + lastLineY;
+        const bracketTopY = systemTopStaffLineY;
+        const bracketBottomY = systemBottomStaffLineY;
         return (
           <g key={sys.systemIndex} transform={groupTransform}>
-            {/* System bracket from Leland (SMuFL bracketTop + line + bracketBottom) – groups all parts in one system */}
+            {/* Spacer handle first so system bracket (SMuFL) paints on top and stays visible */}
+            {showStaffSpacerHandles && typeof onStaffSpacerMouseDown === 'function' && (
+              <rect
+                className="staff-spacer-handle"
+                x={0}
+                y={sys.yOffset}
+                width={14}
+                height={timelineHeight * (multiStaff ? staffList.length : 1)}
+                fill="#e5e7eb"
+                stroke="#9ca3af"
+                strokeWidth={1}
+                rx={2}
+                style={{ cursor: 'ns-resize' }}
+                onMouseDown={onStaffSpacerMouseDown(sys.systemIndex)}
+              />
+            )}
             {showSystemBracket && (
               <g aria-hidden="true">
                 <SmuflGlyph
@@ -427,6 +585,7 @@ export function TraditionalNotationView({
                   fill="#1a1a1a"
                   textAnchor="middle"
                   dominantBaseline="hanging"
+                  style={{ fontFamily: smuflMusicFontStack }}
                 />
                 <line
                   x1={systemBracketX}
@@ -444,23 +603,9 @@ export function TraditionalNotationView({
                   fill="#1a1a1a"
                   textAnchor="middle"
                   dominantBaseline="text-after-edge"
+                  style={{ fontFamily: smuflMusicFontStack }}
                 />
               </g>
-            )}
-            {showStaffSpacerHandles && typeof onStaffSpacerMouseDown === 'function' && (
-              <rect
-                className="staff-spacer-handle"
-                x={0}
-                y={sys.yOffset}
-                width={14}
-                height={timelineHeight * (multiStaff ? staffList.length : 1)}
-                fill="#e5e7eb"
-                stroke="#9ca3af"
-                strokeWidth={1}
-                rx={2}
-                style={{ cursor: 'ns-resize' }}
-                onMouseDown={onStaffSpacerMouseDown(sys.systemIndex)}
-              />
             )}
             {sys.pageBreakBefore && (
               <line x1={0} y1={sys.yOffset - PAGE_BREAK_GAP / 2} x2={pageWidth || 800} y2={sys.yOffset - PAGE_BREAK_GAP / 2} stroke="#c4b896" strokeWidth={1} strokeDasharray="4 4" />
@@ -491,6 +636,10 @@ export function TraditionalNotationView({
             })()}
 
             {staffList.map((inst, staffIndex) => {
+              /** Second+ staves in a combined system must not each draw full-height barlines (staffIndexInScore stays 0). */
+              const drawConnectedBarlinesHere =
+                !(connectedBarlines && staffIndexInScore > 0) &&
+                (!connectedBarlines || !multiStaff || staffIndex === 0);
               const staffY = sys.yOffset + staffIndex * timelineHeight;
               const staffCenterY = timelineHeight / 2;
               const staffFirstLineY = staffLinePositions[0];
@@ -516,32 +665,15 @@ export function TraditionalNotationView({
                     />
                   ))}
 
-                  {/* Partii rida: instrumendi nimi vasakul, siis noodivõti */}
-                  {multiStaff && inst.name && (
-                    <text
-                      x={4}
-                      y={staffY + staffCenterY}
-                      textAnchor="start"
-                      dominantBaseline="middle"
-                      fontSize={Math.max(10, spacing * 1.2)}
-                      fontFamily="sans-serif"
-                      fontWeight="600"
-                      fill="#333"
-                    >
-                      {inst.name}
-                    </text>
-                  )}
-                  {/* Üks noodivõti per staff (1px from left edge of staff; order: staff, 1px gap, clef, key marks if on, time sig first bar only, repeat, notation) */}
+                  {/* Üks noodivõti per staff — sama clefX kui ühe rea traditsioonivaates (ei ole eraldi “nime veergu”). */}
                   {staffLines === 5 && (
                     (() => {
-                      const nameWidth = multiStaff ? 50 : 0;
-                      const clefXStaff = clefX + nameWidth;
                       if (multiStaff) {
                         const clefY = instClef === 'treble' ? staffY + trebleGLine : instClef === 'bass' ? staffY + bassFLine : instClef === 'tenor' ? staffY + cClefTenorLine : staffY + cClefAltoLine;
                         return (
                           <StaffClefSymbol
                             key={`clef-${sys.systemIndex}-${staffIndex}-${instClef}`}
-                            x={clefXStaff}
+                            x={clefX}
                             y={clefY}
                             height={clefFontSize}
                             clefType={instClef}
@@ -552,7 +684,7 @@ export function TraditionalNotationView({
                       }
                       let g = [];
                       if (isVabanotatsioon) {
-                        let currentX = clefXStaff;
+                        let currentX = clefX;
                         const joClefCenterY = staffY + joKeyY;
                         const { above: ledgerAbove, below: ledgerBelow } = getLedgerLineCountExact(joKeyY, firstLineY, lastLineY, spacing);
                         const joClefWidthPx = getJoClefPixelWidth(spacing);
@@ -642,7 +774,7 @@ export function TraditionalNotationView({
                         staffLeft,
                         clefWidth: LAYOUT.CLEF_WIDTH,
                         keySigCount,
-                        extraLeft: multiStaff ? 50 : 0,
+                        extraLeft: 0,
                         measureStartX: effectiveMarginLeft,
                       });
                       return (
@@ -710,19 +842,18 @@ export function TraditionalNotationView({
                   return { ...gr, ...geom, noteXs, noteCys };
                 });
                 const getBeamGroup = (noteIdx) => beamGroups.find(g => noteIdx >= g.start && noteIdx <= g.end);
-                const connectedSpan = Math.max(0, Number(systemTotalHeight) || 0);
-                const connectedY1 = Number.isFinite(connectedBarlineY1Offset)
-                  ? (sys.yOffset + connectedBarlineY1Offset)
-                  : (staffY + firstLineY);
-                const connectedY2 = Number.isFinite(connectedBarlineY2Offset)
-                  ? (sys.yOffset + connectedBarlineY2Offset)
-                  : (connectedY1 + connectedSpan);
-                const barY1 = connectedBarlines && staffIndexInScore === 0 ? connectedY1 : staffY + firstLineY;
-                const barY2 = connectedBarlines && staffIndexInScore === 0 ? connectedY2 : staffY + lastLineY;
+                const systemConnectedSpan = Math.max(0, systemBottomStaffLineY - systemTopStaffLineY);
+                const connectedY1 = systemTopStaffLineY;
+                const connectedY2 = systemBottomStaffLineY;
+                const barY1 =
+                  connectedBarlines && staffIndexInScore === 0 ? connectedY1 : staffY + firstLineY;
+                const barY2 =
+                  connectedBarlines && staffIndexInScore === 0 ? connectedY2 : staffY + lastLineY;
                 const barCenterY = (barY1 + barY2) / 2;
-                const connectedScale = connectedBarlines && staffIndexInScore === 0
-                  ? Math.max(1, connectedSpan / Math.max(1, (lastLineY - firstLineY)))
-                  : 1;
+                const connectedScale =
+                  connectedBarlines && staffIndexInScore === 0
+                    ? Math.max(1, systemConnectedSpan / Math.max(1, lastLineY - firstLineY))
+                    : 1;
 
                 return (
                   <g key={measureIdx}>
@@ -735,7 +866,8 @@ export function TraditionalNotationView({
                         <path d={`M ${measureX + measureWidth / 2 - 4} ${staffY - 10} L ${measureX + measureWidth / 2} ${staffY - 14} L ${measureX + measureWidth / 2 + 4} ${staffY - 10}`} fill="none" stroke="#92400e" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
                       </g>
                     )}
-                    <>
+                    {drawConnectedBarlinesHere && (
+                      <>
                         {/* Left barline: turn into repeat-start symbol when measure.repeatStart (including first bar of line) */}
                         {measure.repeatStart ? (
                           <g
@@ -849,6 +981,7 @@ export function TraditionalNotationView({
                           })()
                         ) : null}
                       </>
+                    )}
                     {/* Segno, coda: 1px above barline; volta. All clickable to remove. */}
                     {staffIndexInScore === 0 && (() => {
                       const placement = getRepeatMarkPlacement({ measureX, staffY, firstLineY, spacing });
@@ -970,7 +1103,6 @@ export function TraditionalNotationView({
                       const ledgerHalfWidth = getLedgerHalfWidth(spacing);
                       const { above: nLedgerAbove, below: nLedgerBelow } = getLedgerLineCountExact(pitchY, firstLineY, lastLineY, spacing);
                       const glyph = getNoteheadGlyph(note.durationLabel, noteheadShape, noteheadEmoji);
-                      const lelandSize = Math.max(18, spacing * 4.2);
                       const stemLenDefault = getStemLength(spacing);
                       const stemStrokeW = getStemThickness(spacing);
                       const stemX = stemUp ? (noteX + noteheadRx - stemStrokeW / 2) : (noteX - noteheadRx + stemStrokeW / 2);
@@ -978,6 +1110,13 @@ export function TraditionalNotationView({
                       const stemLen = beamGroup ? (beamGroup.stemLengths[noteIdx - beamGroup.start] ?? stemLenDefault) : stemLenDefault;
                       const stemY2 = stemUp ? (stemY1 - stemLen) : (stemY1 + stemLen);
                       const flagCount = beamGroup ? 0 : getFlagCount(note.durationLabel);
+                      const rhythmType = smuflPrecomposedTypeForDurationLabel(note.durationLabel);
+                      const precomposedGlyph = smuflPrecomposedNote(rhythmType, stemUp, true);
+                      const useLelandPrecomposedRhythm =
+                        !beamGroup &&
+                        noteheadShape === 'oval' &&
+                        precomposedGlyph != null;
+                      const glyphFontSize = getGlyphFontSize(spacing);
 
                       return (
                         <g key={noteIdx} {...noteGroupProps}>
@@ -988,43 +1127,56 @@ export function TraditionalNotationView({
                             <line key={`lb-${i}`} x1={noteX - ledgerHalfWidth} y1={staffY + lastLineY + (i + 1) * spacing} x2={noteX + ledgerHalfWidth} y2={staffY + lastLineY + (i + 1) * spacing} stroke="#333" strokeWidth={getLegerLineThickness(spacing)} />
                           ))}
                           {isSelected && <rect x={noteX - 18} y={noteY - 22} width={36} height={44} fill="#93c5fd" opacity="0.3" rx="4" />}
-                          {(note.accidental === 1 || note.accidental === -1) && (
-                            <text x={noteX - (noteheadRx + spacing * 0.5)} y={noteY} textAnchor="middle" dominantBaseline="central" fontSize={Math.round(spacing * 1.4)} fill={noteFillColor} fontFamily="serif">{note.accidental === 1 ? '♯' : '♭'}</text>
+                          {(note.accidental === 1 || note.accidental === -1 || (note.accidental === 0 && getAccidentalForPitchInKey(note.pitch, keySignature) !== 0)) && (
+                            <text x={noteX - (noteheadRx + spacing * 0.5)} y={noteY} textAnchor="middle" dominantBaseline="central" fontSize={Math.round(spacing * 1.4)} fill={noteFillColor} fontFamily="serif">{note.accidental === 1 ? '♯' : note.accidental === -1 ? '♭' : '♮'}</text>
                           )}
-                          {glyph ? (
+                          {useLelandPrecomposedRhythm ? (
                             <SmuflGlyph
                               x={noteX}
                               y={noteY}
-                              glyph={glyph}
-                              fontSize={lelandSize}
+                              glyph={precomposedGlyph}
+                              fontSize={glyphFontSize}
                               fill={noteFillColor}
                               dominantBaseline="central"
                             />
                           ) : (
-                            <text x={noteX} y={noteY} textAnchor="middle" dominantBaseline="central" fontSize={lelandSize} fill={noteFillColor}>{noteheadEmoji}</text>
-                          )}
-                          {/* Vars + lipud (talatud nootidel lipud peidetud, vars ulatub talani) */}
-                          {note.durationLabel !== '1/1' && (
-                            <g>
-                              <line
-                                x1={stemX}
-                                y1={stemY1}
-                                x2={stemX}
-                                y2={stemY2}
-                                stroke="var(--note-fill, #1a1a1a)"
-                                strokeWidth={stemStrokeW}
-                                strokeLinecap="butt"
-                              />
-                              {flagCount > 0 && (
-                                <Flags
-                                  stemX={stemX}
-                                  stemEndY={stemY2}
-                                  staffSpace={spacing}
-                                  stemUp={stemUp}
-                                  count={flagCount}
+                            <>
+                              {glyph ? (
+                                <SmuflGlyph
+                                  x={noteX}
+                                  y={noteY}
+                                  glyph={glyph}
+                                  fontSize={glyphFontSize}
+                                  fill={noteFillColor}
+                                  dominantBaseline="central"
                                 />
+                              ) : (
+                                <text x={noteX} y={noteY} textAnchor="middle" dominantBaseline="central" fontSize={Math.max(18, glyphFontSize)} fill={noteFillColor}>{noteheadEmoji}</text>
                               )}
-                            </g>
+                              {/* Talatud / erikujulised pead: noodipea + vars + käsitsi lipud (Lelandil pole x/ruut/triangle valmisnooti) */}
+                              {note.durationLabel !== '1/1' && (
+                                <g>
+                                  <line
+                                    x1={stemX}
+                                    y1={stemY1}
+                                    x2={stemX}
+                                    y2={stemY2}
+                                    stroke={noteFillColor}
+                                    strokeWidth={stemStrokeW}
+                                    strokeLinecap="butt"
+                                  />
+                                  {flagCount > 0 && (
+                                    <Flags
+                                      stemX={stemX}
+                                      stemEndY={stemY2}
+                                      staffSpace={spacing}
+                                      stemUp={stemUp}
+                                      count={flagCount}
+                                    />
+                                  )}
+                                </g>
+                              )}
+                            </>
                           )}
                           {beamGroup && noteIdx === beamGroup.start && (() => {
                             const thick = getBeamThickness(spacing);
@@ -1092,26 +1244,40 @@ export function TraditionalNotationView({
                               </g>
                             );
                           })()}
-                          {(instrument === 'tin-whistle' || String(instrument || '').startsWith('tin-whistle-')) && instrumentNotationVariant === 'fingering' && note.pitch && typeof note.octave === 'number' && (() => {
-                            const name = getTinWhistleNotationName(note.pitch, note.octave);
-                            if (!name) return null;
-                            const fingeringLabelY = staffY + lastLineY + spacing * (showRhythmSyllables ? 2.6 : 1.8);
+                          {showTinWhistleLinkedFingeringForInst(inst) && note.pitch && typeof note.octave === 'number' && (() => {
+                            const effectivePitch = pitchWithAccidental(note.pitch, resolvedAccidental);
+                            const fingeringPattern = getTinWhistleFingeringPattern(effectivePitch, note.octave);
+                            const fingeringLabelY = staffY + lastLineY + spacing * (showRhythmSyllables ? 2.35 : 1.55);
+                            if (fingeringPattern) {
+                              return (
+                                <TinWhistleFingeringSvg
+                                  key="tinwhistle-fingering-svg"
+                                  x={noteX}
+                                  y={fingeringLabelY}
+                                  staffSpace={spacing}
+                                  pattern={fingeringPattern}
+                                  scale={tinWhistleFingeringScale}
+                                />
+                              );
+                            }
+                            // Fallback (rare accidental/out-of-map note): keep legacy text marker.
+                            const fallbackName = `${effectivePitch}${note.octave}`;
                             return (
                               <text
-                                key="tinwhistle-fingering"
+                                key="tinwhistle-fingering-fallback"
                                 x={noteX}
                                 y={fingeringLabelY}
                                 textAnchor="middle"
                                 dominantBaseline="auto"
-                                fontSize={Math.max(12, spacing * 1.4)}
+                                fontSize={Math.max(10, spacing * 1.1 * tinWhistleFingeringScale)}
                                 fill="var(--note-fill, #1a1a1a)"
                                 fontFamily={tinWhistleFontFamily}
                               >
-                                {name}
+                                {fallbackName}
                               </text>
                             );
                           })()}
-                          {instrument === 'recorder' && instrumentNotationVariant === 'fingering' && note.pitch && typeof note.octave === 'number' && (() => {
+                          {showRecorderLinkedFingeringForInst(inst) && note.pitch && typeof note.octave === 'number' && (() => {
                             const char = getRecorderFingeringChar(note.pitch, note.octave);
                             if (!char) return null;
                             const fingeringLabelY = staffY + lastLineY + spacing * (showRhythmSyllables ? 2.6 : 1.8);

@@ -28,7 +28,7 @@ Seega **ainult Google’il on „mootor“** – Microsoft ja Apple on placehold
 2. **Name:** nt `NoodiMeister`.  
    **Supported account types:** „Accounts in any organizational directory and personal Microsoft accounts“.  
    **Redirect URI:** vali **Single-page application (SPA)** ja lisa:
-   - `http://localhost:5173`
+   - `http://127.0.0.1:5197`
    - `https://noodi-meister-vol1-la-stravaganza.vercel.app`
 3. **Register** → kopeeri **Application (client) ID** ja **Directory (tenant) ID** (vajalikud koodis).
 
@@ -47,7 +47,7 @@ Seega **ainult Google’il on „mootor“** – Microsoft ja Apple on placehold
 
 ---
 
-**Kui Microsofti sisselogimine ei vii kuhugi või suunab alati /login lehele:** Azure → App registrations → NoodiMeister → Authentication. **Redirect URI (SPA)** peab olema **rakenduse juur**, mitte /login: lisa mõlemad `https://www.noodimeister.ee/` ja `https://www.noodimeister.ee/login` (ja soovi korral `http://localhost:5173/`, `http://localhost:5173/login`). Kui Azure’s on `.../login`, eemalda see ja lisa ainult juur-URL. Pärast sisselogimist kuvatakse vea korral soovitatav URI – kopeeri see Azure'i.
+**Kui Microsofti sisselogimine ei vii kuhugi või suunab alati /login lehele:** Azure → App registrations → NoodiMeister → Authentication. **Redirect URI (SPA)** peab olema **rakenduse juur**, mitte /login: lisa mõlemad `https://www.noodimeister.ee/` ja `https://www.noodimeister.ee/login` (ja soovi korral kohalik `http://127.0.0.1:5197/`, `http://127.0.0.1:5197/login`). Kui Azure’s on `.../login`, eemalda see ja lisa ainult juur-URL. Pärast sisselogimist kuvatakse vea korral soovitatav URI – kopeeri see Azure'i.
 
 ## Samm 2: Rakenduse koodis – paketid ja keskkond
 

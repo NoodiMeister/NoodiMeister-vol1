@@ -421,6 +421,7 @@ export function buildScoreSceneSnapshot (options = {}) {
     pageDesignCrop = null,
     pageDesignLayer = 'behind',
     footerText = '',
+    layoutSnapshot = null,
     contentWidth: explicitContentWidth,
     contentHeight: explicitContentHeight,
     sceneMarkup = '',
@@ -486,6 +487,7 @@ export function buildScoreSceneSnapshot (options = {}) {
         }
       : { top: 0, right: 0, bottom: 0, left: 0 },
     pageDesignLayer: pageDesignLayer === 'inFront' ? 'inFront' : 'behind',
+    layoutSnapshot: layoutSnapshot && typeof layoutSnapshot === 'object' ? layoutSnapshot : null,
   };
 }
 

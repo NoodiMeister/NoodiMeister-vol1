@@ -112,13 +112,17 @@ function Flags({ cx, cy, staffSpace, stemUp, count = 1, stemLength }) {
 // --- Eksporditavad sümbolid ---
 
 export function WholeNoteSymbol({ cx = 0, cy = 0, staffSpace = STAFF_SPACE }) {
-  return <NoteHeadGlyph cx={cx} cy={cy} staffSpace={staffSpace} type="whole" />;
+  return <PrecomposedNoteGlyph cx={cx} cy={cy} staffSpace={staffSpace} type="whole" stemUp />;
 }
 
-/** Half note: hollow notehead (outline) + SVG stem – same building blocks as quarter for consistent look. */
+/** Half note: Leland precomposed (U+E1D3/E1D4) when standalone; head + SVG stem when stem length is custom (e.g. beamed). */
 export function HalfNoteSymbol({ cx = 0, cy = 0, staffSpace = STAFF_SPACE, stemUp = true, stemLength }) {
   const fontSize = getGlyphFontSize(staffSpace);
   const strokeW = getStemThickness(staffSpace) * 0.8;
+  const usePrecomposed = stemLength == null;
+  if (usePrecomposed) {
+    return <PrecomposedNoteGlyph cx={cx} cy={cy} staffSpace={staffSpace} type="half" stemUp={stemUp} />;
+  }
   return (
     <g>
       <SmuflGlyph
