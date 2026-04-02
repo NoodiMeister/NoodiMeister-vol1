@@ -222,7 +222,12 @@ function TinWhistleFingeringSvg({ x, y, staffSpace, pattern, scale = 1 }) {
   const ss = staffSpace * s;
   const radius = Math.max(1.6, ss * 0.22);
   const gap = Math.max(3, ss * 0.75);
-  const plusY = y + gap * 6 + radius * 1.5;
+  const fontSize = Math.max(7, ss * 0.9);
+  /** Lokaalne Y gruppis (0 = ülemise augu keskpunkt): viimane auk on i=5, alumine äär ≈ 5*gap+radius. Ära lisa välise `y` — grupp on juba translate(x,y). */
+  const bottomOfLastHole = 5 * gap + radius;
+  /** Vahe tulba ja "+" vahel: veidi skaleerub, aga ülempiir, et suure skaalaga ei läheks märk kaugele. */
+  const gapBelowColumn = Math.min(0.35 * gap, 10 + ss * 0.06);
+  const plusLocalY = bottomOfLastHole + gapBelowColumn + fontSize * 0.35;
   return (
     <g transform={`translate(${x}, ${y})`} aria-hidden="true">
       {pattern.holes.map((covered, i) => (
@@ -239,12 +244,12 @@ function TinWhistleFingeringSvg({ x, y, staffSpace, pattern, scale = 1 }) {
       {pattern.overblow && (
         <text
           x={0}
-          y={plusY}
+          y={plusLocalY}
           textAnchor="middle"
           dominantBaseline="middle"
           fontFamily="sans-serif"
           fontWeight="700"
-          fontSize={Math.max(7, ss * 0.9)}
+          fontSize={fontSize}
           fill="#111"
         >
           +
