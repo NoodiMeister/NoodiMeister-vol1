@@ -1,16 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  1/8 + 1/16 + 1/16 (one beat), stem down. Gould / SMuFL / MuseScore-classical:
-  - Primary (eighth) beam: one straight segment from first stem x to last stem x. Its line is
-    anchored like computeBeamGeometry: slope from default stem tips of outer notes (here same
-    pitch ? horizontal). Only the 1/8 stem ends on this line.
-  - Secondary (sixteenth) beam: parallel to primary, only between the two 1/16 stems (partial).
-  - 1/16 stems extend through the primary to the secondary (outer) beam; their tips lie on
-    the secondary, not on the primary.
-  - sp = 8px ? stem length 3.5 sp = 28, beam 0.5 sp = 4, gap 0.25 sp = 2 (Leland-style).
-  Paint order: partial secondary first (under), full primary last (on top).
+  1/8 + 1/16 + 1/16 (one beat), treble D4, stem UP.
+  D4 space below E4: no ledger.
+  Primary (8th) beam across three stems; partial 2/16 only between last two.
+  Stems at centers 141, 208.5, 253.5 (stroke 1.8 -> outer x edges 140.1/141.9 etc.).
+  Horizontal beam line: stroke widens in Y only, not X. Full beam x: 140.1-254.4 (stem1 left to stem3 right).
+  Partial beam x: 207.6-254.4 (stem2 left to stem3 right). y: primary=50; 16th y2=52; secondary=56.
 -->
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 150" width="360" height="150">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 140" width="360" height="140">
   <rect width="100%" height="100%" fill="#fafafa"/>
 
   <g stroke="#333" stroke-width="0.9" fill="none">
@@ -26,27 +23,27 @@
   </g>
   <line x1="68" y1="42" x2="68" y2="98" stroke="#222" stroke-width="1"/>
 
-  <!-- D5 cy=56; centers 135, 202.5, 247.5; stem x = cx - 5.6 ? 129.4, 196.9, 241.9 -->
-  <!-- Primary centerline y = cy + 3.5*sp = 56 + 28 = 84; secondary = 84 + (4+2) = 90 -->
-
+  <!-- stem x=cx+6 (1.8); beam x spans stem outer edges (horizontal stroke does not extend in x) -->
   <g stroke="#1a1a1a" stroke-width="1.8" stroke-linecap="butt" fill="none">
-    <line x1="129.4" y1="56" x2="129.4" y2="84"/>
-    <line x1="196.9" y1="56" x2="196.9" y2="90"/>
-    <line x1="241.9" y1="56" x2="241.9" y2="90"/>
+    <line x1="141" y1="84" x2="141" y2="50"/>
+    <line x1="208.5" y1="84" x2="208.5" y2="52"/>
+    <line x1="253.5" y1="84" x2="253.5" y2="52"/>
   </g>
   <g fill="#1a1a1a">
-    <ellipse cx="135" cy="56" rx="6.5" ry="4.2"/>
-    <ellipse cx="202.5" cy="56" rx="6.5" ry="4.2"/>
-    <ellipse cx="247.5" cy="56" rx="6.5" ry="4.2"/>
+    <ellipse cx="135" cy="84" rx="6.5" ry="4.2"/>
+    <ellipse cx="202.5" cy="84" rx="6.5" ry="4.2"/>
+    <ellipse cx="247.5" cy="84" rx="6.5" ry="4.2"/>
   </g>
 
-  <!-- 1) partial 16th beam (under)  2) full primary eighth (on top) -->
   <g stroke="#1a1a1a" stroke-linecap="butt" fill="none">
-    <line x1="196.9" y1="90" x2="241.9" y2="90" stroke-width="4"/>
-    <line x1="129.4" y1="84" x2="241.9" y2="84" stroke-width="4"/>
+    <line x1="207.6" y1="56" x2="254.4" y2="56" stroke-width="4"/>
+    <line x1="140.1" y1="50" x2="254.4" y2="50" stroke-width="4"/>
   </g>
 
-  <text x="14" y="18" font-family="system-ui, -apple-system, sans-serif" font-size="11" fill="#444">
-    1/8+2/16: primary horizontal (1/8 tip only); 1/16 tips on partial secondary
+  <text x="14" y="20" font-family="system-ui, -apple-system, sans-serif" font-size="11" fill="#444">
+    1/8 + 2x1/16, treble D4, stem up
+  </text>
+  <text x="14" y="36" font-family="system-ui, -apple-system, sans-serif" font-size="9.5" fill="#666">
+    Full 1/8 beam; partial 2/16; no ledger for D4 in this space
   </text>
 </svg>

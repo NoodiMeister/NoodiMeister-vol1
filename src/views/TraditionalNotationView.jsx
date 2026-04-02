@@ -23,6 +23,7 @@ import {
 import { TIME_SIG_LAYOUT, getTraditionalTimeSignatureX } from '../notation/TimeSignatureLayout';
 import {
   getStaffLinePositions,
+  getMiddleStaffLineY,
   getYFromStaffPosition,
   getLedgerLineCountExact,
   getNoteheadRx,
@@ -32,6 +33,7 @@ import {
   getStaffLineThickness,
   getLegerLineThickness,
   getStemThickness,
+  getStemCenterXFromNoteCenter,
   getThinBarlineThickness,
 } from '../notation/StaffConstants';
 import {
@@ -43,6 +45,7 @@ import {
 } from '../notation/musescoreStyle';
 import {
   computeBeamGroups,
+  beamLineYAtX,
   computeBeamGeometry,
   getBeamThickness,
   getBeamGap,
@@ -517,7 +520,7 @@ export function TraditionalNotationView({
   // Leland: Treble on B line (traditional-method placement). Bass: F line (index 1).
   const trebleGLine = staffLinePositions[TREBLE_CLEF_LINE_INDEX];
   const bassFLine = staffLinePositions[1];    // F3
-  const middleLineY = centerY;
+  const middleLineY = getMiddleStaffLineY(centerY, staffLines, spacing);
   // C clef: alto = middle line (index 2), tenor = one line up (index 1). Middle arrow of cClef sits on this line.
   const cClefAltoLine = staffLinePositions[2];
   const cClefTenorLine = staffLinePositions[1];
@@ -1159,7 +1162,7 @@ export function TraditionalNotationView({
                       const glyph = getNoteheadGlyph(note.durationLabel, noteheadShape, noteheadEmoji);
                       const stemLenDefault = getStemLength(spacing);
                       const stemStrokeW = getStemThickness(spacing);
-                      const stemX = stemUp ? (noteX + noteheadRx - stemStrokeW / 2) : (noteX - noteheadRx + stemStrokeW / 2);
+                      const stemX = getStemCenterXFromNoteCenter(noteX, spacing, stemUp);
                       const stemY1 = noteY;
                       const stemLen = beamGroup ? (beamGroup.stemLengths[noteIdx - beamGroup.start] ?? stemLenDefault) : stemLenDefault;
                       const stemY2 = stemUp ? (stemY1 - stemLen) : (stemY1 + stemLen);
@@ -1237,29 +1240,37 @@ export function TraditionalNotationView({
                             const thick = getBeamThickness(spacing);
                             const gap = getBeamGap(spacing);
                             const offset = thick + gap;
-                            const y1 = staffY + beamGroup.beamY1;
-                            const y2 = staffY + beamGroup.beamY2;
                             const dir = beamGroup.stemUp ? -1 : 1;
+                            const slope = beamGroup.beamSlope ?? 0;
+                            const xs = beamGroup.stemXsInGroup;
+                            const sw = beamGroup.stemW ?? getStemThickness(spacing);
                             const beams = [];
                             for (let b = beamGroup.numBeams - 1; b >= 0; b--) {
-                              let xL = beamGroup.xLeft;
-                              let xR = beamGroup.xRight;
-                              if (b >= 1 && beamGroup.beamLevels && beamGroup.noteXs) {
+                              let xL = beamGroup.beamXLeft;
+                              let xR = beamGroup.beamXRight;
+                              if (b >= 1 && beamGroup.beamLevels && xs?.length) {
                                 const idxMin = beamGroup.beamLevels.findIndex((lev) => lev >= b + 1);
                                 const idxMax = beamGroup.beamLevels.length - 1 - [...beamGroup.beamLevels].reverse().findIndex((lev) => lev >= b + 1);
                                 if (idxMin >= 0 && idxMax >= 0) {
-                                  xL = beamGroup.noteXs[idxMin];
-                                  xR = beamGroup.noteXs[idxMax];
+                                  xL = xs[idxMin] - sw / 2;
+                                  xR = xs[idxMax] + sw / 2;
                                 }
                               }
-                              const dy = b * offset * dir;
+                              const swap = beamGroup.mixedBeamStackSwap;
+                              const dy = (swap ? beamGroup.numBeams - 1 - b : b) * offset * dir;
+                              const yL =
+                                staffY +
+                                beamLineYAtX(beamGroup.beamY1, slope, beamGroup.xLeft, xL, dy);
+                              const yR =
+                                staffY +
+                                beamLineYAtX(beamGroup.beamY1, slope, beamGroup.xLeft, xR, dy);
                               beams.push(
                                 <line
                                   key={b}
                                   x1={xL}
-                                  y1={y1 + dy}
+                                  y1={yL}
                                   x2={xR}
-                                  y2={y2 + dy}
+                                  y2={yR}
                                   stroke="#1a1a1a"
                                   strokeWidth={thick}
                                   strokeLinecap="butt"
@@ -1295,7 +1306,7 @@ export function TraditionalNotationView({
                             if (beamGroup && noteIdx === beamGroup.start) {
                               const groupNotes = measure.notes.slice(beamGroup.start, beamGroup.end + 1);
                               const syllable = getRhythmSyllableForNote(note, { beamGroupNotes: groupNotes });
-                              const xCenter = (beamGroup.xLeft + beamGroup.xRight) / 2;
+                              const xCenter = (beamGroup.beamXLeft + beamGroup.beamXRight) / 2;
                               return <RhythmSyllableLabel key="syl" x={xCenter} y={labelY} text={syllable} staffSpace={spacing} />;
                             }
                             if (!beamGroup) {

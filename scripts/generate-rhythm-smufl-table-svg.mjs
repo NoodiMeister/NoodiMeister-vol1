@@ -9,13 +9,14 @@
 import { writeFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
-import { computeBeamGroups, computeBeamGeometry } from '../src/notation/BeamCalculation.js';
+import { beamLineYAtX, computeBeamGroups, computeBeamGeometry } from '../src/notation/BeamCalculation.js';
 import {
   getBeamGap,
   getBeamThickness,
-  getNoteheadRx,
+  getStemCenterXFromNoteCenter,
   getStemLength,
   getStemThickness,
+  SMUFL_BRAVURA_NOTEHEAD_BLACK_WIDTH_SP,
 } from '../src/notation/StaffConstants.js';
 import { getGlyphFontSize } from '../src/notation/musescoreStyle.js';
 import { RHYTHM_PATTERN_SEGMENTS } from '../src/notation/rhythmPatternSpecs.js';
@@ -89,16 +90,15 @@ function renderBeamedPatternInner(segments) {
   const staffSpace = ICON_STAFF_SPACE;
   const middleLineY = 0;
   const notes = buildNotesFromSegments(segments);
-  const contentW = Math.max(14, segments.length * 3.2) * staffSpace * 0.22;
+  const contentW = Math.max(22, segments.length * 5) * staffSpace * 0.32;
   const noteXs = layoutNoteXs(notes, contentW);
   const noteCys = notes.map(() => middleLineY);
   const stemUp = true;
+  const bravuraHeadOpts = { noteheadWidthSp: SMUFL_BRAVURA_NOTEHEAD_BLACK_WIDTH_SP };
   const beamGroups = computeBeamGroups(notes, 0, TIME_SIG).map((gr) => {
-    const geom = computeBeamGeometry(gr, notes, noteXs, noteCys, stemUp, staffSpace);
+    const geom = computeBeamGeometry(gr, notes, noteXs, noteCys, stemUp, staffSpace, bravuraHeadOpts);
     return { ...gr, ...geom, noteXs };
   });
-
-  const rx = getNoteheadRx(staffSpace);
   const defaultStemLen = getStemLength(staffSpace);
   const stemStrokeW = getStemThickness(staffSpace);
   const glyphFontSize = getGlyphFontSize(staffSpace);
@@ -116,11 +116,11 @@ function renderBeamedPatternInner(segments) {
     const cy = noteCys[i];
     const beamGroup = getBeamGroup(i);
     const stemLen = beamGroup ? beamGroup.stemLengths[i - beamGroup.start] ?? defaultStemLen : defaultStemLen;
-    const stemX = noteX + rx - stemStrokeW / 2;
+    const stemX = getStemCenterXFromNoteCenter(noteX, staffSpace, stemUp, bravuraHeadOpts);
     const stemY2 = cy - stemLen;
 
     parts.push(
-      `<text x="${noteX}" y="${cy}" font-family="${BRAVURA_FF}" font-size="${glyphFontSize}" fill="${FILL}" text-anchor="middle" dominant-baseline="middle">${SM.nh}</text>`
+      `<text x="${noteX}" y="${cy}" font-family="${BRAVURA_FF}" font-size="${glyphFontSize}" fill="${FILL}" text-anchor="middle" dominant-baseline="central">${SM.nh}</text>`
     );
     parts.push(
       `<line x1="${stemX}" y1="${cy}" x2="${stemX}" y2="${stemY2}" stroke="${FILL}" stroke-width="${stemStrokeW}" stroke-linecap="butt"/>`
@@ -130,22 +130,29 @@ function renderBeamedPatternInner(segments) {
       drawnBeamStarts.add(beamGroup.start);
       const dir = beamGroup.stemUp ? -1 : 1;
       const y1 = beamGroup.beamY1;
-      const y2 = beamGroup.beamY2;
+      const slope = beamGroup.beamSlope ?? 0;
+      const xs = beamGroup.stemXsInGroup;
+      const sw = beamGroup.stemW ?? stemStrokeW;
+      /* Tala kirjutusjärjekord (SVG/DOM): b=numBeams-1 .. 0 — sekundaarne/osaline span enne, esmane tala viimasena (peal).
+       * x otspunktid varre välisservadel (beamXLeft/Right); osaline tala stemXsInGroup[idxMin], idxMax. */
       for (let b = beamGroup.numBeams - 1; b >= 0; b--) {
-        let xL = beamGroup.xLeft;
-        let xR = beamGroup.xRight;
-        if (b >= 1 && beamGroup.beamLevels && beamGroup.noteXs) {
+        let xL = beamGroup.beamXLeft;
+        let xR = beamGroup.beamXRight;
+        if (b >= 1 && beamGroup.beamLevels && xs?.length) {
           const levels = beamGroup.beamLevels;
           const idxMin = levels.findIndex((lev) => lev >= b + 1);
           const idxMax = levels.length - 1 - [...levels].reverse().findIndex((lev) => lev >= b + 1);
           if (idxMin >= 0 && idxMax >= 0) {
-            xL = beamGroup.noteXs[idxMin];
-            xR = beamGroup.noteXs[idxMax];
+            xL = xs[idxMin] - sw / 2;
+            xR = xs[idxMax] + sw / 2;
           }
         }
-        const dy = b * beamOffset * dir;
+        const swap = beamGroup.mixedBeamStackSwap;
+        const dy = (swap ? beamGroup.numBeams - 1 - b : b) * beamOffset * dir;
+        const yL = beamLineYAtX(y1, slope, beamGroup.xLeft, xL, dy);
+        const yR = beamLineYAtX(y1, slope, beamGroup.xLeft, xR, dy);
         parts.push(
-          `<line x1="${xL}" y1="${y1 + dy}" x2="${xR}" y2="${y2 + dy}" stroke="${FILL}" stroke-width="${beamThick}" stroke-linecap="butt"/>`
+          `<line x1="${xL}" y1="${yL}" x2="${xR}" y2="${yR}" stroke="${FILL}" stroke-width="${beamThick}" stroke-linecap="butt"/>`
         );
       }
     }
@@ -233,6 +240,15 @@ function cellBeamSchematicTxt(t) {
   );
 }
 
+/** Vihje: mitme tala korral alumine kiht enne, ülemine viimasena (sama mis renderBeamedPatternInner). */
+function cellBeamZOrderHint() {
+  return cellSmufl(
+    `<text x="44" y="14" font-family="system-ui,sans-serif" font-size="7" fill="${FILL}" text-anchor="middle">1. alt</text><text x="44" y="26" font-family="system-ui,sans-serif" font-size="7" fill="${FILL}" text-anchor="middle">2. peal</text>`,
+    88,
+    36
+  );
+}
+
 const rows = [];
 function addRow(cat, value, etDesc, previewInner, w = 88) {
   rows.push({ cat, value, etDesc, previewInner, w });
@@ -259,8 +275,13 @@ addRow('Liit', '2/8', '2×1/8 (BeamCalculation, vars üles)', cellBeamedPattern(
 addRow('Liit', '2/8+2/8', 'Kaks eraldi tala', cellBeamedPattern('2/8+2/8'));
 addRow('Liit', '4/8', '4×1/8 üks tala', cellBeamedPattern('4/8'));
 addRow('Liit', '4/16', '4×1/16', cellBeamedPattern('4/16'));
-addRow('Liit', '8/16', '8×1/16 (kaks rühma)', cellBeamedPattern('8/16', 120), 120);
-addRow('Liit', '1/8+2/16', 'Segarütm', cellBeamedPattern('1/8+2/16'));
+addRow('Liit', '8/16', '8×1/16 (kaks rühma)', cellBeamedPattern('8/16', 148), 148);
+addRow(
+  'Liit',
+  '1/8+2/16',
+  'Segarütm (esmane tala väljas, osaline 2/16 sees — vt beam-samples/beam-1-8-plus-2-16.svg)',
+  cellBeamedPattern('1/8+2/16')
+);
 addRow('Liit', '2/16+1/8', 'Segarütm', cellBeamedPattern('2/16+1/8'));
 addRow('Liit', 'triplet-8', 'Triool kaheksandikud', cellBeamedPattern('triplet-8'));
 addRow(
@@ -275,6 +296,12 @@ addRow('Beam', 'beam:2/8', '2/8 kaupa (skeem)', cellBeamSchematic('2'));
 addRow('Beam', 'beam:3/8', '3/8 kaupa (skeem)', cellBeamSchematic('3'));
 addRow('Beam', 'beam:4/8', '4/8 (skeem)', cellBeamSchematic('4'));
 addRow('Beam', 'beam:3/16', '3/16 (skeem)', cellBeamSchematicTxt('3/16'));
+addRow(
+  'Beam',
+  'z-order',
+  'Mitme talaastmega: osaline/sekundaarne span enne (alumine kiht), esmane täispikk tala viimasena (peal). Hori. tala: stroke ei pikenda x-s; x-vahemik = varre välisservad. Näidis: public/beam-samples/beam-1-8-plus-2-16.svg.',
+  cellBeamZOrderHint()
+);
 
 const rowH = 42;
 const startY = 92;
@@ -283,7 +310,7 @@ const colVal = 160;
 const colPrev = 300;
 const colEt = 430;
 const tableW = 900;
-const totalH = startY + rows.length * rowH + 100;
+const totalH = startY + rows.length * rowH + 118;
 
 function embedPreview(r) {
   const w = r.w || 88;
@@ -326,7 +353,8 @@ const svg = `<?xml version="1.0" encoding="UTF-8"?>
   <text x="${colPrev}" y="84" font-family="system-ui,sans-serif" font-size="11" font-weight="700">SMuFL eelvaade</text>
   <text x="${colEt}" y="84" font-family="system-ui,sans-serif" font-size="11" font-weight="700">Kirjeldus</text>
   ${body}
-  <text x="24" y="${totalH - 48}" font-family="system-ui,sans-serif" font-size="10" fill="#666">Beam-read: ainult skeem (mitte SMuFL), nagu rhythmToolbox BEAM_MODE_ICONS.</text>
+  <text x="24" y="${totalH - 66}" font-family="system-ui,sans-serif" font-size="10" fill="#666">Beam-read: ainult skeem (mitte SMuFL), nagu rhythmToolbox BEAM_MODE_ICONS.</text>
+  <text x="24" y="${totalH - 48}" font-family="system-ui,sans-serif" font-size="10" fill="#666">Tala kihid (z-order): rea Beam / z-order; näidis beam-samples/beam-1-8-plus-2-16.svg.</text>
   <text x="24" y="${totalH - 30}" font-family="system-ui,sans-serif" font-size="10" fill="#666">Uuenda: node scripts/generate-rhythm-smufl-table-svg.mjs</text>
 </svg>`;
 

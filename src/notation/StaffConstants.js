@@ -25,6 +25,38 @@ export function getNoteheadRx(staffSpace = STAFF_SPACE) {
   return staffSpace * 0.7;
 }
 
+/**
+ * SMuFL noteheadBlack bbox laius (staff spaces) — Leland: leland_metadata.json glyphBBoxes.noteheadBlack (NE.x − SW.x).
+ * Kasutatakse varre keskjoone X-i (stemUpSE / stemDownNW), mitte ovaali getNoteheadRx.
+ */
+export const SMUFL_LELAND_NOTEHEAD_BLACK_WIDTH_SP = 1.3;
+
+/**
+ * SMuFL noteheadBlack bbox laius — Bravura: bravura_metadata.json glyphBBoxes.noteheadBlack.
+ * Koondtabeli SVG kasutab Bravura fonti; vars peab vastama sama glüüfi laiusele.
+ */
+export const SMUFL_BRAVURA_NOTEHEAD_BLACK_WIDTH_SP = 1.18;
+
+/**
+ * Horisontaalne offset noodipea keskpunktist varre keskjoonele (SMuFL stemUpSE / stemDownNW: lõike serv − varre paksus/2).
+ * @param {number} staffSpace
+ * @param {boolean} stemUp
+ * @param {{ noteheadWidthSp?: number }} [options] — vaikimisi Leland 1.3 sp
+ */
+export function getStemHorizontalOffsetFromNoteCenter(staffSpace = STAFF_SPACE, stemUp = true, options = {}) {
+  const { noteheadWidthSp = SMUFL_LELAND_NOTEHEAD_BLACK_WIDTH_SP } = options;
+  const sw = getStemThickness(staffSpace);
+  const halfW = (noteheadWidthSp / 2) * staffSpace;
+  return stemUp ? halfW - sw / 2 : -halfW + sw / 2;
+}
+
+/**
+ * Varre keskjoone X noodipea keskpunktist (sama mis partituuris ja rütmikasti ikoonidel).
+ */
+export function getStemCenterXFromNoteCenter(noteCenterX, staffSpace = STAFF_SPACE, stemUp = true, options = {}) {
+  return noteCenterX + getStemHorizontalOffsetFromNoteCenter(staffSpace, stemUp, options);
+}
+
 /** Noodipea raadius Y (ovaal kõrgus) = staffSpace * 0.5 */
 export function getNoteheadRy(staffSpace = STAFF_SPACE) {
   return staffSpace * 0.5;
@@ -92,6 +124,16 @@ export function getStaffLinePositions(centerY, staffLines = 5, staffSpace = STAF
     return Array.from({ length: 5 }, (_, i) => startY + i * staffSpace);
   }
   return [centerY];
+}
+
+/**
+ * Keskmine noodijoon (5-liinisel joonestikul indeks 2). Vaike-varre suund: pitchY suurem kui middleLineY => vars üles.
+ * Viiulivõti: B4; bassivõti: D3 (sama geomeetriline keskjoon).
+ */
+export function getMiddleStaffLineY(centerY, staffLines = 5, staffSpace = STAFF_SPACE) {
+  const lines = getStaffLinePositions(centerY, staffLines, staffSpace);
+  if (staffLines === 5 && lines.length >= 3) return lines[2];
+  return centerY;
 }
 
 /**
@@ -249,8 +291,8 @@ export function getLedgerLineCount(pitchY, firstLineY, lastLineY, staffSpace = S
 /**
  * Abijooned vastavalt joon/vahe reeglile: noot võib olla JOONEL või VAHES.
  * Üleval: esimene vahe (A5) = 0 abijoont, esimene abijoon (B5) = 1 abijoon, jne.
- * All: esimene vahe (D4) = 0 abijoont, esimene abijoon (C4) = 1 abijoon, B3 = 1 abijoon (esimese abijoone all),
- *      A3 teisel abijoonel = 2 abijoont, G3 teise abijoone all = 2 abijoont.
+ * All (viiulivõti, E4 alumine joon): esimene vahe allpool (D4) = 0 abijoont; esimene abijoon (C4) = 1;
+ *      B3 = 1 abijoon (esimese abijoone all), jne.
  * Positsioon arvutatakse poolspace sammudes (0 = joon, 1 = vahe, 2 = joon, ...).
  */
 export function getLedgerLineCountExact(pitchY, firstLineY, lastLineY, staffSpace = STAFF_SPACE) {

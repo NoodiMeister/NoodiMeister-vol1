@@ -14,11 +14,13 @@ import { NoteSymbol } from './notation/NoteSymbols';
 import {
   STAFF_SPACE,
   getStaffLinePositions as getStaffLinePositionsFromConstants,
+  getMiddleStaffLineY,
   getVerticalPosition,
   getLedgerLineCountExact,
   getNoteheadRx,
   getNoteheadRy,
   getLedgerHalfWidth,
+  getStemLength,
   getTonicStaffPosition,
   getKeyFromStaffPosition,
   getYFromStaffPosition,
@@ -12337,7 +12339,7 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
   };
 
   const staffLinePositions = getStaffLinePositions();
-  const middleLineY = centerY; // B4 treble / D3 bass
+  const middleLineY = isTabMode ? centerY : getMiddleStaffLineY(centerY, staffLines, spacing);
 
   const staffSpacerDragRef = useRef(staffSpacerDrag);
   staffSpacerDragRef.current = staffSpacerDrag;
@@ -13152,7 +13154,8 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
               if (notationMode === 'traditional') {
                 const rx = getNoteheadRx(spacing);
                 const stemX = stemUp ? cx + rx : cx - rx;
-                const stemY2 = stemUp ? cy - 28 : cy + 28;
+                const ghostStemLen = getStemLength(spacing);
+                const stemY2 = stemUp ? cy - ghostStemLen : cy + ghostStemLen;
                 const ledgerHalfWidth = getLedgerHalfWidth(spacing);
                 const sysY = cursorInfo.system.yOffset;
                 const firstLineY = staffLinePositions[0];

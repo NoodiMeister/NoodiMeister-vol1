@@ -31,6 +31,8 @@ export function SmuflGlyph({
       style={{
         fontFamily,
         fontSize,
+        fontWeight: 'normal',
+        fontStyle: 'normal',
         fill,
         pointerEvents,
         ...style,

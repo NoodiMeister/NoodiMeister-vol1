@@ -25,9 +25,32 @@ function getBravuraOtfBase64 () {
         if (!r.ok) throw new Error(`Bravura OTF fetch failed (${r.status})`);
         return r.arrayBuffer();
       })
-      .then(arrayBufferToBase64);
+      .then(arrayBufferToBase64)
+      .catch((err) => {
+        cachedBase64Promise = null;
+        throw err;
+      });
   }
   return cachedBase64Promise;
+}
+
+/** svg2pdf/jsPDF may request these style keys for <text>; all map to the same Bravura face. */
+const SMUFL_JSPDF_STYLE_VARIANTS = ['normal', 'bold', 'italic', 'bolditalic'];
+
+function ensureLelandStyleVariants (pdf) {
+  const list = pdf.getFontList?.() || {};
+  const have = list.Leland || [];
+  for (const style of SMUFL_JSPDF_STYLE_VARIANTS) {
+    if (have.indexOf(style) < 0) {
+      pdf.addFont(VFS_NAME, 'Leland', style);
+    }
+  }
+  const haveBr = list.Bravura || [];
+  for (const style of SMUFL_JSPDF_STYLE_VARIANTS) {
+    if (haveBr.indexOf(style) < 0) {
+      pdf.addFont(VFS_NAME, 'Bravura', style);
+    }
+  }
 }
 
 /** @param {object} pdf jsPDF instance */
@@ -37,11 +60,5 @@ export async function registerSmuflFontsForJsPdf (pdf) {
   if (!pdf.existsFileInVFS(VFS_NAME)) {
     pdf.addFileToVFS(VFS_NAME, b64);
   }
-  const list = pdf.getFontList?.() || {};
-  if (!list.Leland) {
-    pdf.addFont(VFS_NAME, 'Leland', 'normal');
-  }
-  if (!list.Bravura) {
-    pdf.addFont(VFS_NAME, 'Bravura', 'normal');
-  }
+  ensureLelandStyleVariants(pdf);
 }

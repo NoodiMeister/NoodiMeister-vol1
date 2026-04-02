@@ -1,9 +1,9 @@
 import React, { useMemo } from 'react';
-import { computeBeamGroups, computeBeamGeometry } from '../notation/BeamCalculation';
+import { beamLineYAtX, computeBeamGroups, computeBeamGeometry } from '../notation/BeamCalculation';
 import {
   getBeamGap,
   getBeamThickness,
-  getNoteheadRx,
+  getStemCenterXFromNoteCenter,
   getStemLength,
   getStemThickness,
 } from '../notation/StaffConstants';
@@ -57,7 +57,8 @@ export function BeamedRhythmPatternIcon({ pattern }) {
     const notes = buildNotesFromSegments(segments);
     const middleLineY = 0;
     const noteCys = notes.map(() => middleLineY);
-    const contentW = Math.max(14, segments.length * 3.2) * staffSpace * 0.22;
+    /* Laiem horisontaal: mitu nooti ei suru kokku (rütmikasti + koondtabel). */
+    const contentW = Math.max(22, segments.length * 5) * staffSpace * 0.32;
     const noteXs = layoutNoteXs(notes, contentW);
     const stemUp = true;
     const beamGroups = computeBeamGroups(notes, 0, TIME_SIG).map((gr) => {
@@ -66,7 +67,6 @@ export function BeamedRhythmPatternIcon({ pattern }) {
     });
     const getBeamGroup = (i) => beamGroups.find((g) => i >= g.start && i <= g.end);
 
-    const rx = getNoteheadRx(staffSpace);
     const defaultStemLen = getStemLength(staffSpace);
     const stemStrokeW = getStemThickness(staffSpace);
     const glyphFontSize = getGlyphFontSize(staffSpace);
@@ -84,7 +84,7 @@ export function BeamedRhythmPatternIcon({ pattern }) {
       const cy = noteCys[i];
       const beamGroup = getBeamGroup(i);
       const stemLen = beamGroup ? beamGroup.stemLengths[i - beamGroup.start] ?? defaultStemLen : defaultStemLen;
-      const stemX = noteX + rx - stemStrokeW / 2;
+      const stemX = getStemCenterXFromNoteCenter(noteX, staffSpace, stemUp);
       const stemY2 = cy - stemLen;
 
       headEls.push(
@@ -95,6 +95,7 @@ export function BeamedRhythmPatternIcon({ pattern }) {
           glyph={SMUFL_GLYPH.noteheadBlack}
           fontSize={glyphFontSize}
           fill={FILL}
+          dominantBaseline="central"
         />
       );
       stemEls.push(
@@ -114,27 +115,32 @@ export function BeamedRhythmPatternIcon({ pattern }) {
         drawnBeamStarts.add(beamGroup.start);
         const dir = beamGroup.stemUp ? -1 : 1;
         const y1 = beamGroup.beamY1;
-        const y2 = beamGroup.beamY2;
+        const slope = beamGroup.beamSlope ?? 0;
+        const xs = beamGroup.stemXsInGroup;
+        const sw = beamGroup.stemW ?? stemStrokeW;
         for (let b = beamGroup.numBeams - 1; b >= 0; b--) {
-          let xL = beamGroup.xLeft;
-          let xR = beamGroup.xRight;
-          if (b >= 1 && beamGroup.beamLevels && beamGroup.noteXs) {
+          let xL = beamGroup.beamXLeft;
+          let xR = beamGroup.beamXRight;
+          if (b >= 1 && beamGroup.beamLevels && xs?.length) {
             const levels = beamGroup.beamLevels;
             const idxMin = levels.findIndex((lev) => lev >= b + 1);
             const idxMax = levels.length - 1 - [...levels].reverse().findIndex((lev) => lev >= b + 1);
             if (idxMin >= 0 && idxMax >= 0) {
-              xL = beamGroup.noteXs[idxMin];
-              xR = beamGroup.noteXs[idxMax];
+              xL = xs[idxMin] - sw / 2;
+              xR = xs[idxMax] + sw / 2;
             }
           }
-          const dy = b * beamOffset * dir;
+          const swap = beamGroup.mixedBeamStackSwap;
+          const dy = (swap ? beamGroup.numBeams - 1 - b : b) * beamOffset * dir;
+          const yL = beamLineYAtX(y1, slope, beamGroup.xLeft, xL, dy);
+          const yR = beamLineYAtX(y1, slope, beamGroup.xLeft, xR, dy);
           beamEls.push(
             <line
               key={`bm-${beamGroup.start}-${b}`}
               x1={xL}
-              y1={y1 + dy}
+              y1={yL}
               x2={xR}
-              y2={y2 + dy}
+              y2={yR}
               stroke={FILL}
               strokeWidth={beamThick}
               strokeLinecap="butt"

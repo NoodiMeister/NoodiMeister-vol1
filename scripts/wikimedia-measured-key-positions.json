@@ -1,0 +1,342 @@
+{
+  "source": "Wikimedia Commons PNG/JPEG — scripts/analyze-wikimedia-keysig-images.mjs (noodijooned + veergude tipud)",
+  "method": "Noodijooned: 5 võrdse vahega joonte võrk. Võtmemärgid: veeruprofiili tugevaimad lahutatud tipud (greedy, min vahe ~0,55× staff-space). Vertikaal: raster-glyphi keskpunkt ei ole usaldusväärne joone asukoha jaoks; lõplikud staff-indeksid (0 = alumine joon) on standardne pitch→staff (kvintiring), sama mis StaffConstants / generate-key-signatures-reference-svg.mjs.",
+  "trebleSharpStaffPositions": [
+    8,
+    5,
+    9,
+    6,
+    3,
+    7,
+    4
+  ],
+  "trebleFlatStaffPositions": [
+    4,
+    0,
+    3,
+    6,
+    2,
+    5,
+    1
+  ],
+  "pixelCentroidIntPosBySharpIndex": [
+    4,
+    4,
+    3
+  ],
+  "pixelCentroidIntPosByFlatIndex": [
+    4,
+    6,
+    4,
+    6
+  ],
+  "allReferenceImagesPeakCountOk": true,
+  "files": [
+    "G_Major_key_sig.png",
+    "D_major.png",
+    "A_major.png",
+    "Eflat_Major_key_sig.png",
+    "Aflat_Major_key_sig.png",
+    "Aflat_jpg.jpg"
+  ],
+  "detail": [
+    {
+      "name": "G_Major_key_sig.png",
+      "sharps": 1,
+      "flats": 0,
+      "crop": null,
+      "width": 123,
+      "height": 82,
+      "lineYs": [
+        22,
+        32,
+        42,
+        52,
+        62
+      ],
+      "staffSpacePx": 10,
+      "gridScore": 615,
+      "peakDetection": {
+        "expected": 1,
+        "found": 1,
+        "minPeak": 9,
+        "minSep": 5,
+        "maxProfile": 23
+      },
+      "peakCountMatches": true,
+      "centers": [
+        {
+          "cx": 45,
+          "cy": 31,
+          "rawPos": 6.2,
+          "intPos": 6,
+          "halfPos": 6,
+          "peakStrength": 23
+        }
+      ]
+    },
+    {
+      "name": "D_major.png",
+      "sharps": 2,
+      "flats": 0,
+      "crop": "topStaff",
+      "width": 800,
+      "height": 212,
+      "lineYs": [
+        140,
+        151,
+        162,
+        173,
+        184
+      ],
+      "staffSpacePx": 11,
+      "gridScore": 1847,
+      "peakDetection": {
+        "expected": 2,
+        "found": 2,
+        "minPeak": 9,
+        "minSep": 6,
+        "maxProfile": 49
+      },
+      "peakCountMatches": true,
+      "centers": [
+        {
+          "cx": 232,
+          "cy": 162,
+          "rawPos": 4,
+          "intPos": 4,
+          "halfPos": 4,
+          "peakStrength": 49
+        },
+        {
+          "cx": 284,
+          "cy": 168,
+          "rawPos": 2.909090909090909,
+          "intPos": 3,
+          "halfPos": 3,
+          "peakStrength": 46
+        }
+      ]
+    },
+    {
+      "name": "A_major.png",
+      "sharps": 3,
+      "flats": 0,
+      "crop": "topStaff",
+      "width": 800,
+      "height": 212,
+      "lineYs": [
+        130,
+        142,
+        154,
+        166,
+        178
+      ],
+      "staffSpacePx": 12,
+      "gridScore": 1906,
+      "peakDetection": {
+        "expected": 3,
+        "found": 3,
+        "minPeak": 9,
+        "minSep": 6,
+        "maxProfile": 53
+      },
+      "peakCountMatches": true,
+      "centers": [
+        {
+          "cx": 225,
+          "cy": 155,
+          "rawPos": 3.8333333333333335,
+          "intPos": 4,
+          "halfPos": 4,
+          "peakStrength": 53
+        },
+        {
+          "cx": 250,
+          "cy": 153,
+          "rawPos": 4.166666666666667,
+          "intPos": 4,
+          "halfPos": 4,
+          "peakStrength": 53
+        },
+        {
+          "cx": 307,
+          "cy": 159,
+          "rawPos": 3.1666666666666665,
+          "intPos": 3,
+          "halfPos": 3,
+          "peakStrength": 50
+        }
+      ]
+    },
+    {
+      "name": "Eflat_Major_key_sig.png",
+      "sharps": 0,
+      "flats": 3,
+      "crop": null,
+      "width": 124,
+      "height": 83,
+      "lineYs": [
+        22,
+        32,
+        42,
+        52,
+        62
+      ],
+      "staffSpacePx": 10,
+      "gridScore": 620,
+      "peakDetection": {
+        "expected": 3,
+        "found": 3,
+        "minPeak": 9,
+        "minSep": 5,
+        "maxProfile": 32
+      },
+      "peakCountMatches": true,
+      "centers": [
+        {
+          "cx": 44,
+          "cy": 39,
+          "rawPos": 4.6,
+          "intPos": 5,
+          "halfPos": 4.5,
+          "peakStrength": 32
+        },
+        {
+          "cx": 54,
+          "cy": 32,
+          "rawPos": 6,
+          "intPos": 6,
+          "halfPos": 6,
+          "peakStrength": 20
+        },
+        {
+          "cx": 63,
+          "cy": 42,
+          "rawPos": 4,
+          "intPos": 4,
+          "halfPos": 4,
+          "peakStrength": 30
+        }
+      ]
+    },
+    {
+      "name": "Aflat_Major_key_sig.png",
+      "sharps": 0,
+      "flats": 4,
+      "crop": null,
+      "width": 288,
+      "height": 180,
+      "lineYs": [
+        53,
+        71,
+        89,
+        107,
+        125
+      ],
+      "staffSpacePx": 18,
+      "gridScore": 1440,
+      "peakDetection": {
+        "expected": 4,
+        "found": 4,
+        "minPeak": 9,
+        "minSep": 9,
+        "maxProfile": 50
+      },
+      "peakCountMatches": true,
+      "centers": [
+        {
+          "cx": 82,
+          "cy": 87,
+          "rawPos": 4.222222222222222,
+          "intPos": 4,
+          "halfPos": 4,
+          "peakStrength": 26
+        },
+        {
+          "cx": 93,
+          "cy": 71,
+          "rawPos": 6,
+          "intPos": 6,
+          "halfPos": 6,
+          "peakStrength": 31
+        },
+        {
+          "cx": 112,
+          "cy": 89,
+          "rawPos": 4,
+          "intPos": 4,
+          "halfPos": 4,
+          "peakStrength": 50
+        },
+        {
+          "cx": 130,
+          "cy": 74,
+          "rawPos": 5.666666666666667,
+          "intPos": 6,
+          "halfPos": 5.5,
+          "peakStrength": 40
+        }
+      ]
+    },
+    {
+      "name": "Aflat_jpg.jpg",
+      "sharps": 0,
+      "flats": 4,
+      "crop": "topStaff",
+      "width": 594,
+      "height": 207,
+      "lineYs": [
+        153,
+        163,
+        173,
+        183,
+        193
+      ],
+      "staffSpacePx": 10,
+      "gridScore": 1355,
+      "peakDetection": {
+        "expected": 4,
+        "found": 4,
+        "minPeak": 9,
+        "minSep": 5,
+        "maxProfile": 45
+      },
+      "peakCountMatches": true,
+      "centers": [
+        {
+          "cx": 222,
+          "cy": 178,
+          "rawPos": 3,
+          "intPos": 3,
+          "halfPos": 3,
+          "peakStrength": 36
+        },
+        {
+          "cx": 264,
+          "cy": 173,
+          "rawPos": 4,
+          "intPos": 4,
+          "halfPos": 4,
+          "peakStrength": 45
+        },
+        {
+          "cx": 284,
+          "cy": 171,
+          "rawPos": 4.4,
+          "intPos": 4,
+          "halfPos": 4.5,
+          "peakStrength": 37
+        },
+        {
+          "cx": 350,
+          "cy": 173,
+          "rawPos": 4,
+          "intPos": 4,
+          "halfPos": 4,
+          "peakStrength": 45
+        }
+      ]
+    }
+  ]
+}

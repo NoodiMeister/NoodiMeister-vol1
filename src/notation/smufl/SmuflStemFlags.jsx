@@ -1,5 +1,5 @@
 import React from 'react';
-import { getNoteheadRx, getStemLength, getStemThickness } from '../StaffConstants';
+import { getStemCenterXFromNoteCenter, getStemLength, getStemThickness } from '../StaffConstants';
 import { getGlyphFontSize } from '../musescoreStyle';
 import { SmuflGlyph } from './SmuflGlyph';
 import { SMUFL_GLYPH } from './glyphs';
@@ -55,10 +55,8 @@ export function SmuflStemFlagsFromNoteCenter({
   stemLength,
   fill = 'var(--note-fill, #1a1a1a)',
 }) {
-  const rx = getNoteheadRx(staffSpace);
   const len = stemLength != null ? stemLength : getStemLength(staffSpace);
-  const strokeW = getStemThickness(staffSpace);
-  const stemX = stemUp ? cx + rx - strokeW / 2 : cx - rx + strokeW / 2;
+  const stemX = getStemCenterXFromNoteCenter(cx, staffSpace, stemUp);
   const stemEndY = stemUp ? cy - len : cy + len;
   return (
     <SmuflStemFlags stemX={stemX} stemEndY={stemEndY} staffSpace={staffSpace} stemUp={stemUp} count={count} fill={fill} />

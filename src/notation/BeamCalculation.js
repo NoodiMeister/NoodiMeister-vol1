@@ -3,7 +3,14 @@
  * Grupeerib 1/8 ja 1/16 nootid, arvutab tala asukoha ja varre pikkused.
  */
 
-import { getStemLength, getBeamThickness, getBeamGap } from './StaffConstants.js';
+import {
+  getStemLength,
+  getBeamThickness,
+  getBeamGap,
+  getStemThickness,
+  getStemHorizontalOffsetFromNoteCenter,
+  SMUFL_LELAND_NOTEHEAD_BLACK_WIDTH_SP,
+} from './StaffConstants.js';
 
 /** Kas vältus on lühem kui 1/4 (kaheksandik, kuueteistkümnendik) – võib talutada. */
 export function isBeamableDuration(durationLabel) {
@@ -105,25 +112,44 @@ export function computeBeamGroups(notes, measureStartBeat, timeSignature = { bea
  * @param {number[]} noteCy - iga noodi noodipea Y (pikslites, sama konteksti jaoks)
  * @param {boolean} stemUp - vars üles
  * @param {number} staffSpace
- * @returns {{ beamY1: number, beamY2: number, stemLengths: number[], numBeams: number, beamLevels: number[], xLeft: number, xRight: number }}
- * Render paint order: draw beam indices numBeams-1 … 0 so the primary (b=0) line is on top;
- * partial higher-level beams sit underneath (Gould / classical engraving, matches public/beam-samples).
+ * @param {{ noteheadWidthSp?: number }} [beamOptions] — SMuFL noteheadBlack bbox laius (sp); vaikimisi Leland 1.3 (Bravura nt 1.18 koondtabelis).
+ * @returns {{ beamY1: number, beamY2: number, stemLengths: number[], numBeams: number, beamLevels: number[],
+ *   xLeft: number, xRight: number, beamXLeft: number, beamXRight: number, stemXsInGroup: number[], stemW: number,
+ *   beamSlope: number, mixedBeamStackSwap?: boolean }}
+ * xLeft/xRight: esimese ja viimase noodi *varre keskjoone* X (slope ja varre pikkused).
+ * beamXLeft/beamXRight: tala joone otspunktid varre *välimistel* servadel (SVG horisontaaljoone paksus ei lisa x-s).
+ * Render paint order: draw beam indices numBeams-1 … 0 so the inner line is under, outer on top.
+ * mixedBeamStackSwap (2 kihti + eri pikkused): Noodimeister / beam-1-8-plus-2-16 — esmane 1/8 tala
+ * väljaspool (kaugemal noodist), sekundaarne osaline seespool (Gouldi vastupidine).
  */
-export function computeBeamGeometry(group, notes, noteX, noteCy, stemUp, staffSpace) {
+export function computeBeamGeometry(group, notes, noteX, noteCy, stemUp, staffSpace, beamOptions = {}) {
   const start = group.start;
   const end = group.end;
   const defaultStemLen = getStemLength(staffSpace);
+  const stemW = getStemThickness(staffSpace);
+  const noteheadWidthSp = beamOptions.noteheadWidthSp ?? SMUFL_LELAND_NOTEHEAD_BLACK_WIDTH_SP;
+  const stemOffset = getStemHorizontalOffsetFromNoteCenter(staffSpace, stemUp, { noteheadWidthSp });
+
   const usesGlobalIndexedArrays =
     Array.isArray(noteX) &&
     Array.isArray(noteCy) &&
     noteX.length > end &&
     noteCy.length > end;
   const localStartIndex = usesGlobalIndexedArrays ? start : 0;
-  const localEndIndex = usesGlobalIndexedArrays ? end : (end - start);
-  const xLeft = noteX[localStartIndex];
-  const xRight = noteX[localEndIndex];
+  const localEndIndex = usesGlobalIndexedArrays ? end : end - start;
   const cy1 = noteCy[localStartIndex];
   const cy2 = noteCy[localEndIndex];
+
+  const stemXsInGroup = [];
+  for (let k = start; k <= end; k++) {
+    const arrayIndex = usesGlobalIndexedArrays ? k : k - start;
+    stemXsInGroup.push(noteX[arrayIndex] + stemOffset);
+  }
+
+  const xLeft = stemXsInGroup[0];
+  const xRight = stemXsInGroup[stemXsInGroup.length - 1];
+  const beamXLeft = xLeft - stemW / 2;
+  const beamXRight = xRight + stemW / 2;
 
   const beamLevels = [];
   let numBeams = 1;
@@ -138,22 +164,43 @@ export function computeBeamGeometry(group, notes, noteX, noteCy, stemUp, staffSp
   const beamTip2 = tipY(cy2, defaultStemLen);
 
   const dx = xRight - xLeft;
-  const slope = dx !== 0 ? (beamTip2 - beamTip1) / dx : 0;
+  const beamSlope = dx !== 0 ? (beamTip2 - beamTip1) / dx : 0;
 
   const beamThick = getBeamThickness(staffSpace);
   const beamGap = getBeamGap(staffSpace);
   const beamOffset = beamThick + beamGap;
   const dir = stemUp ? -1 : 1;
 
+  const mixedBeamStackSwap = numBeams === 2 && new Set(beamLevels).size > 1;
+
   const stemLengths = [];
   for (let k = start; k <= end; k++) {
-    const arrayIndex = usesGlobalIndexedArrays ? k : (k - start);
-    const x = noteX[arrayIndex];
+    const arrayIndex = usesGlobalIndexedArrays ? k : k - start;
+    const xStem = stemXsInGroup[k - start];
     const cy = noteCy[arrayIndex];
-    const beamYPrimary = dx === 0 ? beamTip1 : beamTip1 + slope * (x - xLeft);
+    const beamYPrimary = dx === 0 ? beamTip1 : beamTip1 + beamSlope * (xStem - xLeft);
     const level = beamLevels[k - start];
-    const bTarget = Math.min(Math.max(1, level), numBeams) - 1;
-    const beamYTarget = beamYPrimary + bTarget * beamOffset * dir;
+    let beamYTarget;
+
+    if (mixedBeamStackSwap && numBeams === 2) {
+      /* Pika esmase tala keskjoon (välimine kiht); 1/8 ots keskel, 1/16 otsad tala alumisel serval (vt beam-samples). */
+      const yOuterCenter = beamYPrimary + beamOffset * dir;
+      if (level === 1) {
+        beamYTarget = yOuterCenter;
+      } else {
+        const towardNotehead = stemUp ? 1 : -1;
+        beamYTarget = yOuterCenter + (beamThick / 2) * towardNotehead;
+      }
+    } else if (numBeams === 2 && beamLevels.every((l) => l === 2)) {
+      /* 4x1/16: kõik varred ülemise tala alumise serva juurde (sama reegel mis segarütmil 1/16 jaoks). */
+      const yOuterCenter = beamYPrimary + beamOffset * dir;
+      const towardNotehead = stemUp ? 1 : -1;
+      beamYTarget = yOuterCenter + (beamThick / 2) * towardNotehead;
+    } else {
+      const bTarget = Math.min(Math.max(1, level), numBeams) - 1;
+      beamYTarget = beamYPrimary + bTarget * beamOffset * dir;
+    }
+
     const len = stemUp ? cy - beamYTarget : beamYTarget - cy;
     stemLengths.push(Math.max(0, len));
   }
@@ -166,8 +213,19 @@ export function computeBeamGeometry(group, notes, noteX, noteCy, stemUp, staffSp
     beamLevels,
     xLeft,
     xRight,
+    beamXLeft,
+    beamXRight,
+    stemXsInGroup,
+    stemW,
+    beamSlope,
+    mixedBeamStackSwap,
     stemUp,
   };
+}
+
+/** Tala joone Y antud X juures (beamSlope = (beamY2-beamY1)/(xRight-xLeft) varre keskjoontes). */
+export function beamLineYAtX(beamY1, beamSlope, xStemLeft, x, dy = 0) {
+  return beamY1 + dy + beamSlope * (x - xStemLeft);
 }
 
 /** Re-export SMuFL beam thickness and spacing from StaffConstants. */

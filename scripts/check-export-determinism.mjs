@@ -23,7 +23,10 @@ async function main() {
   assert(scoreToSvg.includes('export function buildScoreSceneSnapshot'), 'Missing DOM-free scene snapshot builder.');
   assert(!scoreToSvg.includes('local("serif")'), 'Export defs still depend on local serif fallback.');
   assert(app.includes('scoreToSvg(containerEl,'), 'Preview/PDF path is not using scoreToSvg snapshot builder.');
-  assert(app.includes('pageDiv.innerHTML = pageSvg;'), 'Print preview is not using inline SVG pages.');
+  assert(
+    app.includes('buildNmPrintSvgPagesMarkup') && app.includes('runIsolatedPrintFromHtml'),
+    'Print must embed score pages via buildNmPrintSvgPagesMarkup + runIsolatedPrintFromHtml (isolated document).'
+  );
   assert(exportFontAssets.includes('CANONICAL_SMUFL_FONT_FAMILY = \'Leland\''), 'Canonical Leland font family constant is missing.');
   assert(exportFontAssets.includes('font-family: \'${CANONICAL_SMUFL_FONT_FAMILY}\''), 'Leland alias font-face is missing.');
   assert(exportFontAssets.includes('@fontsource/bravura/files/bravura-latin-400-normal.woff2'), 'Leland is not mapped to bundled Bravura.');

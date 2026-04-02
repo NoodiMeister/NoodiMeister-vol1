@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  1/8 + 1/16 + 1/16, treble D4 (ruum allpool E4 joont, y=95), vars üles — sp=10, beam 0.5 sp + gap 0.25 sp.
+
+  Standard (geomeetria + z-order):
+  - Täispikk 1/8 tala: ühendab kolme varre otsad (kõik kolm posti).
+  - Osaline 2/16 tala: ainult kahe viimase 1/16 noodi vahel (lõpust 1/16+1/16).
+  - Joonistusjärjekord (SVG): osaline tala ENNE (alumine kiht), täispikk 1/8 tala VIIMANA (PEAL),
+    nii et esmane tala loetavalt katkestab/ühendab kogu rühma.
+
+  Horisontaaljoone stroke ei lisa x-laiust. Varred keskel 91, 161, 231 (stroke 1). Tala x: 90.5-231.5 (1. ja 3. varre valised servad); osaline 160.5-231.5.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 132" width="320" height="132">
+  <rect width="100%" height="100%" fill="#fafafa"/>
+  <g stroke="#333" stroke-width="0.8" fill="none">
+    <line x1="20" y1="50" x2="300" y2="50"/>
+    <line x1="20" y1="60" x2="300" y2="60"/>
+    <line x1="20" y1="70" x2="300" y2="70"/>
+    <line x1="20" y1="80" x2="300" y2="80"/>
+    <line x1="20" y1="90" x2="300" y2="90"/>
+  </g>
+
+  <text x="20" y="20" font-family="system-ui, sans-serif" font-size="11" fill="#444">
+    1/8+2/16 treble D4, stem up
+  </text>
+  <text x="20" y="36" font-family="system-ui, sans-serif" font-size="10" fill="#666">
+    Standard: 1/8 tala peal (3 posti) · osaline 2/16 ainult 1/16+1/16
+  </text>
+
+  <!-- D4 cy=95; stem x = cx+6 -->
+  <ellipse cx="85" cy="95" rx="7" ry="5" fill="#1a1a1a"/>
+  <ellipse cx="155" cy="95" rx="7" ry="5" fill="#1a1a1a"/>
+  <ellipse cx="225" cy="95" rx="7" ry="5" fill="#1a1a1a"/>
+
+  <line x1="91" y1="95" x2="91" y2="52.5" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+  <line x1="161" y1="95" x2="161" y2="55" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+  <line x1="231" y1="95" x2="231" y2="55" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+
+  <!-- 1) partial 2/16 under  2) full 1/8 on top; beam x = outer stem edges (horizontal line has no x-thickness) -->
+  <line x1="160.5" y1="60" x2="231.5" y2="60" stroke="#1a1a1a" stroke-width="5" stroke-linecap="butt"/>
+  <line x1="90.5" y1="52.5" x2="231.5" y2="52.5" stroke="#1a1a1a" stroke-width="5" stroke-linecap="butt"/>
+</svg>
