@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Four sixteenth notes C6 D6 E6 F6, treble clef, stems down, double beam.
+  Staff space 8px; middle line B4 at y=64.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 140" width="360" height="140">
+  <rect width="100%" height="100%" fill="#fafafa"/>
+
+  <!-- Staff: bottom line E4 y=80 through top line F5 y=48 -->
+  <g stroke="#333" stroke-width="0.9" fill="none">
+    <line x1="100" y1="48" x2="310" y2="48"/>
+    <line x1="100" y1="56" x2="310" y2="56"/>
+    <line x1="100" y1="64" x2="310" y2="64"/>
+    <line x1="100" y1="72" x2="310" y2="72"/>
+    <line x1="100" y1="80" x2="310" y2="80"/>
+  </g>
+
+  <!-- Treble G-clef (simplified decorative path) -->
+  <g fill="none" stroke="#222" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M 52 38 C 48 52 44 78 52 92 C 56 100 62 98 62 88 C 62 72 52 58 52 46 C 52 38 58 34 62 40 C 68 50 62 72 58 88 C 56 96 60 102 66 100 C 72 96 70 84 64 76"/>
+  </g>
+  <line x1="68" y1="42" x2="68" y2="98" stroke="#222" stroke-width="1"/>
+
+  <!-- Ledger lines for C6 and E6 (on lines above staff) -->
+  <g stroke="#333" stroke-width="0.9" fill="none">
+    <line x1="78" y1="32" x2="102" y2="32"/>
+    <line x1="198" y1="24" x2="222" y2="24"/>
+  </g>
+
+  <!-- Noteheads: C6 D6 E6 F6 ascending -->
+  <g fill="#1a1a1a">
+    <ellipse cx="90" cy="32" rx="6.5" ry="4.2"/>
+    <ellipse cx="150" cy="28" rx="6.5" ry="4.2"/>
+    <ellipse cx="210" cy="24" rx="6.5" ry="4.2"/>
+    <ellipse cx="270" cy="20" rx="6.5" ry="4.2"/>
+  </g>
+
+  <!-- Stems down; tips on outer beam y = 52 + (44-52)/(266-82)*(x-82) at stem x -->
+  <g stroke="#1a1a1a" stroke-width="1.15" stroke-linecap="butt" fill="none">
+    <line x1="84" y1="36.2" x2="84" y2="51.913"/>
+    <line x1="144" y1="32.2" x2="144" y2="49.304"/>
+    <line x1="204" y1="28.2" x2="204" y2="46.696"/>
+    <line x1="264" y1="24.2" x2="264" y2="44.087"/>
+  </g>
+
+  <!-- Two parallel beams, equal weight; slope follows ascending line -->
+  <g stroke="#1a1a1a" stroke-linecap="butt" fill="none">
+    <line x1="82" y1="52" x2="266" y2="44" stroke-width="4"/>
+    <line x1="82" y1="45" x2="266" y2="37" stroke-width="4"/>
+  </g>
+
+  <text x="14" y="18" font-family="system-ui, -apple-system, sans-serif" font-size="11" fill="#444">
+    Four 1/16 notes C6-D6-E6-F6 (treble, stems down, double beam)
+  </text>
+</svg>
