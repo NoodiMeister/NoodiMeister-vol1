@@ -226,6 +226,16 @@ function pitchWithAccidental(pitch, accidental) {
   return letter;
 }
 
+/** Top hole center Y must be at least this value so the ring (center − radius) stays below the notehead — avoids overlap on D4 / C4 / Bb4-class low notes for any tin whistle key. */
+function getTinWhistleTopHoleCenterYMin(noteCenterY, staffSpace, scale = 1) {
+  const s = typeof scale === 'number' && Number.isFinite(scale) && scale > 0 ? scale : 1;
+  const ss = staffSpace * s;
+  const radius = Math.max(1.6, ss * 0.22);
+  const noteHeadHalf = getGlyphFontSize(staffSpace) * 0.48;
+  const gapBelowNote = Math.max(2, staffSpace * 0.22);
+  return noteCenterY + noteHeadHalf + gapBelowNote + radius;
+}
+
 function TinWhistleFingeringSvg({ x, y, staffSpace, pattern, scale = 1 }) {
   if (!pattern?.holes || pattern.holes.length !== 6) return null;
   const s = typeof scale === 'number' && Number.isFinite(scale) && scale > 0 ? scale : 1;
@@ -1329,7 +1339,11 @@ export function TraditionalNotationView({
                           {showTinWhistleLinkedFingeringForInst(inst) && note.pitch && typeof note.octave === 'number' && (() => {
                             const effectivePitch = pitchWithAccidental(note.pitch, resolvedAccidental);
                             const fingeringPattern = getTinWhistleFingeringPattern(effectivePitch, note.octave);
-                            const fingeringLabelY = staffY + lastLineY + spacing * (showRhythmSyllables ? 2.35 : 1.55);
+                            const baseTinWhistleFingeringY = staffY + lastLineY + spacing * (showRhythmSyllables ? 2.35 : 1.55);
+                            const fingeringLabelY = Math.max(
+                              baseTinWhistleFingeringY,
+                              getTinWhistleTopHoleCenterYMin(noteY, spacing, tinWhistleFingeringScale),
+                            );
                             if (fingeringPattern) {
                               return (
                                 <TinWhistleFingeringSvg
