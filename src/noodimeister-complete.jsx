@@ -2725,29 +2725,6 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   /** Vältib beforeprint → iframe.print() võimalikku enne uuesti käivitumist. */
   const nmBeforePrintIframeBusyRef = useRef(false);
 
-  const handlePrint = useCallback(() => {
-    setHeaderMenuOpen(null);
-    const el = scoreContainerRef?.current;
-    if (!el) {
-      window.print();
-      return;
-    }
-    try {
-      const pageModel = buildScoreExportSnapshot(el);
-      const pagesInner = buildNmPrintSvgPagesMarkup(pageModel, { paperSize, pageOrientation });
-      const html = buildNmStandalonePrintDocumentHtml(pagesInner);
-      runIsolatedPrintFromHtml(html, { blankHostDocument: false });
-    } catch (e) {
-      try { console.error('[print isolated document failed]', e); } catch (_) {}
-      setSaveFeedback(e?.message || t('feedback.exportFailed'));
-      setTimeout(() => setSaveFeedback(''), 2500);
-    }
-  }, [buildScoreExportSnapshot, paperSize, pageOrientation, setSaveFeedback, t]);
-
-  useEffect(() => {
-    printOptionsRef.current = { paperSize, pageOrientation };
-  }, [paperSize, pageOrientation]);
-
   const buildScoreExportSnapshot = useCallback((containerEl) => {
     if (!containerEl) {
       throw new Error('Export snapshot failed: score container missing');
@@ -2799,6 +2776,29 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     viewFitPage,
     viewSmartPage,
   ]);
+
+  const handlePrint = useCallback(() => {
+    setHeaderMenuOpen(null);
+    const el = scoreContainerRef?.current;
+    if (!el) {
+      window.print();
+      return;
+    }
+    try {
+      const pageModel = buildScoreExportSnapshot(el);
+      const pagesInner = buildNmPrintSvgPagesMarkup(pageModel, { paperSize, pageOrientation });
+      const html = buildNmStandalonePrintDocumentHtml(pagesInner);
+      runIsolatedPrintFromHtml(html, { blankHostDocument: false });
+    } catch (e) {
+      try { console.error('[print isolated document failed]', e); } catch (_) {}
+      setSaveFeedback(e?.message || t('feedback.exportFailed'));
+      setTimeout(() => setSaveFeedback(''), 2500);
+    }
+  }, [buildScoreExportSnapshot, paperSize, pageOrientation, setSaveFeedback, t]);
+
+  useEffect(() => {
+    printOptionsRef.current = { paperSize, pageOrientation };
+  }, [paperSize, pageOrientation]);
 
   useEffect(() => {
     const onBeforePrint = () => {
