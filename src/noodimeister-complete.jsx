@@ -260,6 +260,60 @@ function minMeasuresNeededForNotesOnStaves(stavesSnapshot, staffIndexToReplace, 
   const measuresAfterFirst = Math.ceil((maxEndBeat - firstMeasureBeats) / beatsPerMeasure);
   return 1 + measuresAfterFirst;
 }
+
+/** Kas antud taktiga kattub mõni noot/paus ühel noodireal (implitsiitne beatRun nagu minMeasuresFromNotes). */
+function measureOverlapsAnyNoteOnStaff(staffNotes, measure) {
+  const EPS = 1e-6;
+  let beatRun = 0;
+  const arr = staffNotes || [];
+  for (let i = 0; i < arr.length; i++) {
+    const n = arr[i];
+    const noteBeat = typeof n.beat === 'number' ? n.beat : beatRun;
+    const dur = Number(n.duration) || 1;
+    if (noteBeat < measure.endBeat - EPS && noteBeat + dur > measure.startBeat + EPS) return true;
+    beatRun = noteBeat + dur;
+  }
+  return false;
+}
+
+function measureHasOverlapAnyStaff(stavesSnapshot, measure) {
+  const list = stavesSnapshot || [];
+  for (let si = 0; si < list.length; si++) {
+    if (measureOverlapsAnyNoteOnStaff(list[si]?.notes || [], measure)) return true;
+  }
+  return false;
+}
+
+/**
+ * Eemaldab puhkus, mis jäävad täielikult [start,end) sisse (ei lõhu takti üle ulatuvaid puhkusid).
+ * Kasutusel enne tühja takti eemaldamist — muidu teisel real (nt klaveri bass) säiliks maxCursor padding ja minMeasuresFromNotes sunniks taktid tagasi.
+ */
+function removeRestsFullyContainedInMeasureAllStaves(stavesSnapshot, measure) {
+  const EPS = 1e-6;
+  const { startBeat, endBeat } = measure;
+  let removedAny = false;
+  const nextStaves = (stavesSnapshot || []).map((staff) => {
+    const arr = staff?.notes || [];
+    let beatRun = 0;
+    const out = [];
+    for (let i = 0; i < arr.length; i++) {
+      const n = arr[i];
+      const noteBeat = typeof n.beat === 'number' ? n.beat : beatRun;
+      const dur = Number(n.duration) || 1;
+      const overlaps = noteBeat < endBeat - EPS && noteBeat + dur > startBeat + EPS;
+      const fullyContained = noteBeat >= startBeat - EPS && noteBeat + dur <= endBeat + EPS;
+      beatRun = noteBeat + dur;
+      if (overlaps && n.isRest && fullyContained) {
+        removedAny = true;
+        continue;
+      }
+      out.push(n);
+    }
+    return { ...staff, notes: out };
+  });
+  return { nextStaves, removedAny };
+}
+
 var PITCH_NAME_TO_NATURAL = { C: 'C', 'C#': 'C', Db: 'C', D: 'D', 'D#': 'D', Eb: 'D', E: 'E', F: 'F', 'F#': 'F', Gb: 'F', G: 'G', 'G#': 'G', Ab: 'G', A: 'A', 'A#': 'A', Bb: 'A', B: 'B' };
 
 // Joonestiku/instrumentide konstandid var'iga faili alguses
@@ -6328,15 +6382,13 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
           }
           if (cursorMeasureIndex >= 1) {
             const m = ms[cursorMeasureIndex];
-            let beatRun = 0;
-            const hasNoteInBar = notes.some((n) => {
-              const noteBeat = typeof n.beat === 'number' ? n.beat : beatRun;
-              const inBar = noteBeat < m.endBeat && noteBeat + n.duration > m.startBeat;
-              beatRun = noteBeat + n.duration;
-              return inBar;
-            });
-            if (!hasNoteInBar) {
+            const { nextStaves, removedAny } = removeRestsFullyContainedInMeasureAllStaves(staves, m);
+            if (!measureHasOverlapAnyStaff(nextStaves, m)) {
               saveToHistory(notes);
+              if (removedAny) {
+                setStaves(nextStaves);
+                dirtyRef.current = true;
+              }
               setAddedMeasures((a) => Math.max(0, (a || 0) - 1));
               const prev = ms[cursorMeasureIndex - 1];
               const oneBeat = (prev.beatCount || timeSignature?.beats || 4) / (timeSignature?.beatUnit || 4);
@@ -7091,7 +7143,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     shiftPitchClassSameOctave, shiftOctave, addMeasure, ghostPitch, ghostOctave, ghostAccidental, ghostAccidentalIsExplicit, playNoteOnInsert, playPianoNote,
     cursorPosition, cursorSubRow, notationStyle, figurenotesChordBlocks, addChordAt, getChordInsertBeat, getChordAtCursor, transposeChordSymbol,
     cursorOnMelodyRow, noteIndexAtCursor, playNoteAtBeatIfEnabled,
-    joClefFocused, joClefStaffPosition, keySignature, setNotes, setKeySignature, notationMode, addNoteOnTopOfCursor,
+    joClefFocused, joClefStaffPosition, keySignature, setNotes, setKeySignature, setStaves, notationMode, addNoteOnTopOfCursor,
     staves, activeStaffIndex, timeSignature, pickupEnabled, pickupQuantity, pickupDuration,
     handleSaveShortcut, handlePrint, addedMeasures, timeSignature, setAddedMeasures, setCursorPosition, measureRepeatMarks, setMeasureRepeatMarks,
     maxCursor, setScoreZoomLevel, durationToBeats, hasFullAccess, pickupEnabled, pickupQuantity, pickupDuration, isScorePlaybackPlaying, stopScorePlayback, isInstrumentManagerOpen,
