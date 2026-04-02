@@ -6495,11 +6495,6 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
           }
           return best;
         };
-        const getLastNoteStartBeat = () => {
-          const spans = getSortedNoteBeats();
-          if (!spans.length) return null;
-          return spans[spans.length - 1].start;
-        };
         const cursorStep = e.shiftKey ? 0.25 : 1;
         if (e.code === 'ArrowLeft') {
           e.preventDefault();
@@ -6526,15 +6521,6 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         }
         if (e.code === 'ArrowRight') {
           e.preventDefault();
-          const lastNoteStart = getLastNoteStartBeat();
-          // Reader behavior: when cursor reaches the last inserted note,
-          // do not allow stepping beyond it unless user moves in the opposite direction.
-          if (!e.shiftKey && lastNoteStart != null && cursorPosition >= lastNoteStart - EPS) {
-            const clampedBeat = Math.max(0, Math.min(maxCursor, lastNoteStart));
-            setCursorPosition(clampedBeat);
-            playNoteAtBeatIfEnabled(clampedBeat);
-            return;
-          }
           if (cursorPosition >= maxCursor - EPS) {
             setCursorPosition(maxCursor);
             playNoteAtBeatIfEnabled(maxCursor);
@@ -6551,9 +6537,10 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
             }
           }
           const boundary = !e.shiftKey ? getNextNoteBoundaryBeat(1) : null;
+          // Ilma järgmise noodi piirita: sammu edasi (tühi takt / lõpp); muidu jääb kursor kinni viimase noodi järel
           const newBeat = boundary != null
             ? Math.min(maxCursor, boundary)
-            : (e.shiftKey ? Math.min(maxCursor, cursorPosition + cursorStep) : cursorPosition);
+            : Math.min(maxCursor, cursorPosition + cursorStep);
           setCursorPosition(newBeat);
           playNoteAtBeatIfEnabled(newBeat);
           return;
