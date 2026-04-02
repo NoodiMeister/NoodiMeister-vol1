@@ -26,6 +26,7 @@ import {
   getPitchFromJoClick,
 } from './notation/StaffConstants';
 import { getRhythmSyllableForNote } from './notation/rhythmSyllables';
+import { RHYTHM_PATTERN_SEGMENTS } from './notation/rhythmPatternSpecs';
 import { RhythmSyllableLabel } from './components/RhythmSyllableLabel';
 import { getJoName } from './notation/joNames';
 import { expandEmojiShortcuts } from './utils/emojiShortcuts';
@@ -48,6 +49,8 @@ import { getChromaNotesColor, getPedagogicalSymbol, getSchoolHandbellColor } fro
 import { FigurenotesBlockIcon, RhythmIcon, RhythmPatternIcon, MeterIcon, PedagogicalMeterIcon } from './toolboxes';
 import { SmuflGlyph } from './notation/smufl/SmuflGlyph';
 import { SMUFL_GLYPH, NOTEHEAD_SHAPE_GLYPH } from './notation/smufl/glyphs';
+import { getAugmentationDotCenterPitchY, getAugmentationDotXFromNoteCenter } from './notation/augmentationDotLayout';
+import { getGlyphFontSize } from './notation/musescoreStyle';
 import { FigurenotesView } from './views/FigurenotesView';
 import { TraditionalNotationView } from './views/TraditionalNotationView';
 import { LOCALE_STORAGE_KEY, DEFAULT_LOCALE, LOCALES, createT } from './i18n';
@@ -316,7 +319,7 @@ var INSTRUMENT_TO_GM_PROGRAM = {
   violin: 40, viola: 41, cello: 42, 'double-bass': 43, 'strings-ensemble': 48, 'acoustic-bass': 32, 'electric-bass': 33,
   flute: 73, recorder: 74, clarinet: 71, oboe: 68, bassoon: 70,
   trumpet: 56, trombone: 57, tuba: 58, 'french-horn': 60,
-  'tin-whistle': 74, 'tin-whistle-d': 74, 'tin-whistle-c': 74, 'tin-whistle-bb': 74, 'tin-whistle-a': 74, 'tin-whistle-g': 74, 'tin-whistle-f': 74, saxophone: 65, glockenspiel: 9, xylophone: 13, marimba: 12, vibraphone: 11, 'synth-lead': 80, 'synth-pad': 88, voice: 52
+  'tin-whistle': 73, 'tin-whistle-d': 73, 'tin-whistle-c': 73, 'tin-whistle-bb': 73, 'tin-whistle-a': 73, 'tin-whistle-g': 73, 'tin-whistle-f': 73, saxophone: 65, glockenspiel: 9, xylophone: 13, marimba: 12, vibraphone: 11, 'synth-lead': 80, 'synth-pad': 88, voice: 52
 };
 var INSTRUMENT_TO_SOUNDFONT_NAME = {
   'single-staff-treble': 'acoustic_grand_piano', 'single-staff-bass': 'acoustic_grand_piano',
@@ -325,17 +328,11 @@ var INSTRUMENT_TO_SOUNDFONT_NAME = {
   violin: 'violin', viola: 'viola', cello: 'cello', 'double-bass': 'contrabass', 'strings-ensemble': 'string_ensemble_1', 'acoustic-bass': 'acoustic_bass', 'electric-bass': 'electric_bass_finger',
   flute: 'flute', recorder: 'recorder', clarinet: 'clarinet', oboe: 'oboe', bassoon: 'bassoon',
   trumpet: 'trumpet', trombone: 'trombone', tuba: 'tuba', 'french-horn': 'french_horn',
-  'tin-whistle': 'recorder', 'tin-whistle-d': 'recorder', 'tin-whistle-c': 'recorder', 'tin-whistle-bb': 'recorder', 'tin-whistle-a': 'recorder', 'tin-whistle-g': 'recorder', 'tin-whistle-f': 'recorder', saxophone: 'alto_sax', glockenspiel: 'glockenspiel', xylophone: 'xylophone', marimba: 'marimba', vibraphone: 'vibraphone', 'synth-lead': 'lead_1_square', 'synth-pad': 'pad_2_warm', voice: 'choir_aahs'
+  // Tin whistle: GM-s ei ole eraldi häält; kasutame flöödi programmi (73) — lähedasem kui recorder (74).
+  'tin-whistle': 'flute', 'tin-whistle-d': 'flute', 'tin-whistle-c': 'flute', 'tin-whistle-bb': 'flute', 'tin-whistle-a': 'flute', 'tin-whistle-g': 'flute', 'tin-whistle-f': 'flute', saxophone: 'alto_sax', glockenspiel: 'glockenspiel', xylophone: 'xylophone', marimba: 'marimba', vibraphone: 'vibraphone', 'synth-lead': 'lead_1_square', 'synth-pad': 'pad_2_warm', voice: 'choir_aahs'
 };
-// Iirivile: MusyngKite pank (gleitz CDN) — teised instrumendid FluidR3_GM.
+// Instrument-specific SoundFont pack overrides (gleitz CDN). Default: FluidR3_GM (iirivile kasutab nüüd sama panka mis flööt).
 var INSTRUMENT_SOUNDFONT_PACK = {
-  'tin-whistle': 'MusyngKite',
-  'tin-whistle-d': 'MusyngKite',
-  'tin-whistle-c': 'MusyngKite',
-  'tin-whistle-bb': 'MusyngKite',
-  'tin-whistle-a': 'MusyngKite',
-  'tin-whistle-g': 'MusyngKite',
-  'tin-whistle-f': 'MusyngKite',
 };
 function soundfontPackForInstrumentId(id) {
   return INSTRUMENT_SOUNDFONT_PACK[id] || 'FluidR3_GM';
@@ -348,73 +345,6 @@ function soundfontPlayerCacheKey(instrumentId) {
 var TREBLE_CLEF_PATH = 'M14 2v2c0 2-1 4-3 5-2 1-4 1-5 0-1-1-1-3 0-4 1-1 2-2 2-3 1-2-1-2-3 0-4 2-1 4-1 6 0 2 1 3 2 4 3 1 2 2 3 2 5 0 2-1 4-3 5-2 1-4 1-6-1-2-2-2-5 0-7 2-2 4-2 7 0 3 2 4 4 4 7 0 2-2 4-4 5-2 1-4 0-5-2-1-2-1-4 0-6 1-2 3-2 5 0 2 2 3 4 3 6 0 1-1 2-2 2-3 0-1-1-1-2 0-2 1 0 2 0 3-1 1-1 2-2 2-4 0-2-1-3-2-4-1-1-3-1-4 0-1 1-1 2 0 3 1 1 2 1 3 0 1-1 2-1 3 0 1 1 2 1 3 0';
 var BASS_CLEF_PATH = 'M8 4c0 2 1 3 2 3 1 0 2-1 2-3 0-2-1-3-2-3-1 0-2 1-2 3zm8 0c0 2 1 3 2 3 1 0 2-1 2-3 0-2-1-3-2-3-1 0-2 1-2 3zm-10 4v12c0 1 1 2 2 2 1 0 2-1 2-2V8c0-1-1-2-2-2-1 0-2 1-2 2zm12 0v12c0 1 1 2 2 2 1 0 2-1 2-2V8c0-1-1-2-2-2-1 0-2 1-2 2zM10 6c-1 0-2 1-2 2v8c0 1 1 2 2 2 1 0 2-1 2-2V8c0-1-1-2-2-2zm4 0c-1 0-2 1-2 2v8c0 1 1 2 2 2 1 0 2-1 2-2V8c0-1-1-2-2-2z';
 var ALTO_TENOR_CLEF_PATH = 'M8 4c-2 0-4 2-4 5s2 5 4 5 4-2 4-5-2-5-4-5zm0 6c-1 0-2-1-2-1 0 0 1-1 2-1s2 1 2 1c0 0-1 1-2 1zm8-6c2 0 4 2 4 5s-2 5-4 5-4-2-4-5 2-5 4-5zm0 6c1 0 2-1 2-1 0 0-1-1-2-1s-2 1-2 1c0 0 1 1 2 1z';
-
-// Rütmipatternite ikoonid (JSX) – var faili alguses
-var RHYTHM_PATTERN_ICONS = {
-  '2/8': (
-    <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5" stroke="currentColor" strokeWidth="1.2">
-      <ellipse cx="6" cy="17" rx="2.2" ry="1.8" fill="currentColor"/><ellipse cx="18" cy="17" rx="2.2" ry="1.8" fill="currentColor"/>
-      <line x1="7.5" y1="17" x2="7.5" y2="5" strokeWidth="1.2"/><line x1="16.5" y1="17" x2="16.5" y2="5" strokeWidth="1.2"/>
-      <line x1="5" y1="5" x2="19" y2="5" strokeWidth="1.5" strokeLinecap="round"/>
-    </svg>
-  ),
-  '4/16': (
-    <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5" stroke="currentColor" strokeWidth="1.1">
-      {[4, 8, 14, 20].map((cx, i) => <ellipse key={i} cx={cx} cy="17" rx="1.8" ry="1.5" fill="currentColor"/>)}
-      {[5, 11, 17, 23].map((x, i) => <line key={i} x1={x} y1="17" x2={x} y2="3" strokeWidth="1.1"/>)}
-      <line x1="3" y1="3" x2="21" y2="3" strokeWidth="1.3" strokeLinecap="round"/>
-      <line x1="3" y1="4.5" x2="21" y2="4.5" strokeWidth="1" strokeLinecap="round"/>
-    </svg>
-  ),
-  '8/16': (
-    <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5" stroke="currentColor" strokeWidth="1">
-      {[2.5, 5.5, 8.5, 11.5, 14.5, 17.5, 20.5, 23.5].map((cx, i) => <ellipse key={i} cx={cx} cy="17" rx="1.4" ry="1.2" fill="currentColor"/>)}
-      {[3.5, 6.5, 9.5, 12.5, 15.5, 18.5, 21.5].map((x, i) => <line key={i} x1={x} y1="17" x2={x} y2="2" strokeWidth="1"/>)}
-      <line x1="1" y1="2" x2="23" y2="2" strokeWidth="1.2" strokeLinecap="round"/>
-      <line x1="1" y1="3.5" x2="23" y2="3.5" strokeWidth="0.9" strokeLinecap="round"/>
-    </svg>
-  ),
-  '1/8+2/16': (
-    <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5" stroke="currentColor" strokeWidth="1.1">
-      <ellipse cx="5" cy="17" rx="2.2" ry="1.8" fill="currentColor"/><ellipse cx="12" cy="17" rx="1.8" ry="1.5" fill="currentColor"/><ellipse cx="19" cy="17" rx="1.8" ry="1.5" fill="currentColor"/>
-      <line x1="6.5" y1="17" x2="6.5" y2="5" strokeWidth="1.1"/><line x1="12" y1="17" x2="12" y2="3" strokeWidth="1.1"/><line x1="17.5" y1="17" x2="17.5" y2="3" strokeWidth="1.1"/>
-      <line x1="4" y1="5" x2="20" y2="5" strokeWidth="1.4" strokeLinecap="round"/>
-      <line x1="10" y1="3" x2="19" y2="3" strokeWidth="1.1" strokeLinecap="round"/>
-    </svg>
-  ),
-  '2/16+1/8': (
-    <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5" stroke="currentColor" strokeWidth="1.1">
-      <ellipse cx="5" cy="17" rx="1.8" ry="1.5" fill="currentColor"/><ellipse cx="12" cy="17" rx="1.8" ry="1.5" fill="currentColor"/><ellipse cx="19" cy="17" rx="2.2" ry="1.8" fill="currentColor"/>
-      <line x1="6.5" y1="17" x2="6.5" y2="3" strokeWidth="1.1"/><line x1="12" y1="17" x2="12" y2="3" strokeWidth="1.1"/><line x1="17.5" y1="17" x2="17.5" y2="5" strokeWidth="1.1"/>
-      <line x1="4" y1="3" x2="20" y2="3" strokeWidth="1.1" strokeLinecap="round"/>
-      <line x1="5" y1="5" x2="19" y2="5" strokeWidth="1.4" strokeLinecap="round"/>
-    </svg>
-  ),
-  'triplet': (
-    <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5" stroke="currentColor" strokeWidth="1.1">
-      <ellipse cx="5" cy="17" rx="2" ry="1.6" fill="currentColor"/><ellipse cx="12" cy="17" rx="2" ry="1.6" fill="currentColor"/><ellipse cx="19" cy="17" rx="2" ry="1.6" fill="currentColor"/>
-      <line x1="6.5" y1="17" x2="6.5" y2="5" strokeWidth="1.1"/><line x1="12" y1="17" x2="12" y2="5" strokeWidth="1.1"/><line x1="17.5" y1="17" x2="17.5" y2="5" strokeWidth="1.1"/>
-      <line x1="4" y1="5" x2="20" y2="5" strokeWidth="1.3" strokeLinecap="round"/>
-      <text x="12" y="2" textAnchor="middle" fontSize="5.5" fontWeight="bold" fill="currentColor">3</text>
-    </svg>
-  ),
-  'triplet-8': (
-    <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5" stroke="currentColor" strokeWidth="1.1">
-      <ellipse cx="5" cy="17" rx="2" ry="1.6" fill="currentColor"/><ellipse cx="12" cy="17" rx="2" ry="1.6" fill="currentColor"/><ellipse cx="19" cy="17" rx="2" ry="1.6" fill="currentColor"/>
-      <line x1="6.5" y1="17" x2="6.5" y2="5" strokeWidth="1.1"/><line x1="12" y1="17" x2="12" y2="5" strokeWidth="1.1"/><line x1="17.5" y1="17" x2="17.5" y2="5" strokeWidth="1.1"/>
-      <line x1="4" y1="5" x2="20" y2="5" strokeWidth="1.3" strokeLinecap="round"/>
-      <text x="12" y="2" textAnchor="middle" fontSize="5.5" fontWeight="bold" fill="currentColor">3</text>
-    </svg>
-  ),
-  'triplet-4': (
-    <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5" stroke="currentColor" strokeWidth="1.1">
-      <ellipse cx="5" cy="17" rx="2.2" ry="1.8" fill="currentColor"/><ellipse cx="12" cy="17" rx="2.2" ry="1.8" fill="currentColor"/><ellipse cx="19" cy="17" rx="2.2" ry="1.8" fill="currentColor"/>
-      <line x1="7" y1="17" x2="7" y2="5" strokeWidth="1.1"/><line x1="12" y1="17" x2="12" y2="5" strokeWidth="1.1"/><line x1="17" y1="17" x2="17" y2="5" strokeWidth="1.1"/>
-      <line x1="4" y1="5" x2="20" y2="5" strokeWidth="1.3" strokeLinecap="round"/>
-      <text x="12" y="2" textAnchor="middle" fontSize="5.5" fontWeight="bold" fill="currentColor">3</text>
-    </svg>
-  )
-};
 
 // Font options: classic, handwritten, and capitals/display (for figuurnotatsioon / note labels)
 var FONT_OPTIONS = [
@@ -5118,35 +5048,8 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     }
   }, [notes, cursorPosition, ghostOctave, ghostAccidental, ghostAccidentalIsExplicit, saveToHistory, setNotes, playPianoNote, playNoteOnInsert, notationStyle, keySignature]);
 
-  // Liitrütmimustrid: iga element { durationLabel, duration, tuplet? }
-  const RHYTHM_PATTERN_NOTES = useMemo(() => {
-    const triplet32 = { type: 3, inSpaceOf: 2 };
-    return {
-      '2/8': [{ durationLabel: '1/8', duration: 0.5 }, { durationLabel: '1/8', duration: 0.5 }],
-      '2/8+2/8': [
-        { durationLabel: '1/8', duration: 0.5, beamGroupId: 'A' },
-        { durationLabel: '1/8', duration: 0.5, beamGroupId: 'A' },
-        { durationLabel: '1/8', duration: 0.5, beamGroupId: 'B' },
-        { durationLabel: '1/8', duration: 0.5, beamGroupId: 'B' },
-      ],
-      '4/8': [
-        { durationLabel: '1/8', duration: 0.5, beamGroupId: 'A' },
-        { durationLabel: '1/8', duration: 0.5, beamGroupId: 'A' },
-        { durationLabel: '1/8', duration: 0.5, beamGroupId: 'A' },
-        { durationLabel: '1/8', duration: 0.5, beamGroupId: 'A' },
-      ],
-      '4/16': Array(4).fill({ durationLabel: '1/16', duration: 0.25 }),
-      '8/16': Array(8).fill({ durationLabel: '1/16', duration: 0.25 }),
-      '1/8+2/16': [{ durationLabel: '1/8', duration: 0.5 }, { durationLabel: '1/16', duration: 0.25 }, { durationLabel: '1/16', duration: 0.25 }],
-      '2/16+1/8': [{ durationLabel: '1/16', duration: 0.25 }, { durationLabel: '1/16', duration: 0.25 }, { durationLabel: '1/8', duration: 0.5 }],
-      // Irregular (triplet) patterns in 4/4: two variations
-      'triplet-8': Array(3).fill({ durationLabel: '1/8', duration: 1 / 3, tuplet: triplet32 }),
-      'triplet-4': Array(3).fill({ durationLabel: '1/4', duration: 2 / 3, tuplet: triplet32 })
-    };
-  }, []);
-
   const insertPatternAtCursor = useCallback((patternKey) => {
-    const pattern = RHYTHM_PATTERN_NOTES[patternKey];
+    const pattern = RHYTHM_PATTERN_SEGMENTS[patternKey];
     if (!pattern || !ghostPitch) return;
     const totalDuration = pattern.reduce((s, n) => s + n.duration, 0);
     const startBeat = cursorPosition;
@@ -5183,7 +5086,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     });
     setCursorPosition(startBeat + totalDuration);
     if (!isRest && playNoteOnInsert) playPianoNote(ghostPitch, ghostOctave);
-  }, [RHYTHM_PATTERN_NOTES, ghostPitch, ghostOctave, isRest, notes, saveToHistory, playPianoNote, playNoteOnInsert, cursorPosition, notesWithExplicitBeats]);
+  }, [ghostPitch, ghostOctave, isRest, notes, saveToHistory, playPianoNote, playNoteOnInsert, cursorPosition, notesWithExplicitBeats]);
 
   const applyBeamOverrideAtCursorMeasure = useCallback((overrideValue) => {
     const ms = measuresRef.current;
@@ -13006,7 +12909,24 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
                 } else {
                   el = <circle cx={cx} cy={cy} r={r} fill={color} stroke="#2563eb" strokeWidth="2" opacity="0.9" />;
                 }
-                return <g opacity="0.9">{el}</g>;
+                return (
+                  <g opacity="0.9">
+                    {el}
+                    {isDotted && ghostPitch && (
+                      <g>
+                        <animate attributeName="opacity" values="1;0.55;1" dur="0.8s" repeatCount="indefinite" />
+                        <SmuflGlyph
+                          x={getAugmentationDotXFromNoteCenter(cx, spacing)}
+                          y={cursorInfo.system.yOffset + centerY + crOff}
+                          glyph={SMUFL_GLYPH.augmentationDot}
+                          fontSize={getGlyphFontSize(spacing)}
+                          fill="#f59e0b"
+                          dominantBaseline="central"
+                        />
+                      </g>
+                    )}
+                  </g>
+                );
               }
               if (notationMode === 'traditional') {
                 const rx = getNoteheadRx(spacing);
@@ -13035,6 +12955,19 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
                     )}
                     <NoteHead cx={cx} cy={cy} staffSpace={spacing} filled stemUp={stemUp} selected fill={themeColors.noteFill} />
                     <line x1={stemX} y1={cy} x2={stemX} y2={stemY2} stroke={themeColors.noteFill} strokeWidth="1.5"/>
+                    {isDotted && (
+                      <g>
+                        <animate attributeName="opacity" values="1;0.55;1" dur="0.8s" repeatCount="indefinite" />
+                        <SmuflGlyph
+                          x={getAugmentationDotXFromNoteCenter(cx, spacing)}
+                          y={cursorInfo.system.yOffset + crOff + getAugmentationDotCenterPitchY(pitchY, firstLineY, spacing)}
+                          glyph={SMUFL_GLYPH.augmentationDot}
+                          fontSize={getGlyphFontSize(spacing)}
+                          fill="#f59e0b"
+                          dominantBaseline="central"
+                        />
+                      </g>
+                    )}
                   </g>
                 );
               }
@@ -13047,11 +12980,6 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
           ) : (
             <circle cx={cursorX} cy={cursorInfo.system.yOffset + centerY + crOff} r="6" fill="#2563eb" stroke="white" strokeWidth="2">
               <animate attributeName="r" values="6;8;6" dur="1s" repeatCount="indefinite" />
-            </circle>
-          )}
-          {isDotted && !isRest && ghostPitch && (
-            <circle cx={cursorX + 12} cy={cursorInfo.system.yOffset + (notationMode === 'figurenotes' ? centerY + crOff : getPitchY(ghostPitch, ghostOctave) + crOff)} r="3" fill="#f59e0b" stroke="white" strokeWidth="1">
-              <animate attributeName="opacity" values="1;0.5;1" dur="0.8s" repeatCount="indefinite" />
             </circle>
           )}
         </g>

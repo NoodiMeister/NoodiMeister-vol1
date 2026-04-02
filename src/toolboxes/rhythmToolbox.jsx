@@ -1,9 +1,11 @@
 /**
  * Rütmi tööriistakast: visuaalsed sümbolid (noodid, pausid, rütmipatternid).
  * Figurenotes režiimis: rütmi pikkust näidatakse hallide klotsidena (1× = 1/4, 2× = 1/2 jne).
- * Traditional: uses the same NoteSymbols and RestSymbols as the symbol gallery.
+ * Traditional: SMuFL (sama font ja beam-loogika mis scorepage / PDF).
  */
 import React from 'react';
+import { RHYTHM_PATTERN_SEGMENTS } from '../notation/rhythmPatternSpecs';
+import { BeamedRhythmPatternIcon } from './BeamedRhythmPatternIcon';
 import {
   WholeNoteSymbol,
   HalfNoteSymbol,
@@ -20,6 +22,10 @@ import {
   SixteenthRestSymbol,
   ThirtySecondRestSymbol,
 } from '../notation/RestSymbols';
+import { getAugmentationDotXFromNoteCenter } from '../notation/augmentationDotLayout';
+import { getGlyphFontSize } from '../notation/musescoreStyle';
+import { SmuflGlyph } from '../notation/smufl/SmuflGlyph';
+import { SMUFL_GLYPH } from '../notation/smufl/glyphs';
 
 const FIGURE_BLOCK_GRAY = '#9ca3af';
 
@@ -72,85 +78,8 @@ export const RHYTHM_SYLLABLE_IMAGES = {
   '1/32': '/ri.svg',
 };
 
-const RHYTHM_PATTERN_ICONS = {
-  '2/8': (
-    <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5" stroke="currentColor" strokeWidth="1.2">
-      <ellipse cx="6" cy="17" rx="2.2" ry="1.8" fill="currentColor"/><ellipse cx="18" cy="17" rx="2.2" ry="1.8" fill="currentColor"/>
-      <line x1="7.5" y1="17" x2="7.5" y2="5" strokeWidth="1.2"/><line x1="16.5" y1="17" x2="16.5" y2="5" strokeWidth="1.2"/>
-      <line x1="5" y1="5" x2="19" y2="5" strokeWidth="1.5" strokeLinecap="round"/>
-    </svg>
-  ),
-  '2/8+2/8': (
-    <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5" stroke="currentColor" strokeWidth="1.15">
-      {[3.5, 8.5, 15.5, 20.5].map((cx, i) => <ellipse key={i} cx={cx} cy="17" rx="1.8" ry="1.5" fill="currentColor"/>)}
-      {[4.7, 9.7, 16.7, 21.7].map((x, i) => <line key={i} x1={x} y1="17" x2={x} y2="5" strokeWidth="1.15"/>)}
-      <line x1="2.2" y1="5" x2="10.4" y2="5" strokeWidth="1.35" strokeLinecap="round"/>
-      <line x1="14.2" y1="5" x2="22.4" y2="5" strokeWidth="1.35" strokeLinecap="round"/>
-    </svg>
-  ),
-  '4/8': (
-    <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5" stroke="currentColor" strokeWidth="1.15">
-      {[3.5, 8.5, 15.5, 20.5].map((cx, i) => <ellipse key={i} cx={cx} cy="17" rx="1.8" ry="1.5" fill="currentColor"/>)}
-      {[4.7, 9.7, 16.7, 21.7].map((x, i) => <line key={i} x1={x} y1="17" x2={x} y2="5" strokeWidth="1.15"/>)}
-      <line x1="2.2" y1="5" x2="22.4" y2="5" strokeWidth="1.35" strokeLinecap="round"/>
-    </svg>
-  ),
-  '4/16': (
-    <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5" stroke="currentColor" strokeWidth="1.1">
-      {[4, 8, 14, 20].map((cx, i) => <ellipse key={i} cx={cx} cy="17" rx="1.8" ry="1.5" fill="currentColor"/>)}
-      {[5, 11, 17, 23].map((x, i) => <line key={i} x1={x} y1="17" x2={x} y2="3" strokeWidth="1.1"/>)}
-      <line x1="3" y1="3" x2="21" y2="3" strokeWidth="1.3" strokeLinecap="round"/>
-      <line x1="3" y1="4.5" x2="21" y2="4.5" strokeWidth="1" strokeLinecap="round"/>
-    </svg>
-  ),
-  '8/16': (
-    <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5" stroke="currentColor" strokeWidth="1">
-      {[2.5, 5.5, 8.5, 11.5, 14.5, 17.5, 20.5, 23.5].map((cx, i) => <ellipse key={i} cx={cx} cy="17" rx="1.4" ry="1.2" fill="currentColor"/>)}
-      {[3.5, 6.5, 9.5, 12.5, 15.5, 18.5, 21.5].map((x, i) => <line key={i} x1={x} y1="17" x2={x} y2="2" strokeWidth="1"/>)}
-      <line x1="1" y1="2" x2="23" y2="2" strokeWidth="1.2" strokeLinecap="round"/>
-      <line x1="1" y1="3.5" x2="23" y2="3.5" strokeWidth="0.9" strokeLinecap="round"/>
-    </svg>
-  ),
-  '1/8+2/16': (
-    <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5" stroke="currentColor" strokeWidth="1.1">
-      <ellipse cx="5" cy="17" rx="2.2" ry="1.8" fill="currentColor"/><ellipse cx="12" cy="17" rx="1.8" ry="1.5" fill="currentColor"/><ellipse cx="19" cy="17" rx="1.8" ry="1.5" fill="currentColor"/>
-      <line x1="6.5" y1="17" x2="6.5" y2="5" strokeWidth="1.1"/><line x1="12" y1="17" x2="12" y2="3" strokeWidth="1.1"/><line x1="17.5" y1="17" x2="17.5" y2="3" strokeWidth="1.1"/>
-      <line x1="4" y1="5" x2="20" y2="5" strokeWidth="1.4" strokeLinecap="round"/>
-      <line x1="10" y1="3" x2="19" y2="3" strokeWidth="1.1" strokeLinecap="round"/>
-    </svg>
-  ),
-  '2/16+1/8': (
-    <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5" stroke="currentColor" strokeWidth="1.1">
-      <ellipse cx="5" cy="17" rx="1.8" ry="1.5" fill="currentColor"/><ellipse cx="12" cy="17" rx="1.8" ry="1.5" fill="currentColor"/><ellipse cx="19" cy="17" rx="2.2" ry="1.8" fill="currentColor"/>
-      <line x1="6.5" y1="17" x2="6.5" y2="3" strokeWidth="1.1"/><line x1="12" y1="17" x2="12" y2="3" strokeWidth="1.1"/><line x1="17.5" y1="17" x2="17.5" y2="5" strokeWidth="1.1"/>
-      <line x1="4" y1="3" x2="20" y2="3" strokeWidth="1.1" strokeLinecap="round"/>
-      <line x1="5" y1="5" x2="19" y2="5" strokeWidth="1.4" strokeLinecap="round"/>
-    </svg>
-  ),
-  triplet: (
-    <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5" stroke="currentColor" strokeWidth="1.1">
-      <ellipse cx="5" cy="17" rx="2" ry="1.6" fill="currentColor"/><ellipse cx="12" cy="17" rx="2" ry="1.6" fill="currentColor"/><ellipse cx="19" cy="17" rx="2" ry="1.6" fill="currentColor"/>
-      <line x1="6.5" y1="17" x2="6.5" y2="5" strokeWidth="1.1"/><line x1="12" y1="17" x2="12" y2="5" strokeWidth="1.1"/><line x1="17.5" y1="17" x2="17.5" y2="5" strokeWidth="1.1"/>
-      <line x1="4" y1="5" x2="20" y2="5" strokeWidth="1.3" strokeLinecap="round"/>
-      <text x="12" y="2" textAnchor="middle" fontSize="5.5" fontWeight="bold" fill="currentColor">3</text>
-    </svg>
-  ),
-  'triplet-8': (
-    <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5" stroke="currentColor" strokeWidth="1.1">
-      <ellipse cx="5" cy="17" rx="2" ry="1.6" fill="currentColor"/><ellipse cx="12" cy="17" rx="2" ry="1.6" fill="currentColor"/><ellipse cx="19" cy="17" rx="2" ry="1.6" fill="currentColor"/>
-      <line x1="6.5" y1="17" x2="6.5" y2="5" strokeWidth="1.1"/><line x1="12" y1="17" x2="12" y2="5" strokeWidth="1.1"/><line x1="17.5" y1="17" x2="17.5" y2="5" strokeWidth="1.1"/>
-      <line x1="4" y1="5" x2="20" y2="5" strokeWidth="1.3" strokeLinecap="round"/>
-      <text x="12" y="2" textAnchor="middle" fontSize="5.5" fontWeight="bold" fill="currentColor">3</text>
-    </svg>
-  ),
-  'triplet-4': (
-    <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5" stroke="currentColor" strokeWidth="1.1">
-      <ellipse cx="5" cy="17" rx="2.2" ry="1.8" fill="currentColor"/><ellipse cx="12" cy="17" rx="2.2" ry="1.8" fill="currentColor"/><ellipse cx="19" cy="17" rx="2.2" ry="1.8" fill="currentColor"/>
-      <line x1="7" y1="17" x2="7" y2="5" strokeWidth="1.1"/><line x1="12" y1="17" x2="12" y2="5" strokeWidth="1.1"/><line x1="17" y1="17" x2="17" y2="5" strokeWidth="1.1"/>
-      <line x1="4" y1="5" x2="20" y2="5" strokeWidth="1.3" strokeLinecap="round"/>
-      <text x="12" y="2" textAnchor="middle" fontSize="5.5" fontWeight="bold" fill="currentColor">3</text>
-    </svg>
-  ),
+/** Tala-override nupud (abstraktne skeem, mitte eraldi SMuFL muster). */
+const BEAM_MODE_ICONS = {
   'beam:auto': (
     <svg viewBox="0 0 24 24" fill="none" className="w-5 h-5" stroke="currentColor" strokeWidth="1.2">
       <line x1="3" y1="16" x2="21" y2="16" />
@@ -225,8 +154,18 @@ export function RhythmIcon({ duration, isDotted, isRest }) {
   }
 
   const Note = NOTE_ICONS[d] || NOTE_ICONS['1/4'];
+  const dotX = getAugmentationDotXFromNoteCenter(0, ICON_STAFF_SPACE);
+  const dotFs = getGlyphFontSize(ICON_STAFF_SPACE);
   const dot = isDotted ? (
-    <circle cx={half - 1.5} cy={0} r={1} fill="currentColor" aria-hidden="true" />
+    <SmuflGlyph
+      x={dotX}
+      y={0}
+      glyph={SMUFL_GLYPH.augmentationDot}
+      fontSize={dotFs}
+      fill="currentColor"
+      textAnchor="middle"
+      dominantBaseline="central"
+    />
   ) : null;
   return (
     <svg viewBox={viewBox} className="w-5 h-5" fill="currentColor" style={{ overflow: 'visible' }} aria-hidden="true">
@@ -237,5 +176,9 @@ export function RhythmIcon({ duration, isDotted, isRest }) {
 }
 
 export function RhythmPatternIcon({ pattern }) {
-  return <span className="inline-flex items-center text-amber-900">{RHYTHM_PATTERN_ICONS[pattern] || null}</span>;
+  if (RHYTHM_PATTERN_SEGMENTS[pattern]) {
+    return <BeamedRhythmPatternIcon pattern={pattern} />;
+  }
+  const beamIcon = BEAM_MODE_ICONS[pattern];
+  return beamIcon ? <span className="inline-flex items-center text-amber-900">{beamIcon}</span> : null;
 }

@@ -12,7 +12,7 @@ import {
   BEAM_SPACING,
   STEM_LENGTH,
   getThinBarlineThickness as getThinBarlineThicknessFromStyle,
-} from './musescoreStyle';
+} from './musescoreStyle.js';
 
 /** Standardne vahe kahe joone vahel (px). Kõik joonestiku mõõdud tuletatakse sellest. */
 export const STAFF_SPACE = 10;

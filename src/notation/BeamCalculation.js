@@ -3,7 +3,7 @@
  * Grupeerib 1/8 ja 1/16 nootid, arvutab tala asukoha ja varre pikkused.
  */
 
-import { getStemLength, getBeamThickness, getBeamGap } from './StaffConstants';
+import { getStemLength, getBeamThickness, getBeamGap } from './StaffConstants.js';
 
 /** Kas vältus on lühem kui 1/4 (kaheksandik, kuueteistkümnendik) – võib talutada. */
 export function isBeamableDuration(durationLabel) {
@@ -98,7 +98,7 @@ export function computeBeamGroups(notes, measureStartBeat, timeSignature = { bea
 /**
  * Arvutab ühe talarühma geomeetria: tala otspunktid (Y) ja iga noodi varre pikkuse.
  * Tala on sirge (või kergelt kaldus) esimese ja viimase noodi varreotsi vahel;
- * keskmiste nootide varred ulatuvad täpselt talani.
+ * iga noodi vars ulatub oma rütmatasemele vastavale tala jooneni (1/8 → esimene kiht, 1/16 → teine jne).
  * @param {object} group - { start, end } indeksid notes massiivis
  * @param {Array<{ durationLabel: string, isDotted?: boolean }>} notes - rühma nootid (või kogu takti nootid, siis group.start..end)
  * @param {number[]} noteX - iga noodi X (pikslites)
@@ -123,6 +123,14 @@ export function computeBeamGeometry(group, notes, noteX, noteCy, stemUp, staffSp
   const cy1 = noteCy[localStartIndex];
   const cy2 = noteCy[localEndIndex];
 
+  const beamLevels = [];
+  let numBeams = 1;
+  for (let k = start; k <= end; k++) {
+    const level = getBeamLevel(notes[k].durationLabel, notes[k].isDotted);
+    beamLevels.push(level);
+    if (level > numBeams) numBeams = level;
+  }
+
   const tipY = (cy, len) => (stemUp ? cy - len : cy + len);
   const beamTip1 = tipY(cy1, defaultStemLen);
   const beamTip2 = tipY(cy2, defaultStemLen);
@@ -130,22 +138,22 @@ export function computeBeamGeometry(group, notes, noteX, noteCy, stemUp, staffSp
   const dx = xRight - xLeft;
   const slope = dx !== 0 ? (beamTip2 - beamTip1) / dx : 0;
 
+  const beamThick = getBeamThickness(staffSpace);
+  const beamGap = getBeamGap(staffSpace);
+  const beamOffset = beamThick + beamGap;
+  const dir = stemUp ? -1 : 1;
+
   const stemLengths = [];
   for (let k = start; k <= end; k++) {
     const arrayIndex = usesGlobalIndexedArrays ? k : (k - start);
     const x = noteX[arrayIndex];
     const cy = noteCy[arrayIndex];
-    const beamYAtX = dx === 0 ? beamTip1 : beamTip1 + slope * (x - xLeft);
-    const len = Math.abs(beamYAtX - cy);
-    stemLengths.push(len);
-  }
-
-  let numBeams = 1;
-  const beamLevels = [];
-  for (let k = start; k <= end; k++) {
-    const level = getBeamLevel(notes[k].durationLabel, notes[k].isDotted);
-    beamLevels.push(level);
-    if (level > numBeams) numBeams = level;
+    const beamYPrimary = dx === 0 ? beamTip1 : beamTip1 + slope * (x - xLeft);
+    const level = beamLevels[k - start];
+    const bTarget = Math.min(Math.max(1, level), numBeams) - 1;
+    const beamYTarget = beamYPrimary + bTarget * beamOffset * dir;
+    const len = stemUp ? cy - beamYTarget : beamYTarget - cy;
+    stemLengths.push(Math.max(0, len));
   }
 
   return {

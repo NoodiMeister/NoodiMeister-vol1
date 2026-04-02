@@ -11,6 +11,7 @@ import { getJoName } from '../notation/joNames';
 import { getRhythmSyllableForNote } from '../notation/rhythmSyllables';
 import { expandEmojiShortcuts } from '../utils/emojiShortcuts';
 import { SmuflGlyph } from '../notation/smufl/SmuflGlyph';
+import { SmuflStemFlags } from '../notation/smufl/SmuflStemFlags';
 import {
   SMUFL_GLYPH,
   NOTEHEAD_SHAPE_GLYPH,
@@ -46,6 +47,12 @@ import {
   getBeamThickness,
   getBeamGap,
 } from '../notation/BeamCalculation';
+import {
+  getAugmentationDotCenterPitchY,
+  getAugmentationDotXFromNoteCenter,
+  getAugmentationDotXFromRestCenter,
+  getRestAugmentationDotPitchY,
+} from '../notation/augmentationDotLayout';
 import { renderFiguredBassFigurations } from '../notation/figuredBassFigurations';
 import { hasBundledOptionalFont } from '../export/exportFontAssets';
 import { getAccidentalForPitchInKey } from '../utils/notationConstants';
@@ -265,30 +272,6 @@ function getRecorderFingeringChar(pitch, octave) {
   const letter = pitch.replace(/[#b]/, '');
   const base = { C: 'C', D: 'D', E: 'E', F: 'F', G: 'G', A: 'A', B: 'B' }[letter] || 'C';
   return pitch.includes('#') ? base + '#' : pitch.includes('b') ? base + 'b' : base;
-}
-
-function Flags({ stemX, stemEndY, staffSpace, stemUp, count = 1 }) {
-  const elements = [];
-  const strokeW = getStemThickness(staffSpace);
-  const flagGap = staffSpace * 0.8;
-  for (let i = 0; i < count; i++) {
-    const yOffset = i * flagGap * (stemUp ? 1 : -1);
-    const startY = stemEndY + yOffset;
-    const curve = stemUp
-      ? `M ${stemX} ${startY} c ${staffSpace * 0.8} ${staffSpace * 0.2} ${staffSpace * 1.2} ${staffSpace * 1.5} ${staffSpace * 1.2} ${staffSpace * 2.5}`
-      : `M ${stemX} ${startY} c ${staffSpace * 0.8} ${-staffSpace * 0.2} ${staffSpace * 1.2} ${-staffSpace * 1.5} ${staffSpace * 1.2} ${-staffSpace * 2.5}`;
-    elements.push(
-      <path
-        key={i}
-        d={curve}
-        fill="none"
-        stroke="var(--note-fill, #1a1a1a)"
-        strokeWidth={strokeW}
-        strokeLinecap="round"
-      />
-    );
-  }
-  return <g>{elements}</g>;
 }
 
 /** Leland SMuFL time signature digits centered at (x, y). Multi-digit (e.g. 12) laid out horizontally. */
@@ -1149,6 +1132,16 @@ export function TraditionalNotationView({
                         return (
                           <g key={noteIdx} {...noteGroupProps}>
                             {renderStandardRest(note, noteX, restAnchorY, spacing)}
+                            {note.isDotted && (
+                              <SmuflGlyph
+                                x={getAugmentationDotXFromRestCenter(noteX, spacing)}
+                                y={staffY + getRestAugmentationDotPitchY(firstLineY, spacing)}
+                                glyph={SMUFL_GLYPH.augmentationDot}
+                                fontSize={getGlyphFontSize(spacing)}
+                                fill="var(--note-fill, #1a1a1a)"
+                                dominantBaseline="central"
+                              />
+                            )}
                             {restSyllable && <RhythmSyllableLabel x={noteX} y={restLabelY} text={restSyllable} staffSpace={spacing} />}
                           </g>
                         );
@@ -1214,7 +1207,7 @@ export function TraditionalNotationView({
                               ) : (
                                 <text x={noteX} y={noteY} textAnchor="middle" dominantBaseline="central" fontSize={Math.max(18, glyphFontSize)} fill={noteFillColor}>{noteheadEmoji}</text>
                               )}
-                              {/* Talatud / erikujulised pead: noodipea + vars + käsitsi lipud (Lelandil pole x/ruut/triangle valmisnooti) */}
+                              {/* Talatud / erikujulised pead: noodipea + vars + SMuFL lipud (valmisnooti pole x/ruut/triangle) */}
                               {note.durationLabel !== '1/1' && (
                                 <g>
                                   <line
@@ -1227,12 +1220,13 @@ export function TraditionalNotationView({
                                     strokeLinecap="butt"
                                   />
                                   {flagCount > 0 && (
-                                    <Flags
+                                    <SmuflStemFlags
                                       stemX={stemX}
                                       stemEndY={stemY2}
                                       staffSpace={spacing}
                                       stemUp={stemUp}
                                       count={flagCount}
+                                      fill={noteFillColor}
                                     />
                                   )}
                                 </g>
@@ -1268,11 +1262,27 @@ export function TraditionalNotationView({
                                   y2={y2 + dy}
                                   stroke="#1a1a1a"
                                   strokeWidth={thick}
-                                  strokeLinecap="round"
+                                  strokeLinecap="butt"
                                 />
                               );
                             }
                             return <g>{beams}</g>;
+                          })()}
+                          {note.isDotted && (() => {
+                            const dotX = getAugmentationDotXFromNoteCenter(noteX, spacing);
+                            const dotPitchY = getAugmentationDotCenterPitchY(pitchY, firstLineY, spacing);
+                            const dotY = staffY + dotPitchY;
+                            return (
+                              <SmuflGlyph
+                                key="aug-dot"
+                                x={dotX}
+                                y={dotY}
+                                glyph={SMUFL_GLYPH.augmentationDot}
+                                fontSize={glyphFontSize}
+                                fill={noteFillColor}
+                                dominantBaseline="central"
+                              />
+                            );
                           })()}
                           {(note.lyric != null && String(note.lyric).trim() !== '') && (
                             <text x={noteX} y={staffY + lastLineY + (Math.max(1, Number(lyricFontSize)) || 12) * 1.5 + (lyricLineYOffset || 0)} textAnchor="middle" fontSize={Math.max(1, Number(lyricFontSize)) || 12} fill="#333" fontFamily={lyricFontFamily}>{note.lyric}</text>

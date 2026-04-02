@@ -8,6 +8,7 @@ import {
 import { getGlyphFontSize } from './musescoreStyle';
 import { SmuflGlyph } from './smufl/SmuflGlyph';
 import { SMUFL_GLYPH, smuflNoteheadForType, smuflPrecomposedNote } from './smufl/glyphs';
+import { SmuflStemFlagsFromNoteCenter } from './smufl/SmuflStemFlags';
 
 /**
  * SMuFL notehead glyph (Leland). Scale from MuseScore/SMuFL: 4 sp per em.
@@ -70,45 +71,6 @@ function Stem({ cx, cy, staffSpace, stemUp, stemLength }) {
   );
 }
 
-/**
- * Lipud (Flags): MuseScore'i stiilis kumerad lipud, alati paremale suunatud.
- * stemLength: valikuline (kui talatud nootidel kasutatakse kohandatud varre pikkust).
- */
-function Flags({ cx, cy, staffSpace, stemUp, count = 1, stemLength }) {
-  const rx = getNoteheadRx(staffSpace);
-  const stemLen = stemLength != null ? stemLength : getStemLength(staffSpace);
-  const strokeW = getStemThickness(staffSpace);
-
-  const stemX = stemUp ? cx + rx - strokeW / 2 : cx - rx + strokeW / 2;
-  const stemEndY = stemUp ? cy - stemLen : cy + stemLen;
-
-  const elements = [];
-  const flagGap = staffSpace * 0.8; // Lippude vahe
-
-  for (let i = 0; i < count; i++) {
-    const yOffset = i * flagGap * (stemUp ? 1 : -1);
-    const startY = stemEndY + yOffset;
-
-    // MuseScore'i lipp on "S" kujuline ja alati tüvest paremal
-    // d-string: M (start) c (relative cubic bezier)
-    const curve = stemUp
-      ? `M ${stemX} ${startY} c ${staffSpace * 0.8} ${staffSpace * 0.2} ${staffSpace * 1.2} ${staffSpace * 1.5} ${staffSpace * 1.2} ${staffSpace * 2.5}`
-      : `M ${stemX} ${startY} c ${staffSpace * 0.8} ${-staffSpace * 0.2} ${staffSpace * 1.2} ${-staffSpace * 1.5} ${staffSpace * 1.2} ${-staffSpace * 2.5}`;
-
-    elements.push(
-      <path
-        key={i}
-        d={curve}
-        fill="none"
-        stroke="var(--note-fill, #1a1a1a)"
-        strokeWidth={strokeW}
-        strokeLinecap="round"
-      />
-    );
-  }
-  return <g>{elements}</g>;
-}
-
 // --- Eksporditavad sümbolid ---
 
 export function WholeNoteSymbol({ cx = 0, cy = 0, staffSpace = STAFF_SPACE }) {
@@ -162,7 +124,9 @@ export function EighthNoteSymbol({ cx = 0, cy = 0, staffSpace = STAFF_SPACE, ste
   return (
     <g>
       <QuarterNoteSymbol cx={cx} cy={cy} staffSpace={staffSpace} stemUp={stemUp} stemLength={stemLength} />
-      {!hideFlags && <Flags cx={cx} cy={cy} staffSpace={staffSpace} stemUp={stemUp} count={1} stemLength={stemLength} />}
+      {!hideFlags && (
+        <SmuflStemFlagsFromNoteCenter cx={cx} cy={cy} staffSpace={staffSpace} stemUp={stemUp} count={1} stemLength={stemLength} />
+      )}
     </g>
   );
 }
@@ -175,7 +139,9 @@ export function SixteenthNoteSymbol({ cx = 0, cy = 0, staffSpace = STAFF_SPACE, 
   return (
     <g>
       <QuarterNoteSymbol cx={cx} cy={cy} staffSpace={staffSpace} stemUp={stemUp} stemLength={stemLength} />
-      {!hideFlags && <Flags cx={cx} cy={cy} staffSpace={staffSpace} stemUp={stemUp} count={2} stemLength={stemLength} />}
+      {!hideFlags && (
+        <SmuflStemFlagsFromNoteCenter cx={cx} cy={cy} staffSpace={staffSpace} stemUp={stemUp} count={2} stemLength={stemLength} />
+      )}
     </g>
   );
 }
@@ -189,7 +155,9 @@ export function ThirtySecondNoteSymbol({ cx = 0, cy = 0, staffSpace = STAFF_SPAC
   return (
     <g>
       <QuarterNoteSymbol cx={cx} cy={cy} staffSpace={staffSpace} stemUp={stemUp} stemLength={stemLength} />
-      {!hideFlags && <Flags cx={cx} cy={cy} staffSpace={staffSpace} stemUp={stemUp} count={3} stemLength={stemLength} />}
+      {!hideFlags && (
+        <SmuflStemFlagsFromNoteCenter cx={cx} cy={cy} staffSpace={staffSpace} stemUp={stemUp} count={3} stemLength={stemLength} />
+      )}
     </g>
   );
 }

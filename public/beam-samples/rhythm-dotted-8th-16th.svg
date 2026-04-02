@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 130" width="280" height="130">
+  <rect width="280" height="130" fill="#fafafa"/>
+  <text x="20" y="22" font-family="system-ui,sans-serif" font-size="11" fill="#444">1/8. + 1/16 (dotted eighth + sixteenth)</text>
+  <g stroke="#333" stroke-width="0.75" fill="none">
+    <line x1="24" y1="52" x2="256" y2="52"/>
+    <line x1="24" y1="62" x2="256" y2="62"/>
+    <line x1="24" y1="72" x2="256" y2="72"/>
+    <line x1="24" y1="82" x2="256" y2="82"/>
+    <line x1="24" y1="92" x2="256" y2="92"/>
+  </g>
+  <!-- Beat span: dotted 8th (3/4) then 16th (1/4); noteheads on middle line (y=72), dot in space above -->
+  <ellipse cx="110" cy="72" rx="7" ry="5" fill="#1a1a1a"/>
+  <circle cx="123" cy="65" r="2.4" fill="#1a1a1a"/>
+  <ellipse cx="190" cy="72" rx="7" ry="5" fill="#1a1a1a"/>
+  <line x1="116" y1="72" x2="116" y2="34" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+  <line x1="196" y1="72" x2="196" y2="34" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+  <!-- Primary beam (8th level): full span -->
+  <line x1="116" y1="34" x2="196" y2="34" stroke="#1a1a1a" stroke-width="4.5" stroke-linecap="butt"/>
+  <!-- Secondary beam (16th): only over last sixteenth -->
+  <line x1="170" y1="42" x2="196" y2="42" stroke="#1a1a1a" stroke-width="4.5" stroke-linecap="butt"/>
+</svg>

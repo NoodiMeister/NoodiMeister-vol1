@@ -26,6 +26,9 @@ export const SMUFL_GLYPH = Object.freeze({
   noteheadSquareBlack: '\uE0B9',
   noteheadTriangleUpBlack: '\uE0BE',
 
+  /** Augmentation dot (SMuFL noteheads supplement U+E1E7). */
+  augmentationDot: '\uE1E7',
+
   // Precomposed notes (U+E1D0–E1EF): full note from font – use for standalone notes
   noteWhole: '\uE1D2',
   noteHalfUp: '\uE1D3', noteHalfDown: '\uE1D4',
@@ -33,6 +36,14 @@ export const SMUFL_GLYPH = Object.freeze({
   note8thUp: '\uE1D7', note8thDown: '\uE1D8',
   note16thUp: '\uE1D9', note16thDown: '\uE1DA',
   note32ndUp: '\uE1DB', note32ndDown: '\uE1DC',
+
+  // Flags (SMuFL combining glyphs; anchors in Leland glyphWithAnchors / leland_metadata.json)
+  flag8thUp: '\uE240',
+  flag8thDown: '\uE241',
+  flag16thUp: '\uE242',
+  flag16thDown: '\uE243',
+  flag32ndUp: '\uE244',
+  flag32ndDown: '\uE245',
 
   // Rests
   restDoubleWhole: '\uE4E2',
