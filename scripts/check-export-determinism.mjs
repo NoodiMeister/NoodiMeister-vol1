@@ -31,6 +31,7 @@ async function main() {
   assert(scoreToSvg.includes('validateSmuflTimeSigExport'), 'SMuFL time-signature export validator is missing.');
   assert(app.includes('validateSmuflTimeSigExport({ defsString: previewSvgData.defsString, contentString: previewSvgData.contentString })'), 'PDF export is missing SMuFL preflight validation.');
   assert(app.includes('validateSmuflTimeSigExport({ defsString: pdfPreviewSvgData.defsString, contentString: pdfPreviewSvgData.contentString })'), 'Print export is missing SMuFL preflight validation.');
+  assert(app.includes('registerSmuflFontsForJsPdf'), 'PDF/print path must register SMuFL (Bravura) with jsPDF before svg2pdf.');
   assert(smuflGlyphs.includes("export const SMUFL_MUSIC_FONT_FAMILY = 'Leland';"), 'Canonical SMuFL font family constant is missing.');
   assert(figurenotesView.includes('fontFamily={SMUFL_MUSIC_FONT_FAMILY}'), 'Figurenotes time signature is not forced to canonical SMuFL font family.');
 

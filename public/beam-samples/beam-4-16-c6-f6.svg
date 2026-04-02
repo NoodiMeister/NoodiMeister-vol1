@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  Four sixteenth notes C6 D6 E6 F6, treble clef, stems down, double beam.
-  Staff space 8px; middle line B4 at y=64.
+  C6 D6 E6 F6: stems from notehead center at stem side; tips on outer beam; beams last.
 -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 140" width="360" height="140">
   <rect width="100%" height="100%" fill="#fafafa"/>
@@ -27,26 +26,21 @@
     <line x1="198" y1="24" x2="222" y2="24"/>
   </g>
 
-  <!-- Noteheads: C6 D6 E6 F6 ascending -->
+  <g stroke="#1a1a1a" stroke-width="1.8" stroke-linecap="butt" fill="none">
+    <line x1="84.4" y1="32" x2="84.4" y2="52"/>
+    <line x1="144.4" y1="28" x2="144.4" y2="48"/>
+    <line x1="204.4" y1="24" x2="204.4" y2="44"/>
+    <line x1="264.4" y1="20" x2="264.4" y2="40"/>
+  </g>
   <g fill="#1a1a1a">
     <ellipse cx="90" cy="32" rx="6.5" ry="4.2"/>
     <ellipse cx="150" cy="28" rx="6.5" ry="4.2"/>
     <ellipse cx="210" cy="24" rx="6.5" ry="4.2"/>
     <ellipse cx="270" cy="20" rx="6.5" ry="4.2"/>
   </g>
-
-  <!-- Stems down; tips on outer beam y = 52 + (44-52)/(266-82)*(x-82) at stem x -->
-  <g stroke="#1a1a1a" stroke-width="1.15" stroke-linecap="butt" fill="none">
-    <line x1="84" y1="36.2" x2="84" y2="51.913"/>
-    <line x1="144" y1="32.2" x2="144" y2="49.304"/>
-    <line x1="204" y1="28.2" x2="204" y2="46.696"/>
-    <line x1="264" y1="24.2" x2="264" y2="44.087"/>
-  </g>
-
-  <!-- Two parallel beams, equal weight; slope follows ascending line -->
   <g stroke="#1a1a1a" stroke-linecap="butt" fill="none">
-    <line x1="82" y1="52" x2="266" y2="44" stroke-width="4"/>
-    <line x1="82" y1="45" x2="266" y2="37" stroke-width="4"/>
+    <line x1="84.4" y1="52" x2="264.4" y2="40" stroke-width="4.2"/>
+    <line x1="84.4" y1="45.3" x2="264.4" y2="33.3" stroke-width="4.2"/>
   </g>
 
   <text x="14" y="18" font-family="system-ui, -apple-system, sans-serif" font-size="11" fill="#444">

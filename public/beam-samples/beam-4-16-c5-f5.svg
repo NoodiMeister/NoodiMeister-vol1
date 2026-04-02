@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Anchoring: stem down from (cx - rx + stemW/2, cy); tips on one outer-beam line.
+  Draw order: stems, noteheads (cover stem in oval), beams (cap tips). Inner beam parallel to outer.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 150" width="360" height="150">
+  <rect width="100%" height="100%" fill="#fafafa"/>
+
+  <g stroke="#333" stroke-width="0.9" fill="none">
+    <line x1="100" y1="48" x2="310" y2="48"/>
+    <line x1="100" y1="56" x2="310" y2="56"/>
+    <line x1="100" y1="64" x2="310" y2="64"/>
+    <line x1="100" y1="72" x2="310" y2="72"/>
+    <line x1="100" y1="80" x2="310" y2="80"/>
+  </g>
+
+  <g fill="none" stroke="#222" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M 52 38 C 48 52 44 78 52 92 C 56 100 62 98 62 88 C 62 72 52 58 52 46 C 52 38 58 34 62 40 C 68 50 62 72 58 88 C 56 96 60 102 66 100 C 72 96 70 84 64 76"/>
+  </g>
+  <line x1="68" y1="42" x2="68" y2="98" stroke="#222" stroke-width="1"/>
+
+  <!-- Stems first; noteheads on top hide stem inside oval; beams last cap tips -->
+  <g stroke="#1a1a1a" stroke-width="1.8" stroke-linecap="butt" fill="none">
+    <line x1="84.4" y1="60" x2="84.4" y2="80"/>
+    <line x1="144.4" y1="56" x2="144.4" y2="75.333"/>
+    <line x1="204.4" y1="52" x2="204.4" y2="70.667"/>
+    <line x1="264.4" y1="48" x2="264.4" y2="66"/>
+  </g>
+  <g fill="#1a1a1a">
+    <ellipse cx="90" cy="60" rx="6.5" ry="4.2"/>
+    <ellipse cx="150" cy="56" rx="6.5" ry="4.2"/>
+    <ellipse cx="210" cy="52" rx="6.5" ry="4.2"/>
+    <ellipse cx="270" cy="48" rx="6.5" ry="4.2"/>
+  </g>
+
+  <!-- Beams span only outer stem tips (x = first to last stem); no extension past stems -->
+  <g stroke="#1a1a1a" stroke-linecap="butt" fill="none">
+    <line x1="84.4" y1="80" x2="264.4" y2="66" stroke-width="4.2"/>
+    <line x1="84.4" y1="73.3" x2="264.4" y2="59.3" stroke-width="4.2"/>
+  </g>
+
+  <text x="14" y="18" font-family="system-ui, -apple-system, sans-serif" font-size="11" fill="#444">
+    Four 1/16: C5-D5-E5-F5 (anchored stems, beams on tips)
+  </text>
+</svg>

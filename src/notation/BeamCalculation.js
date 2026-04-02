@@ -106,6 +106,8 @@ export function computeBeamGroups(notes, measureStartBeat, timeSignature = { bea
  * @param {boolean} stemUp - vars üles
  * @param {number} staffSpace
  * @returns {{ beamY1: number, beamY2: number, stemLengths: number[], numBeams: number, beamLevels: number[], xLeft: number, xRight: number }}
+ * Render paint order: draw beam indices numBeams-1 … 0 so the primary (b=0) line is on top;
+ * partial higher-level beams sit underneath (Gould / classical engraving, matches public/beam-samples).
  */
 export function computeBeamGeometry(group, notes, noteX, noteCy, stemUp, staffSpace) {
   const start = group.start;

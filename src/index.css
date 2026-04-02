@@ -523,6 +523,8 @@ html, body, #root {
   display: none !important;
 }
 
+/* Isoleeritud print-dokumendi (@page + .nm-print-svg-*) peegeldus: src/print/nmPrintDocument.js — hoia stiilid sünkroonis.
+   nm-print-svg-mode ilma .nm-print-svg-pages: beforeprint suunab printi iframe’i; põhidokumendi eelvaade jääb tühjaks. */
 @media print {
   /* Deterministic print mode: render as SVG pages (avoids Chrome print layout quirks with transforms). */
   html.nm-print-svg-mode body * {

@@ -1241,7 +1241,7 @@ export function TraditionalNotationView({
                             const y2 = staffY + beamGroup.beamY2;
                             const dir = beamGroup.stemUp ? -1 : 1;
                             const beams = [];
-                            for (let b = 0; b < beamGroup.numBeams; b++) {
+                            for (let b = beamGroup.numBeams - 1; b >= 0; b--) {
                               let xL = beamGroup.xLeft;
                               let xR = beamGroup.xRight;
                               if (b >= 1 && beamGroup.beamLevels && beamGroup.noteXs) {

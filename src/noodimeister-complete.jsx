@@ -71,7 +71,13 @@ import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 import 'svg2pdf.js';
 import Soundfont from 'soundfont-player';
-import { scoreToSvg, getFirstPageSvgString, getPageSvgString } from './utils/scoreToSvg';
+import { scoreToSvg, getFirstPageSvgString, getPageSvgString, validateSmuflTimeSigExport } from './utils/scoreToSvg';
+import {
+  buildNmPrintSvgPagesMarkup,
+  buildNmStandalonePrintDocumentHtml,
+  runIsolatedPrintFromHtml,
+} from './print/nmPrintDocument';
+import { registerSmuflFontsForJsPdf } from './export/registerSmuflFontForJsPdf';
 import { getScorePageDimensions } from './layout/LayoutManager';
 import { openCloudFileInNewBrowserTab } from './utils/appUrls';
 import {
@@ -2715,13 +2721,28 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
 
   const printOptionsRef = useRef({ paperSize: 'a4', pageOrientation: 'portrait' });
   const pdfExportOptionsRef = useRef({ pageFlowDirection: 'vertical', pageWidth: LAYOUT.PAGE_WIDTH_PX });
-  const printSvgCleanupRef = useRef(null);
   const exportLayoutSnapshotRef = useRef(null);
+  /** Vältib beforeprint → iframe.print() võimalikku enne uuesti käivitumist. */
+  const nmBeforePrintIframeBusyRef = useRef(false);
 
   const handlePrint = useCallback(() => {
     setHeaderMenuOpen(null);
-    window.print();
-  }, []);
+    const el = scoreContainerRef?.current;
+    if (!el) {
+      window.print();
+      return;
+    }
+    try {
+      const pageModel = buildScoreExportSnapshot(el);
+      const pagesInner = buildNmPrintSvgPagesMarkup(pageModel, { paperSize, pageOrientation });
+      const html = buildNmStandalonePrintDocumentHtml(pagesInner);
+      runIsolatedPrintFromHtml(html, { blankHostDocument: false });
+    } catch (e) {
+      try { console.error('[print isolated document failed]', e); } catch (_) {}
+      setSaveFeedback(e?.message || t('feedback.exportFailed'));
+      setTimeout(() => setSaveFeedback(''), 2500);
+    }
+  }, [buildScoreExportSnapshot, paperSize, pageOrientation, setSaveFeedback, t]);
 
   useEffect(() => {
     printOptionsRef.current = { paperSize, pageOrientation };
@@ -2781,54 +2802,36 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
 
   useEffect(() => {
     const onBeforePrint = () => {
+      if (nmBeforePrintIframeBusyRef.current) return;
       const el = scoreContainerRef?.current;
       if (!el) return;
-      // Build deterministic SVG pages for printing. Chrome on Windows can render complex
-      // transformed DOM trees in print preview inconsistently; SVG pages avoid that.
+      // Sama isoleeritud iframe-print mis handlePrint; põhidokument “tühi” (nm-print-svg-mode),
+      // et brauseri menüü Print ei peaks näitama SPA DOM-i.
+      nmBeforePrintIframeBusyRef.current = true;
       try {
         const pageModel = buildScoreExportSnapshot(el);
         try {
           const snap = pageModel?.layoutSnapshot;
           if (snap && snap.source) console.info('[print layout snapshot]', snap);
         } catch (_) {}
-        const { defsString, contentString, contentHeight, orientation, footerText } = pageModel;
-        const orient = (orientation ?? pageOrientation) === 'landscape' ? 'landscape' : 'portrait';
-        const pageH = orient === 'landscape' ? 794 : 1123;
-        const numPages = Math.max(1, Math.ceil((Number(contentHeight) || pageH) / pageH));
-        const paper = (pageModel?.paperSize || paperSize || 'a4').toLowerCase();
-        const printPageClass = `print-page-${paper}-${orient}`;
-
-        const wrapper = document.createElement('div');
-        wrapper.className = 'nm-print-svg-pages';
-        for (let p = 0; p < numPages; p++) {
-          const pageSvg = getPageSvgString(defsString, contentString, pageModel, p, { footerText });
-          const pageDiv = document.createElement('div');
-          pageDiv.className = `nm-print-svg-page ${printPageClass}`;
-          // Inline SVG avoids image decoding race in browser print preview.
-          pageDiv.innerHTML = pageSvg;
-          wrapper.appendChild(pageDiv);
-        }
-        document.documentElement.classList.add('nm-print-svg-mode');
-        document.body.appendChild(wrapper);
-        printSvgCleanupRef.current = () => {
-          try { wrapper.remove(); } catch (_) {}
-          document.documentElement.classList.remove('nm-print-svg-mode');
-          printSvgCleanupRef.current = null;
-        };
+        const pagesInner = buildNmPrintSvgPagesMarkup(pageModel, { paperSize, pageOrientation });
+        const html = buildNmStandalonePrintDocumentHtml(pagesInner);
+        runIsolatedPrintFromHtml(html, {
+          blankHostDocument: true,
+          onFinished: () => {
+            nmBeforePrintIframeBusyRef.current = false;
+          },
+        });
       } catch (e) {
-        try { console.error('[print beforeprint build failed]', e); } catch (_) {}
+        nmBeforePrintIframeBusyRef.current = false;
+        try { console.error('[print beforeprint iframe failed]', e); } catch (_) {}
         setSaveFeedback(e?.message || t('feedback.exportFailed'));
         setTimeout(() => setSaveFeedback(''), 2500);
       }
     };
-    const onAfterPrint = () => {
-      try { printSvgCleanupRef.current?.(); } catch (_) {}
-    };
     window.addEventListener('beforeprint', onBeforePrint);
-    window.addEventListener('afterprint', onAfterPrint);
     return () => {
       window.removeEventListener('beforeprint', onBeforePrint);
-      window.removeEventListener('afterprint', onAfterPrint);
     };
   }, [buildScoreExportSnapshot, pageOrientation, paperSize, t]);
 
@@ -2955,10 +2958,15 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     try {
       /* SVG → PDF vektoritega (svg2pdf.js): terav, viewBox sünkroonitud orientationiga (portrait 794×1123, landscape 1123×794). */
       const { defsString, contentString, contentHeight, orientation, footerText } = previewSvgData;
+      try {
+        const smuflCheck = validateSmuflTimeSigExport({ defsString: previewSvgData.defsString, contentString: previewSvgData.contentString });
+        if (!smuflCheck.ok && smuflCheck.error) console.warn('[PDF export SMuFL preflight]', smuflCheck.error);
+      } catch (_) { /* ignore */ }
       const orient = (orientation ?? pageOrientation) === 'landscape' ? 'landscape' : 'portrait';
       const pageH = orient === 'landscape' ? 794 : 1123;
       const numPages = Math.max(1, Math.ceil(contentHeight / pageH));
       const pdf = new jsPDF({ orientation: orient, unit: 'pt', format: 'a4' });
+      await registerSmuflFontsForJsPdf(pdf);
       const widthPt = orient === 'landscape' ? 841.89 : 595.28;
       const heightPt = orient === 'landscape' ? 595.28 : 841.89;
       for (let p = 0; p < numPages; p++) {
@@ -3029,10 +3037,15 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     await new Promise((r) => setTimeout(r, 50));
     try {
       const { defsString, contentString, contentHeight, orientation, footerText } = pdfPreviewSvgData;
+      try {
+        const smuflCheck = validateSmuflTimeSigExport({ defsString: pdfPreviewSvgData.defsString, contentString: pdfPreviewSvgData.contentString });
+        if (!smuflCheck.ok && smuflCheck.error) console.warn('[Print SMuFL preflight]', smuflCheck.error);
+      } catch (_) { /* ignore */ }
       const orient = (orientation ?? pageOrientation) === 'landscape' ? 'landscape' : 'portrait';
       const pageH = orient === 'landscape' ? 794 : 1123;
       const numPages = Math.max(1, Math.ceil((Number(contentHeight) || pageH) / pageH));
       const pdf = new jsPDF({ orientation: orient, unit: 'pt', format: 'a4' });
+      await registerSmuflFontsForJsPdf(pdf);
       const widthPt = orient === 'landscape' ? 841.89 : 595.28;
       const heightPt = orient === 'landscape' ? 595.28 : 841.89;
       for (let p = 0; p < numPages; p++) {

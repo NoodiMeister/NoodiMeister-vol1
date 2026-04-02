@@ -131,7 +131,7 @@ function renderBeamedPatternInner(segments) {
       const dir = beamGroup.stemUp ? -1 : 1;
       const y1 = beamGroup.beamY1;
       const y2 = beamGroup.beamY2;
-      for (let b = 0; b < beamGroup.numBeams; b++) {
+      for (let b = beamGroup.numBeams - 1; b >= 0; b--) {
         let xL = beamGroup.xLeft;
         let xR = beamGroup.xRight;
         if (b >= 1 && beamGroup.beamLevels && beamGroup.noteXs) {
