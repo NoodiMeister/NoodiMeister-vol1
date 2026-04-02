@@ -226,14 +226,61 @@ function pitchWithAccidental(pitch, accidental) {
   return letter;
 }
 
-/** Top hole center Y must be at least this value so the ring (center − radius) stays below the notehead — avoids overlap on D4 / C4 / Bb4-class low notes for any tin whistle key. */
-function getTinWhistleTopHoleCenterYMin(noteCenterY, staffSpace, scale = 1) {
+/** Vars alla + tala: min vahe (px) tala alumise serva ja ülemise sõrmestusringi ülemise serva vahel (nt 3. joon + beam). */
+const TIN_WHISTLE_BEAM_TO_RING_GAP_MIN_PX = 5;
+
+/** Top hole center Y: ülemise ringi ülemine serv jääb structuralBottomY + gap kohale (noodipea / vars alla / tala / lipud). */
+function getTinWhistleTopHoleCenterYMinFromStructuralBottom(structuralBottomY, staffSpace, scale = 1, minGapAboveStructurePx) {
   const s = typeof scale === 'number' && Number.isFinite(scale) && scale > 0 ? scale : 1;
   const ss = staffSpace * s;
   const radius = Math.max(1.6, ss * 0.22);
-  const noteHeadHalf = getGlyphFontSize(staffSpace) * 0.48;
-  const gapBelowNote = Math.max(2, staffSpace * 0.22);
-  return noteCenterY + noteHeadHalf + gapBelowNote + radius;
+  const baseGap = Math.max(2, staffSpace * 0.22);
+  const gap =
+    typeof minGapAboveStructurePx === 'number' && Number.isFinite(minGapAboveStructurePx)
+      ? Math.max(baseGap, minGapAboveStructurePx)
+      : baseGap;
+  return structuralBottomY + gap + radius;
+}
+
+/**
+ * Madalaim globaalne Y (SVG), kuhu ulatuvad noodipea alumine serv või vars-alla graafika (tala alumine serv, lipud).
+ * Tin whistle sõrmestuse ülemine auk peab algama sellest allpool, et tala ei kattuks ringiga.
+ */
+function getTinWhistleStructuralBottomGlobalY({
+  noteY,
+  staffY,
+  spacing,
+  stemUp,
+  stemY2,
+  durationLabel,
+  beamGroup,
+  noteIdx,
+}) {
+  const nh = getGlyphFontSize(spacing) * 0.48;
+  let bottom = noteY + nh;
+  if (stemUp || durationLabel === '1/1') return bottom;
+  bottom = Math.max(bottom, stemY2);
+  if (beamGroup && noteIdx >= beamGroup.start && noteIdx <= beamGroup.end && !beamGroup.stemUp) {
+    const thick = getBeamThickness(spacing);
+    const gap = getBeamGap(spacing);
+    const offset = thick + gap;
+    const dir = 1;
+    const swap = beamGroup.mixedBeamStackSwap;
+    const slope = beamGroup.beamSlope ?? 0;
+    const stemIdx = noteIdx - beamGroup.start;
+    const xStem = beamGroup.stemXsInGroup[stemIdx];
+    for (let b = beamGroup.numBeams - 1; b >= 0; b -= 1) {
+      const dy = (swap ? beamGroup.numBeams - 1 - b : b) * offset * dir;
+      const yCenter = staffY + beamLineYAtX(beamGroup.beamY1, slope, beamGroup.xLeft, xStem, dy);
+      bottom = Math.max(bottom, yCenter + thick / 2);
+    }
+  } else {
+    const fc = getFlagCount(durationLabel);
+    if (fc > 0) {
+      bottom = Math.max(bottom, stemY2 + spacing * 0.5 * fc);
+    }
+  }
+  return bottom;
 }
 
 function TinWhistleFingeringSvg({ x, y, staffSpace, pattern, scale = 1 }) {
@@ -1340,9 +1387,29 @@ export function TraditionalNotationView({
                             const effectivePitch = pitchWithAccidental(note.pitch, resolvedAccidental);
                             const fingeringPattern = getTinWhistleFingeringPattern(effectivePitch, note.octave);
                             const baseTinWhistleFingeringY = staffY + lastLineY + spacing * (showRhythmSyllables ? 2.35 : 1.55);
+                            const tinStructuralBottom = getTinWhistleStructuralBottomGlobalY({
+                              noteY,
+                              staffY,
+                              spacing,
+                              stemUp,
+                              stemY2,
+                              durationLabel: note.durationLabel,
+                              beamGroup,
+                              noteIdx,
+                            });
+                            const hasBeamBelow =
+                              beamGroup &&
+                              noteIdx >= beamGroup.start &&
+                              noteIdx <= beamGroup.end &&
+                              !beamGroup.stemUp;
                             const fingeringLabelY = Math.max(
                               baseTinWhistleFingeringY,
-                              getTinWhistleTopHoleCenterYMin(noteY, spacing, tinWhistleFingeringScale),
+                              getTinWhistleTopHoleCenterYMinFromStructuralBottom(
+                                tinStructuralBottom,
+                                spacing,
+                                tinWhistleFingeringScale,
+                                hasBeamBelow ? TIN_WHISTLE_BEAM_TO_RING_GAP_MIN_PX : undefined,
+                              ),
                             );
                             if (fingeringPattern) {
                               return (
