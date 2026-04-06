@@ -81,6 +81,7 @@ import {
 } from './print/nmPrintDocument';
 import { registerSmuflFontsForJsPdf } from './export/registerSmuflFontForJsPdf';
 import { getScorePageDimensions } from './layout/LayoutManager';
+import { getPageCount, normalizePaperSize } from './utils/pageGeometry';
 import { openCloudFileInNewBrowserTab } from './utils/appUrls';
 import {
   resolveInstrumentRange,
@@ -2007,9 +2008,12 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   const [pdfPreviewPageIndex, setPdfPreviewPageIndex] = useState(0);
   const pdfPreviewTotalPages = useMemo(() => {
     if (!pdfPreviewSvgData?.contentHeight || !pdfPreviewSvgData?.orientation) return 1;
-    const isLandscape = pdfPreviewSvgData.orientation === 'landscape';
-    const pageH = isLandscape ? 794 : 1123;
-    return Math.max(1, Math.ceil((Number(pdfPreviewSvgData.contentHeight) || pageH) / pageH));
+    const pm = pdfPreviewSvgData.pageMetrics;
+    const flow = pdfPreviewSvgData.flowDirection === 'horizontal' ? 'horizontal' : 'vertical';
+    const pageExtentPx = pm
+      ? (flow === 'horizontal' ? pm.widthPx : pm.heightPx)
+      : (pdfPreviewSvgData.orientation === 'landscape' ? 794 : 1123);
+    return getPageCount(Number(pdfPreviewSvgData.contentHeight) || pageExtentPx, pageExtentPx);
   }, [pdfPreviewSvgData]);
   const [pdfPreviewZoom, setPdfPreviewZoom] = useState(1);
   const [pdfPreviewCaptureKey, setPdfPreviewCaptureKey] = useState(0);
@@ -2987,6 +2991,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       authorItalic,
       titleAlignment,
       authorAlignment,
+      paperSize,
       pageOrientation,
       pageFlowDirection: pdfExportOptionsRef.current?.pageFlowDirection ?? 'vertical',
       notationSvgElement,
@@ -3012,6 +3017,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     titleAlignment,
     authorAlignment,
     pageOrientation,
+    paperSize,
     viewFitPage,
     viewSmartPage,
   ]);
@@ -3104,7 +3110,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         const firstPageSvg = getPageSvgString(defsString, contentString, pageModel, 0, { footerText });
         const dataUrl = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(firstPageSvg)));
         setPdfPreviewDataUrl(dataUrl);
-        const dims = getScorePageDimensions(orientation);
+        const dims = getScorePageDimensions(orientation, pageModel.paperSize || paperSize);
         setPdfPreviewSize({ w: dims.width, h: dims.height });
         setPdfPreviewSvgData(pageModel);
         setPdfPreviewError('');
@@ -3142,7 +3148,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       cancelled = true;
       cleanup();
     };
-  }, [showPdfExportPreview, pdfPreviewCaptureKey, pageOrientation, buildScoreExportSnapshot, viewFitPage, viewSmartPage, t]);
+  }, [showPdfExportPreview, pdfPreviewCaptureKey, pageOrientation, paperSize, buildScoreExportSnapshot, viewFitPage, viewSmartPage, t]);
 
   useEffect(() => {
     if (!showPdfExportPreview) return;
@@ -3196,20 +3202,24 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     await new Promise((r) => setTimeout(r, 150));
     try {
       /* SVG → PDF vektoritega (svg2pdf.js): terav, viewBox sünkroonitud orientationiga (portrait 794×1123, landscape 1123×794). */
-      const { defsString, contentString, contentHeight, orientation, footerText } = previewSvgData;
+      const { defsString, contentString, contentHeight, orientation, footerText, pageMetrics, flowDirection } = previewSvgData;
       try {
         const smuflCheck = validateSmuflTimeSigExport({ defsString: previewSvgData.defsString, contentString: previewSvgData.contentString });
         if (!smuflCheck.ok && smuflCheck.error) console.warn('[PDF export SMuFL preflight]', smuflCheck.error);
       } catch (_) { /* ignore */ }
       const orient = (orientation ?? pageOrientation) === 'landscape' ? 'landscape' : 'portrait';
-      const pageH = orient === 'landscape' ? 794 : 1123;
-      const numPages = Math.max(1, Math.ceil(contentHeight / pageH));
-      const pdf = new jsPDF({ orientation: orient, unit: 'pt', format: 'a4' });
+      const flowDir = flowDirection === 'horizontal' ? 'horizontal' : 'vertical';
+      const pageExtentPx = pageMetrics
+        ? (flowDir === 'horizontal' ? pageMetrics.widthPx : pageMetrics.heightPx)
+        : (orient === 'landscape' ? 794 : 1123);
+      const numPages = getPageCount(Number(contentHeight) || pageExtentPx, pageExtentPx);
+      const paper = normalizePaperSize(pageMetrics?.paperSize || paperSize);
+      const pdf = new jsPDF({ orientation: orient, unit: 'pt', format: paper });
       await registerSmuflFontsForJsPdf(pdf);
-      const widthPt = orient === 'landscape' ? 841.89 : 595.28;
-      const heightPt = orient === 'landscape' ? 595.28 : 841.89;
+      const widthPt = pageMetrics?.widthPt ?? (orient === 'landscape' ? 841.89 : 595.28);
+      const heightPt = pageMetrics?.heightPt ?? (orient === 'landscape' ? 595.28 : 841.89);
       for (let p = 0; p < numPages; p++) {
-        if (p > 0) pdf.addPage('a4', orient);
+        if (p > 0) pdf.addPage(paper, orient);
         const pageSvgString = getPageSvgString(defsString, contentString, previewSvgData, p, { footerText });
         const wrap = document.createElement('div');
         wrap.innerHTML = pageSvgString;
@@ -3275,20 +3285,24 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     setSaveFeedback(t('file.print') || 'Print');
     await new Promise((r) => setTimeout(r, 50));
     try {
-      const { defsString, contentString, contentHeight, orientation, footerText } = pdfPreviewSvgData;
+      const { defsString, contentString, contentHeight, orientation, footerText, pageMetrics, flowDirection } = pdfPreviewSvgData;
       try {
         const smuflCheck = validateSmuflTimeSigExport({ defsString: pdfPreviewSvgData.defsString, contentString: pdfPreviewSvgData.contentString });
         if (!smuflCheck.ok && smuflCheck.error) console.warn('[Print SMuFL preflight]', smuflCheck.error);
       } catch (_) { /* ignore */ }
       const orient = (orientation ?? pageOrientation) === 'landscape' ? 'landscape' : 'portrait';
-      const pageH = orient === 'landscape' ? 794 : 1123;
-      const numPages = Math.max(1, Math.ceil((Number(contentHeight) || pageH) / pageH));
-      const pdf = new jsPDF({ orientation: orient, unit: 'pt', format: 'a4' });
+      const flowDir = flowDirection === 'horizontal' ? 'horizontal' : 'vertical';
+      const pageExtentPx = pageMetrics
+        ? (flowDir === 'horizontal' ? pageMetrics.widthPx : pageMetrics.heightPx)
+        : (orient === 'landscape' ? 794 : 1123);
+      const numPages = getPageCount(Number(contentHeight) || pageExtentPx, pageExtentPx);
+      const paper = normalizePaperSize(pageMetrics?.paperSize || paperSize);
+      const pdf = new jsPDF({ orientation: orient, unit: 'pt', format: paper });
       await registerSmuflFontsForJsPdf(pdf);
-      const widthPt = orient === 'landscape' ? 841.89 : 595.28;
-      const heightPt = orient === 'landscape' ? 595.28 : 841.89;
+      const widthPt = pageMetrics?.widthPt ?? (orient === 'landscape' ? 841.89 : 595.28);
+      const heightPt = pageMetrics?.heightPt ?? (orient === 'landscape' ? 595.28 : 841.89);
       for (let p = 0; p < numPages; p++) {
-        if (p > 0) pdf.addPage('a4', orient);
+        if (p > 0) pdf.addPage(paper, orient);
         const pageSvgString = getPageSvgString(defsString, contentString, pdfPreviewSvgData, p, { footerText });
         const wrap = document.createElement('div');
         wrap.innerHTML = pageSvgString;
@@ -3303,7 +3317,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       setIsExportingPdf(false);
       setSaveFeedback('');
     }
-  }, [isExportingPdf, pageOrientation, pdfPreviewSvgData, printPdfBlob, t]);
+  }, [isExportingPdf, pageOrientation, paperSize, pdfPreviewSvgData, printPdfBlob, t]);
 
   // Build state to persist
   const getPersistedState = useCallback(() => ({
@@ -5295,20 +5309,60 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     const insertIntoStaffNotes = (noteList) => {
       const withBeats = notesWithExplicitBeats(noteList);
       const EPS = 1e-6;
-      const cleaned = withBeats.filter((n) => {
+      const ndur = (n) => noteDurationInQuarterBeats(n);
+      const newEnd = insertBeat + effectiveDuration;
+
+      // Kui kursor on puhkuse sees (mitte täpselt alguses), jaga puhkus: eelnevad pausid + uus + järellüngas pausid.
+      let splitRestId = null;
+      let splitRestStart = 0;
+      let splitRestEnd = 0;
+      for (const n of withBeats) {
+        if (!n.isRest) continue;
         const nb = n.beat ?? 0;
-        const nd = n.duration ?? 1;
+        const end = nb + ndur(n);
+        if (insertBeat > nb + EPS && insertBeat < end - EPS) {
+          splitRestId = n.id;
+          splitRestStart = nb;
+          splitRestEnd = end;
+          break;
+        }
+      }
+
+      const victimsAtStart = withBeats.filter((n) => Math.abs((n.beat ?? 0) - insertBeat) < EPS);
+      let victimSpanEnd = insertBeat;
+      if (victimsAtStart.length > 0) {
+        victimSpanEnd = Math.max(...victimsAtStart.map((n) => (n.beat ?? 0) + ndur(n)));
+      }
+
+      const cleaned = withBeats.filter((n) => {
+        if (splitRestId != null && n.id === splitRestId) return false;
+        const nb = n.beat ?? 0;
         const sameBeat = Math.abs(nb - insertBeat) < EPS;
-        const sameDur = Math.abs(nd - effectiveDuration) < EPS;
-        // Default: "overwrite" the note/rest that starts exactly here (avoid accidental stacking).
-        // Chords are created via addNoteOnTopOfCursor (Shift+Letter), not by stacking here.
-        const overwriteAtStart = sameBeat;
-        if (overwriteAtStart) return false;
-        // Also consume a rest placeholder that exactly matches this span.
+        if (sameBeat) return false;
+        const d = ndur(n);
+        const sameDur = Math.abs(d - effectiveDuration) < EPS;
         return !(n.isRest && sameBeat && sameDur);
       });
-      const merged = [...cleaned, newNote].sort((a, b) => (a.beat ?? 0) - (b.beat ?? 0));
-      const totalSpan = merged.reduce((max, n) => Math.max(max, (n.beat ?? 0) + (n.duration ?? 1)), 0);
+
+      const toAdd = [];
+      if (splitRestId != null) {
+        if (insertBeat > splitRestStart + EPS) {
+          toAdd.push(...fillGapWithRests(splitRestStart, insertBeat));
+        }
+        toAdd.push(newNote);
+        if (splitRestEnd > newEnd + EPS) {
+          toAdd.push(...fillGapWithRests(newEnd, splitRestEnd));
+        }
+      } else {
+        toAdd.push(newNote);
+        // Lühem noot/puhkus asendab pikemat sama algusega: täida ülejäänud auk pausidega (nt 1/16 veerandi asemele → kolm 1/16 pausi).
+        if (victimsAtStart.length > 0 && victimSpanEnd > newEnd + EPS) {
+          toAdd.push(...fillGapWithRests(newEnd, victimSpanEnd));
+        }
+      }
+
+      const merged = [...cleaned, ...toAdd].sort((a, b) => (a.beat ?? 0) - (b.beat ?? 0));
+      const totalSpan = merged.reduce((max, n) => Math.max(max, (n.beat ?? 0) + ndur(n)), 0);
       const demoMaxSpanBeats = beatsPerMeasureFromTimeSig(timeSignature) * DEMO_MAX_MEASURES;
       if (!hasFullAccess && totalSpan > demoMaxSpanBeats) {
         setSaveFeedback('Demo: max 8 takti (2 rida). Logi sisse või registreeru, et kirjutada edasi.');
@@ -5352,7 +5406,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       const semitones = accResolved === 1 ? 1 : accResolved === -1 ? -1 : 0;
       playPianoNote(pitch, oct, semitones);
     }
-  }, [cursorPosition, selectedDuration, getEffectiveDuration, isDotted, isRest, notes, saveToHistory, ghostOctave, ghostAccidental, ghostAccidentalIsExplicit, playPianoNote, playNoteOnInsert, tupletMode, durations, staves, activeStaffIndex, notesWithExplicitBeats, notationStyle, keySignature, instrument, t, noteInputMode, expandScoreForNoteInputAdvance, timeSignature, pickupEnabled, pickupQuantity, pickupDuration]);
+  }, [cursorPosition, selectedDuration, getEffectiveDuration, isDotted, isRest, notes, saveToHistory, ghostOctave, ghostAccidental, ghostAccidentalIsExplicit, playPianoNote, playNoteOnInsert, tupletMode, durations, staves, activeStaffIndex, notesWithExplicitBeats, noteDurationInQuarterBeats, notationStyle, keySignature, instrument, t, noteInputMode, expandScoreForNoteInputAdvance, timeSignature, pickupEnabled, pickupQuantity, pickupDuration]);
 
   // Add a note on top of the note at cursor (chord input). Traditional or Pedagogical only. Shift+Letter.
   const addNoteOnTopOfCursor = useCallback((pitch, octave, accidental, options = {}) => {
@@ -8745,14 +8799,17 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                 </div>
               )}
               <div className="flex flex-col items-center gap-2">
-                <span className="text-sm font-medium text-amber-900 dark:text-white self-start">Eelvaade = SVG (viewBox sünkroonitud: vertikaal 794×1123, horisontaal 1123×794). PDF eksportitakse vektoritena; A4 trükk vastavalt lehe suunale.</span>
+                <span className="text-sm font-medium text-amber-900 dark:text-white self-start">Eelvaade = SVG (sama viewBox ja paberi suurus mis PDF/print; A3/A4/A5 + suund). Eksport vektorina.</span>
                 <button type="button" onClick={() => setPdfPreviewCaptureKey(k => k + 1)} className="self-start px-2 py-1 rounded text-sm font-medium bg-amber-100 dark:bg-amber-900/40 text-amber-900 dark:text-amber-100 hover:bg-amber-200 dark:hover:bg-amber-800/50" title="Tee uus pilt noodilehest">Värskenda eelvaadet</button>
                 <div
                   ref={pdfPreviewContainerRef}
                   className="relative bg-white dark:bg-gray-100 rounded-sm shadow-lg box-border"
                   style={{
                     width: '100%',
-                    maxWidth: getScorePageDimensions(pdfPreviewSvgData?.orientation === 'landscape' ? 'landscape' : pageOrientation).width,
+                    maxWidth: getScorePageDimensions(
+                      pdfPreviewSvgData?.orientation === 'landscape' ? 'landscape' : pageOrientation,
+                      pdfPreviewSvgData?.paperSize || paperSize
+                    ).width,
                     aspectRatio: (pdfPreviewSvgData?.orientation === 'landscape' ? 'landscape' : pageOrientation) === 'landscape' ? '297/210' : '210/297',
                     border: '3px solid #b45309',
                     boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.08)',

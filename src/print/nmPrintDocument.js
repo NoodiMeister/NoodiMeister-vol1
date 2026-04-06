@@ -7,6 +7,7 @@
  */
 
 import { getPageSvgString } from '../utils/scoreToSvg';
+import { getPageCount } from '../utils/pageGeometry';
 
 /**
  * @param {object} pageModel — scoreToSvg / buildScoreExportSnapshot väljund
@@ -15,11 +16,14 @@ import { getPageSvgString } from '../utils/scoreToSvg';
  */
 export function buildNmPrintSvgPagesMarkup (pageModel, opts = {}) {
   if (!pageModel) return '';
-  const { defsString, contentString, contentHeight, orientation, footerText } = pageModel;
+  const { defsString, contentString, contentHeight, orientation, footerText, pageMetrics, flowDirection } = pageModel;
   const pageOrientation = opts.pageOrientation ?? 'portrait';
   const orient = (orientation ?? pageOrientation) === 'landscape' ? 'landscape' : 'portrait';
-  const pageH = orient === 'landscape' ? 794 : 1123;
-  const numPages = Math.max(1, Math.ceil((Number(contentHeight) || pageH) / pageH));
+  const flow = flowDirection === 'horizontal' ? 'horizontal' : 'vertical';
+  const pageExtentPx = pageMetrics
+    ? (flow === 'horizontal' ? pageMetrics.widthPx : pageMetrics.heightPx)
+    : (orient === 'landscape' ? 794 : 1123);
+  const numPages = getPageCount(Number(contentHeight) || pageExtentPx, pageExtentPx);
   const paper = (pageModel?.paperSize || opts.paperSize || 'a4').toLowerCase();
   const printPageClass = `print-page-${paper}-${orient}`;
   const foot = typeof footerText === 'string' ? footerText : '';
