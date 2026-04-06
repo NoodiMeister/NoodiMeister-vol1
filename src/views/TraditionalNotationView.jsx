@@ -9,6 +9,7 @@ import { JoClefSymbol, TrebleClefSymbol, BassClefSymbol, getJoClefPixelWidth, ge
 import { RhythmSyllableLabel } from '../components/RhythmSyllableLabel';
 import { getJoName } from '../notation/joNames';
 import { getRhythmSyllableForNote } from '../notation/rhythmSyllables';
+import { shouldDrawRestGlyph } from '../notation/restGlyphDedupe';
 import { expandEmojiShortcuts } from '../utils/emojiShortcuts';
 import { SmuflGlyph } from '../notation/smufl/SmuflGlyph';
 import { SmuflStemFlags } from '../notation/smufl/SmuflStemFlags';
@@ -19,6 +20,7 @@ import {
   smuflTimeSigDigitsForNumber,
   smuflPrecomposedNote,
   smuflPrecomposedTypeForDurationLabel,
+  SMUFL_MUSIC_FONT_FAMILY,
 } from '../notation/smufl/glyphs';
 import { TIME_SIG_LAYOUT, getTraditionalTimeSignatureX } from '../notation/TimeSignatureLayout';
 import {
@@ -65,6 +67,10 @@ import {
   isMidiOutOfInstrumentRange,
 } from '../notation/instrumentRangeRules';
 import { getRepeatMarkPlacement } from '../notation/repeatMarksEngine';
+import {
+  getLeftBarlineRepeatRender,
+  shouldDrawRepeatEndGlyphOnRight,
+} from '../notation/repeatBarlineResolve';
 
 const LAYOUT = { MARGIN_LEFT: 60, CLEF_WIDTH: 45, MEASURE_MIN_WIDTH: 28 };
 
@@ -893,6 +899,15 @@ export function TraditionalNotationView({
                     return sys.measureIndices.map((measureIdx, j) => {
                       const measure = instMeasures[measureIdx];
                       if (!measure) return null;
+                const prevMeasureInSystem = j > 0 ? instMeasures[sys.measureIndices[j - 1]] : null;
+                const nextMeasureInSystem = j < sys.measureIndices.length - 1 ? instMeasures[sys.measureIndices[j + 1]] : null;
+                const leftBarlineRepeat = getLeftBarlineRepeatRender({
+                  measureIndexInSystem: j,
+                  measure,
+                  prevMeasureInSystem,
+                });
+                const drawRepeatEndGlyphRight = shouldDrawRepeatEndGlyphOnRight(measure, nextMeasureInSystem);
+                const prevIdxForRepeatPair = j > 0 ? sys.measureIndices[j - 1] : null;
                 const measureWidths = sys.measureWidths ?? sys.measureIndices.map(() => sys.measureWidth ?? beatsPerMeasure * 80);
                 const measureWidth = measureWidths[j] ?? (sys.measureWidth ?? beatsPerMeasure * 80);
                 const measureX = effectiveMarginLeft + measureWidths.slice(0, j).reduce((a, b) => a + b, 0);
@@ -972,26 +987,50 @@ export function TraditionalNotationView({
                     )}
                     {drawConnectedBarlinesHere && (
                       <>
-                        {/* Left barline: turn into repeat-start symbol when measure.repeatStart (including first bar of line) */}
-                        {measure.repeatStart ? (
+                        {/* Left barline: E040 / E042 (Leland); ühine loogika repeatBarlineResolve */}
+                        {leftBarlineRepeat.variant === 'both' ? (
+                          <g
+                            onClick={typeof onRemoveRepeatMark === 'function' ? (e) => {
+                              e.stopPropagation();
+                              if (prevIdxForRepeatPair != null) onRemoveRepeatMark(prevIdxForRepeatPair, 'repeatEnd');
+                              onRemoveRepeatMark(measureIdx, 'repeatStart');
+                            } : undefined}
+                            style={{ cursor: onRemoveRepeatMark ? 'pointer' : undefined }}
+                            pointerEvents={onRemoveRepeatMark ? 'auto' : 'none'}
+                          >
+                            <SmuflGlyph
+                              glyph={leftBarlineRepeat.glyph}
+                              x={measureX}
+                              y={barCenterY}
+                              fontSize={getGlyphFontSize(spacing) * connectedScale}
+                              fill="#1a1a1a"
+                              textAnchor="middle"
+                              fontFamily={SMUFL_MUSIC_FONT_FAMILY}
+                            />
+                            {onRemoveRepeatMark && (
+                              <rect x={measureX - spacing * 2} y={staffY + firstLineY - spacing} width={spacing * 4} height={lastLineY - firstLineY + spacing * 2} fill="transparent" />
+                            )}
+                          </g>
+                        ) : leftBarlineRepeat.variant === 'start' ? (
                           <g
                             onClick={typeof onRemoveRepeatMark === 'function' ? (e) => { e.stopPropagation(); onRemoveRepeatMark(measureIdx, 'repeatStart'); } : undefined}
                             style={{ cursor: onRemoveRepeatMark ? 'pointer' : undefined }}
                             pointerEvents={onRemoveRepeatMark ? 'auto' : 'none'}
                           >
                             <SmuflGlyph
-                              glyph={SMUFL_GLYPH.repeatLeft}
+                              glyph={leftBarlineRepeat.glyph}
                               x={measureX}
                               y={barCenterY}
                               fontSize={getGlyphFontSize(spacing) * connectedScale}
                               fill="#1a1a1a"
                               textAnchor="end"
+                              fontFamily={SMUFL_MUSIC_FONT_FAMILY}
                             />
                             {onRemoveRepeatMark && (
                               <rect x={measureX - spacing * 2} y={staffY + firstLineY - spacing} width={spacing * 2} height={lastLineY - firstLineY + spacing * 2} fill="transparent" />
                             )}
                           </g>
-                        ) : j !== 0 ? (
+                        ) : leftBarlineRepeat.variant === 'barline' ? (
                           <line
                             x1={measureX}
                             y1={barY1}
@@ -1001,8 +1040,8 @@ export function TraditionalNotationView({
                             strokeWidth={getThinBarlineThickness(spacing)}
                           />
                         ) : null}
-                        {/* Right barline: turn into repeat-end symbol when measure.repeatEnd */}
-                        {measure.repeatEnd ? (
+                        {/* Right barline: E041 kui pole ühendatud E042-ga järgmise takti vasakul */}
+                        {measure.repeatEnd && drawRepeatEndGlyphRight ? (
                           <g
                             onClick={typeof onRemoveRepeatMark === 'function' ? (e) => { e.stopPropagation(); onRemoveRepeatMark(measureIdx, 'repeatEnd'); } : undefined}
                             style={{ cursor: onRemoveRepeatMark ? 'pointer' : undefined }}
@@ -1015,6 +1054,7 @@ export function TraditionalNotationView({
                               fontSize={getGlyphFontSize(spacing) * connectedScale}
                               fill="#1a1a1a"
                               textAnchor="start"
+                              fontFamily={SMUFL_MUSIC_FONT_FAMILY}
                             />
                             {onRemoveRepeatMark && (
                               <rect x={measureX + measureWidth} y={staffY + firstLineY - spacing} width={spacing * 2} height={lastLineY - firstLineY + spacing * 2} fill="transparent" />
@@ -1181,7 +1221,8 @@ export function TraditionalNotationView({
                       const restLabelY = staffY + lastLineY + spacing * 1.8;
 
                       if (note.isRest) {
-                        const restSyllable = showRhythmSyllables ? getRhythmSyllableForNote(note) : '';
+                        const drawRestGlyph = shouldDrawRestGlyph(measure.notes, noteIdx);
+                        const restSyllable = drawRestGlyph && showRhythmSyllables ? getRhythmSyllableForNote(note) : '';
                         const dur = note.durationLabel || '1/4';
                         const restAnchorY =
                           dur === '1/1'
@@ -1191,8 +1232,8 @@ export function TraditionalNotationView({
                               : staffY + staffCenterY;
                         return (
                           <g key={noteIdx} {...noteGroupProps}>
-                            {renderStandardRest(note, noteX, restAnchorY, spacing)}
-                            {note.isDotted && (
+                            {drawRestGlyph && renderStandardRest(note, noteX, restAnchorY, spacing)}
+                            {drawRestGlyph && note.isDotted && (
                               <SmuflGlyph
                                 x={getAugmentationDotXFromRestCenter(noteX, spacing)}
                                 y={staffY + getRestAugmentationDotPitchY(firstLineY, spacing)}
@@ -1203,6 +1244,15 @@ export function TraditionalNotationView({
                               />
                             )}
                             {restSyllable && <RhythmSyllableLabel x={noteX} y={restLabelY} text={restSyllable} staffSpace={spacing} />}
+                            {!drawRestGlyph && (
+                              <rect
+                                x={noteX - spacing * 2.25}
+                                y={restAnchorY - spacing * 2.25}
+                                width={spacing * 4.5}
+                                height={spacing * 4.5}
+                                fill="transparent"
+                              />
+                            )}
                           </g>
                         );
                       }

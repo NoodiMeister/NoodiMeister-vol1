@@ -20,6 +20,7 @@ const DemoIntroPage = lazyWithRetry(() => import('./pages/DemoIntroPage'));
 
 import * as authStorage from './services/authStorage';
 import { IntroCrossfadeProvider } from './context/IntroCrossfadeContext';
+import { SHOW_SUPPORT_AND_PRICING_UI } from './config/productFlags';
 
 /** Esc vajutamine logib sisselogitud kasutaja välja ja suunab avalehele. */
 function EscapeLogoutHandler() {
@@ -245,8 +246,14 @@ function AppRoutes() {
           <Route path="/konto" element={<AccountOrRedirect />} />
           <Route path="/login" element={<LoginOrRedirect />} />
           <Route path="/registreeru" element={<RegisterOrRedirect />} />
-          <Route path="/hinnakiri" element={<HinnakiriPage />} />
-          <Route path="/toeta" element={<ToetaPage />} />
+          <Route
+            path="/hinnakiri"
+            element={SHOW_SUPPORT_AND_PRICING_UI ? <HinnakiriPage /> : <Navigate to="/" replace />}
+          />
+          <Route
+            path="/toeta"
+            element={SHOW_SUPPORT_AND_PRICING_UI ? <ToetaPage /> : <Navigate to="/" replace />}
+          />
           <Route path="/administraator" element={<AdminGrantSupportPage />} />
           <Route path="/administraator/register" element={<AdminRegistrationPage />} />
           <Route path="/administraator-registreerimine" element={<Navigate to="/administraator/register" replace />} />

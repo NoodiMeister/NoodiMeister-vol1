@@ -4,6 +4,7 @@ import { FileMusic, Cloud, UserPlus, LogIn, PenTool, Save, Share2 } from 'lucide
 import { AppLogo } from '../components/AppLogo';
 import { LOCALE_STORAGE_KEY, DEFAULT_LOCALE, getTranslations } from '../i18n';
 import { useForceLightTheme } from '../hooks/useForceLightTheme';
+import { SHOW_SUPPORT_AND_PRICING_UI } from '../config/productFlags';
 
 export default function LandingPage() {
   useForceLightTheme();
@@ -24,14 +25,16 @@ export default function LandingPage() {
           <Link to="/" className="flex items-center">
             <AppLogo variant="header" alt="NoodiMeister" />
           </Link>
-          <nav className="flex items-center gap-3">
-            <Link
-              to="/hinnakiri"
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-amber-800 dark:text-white font-medium hover:bg-amber-100 dark:hover:bg-white/10 transition-colors"
-            >
-              {t['landing.pricing']}
-            </Link>
-          </nav>
+          {SHOW_SUPPORT_AND_PRICING_UI ? (
+            <nav className="flex items-center gap-3">
+              <Link
+                to="/hinnakiri"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-amber-800 dark:text-white font-medium hover:bg-amber-100 dark:hover:bg-white/10 transition-colors"
+              >
+                {t['landing.pricing']}
+              </Link>
+            </nav>
+          ) : null}
         </div>
       </header>
 

@@ -6,6 +6,7 @@ import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { getFigureSymbol, getFigureColor } from "../utils/figurenotes";
 import { RhythmSyllableLabel } from "../components/RhythmSyllableLabel";
 import { getRhythmSyllableForNote } from "../notation/rhythmSyllables";
+import { shouldDrawRestGlyph } from "../notation/restGlyphDedupe";
 import { getFigureNoteWidth, FIGURE_BASE_WIDTH } from "../layout/LayoutEngine";
 import { SmuflGlyph } from "../notation/smufl/SmuflGlyph";
 import {
@@ -24,6 +25,10 @@ import {
   TIME_SIG_LAYOUT,
   getFigureTimeSignatureX,
 } from "../notation/TimeSignatureLayout";
+import {
+  getLeftBarlineRepeatRender,
+  shouldDrawRepeatEndGlyphOnRight,
+} from "../notation/repeatBarlineResolve";
 
 const LAYOUT = { MARGIN_LEFT: 60, MEASURE_MIN_WIDTH: 28 };
 const FIGURE_START_PADDING = 8;
@@ -1115,6 +1120,27 @@ export function FigurenotesView({
                           )}
                         {!combinedRows &&
                           (() => {
+                            const mBar =
+                              layoutSourceMeasures[measureIdx] ?? measure;
+                            const prevM =
+                              j > 0
+                                ? layoutSourceMeasures[sys.measureIndices[j - 1]]
+                                : null;
+                            const nextM =
+                              j < sys.measureIndices.length - 1
+                                ? layoutSourceMeasures[
+                                    sys.measureIndices[j + 1]
+                                  ]
+                                : null;
+                            const leftR = getLeftBarlineRepeatRender({
+                              measureIndexInSystem: j,
+                              measure: mBar,
+                              prevMeasureInSystem: prevM,
+                            });
+                            const drawEnd = shouldDrawRepeatEndGlyphOnRight(
+                              mBar,
+                              nextM,
+                            );
                             const barLineBottomY =
                               chordLineHeight > 0
                                 ? sys.yOffset +
@@ -1133,8 +1159,8 @@ export function FigurenotesView({
                             const isLastMeasureOfScore =
                               measureIdx === layoutSourceMeasures.length - 1;
                             const showFinalBar =
-                              (isLastMeasureOfScore || measure.barlineFinal) &&
-                              !measure.repeatEnd;
+                              (isLastMeasureOfScore || mBar.barlineFinal) &&
+                              !mBar.repeatEnd;
                             const xRight = measureX + measureWidth;
                             const repeatGlyphSize = Math.max(
                               18,
@@ -1154,28 +1180,37 @@ export function FigurenotesView({
                               : null;
                             return (
                               <>
-                                {measure.repeatStart ? (
+                                {leftR.variant === "both" ? (
                                   <SmuflGlyph
-                                    glyph={SMUFL_GLYPH.repeatLeft}
+                                    glyph={leftR.glyph}
+                                    x={measureX}
+                                    y={barLineCenterY}
+                                    fontSize={repeatGlyphSize}
+                                    fill="#1a1a1a"
+                                    textAnchor="middle"
+                                    fontFamily={SMUFL_MUSIC_FONT_FAMILY}
+                                  />
+                                ) : leftR.variant === "start" ? (
+                                  <SmuflGlyph
+                                    glyph={leftR.glyph}
                                     x={measureX}
                                     y={barLineCenterY}
                                     fontSize={repeatGlyphSize}
                                     fill="#1a1a1a"
                                     textAnchor="end"
+                                    fontFamily={SMUFL_MUSIC_FONT_FAMILY}
                                   />
-                                ) : (
-                                  j !== 0 && (
-                                    <line
-                                      x1={measureX}
-                                      y1={barLineTopY}
-                                      x2={measureX}
-                                      y2={barLineBottomY}
-                                      stroke="#1a1a1a"
-                                      strokeWidth={barLineWidth}
-                                    />
-                                  )
-                                )}
-                                {measure.repeatEnd ? (
+                                ) : leftR.variant === "barline" ? (
+                                  <line
+                                    x1={measureX}
+                                    y1={barLineTopY}
+                                    x2={measureX}
+                                    y2={barLineBottomY}
+                                    stroke="#1a1a1a"
+                                    strokeWidth={barLineWidth}
+                                  />
+                                ) : null}
+                                {drawEnd ? (
                                   <SmuflGlyph
                                     glyph={SMUFL_GLYPH.repeatRight}
                                     x={xRight}
@@ -1183,6 +1218,7 @@ export function FigurenotesView({
                                     fontSize={repeatGlyphSize}
                                     fill="#1a1a1a"
                                     textAnchor="start"
+                                    fontFamily={SMUFL_MUSIC_FONT_FAMILY}
                                   />
                                 ) : (
                                   isRightBarlineOfSystem &&
@@ -1817,12 +1853,33 @@ export function FigurenotesView({
                               if (isAutoGapRest) return null;
                               // Kui samas ajavahemikus on juba figurshape/noot, loe see slot täidetuks ja ära joonista pausi.
                               if (restOverlapsPlayed(note)) return null;
+                              const drawRestGlyph = shouldDrawRestGlyph(
+                                measure.notes,
+                                noteIdx,
+                              );
                               const restLabelY = sys.yOffset + centerY + 20;
-                              const restSyllable = showRhythmSyllables
-                                ? getRhythmSyllableForNote(note)
-                                : "";
+                              const restSyllable =
+                                drawRestGlyph && showRhythmSyllables
+                                  ? getRhythmSyllableForNote(note)
+                                  : "";
+                              const restHitRect = (zSize) => (
+                                <rect
+                                  x={figureCenterX - noteWidth / 2}
+                                  y={sys.yOffset + centerY - zSize * 0.35}
+                                  width={noteWidth}
+                                  height={Math.max(figureSize * 1.4, zSize * 1.5)}
+                                  fill="transparent"
+                                />
+                              );
                               if (!figurenotesStems) {
                                 const zSize = Math.min(noteWidth * 0.55, 26);
+                                if (!drawRestGlyph) {
+                                  return (
+                                    <g key={noteIdx} {...noteGroupProps}>
+                                      {restHitRect(zSize)}
+                                    </g>
+                                  );
+                                }
                                 return (
                                   <g key={noteIdx} {...noteGroupProps}>
                                     <text
@@ -1844,6 +1901,14 @@ export function FigurenotesView({
                                         staffSpace={10}
                                       />
                                     )}
+                                  </g>
+                                );
+                              }
+                              if (!drawRestGlyph) {
+                                const zSize = Math.min(noteWidth * 0.55, 26);
+                                return (
+                                  <g key={noteIdx} {...noteGroupProps}>
+                                    {restHitRect(zSize)}
                                   </g>
                                 );
                               }
@@ -1984,9 +2049,27 @@ export function FigurenotesView({
                     );
                   })}
                   {combinedRows &&
+                    staffSi === 0 &&
                     (() => {
                       const measureBar = layoutSourceMeasures[measureIdx];
                       if (!measureBar) return null;
+                      const prevBar =
+                        j > 0
+                          ? layoutSourceMeasures[sys.measureIndices[j - 1]]
+                          : null;
+                      const nextBar =
+                        j < sys.measureIndices.length - 1
+                          ? layoutSourceMeasures[sys.measureIndices[j + 1]]
+                          : null;
+                      const leftR = getLeftBarlineRepeatRender({
+                        measureIndexInSystem: j,
+                        measure: measureBar,
+                        prevMeasureInSystem: prevBar,
+                      });
+                      const drawEnd = shouldDrawRepeatEndGlyphOnRight(
+                        measureBar,
+                        nextBar,
+                      );
                       const barLineBottomY =
                         chordLineHeight > 0
                           ? sys.yOffset +
@@ -2031,28 +2114,37 @@ export function FigurenotesView({
                         : null;
                       return (
                         <>
-                          {measureBar.repeatStart ? (
+                          {leftR.variant === "both" ? (
                             <SmuflGlyph
-                              glyph={SMUFL_GLYPH.repeatLeft}
+                              glyph={leftR.glyph}
+                              x={measureX}
+                              y={barLineCenterY}
+                              fontSize={repeatGlyphSize}
+                              fill="#1a1a1a"
+                              textAnchor="middle"
+                              fontFamily={SMUFL_MUSIC_FONT_FAMILY}
+                            />
+                          ) : leftR.variant === "start" ? (
+                            <SmuflGlyph
+                              glyph={leftR.glyph}
                               x={measureX}
                               y={barLineCenterY}
                               fontSize={repeatGlyphSize}
                               fill="#1a1a1a"
                               textAnchor="end"
+                              fontFamily={SMUFL_MUSIC_FONT_FAMILY}
                             />
-                          ) : (
-                            j !== 0 && (
-                              <line
-                                x1={measureX}
-                                y1={barLineTopY}
-                                x2={measureX}
-                                y2={barLineBottomY}
-                                stroke="#1a1a1a"
-                                strokeWidth={barLineWidth}
-                              />
-                            )
-                          )}
-                          {measureBar.repeatEnd ? (
+                          ) : leftR.variant === "barline" ? (
+                            <line
+                              x1={measureX}
+                              y1={barLineTopY}
+                              x2={measureX}
+                              y2={barLineBottomY}
+                              stroke="#1a1a1a"
+                              strokeWidth={barLineWidth}
+                            />
+                          ) : null}
+                          {drawEnd ? (
                             <SmuflGlyph
                               glyph={SMUFL_GLYPH.repeatRight}
                               x={xRight}
@@ -2060,6 +2152,7 @@ export function FigurenotesView({
                               fontSize={repeatGlyphSize}
                               fill="#1a1a1a"
                               textAnchor="start"
+                              fontFamily={SMUFL_MUSIC_FONT_FAMILY}
                             />
                           ) : (
                             isRightBarlineOfSystem &&

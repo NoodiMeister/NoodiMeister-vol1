@@ -8,6 +8,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Shield, Loader2, CheckCircle, AlertCircle, Lock, KeyRound, List, ExternalLink } from 'lucide-react';
 import { useNoodimeisterOptional } from '../store/NoodimeisterContext';
 import * as authStorage from '../services/authStorage';
+import { SHOW_SUPPORT_AND_PRICING_UI } from '../config/productFlags';
 
 const JWT_STORAGE_KEY = 'noodimeister-admin-jwt';
 const PASSWORD_CHANGE_MONTHS = 3;
@@ -396,8 +397,12 @@ export default function AdminGrantSupportPage() {
                   <Link to="/konto" className="px-3 py-1.5 rounded-lg bg-white dark:bg-zinc-700 text-slate-700 dark:text-white border border-slate-200 dark:border-white/20 hover:bg-amber-50 dark:hover:bg-zinc-600" target="_blank" rel="noopener noreferrer">Minu konto</Link>
                   <Link to="/login" className="px-3 py-1.5 rounded-lg bg-white dark:bg-zinc-700 text-slate-700 dark:text-white border border-slate-200 dark:border-white/20 hover:bg-amber-50 dark:hover:bg-zinc-600" target="_blank" rel="noopener noreferrer">Logi sisse</Link>
                   <Link to="/registreeru" className="px-3 py-1.5 rounded-lg bg-white dark:bg-zinc-700 text-slate-700 dark:text-white border border-slate-200 dark:border-white/20 hover:bg-amber-50 dark:hover:bg-zinc-600" target="_blank" rel="noopener noreferrer">Registreeru</Link>
-                  <Link to="/hinnakiri" className="px-3 py-1.5 rounded-lg bg-white dark:bg-zinc-700 text-slate-700 dark:text-white border border-slate-200 dark:border-white/20 hover:bg-amber-50 dark:hover:bg-zinc-600" target="_blank" rel="noopener noreferrer">Hinnakiri</Link>
-                  <Link to="/toeta" className="px-3 py-1.5 rounded-lg bg-white dark:bg-zinc-700 text-slate-700 dark:text-white border border-slate-200 dark:border-white/20 hover:bg-amber-50 dark:hover:bg-zinc-600" target="_blank" rel="noopener noreferrer">Toeta</Link>
+                  {SHOW_SUPPORT_AND_PRICING_UI ? (
+                    <>
+                      <Link to="/hinnakiri" className="px-3 py-1.5 rounded-lg bg-white dark:bg-zinc-700 text-slate-700 dark:text-white border border-slate-200 dark:border-white/20 hover:bg-amber-50 dark:hover:bg-zinc-600" target="_blank" rel="noopener noreferrer">Hinnakiri</Link>
+                      <Link to="/toeta" className="px-3 py-1.5 rounded-lg bg-white dark:bg-zinc-700 text-slate-700 dark:text-white border border-slate-200 dark:border-white/20 hover:bg-amber-50 dark:hover:bg-zinc-600" target="_blank" rel="noopener noreferrer">Toeta</Link>
+                    </>
+                  ) : null}
                   <Link to="/gallery" className="px-3 py-1.5 rounded-lg bg-white dark:bg-zinc-700 text-slate-700 dark:text-white border border-slate-200 dark:border-white/20 hover:bg-amber-50 dark:hover:bg-zinc-600" target="_blank" rel="noopener noreferrer">Sümboligalerii</Link>
                   <Link to="/gallery/figurenotes" className="px-3 py-1.5 rounded-lg bg-white dark:bg-zinc-700 text-slate-700 dark:text-white border border-slate-200 dark:border-white/20 hover:bg-amber-50 dark:hover:bg-zinc-600" target="_blank" rel="noopener noreferrer">Figuurnoodi galerii</Link>
                   <Link to="/piano" className="px-3 py-1.5 rounded-lg bg-white dark:bg-zinc-700 text-slate-700 dark:text-white border border-slate-200 dark:border-white/20 hover:bg-amber-50 dark:hover:bg-zinc-600" target="_blank" rel="noopener noreferrer">Klaver</Link>
@@ -461,7 +466,13 @@ export default function AdminGrantSupportPage() {
         </div>
       </main>
       <footer className="flex-shrink-0 py-4 text-center text-xs text-slate-500 dark:text-white/50 border-t border-slate-200 dark:border-white/10">
-        <Link to="/hinnakiri" className="underline">Hinnakiri</Link> · <Link to="/" className="underline">Avaleht</Link>
+        {SHOW_SUPPORT_AND_PRICING_UI ? (
+          <>
+            <Link to="/hinnakiri" className="underline">Hinnakiri</Link>
+            {' · '}
+          </>
+        ) : null}
+        <Link to="/" className="underline">Avaleht</Link>
       </footer>
     </div>
   );

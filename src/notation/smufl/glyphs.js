@@ -57,6 +57,8 @@ export const SMUFL_GLYPH = Object.freeze({
   // Repeats and jumps (Leland / SMuFL U+E040–E04F) – for toolbox "Kordused ja hüpped"
   repeatLeft: '\uE040',       // start repeat (|:)
   repeatRight: '\uE041',     // end repeat (:|)
+  /** Same barline: end previous repeat + start next (SMuFL repeatRightLeft). */
+  repeatRightLeft: '\uE042',
   repeatDots: '\uE043',      // repeat dots (center)
   repeatDot: '\uE044',       // single repeat dot
   dalSegno: '\uE045',        // Dal segno
