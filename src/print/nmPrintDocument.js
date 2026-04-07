@@ -5,7 +5,11 @@
  * @page size arvutatakse trükihetkel layoutOpts-ist (paber + orientatsioon); index.css host-print reeglid on eraldi.
  */
 
-import { getPageSvgString } from '../utils/scoreToSvg';
+import {
+  getPageSvgString,
+  rewriteSmuflTimeSigDigitsToAscii,
+  validateSmuflTimeSigExport,
+} from '../utils/scoreToSvg';
 import {
   getPageCount,
   getPaperDimensionsMm,
@@ -29,10 +33,15 @@ export function buildNmPrintSvgPagesMarkup (pageModel, opts = {}) {
     : (orient === 'landscape' ? 794 : 1123);
   const numPages = getPageCount(Number(contentHeight) || pageExtentPx, pageExtentPx);
   const foot = typeof footerText === 'string' ? footerText : '';
+  let smuflOk = true;
+  try {
+    smuflOk = validateSmuflTimeSigExport({ defsString, contentString }).ok !== false;
+  } catch (_) {}
   let html = '';
   for (let p = 0; p < numPages; p += 1) {
     const pageSvg = getPageSvgString(defsString, contentString, pageModel, p, { footerText: foot });
-    html += `<div class="nm-print-svg-page">${pageSvg}</div>`;
+    const safePageSvg = smuflOk ? pageSvg : rewriteSmuflTimeSigDigitsToAscii(pageSvg);
+    html += `<div class="nm-print-svg-page">${safePageSvg}</div>`;
   }
   return html;
 }
@@ -47,8 +56,14 @@ export function buildNmStandalonePrintDocumentHtml (pagesInnerHtml, layoutOpts =
   const orient = normalizePageOrientation(layoutOpts.pageOrientation || 'portrait');
   const { width, height } = getPaperDimensionsMm(paper, orient);
   const style = getNmStandalonePrintStylesheet(width, height);
+  const baseHref = (() => {
+    try {
+      if (typeof document !== 'undefined' && document.baseURI) return document.baseURI;
+    } catch (_) {}
+    return '/';
+  })();
   const body = `<div class="nm-print-svg-pages">${pagesInnerHtml}</div>`;
-  return `<!DOCTYPE html><html lang="et"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><title>Noodimeister</title><style>${style}</style></head><body>${body}</body></html>`;
+  return `<!DOCTYPE html><html lang="et"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><base href="${baseHref}"/><title>Noodimeister</title><style>${style}</style></head><body>${body}</body></html>`;
 }
 
 /**
@@ -111,8 +126,21 @@ export function runIsolatedPrintFromHtml (fullDocumentHtml, opts = {}) {
     win.addEventListener('afterprint', onIframeAfterPrint);
     window.addEventListener('afterprint', onHostAfterPrint, { once: true });
     setTimeout(finish, 120000);
-    win.focus();
-    win.print();
+    const triggerPrint = () => {
+      try {
+        win.focus();
+        win.print();
+      } catch (_) {
+        finish();
+      }
+    };
+    const readyPromise = idoc?.fonts?.ready
+      ? idoc.fonts.ready.catch(() => null)
+      : Promise.resolve(null);
+    Promise.race([
+      readyPromise,
+      new Promise((resolve) => setTimeout(resolve, 1200)),
+    ]).finally(triggerPrint);
   } catch (e) {
     if (blankHostDocument) {
       document.documentElement.classList.remove('nm-print-svg-mode');

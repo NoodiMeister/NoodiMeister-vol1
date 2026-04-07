@@ -73,7 +73,13 @@ import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 import 'svg2pdf.js';
 import Soundfont from 'soundfont-player';
-import { scoreToSvg, getFirstPageSvgString, getPageSvgString, validateSmuflTimeSigExport } from './utils/scoreToSvg';
+import {
+  scoreToSvg,
+  getFirstPageSvgString,
+  getPageSvgString,
+  validateSmuflTimeSigExport,
+  rewriteSmuflTimeSigDigitsToAscii,
+} from './utils/scoreToSvg';
 import {
   buildNmPrintSvgPagesMarkup,
   buildNmStandalonePrintDocumentHtml,
@@ -2244,6 +2250,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   const activeSoundfontVoiceRef = useRef(null);
   const activeOscillatorStopRef = useRef(null);
   const activePreviewStopTimeoutRef = useRef(null);
+  const lastRemoteCloudChangeNoticeRef = useRef('');
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const isNewWorkFlow = (searchParams && typeof searchParams.get === 'function' && searchParams.get('new')) === '1';
@@ -3190,7 +3197,8 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         } catch (_) {}
         const { defsString, contentString, orientation, footerText } = pageModel;
         const firstPageSvg = getPageSvgString(defsString, contentString, pageModel, 0, { footerText });
-        setPdfPreviewPageSvgHtml(firstPageSvg);
+        const smuflCheck = validateSmuflTimeSigExport({ defsString, contentString });
+        setPdfPreviewPageSvgHtml(smuflCheck.ok ? firstPageSvg : rewriteSmuflTimeSigDigitsToAscii(firstPageSvg));
         const dims = getScorePageDimensions(orientation, pageModel.paperSize || paperSize);
         setPdfPreviewSize({ w: dims.width, h: dims.height });
         setPdfPreviewSvgData(pageModel);
@@ -3242,7 +3250,8 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     }
     const { defsString, contentString, footerText } = pdfPreviewSvgData;
     const pageSvg = getPageSvgString(defsString, contentString, pdfPreviewSvgData, safeIdx, { footerText });
-    setPdfPreviewPageSvgHtml(pageSvg);
+    const smuflCheck = validateSmuflTimeSigExport({ defsString, contentString });
+    setPdfPreviewPageSvgHtml(smuflCheck.ok ? pageSvg : rewriteSmuflTimeSigDigitsToAscii(pageSvg));
   }, [showPdfExportPreview, pdfPreviewSvgData, pdfPreviewPageIndex, pdfPreviewTotalPages]);
 
   const handlePdfPreviewFit = useCallback(() => {
@@ -3283,8 +3292,10 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     try {
       /* SVG → PDF vektoritega (svg2pdf.js): terav, viewBox sünkroonitud orientationiga (portrait 794×1123, landscape 1123×794). */
       const { defsString, contentString, contentHeight, orientation, footerText, pageMetrics, flowDirection } = previewSvgData;
+      let smuflExportOk = true;
       try {
         const smuflCheck = validateSmuflTimeSigExport({ defsString: previewSvgData.defsString, contentString: previewSvgData.contentString });
+        smuflExportOk = smuflCheck.ok !== false;
         if (!smuflCheck.ok && smuflCheck.error) console.warn('[PDF export SMuFL preflight]', smuflCheck.error);
       } catch (_) { /* ignore */ }
       const orient = (orientation ?? pageOrientation) === 'landscape' ? 'landscape' : 'portrait';
@@ -3301,8 +3312,9 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       for (let p = 0; p < numPages; p++) {
         if (p > 0) pdf.addPage(paper, orient);
         const pageSvgString = getPageSvgString(defsString, contentString, previewSvgData, p, { footerText });
+        const exportPageSvg = smuflExportOk ? pageSvgString : rewriteSmuflTimeSigDigitsToAscii(pageSvgString);
         const wrap = document.createElement('div');
-        wrap.innerHTML = pageSvgString;
+        wrap.innerHTML = exportPageSvg;
         const svgEl = wrap.querySelector('svg');
         if (svgEl) {
           await pdf.svg(svgEl, { x: 0, y: 0, width: widthPt, height: heightPt });
@@ -3366,8 +3378,10 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     await new Promise((r) => setTimeout(r, 50));
     try {
       const { defsString, contentString, contentHeight, orientation, footerText, pageMetrics, flowDirection } = pdfPreviewSvgData;
+      let smuflPrintOk = true;
       try {
         const smuflCheck = validateSmuflTimeSigExport({ defsString: pdfPreviewSvgData.defsString, contentString: pdfPreviewSvgData.contentString });
+        smuflPrintOk = smuflCheck.ok !== false;
         if (!smuflCheck.ok && smuflCheck.error) console.warn('[Print SMuFL preflight]', smuflCheck.error);
       } catch (_) { /* ignore */ }
       const orient = (orientation ?? pageOrientation) === 'landscape' ? 'landscape' : 'portrait';
@@ -3384,8 +3398,9 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       for (let p = 0; p < numPages; p++) {
         if (p > 0) pdf.addPage(paper, orient);
         const pageSvgString = getPageSvgString(defsString, contentString, pdfPreviewSvgData, p, { footerText });
+        const printPageSvg = smuflPrintOk ? pageSvgString : rewriteSmuflTimeSigDigitsToAscii(pageSvgString);
         const wrap = document.createElement('div');
-        wrap.innerHTML = pageSvgString;
+        wrap.innerHTML = printPageSvg;
         const svgEl = wrap.querySelector('svg');
         if (svgEl) await pdf.svg(svgEl, { x: 0, y: 0, width: widthPt, height: heightPt });
       }

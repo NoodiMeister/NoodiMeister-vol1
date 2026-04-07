@@ -42,13 +42,13 @@ function ensureLelandStyleVariants (pdf) {
   const have = list.Leland || [];
   for (const style of SMUFL_JSPDF_STYLE_VARIANTS) {
     if (have.indexOf(style) < 0) {
-      pdf.addFont(VFS_NAME, 'Leland', style);
+      pdf.addFont(VFS_NAME, 'Leland', style, 'Identity-H');
     }
   }
   const haveBr = list.Bravura || [];
   for (const style of SMUFL_JSPDF_STYLE_VARIANTS) {
     if (haveBr.indexOf(style) < 0) {
-      pdf.addFont(VFS_NAME, 'Bravura', style);
+      pdf.addFont(VFS_NAME, 'Bravura', style, 'Identity-H');
     }
   }
 }
