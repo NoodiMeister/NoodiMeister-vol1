@@ -2,12 +2,16 @@
  * Noodimeistri isoleeritud print-dokument (Google Docs–stiilis): ainult see HTML/CSS
  * läheb printimisele, mitte terve SPA. Sünkroonis PDF/print SVG mudeliga (scoreToSvg).
  *
- * Peamised stiilid peegeldavad src/index.css @media print + @page reegleid;
- * muutmisel hoia mõlemad kooskõlas (või tõsta ühine .css + ?raw import).
+ * @page size arvutatakse trükihetkel layoutOpts-ist (paber + orientatsioon); index.css host-print reeglid on eraldi.
  */
 
 import { getPageSvgString } from '../utils/scoreToSvg';
-import { getPageCount } from '../utils/pageGeometry';
+import {
+  getPageCount,
+  getPaperDimensionsMm,
+  normalizePageOrientation,
+  normalizePaperSize,
+} from '../utils/pageGeometry';
 
 /**
  * @param {object} pageModel — scoreToSvg / buildScoreExportSnapshot väljund
@@ -24,20 +28,25 @@ export function buildNmPrintSvgPagesMarkup (pageModel, opts = {}) {
     ? (flow === 'horizontal' ? pageMetrics.widthPx : pageMetrics.heightPx)
     : (orient === 'landscape' ? 794 : 1123);
   const numPages = getPageCount(Number(contentHeight) || pageExtentPx, pageExtentPx);
-  const paper = (pageModel?.paperSize || opts.paperSize || 'a4').toLowerCase();
-  const printPageClass = `print-page-${paper}-${orient}`;
   const foot = typeof footerText === 'string' ? footerText : '';
   let html = '';
   for (let p = 0; p < numPages; p += 1) {
     const pageSvg = getPageSvgString(defsString, contentString, pageModel, p, { footerText: foot });
-    html += `<div class="nm-print-svg-page ${printPageClass}">${pageSvg}</div>`;
+    html += `<div class="nm-print-svg-page">${pageSvg}</div>`;
   }
   return html;
 }
 
-/** Täielik HTML-dokument iframe srcdoc / document.write jaoks. */
-export function buildNmStandalonePrintDocumentHtml (pagesInnerHtml) {
-  const style = getNmStandalonePrintStylesheet();
+/**
+ * @param {string} pagesInnerHtml
+ * @param {{ paperSize?: string, pageOrientation?: string }} layoutOpts — peab vastama pageModeli orientatsioonile,
+ *   et @page size ei jääks vaikimisi portrait’iks (Chrome võib muidu Cmd/Ctrl+P eelvaates paberi püsti jätta).
+ */
+export function buildNmStandalonePrintDocumentHtml (pagesInnerHtml, layoutOpts = {}) {
+  const paper = normalizePaperSize(layoutOpts.paperSize || 'a4');
+  const orient = normalizePageOrientation(layoutOpts.pageOrientation || 'portrait');
+  const { width, height } = getPaperDimensionsMm(paper, orient);
+  const style = getNmStandalonePrintStylesheet(width, height);
   const body = `<div class="nm-print-svg-pages">${pagesInnerHtml}</div>`;
   return `<!DOCTYPE html><html lang="et"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><title>Noodimeister</title><style>${style}</style></head><body>${body}</body></html>`;
 }
@@ -116,7 +125,9 @@ export function runIsolatedPrintFromHtml (fullDocumentHtml, opts = {}) {
   }
 }
 
-function getNmStandalonePrintStylesheet () {
+function getNmStandalonePrintStylesheet (widthMm, heightMm) {
+  const w = Number(widthMm) || 210;
+  const h = Number(heightMm) || 297;
   return `
 html, body {
   margin: 0;
@@ -125,32 +136,9 @@ html, body {
   height: 100%;
 }
 @media print {
-  @page a4-portrait {
-    size: 210mm 297mm;
-    margin: 12mm;
-  }
-  @page a4-landscape {
-    size: 297mm 210mm;
-    margin: 12mm;
-  }
-  @page a3-portrait {
-    size: A3 portrait;
-    margin: 12mm;
-  }
-  @page a3-landscape {
-    size: A3 landscape;
-    margin: 12mm;
-  }
-  @page a5-portrait {
-    size: A5 portrait;
-    margin: 12mm;
-  }
-  @page a5-landscape {
-    size: A5 landscape;
-    margin: 12mm;
-  }
+  /* Üks @page reegel dokumendi kohta — vältib “vaikimisi A4 portrait” võitu üle page: nimetatud lehtede (Chrome). */
   @page {
-    size: A4 portrait;
+    size: ${w}mm ${h}mm;
     margin: 12mm;
   }
   body {
@@ -174,12 +162,6 @@ html, body {
     page-break-after: always;
     break-after: page;
   }
-  .nm-print-svg-page.print-page-a4-portrait { page: a4-portrait; }
-  .nm-print-svg-page.print-page-a4-landscape { page: a4-landscape; }
-  .nm-print-svg-page.print-page-a3-portrait { page: a3-portrait; }
-  .nm-print-svg-page.print-page-a3-landscape { page: a3-landscape; }
-  .nm-print-svg-page.print-page-a5-portrait { page: a5-portrait; }
-  .nm-print-svg-page.print-page-a5-landscape { page: a5-landscape; }
   .nm-print-svg-page:last-child {
     page-break-after: auto;
     break-after: auto;

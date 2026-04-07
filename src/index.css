@@ -548,12 +548,7 @@ html, body, #root {
     page-break-after: always;
     break-after: page;
   }
-  html.nm-print-svg-mode .nm-print-svg-page.print-page-a4-portrait { page: a4-portrait; }
-  html.nm-print-svg-mode .nm-print-svg-page.print-page-a4-landscape { page: a4-landscape; }
-  html.nm-print-svg-mode .nm-print-svg-page.print-page-a3-portrait { page: a3-portrait; }
-  html.nm-print-svg-mode .nm-print-svg-page.print-page-a3-landscape { page: a3-landscape; }
-  html.nm-print-svg-mode .nm-print-svg-page.print-page-a5-portrait { page: a5-portrait; }
-  html.nm-print-svg-mode .nm-print-svg-page.print-page-a5-landscape { page: a5-landscape; }
+  /* @page suund tuleb iframe’i dünaamilisest stiilist (nmPrintDocument.js), mitte print-page-* klassidest. */
   html.nm-print-svg-mode .nm-print-svg-page:last-child {
     page-break-after: auto;
     break-after: auto;
