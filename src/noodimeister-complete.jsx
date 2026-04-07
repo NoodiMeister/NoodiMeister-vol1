@@ -950,6 +950,7 @@ const DEFAULT_SHORTCUT_PREFS = {
   'app.save': { code: 'KeyS', shift: false, alt: false, mod: true },
   'app.print': { code: 'KeyP', shift: false, alt: false, mod: true },
   'app.addMeasure': { code: 'KeyB', shift: false, alt: false, mod: true },
+  'app.addSongBlock': { code: 'KeyN', shift: false, alt: true, mod: false },
   'app.deleteMeasure': { code: 'Backspace', shift: false, alt: false, mod: true },
   'app.zoomIn': { code: 'Equal', shift: false, alt: false, mod: true },
   'app.zoomOut': { code: 'Minus', shift: false, alt: false, mod: true },
@@ -985,6 +986,7 @@ const SHORTCUT_ACTION_LABELS = {
   'app.save': 'Salvesta',
   'app.print': 'Prindi',
   'app.addMeasure': 'Lisa takt',
+  'app.addSongBlock': 'Lisa noodistusplokk',
   'app.deleteMeasure': 'Kustuta takt(id)',
   'app.zoomIn': 'Suurenda vaadet',
   'app.zoomOut': 'Vähenda vaadet',
@@ -1440,6 +1442,10 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   const addMeasureShortcutLabel = useMemo(
     () => formatShortcutLabel(effectiveShortcutPrefs['app.addMeasure']) || (isMacPlatform ? 'Cmd+B' : 'Ctrl+B'),
     [effectiveShortcutPrefs, isMacPlatform]
+  );
+  const addSongBlockShortcutLabel = useMemo(
+    () => formatShortcutLabel(effectiveShortcutPrefs['app.addSongBlock']) || 'Alt+N',
+    [effectiveShortcutPrefs]
   );
 
   // JO-võti ja noodigraafika state (GLOBAL_NOTATION_CONFIG on faili alguses)
@@ -2453,6 +2459,49 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       setTimeout(() => setSaveFeedback(''), 3500);
     }
   }, [hasFullAccess, t]);
+
+  const addSongBlock = useCallback(() => {
+    const ms = measuresRef.current || [];
+    const minM = minMeasuresFromNotesRef.current || 1;
+    const oldMeasureCount = Math.max(1, ms.length);
+    const nextMeasureIndex = oldMeasureCount;
+    let blocked = false;
+    setAddedMeasures((prev) => {
+      const uncapped = Math.max(1 + (prev || 0), minM);
+      const capped = hasFullAccess ? uncapped : Math.min(uncapped, DEMO_MAX_MEASURES);
+      if (!hasFullAccess && capped >= DEMO_MAX_MEASURES) {
+        blocked = true;
+        return prev;
+      }
+      return uncapped;
+    });
+    if (blocked) {
+      setSaveFeedback(t('demo.maxMeasures'));
+      setTimeout(() => setSaveFeedback(''), 3500);
+      return;
+    }
+    dirtyRef.current = true;
+    setLayoutLineBreakBefore((prev) => {
+      if (prev.includes(nextMeasureIndex)) return prev;
+      return [...prev, nextMeasureIndex].sort((a, b) => a - b);
+    });
+    setPartLayoutLineBreakBefore((prev) => {
+      if (prev.includes(nextMeasureIndex)) return prev;
+      return [...prev, nextMeasureIndex].sort((a, b) => a - b);
+    });
+    const lastMeasure = ms.length > 0 ? ms[ms.length - 1] : null;
+    const fallbackMeasureSpan = beatsPerMeasureFromTimeSig(timeSignature);
+    const measureSpan = lastMeasure ? Math.max(0.5, lastMeasure.endBeat - lastMeasure.startBeat) : fallbackMeasureSpan;
+    const startBeat = lastMeasure ? lastMeasure.endBeat : 0;
+    const endBeat = startBeat + measureSpan;
+    setIntermissionLabels((prev) => {
+      const seq = prev.length + 1;
+      const blockName = `${t('tool.addSongBlockDefaultTitle')} ${seq}`;
+      const id = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `song-block-${Date.now()}`;
+      return [...prev, { id, startBeat, endBeat, text: blockName }];
+    });
+    setCursorPosition(startBeat);
+  }, [hasFullAccess, timeSignature, t]);
 
   // Pedagoogiline notatsioon: salvestatud heli laadimine ja taustamängimine (kursor sünkroonis heliga)
   const handlePedagogicalAudioFile = useCallback((e) => {
@@ -6150,6 +6199,11 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         addMeasure();
         return;
       }
+      if (matchesShortcutPref(e, effectiveShortcutPrefs['app.addSongBlock'])) {
+        e.preventDefault();
+        addSongBlock();
+        return;
+      }
       if (matchesShortcutPref(e, effectiveShortcutPrefs['app.deleteMeasure'])) {
         e.preventDefault();
         deleteMeasuresRangeRef.current();
@@ -7436,7 +7490,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   }, [
     activeToolbox, selectedOptionIndex, handleToolboxSelection, noteInputMode, selectedDuration, isDotted, isRest, notes,
     getEffectiveDuration, selectedNoteIndex, selectionStart, selectionEnd, clipboard, undo, saveToHistory, getSelectedNotes,
-    shiftPitchClassSameOctave, shiftOctave, addMeasure, ghostPitch, ghostOctave, ghostAccidental, ghostAccidentalIsExplicit, playNoteOnInsert, playPianoNote,
+    shiftPitchClassSameOctave, shiftOctave, addMeasure, addSongBlock, ghostPitch, ghostOctave, ghostAccidental, ghostAccidentalIsExplicit, playNoteOnInsert, playPianoNote,
     cursorPosition, cursorSubRow, notationStyle, figurenotesChordBlocks, addChordAt, getChordInsertBeat, getChordAtCursor, transposeChordSymbol,
     cursorOnMelodyRow, noteIndexAtCursor, playNoteAtBeatIfEnabled,
     joClefFocused, joClefStaffPosition, keySignature, setNotes, setKeySignature, setStaves, notationMode, addNoteOnTopOfCursor,
@@ -9600,6 +9654,16 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
               >
                 <Plus className="w-4 h-4" />
                 {`Lisa takt (${addMeasureShortcutLabel})`}
+              </button>
+              <button
+                type="button"
+                onClick={addSongBlock}
+                className="inline-flex items-center gap-2 px-3 py-2 rounded-lg font-semibold text-sm bg-slate-600 text-white shadow-md hover:bg-slate-500 hover:shadow-lg active:scale-[0.98] transition-all duration-200 border border-slate-700/50"
+                title={`${t('tool.addSongBlock')}\n${t('tool.addSongBlock.desc')}\n${t('tool.addSongBlock.shortcut')}: ${addSongBlockShortcutLabel}`}
+                aria-label={t('tool.addSongBlock')}
+              >
+                <FolderPlus className="w-4 h-4" />
+                <span className="hidden xl:inline">{t('tool.addSongBlock')}</span>
               </button>
               <button
                 type="button"
