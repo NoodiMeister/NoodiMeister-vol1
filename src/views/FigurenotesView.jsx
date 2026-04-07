@@ -2049,7 +2049,6 @@ export function FigurenotesView({
                     );
                   })}
                   {combinedRows &&
-                    staffSi === 0 &&
                     (() => {
                       const measureBar = layoutSourceMeasures[measureIdx];
                       if (!measureBar) return null;
