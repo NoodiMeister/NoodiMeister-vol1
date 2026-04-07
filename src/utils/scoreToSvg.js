@@ -5,6 +5,7 @@
 
 import { getExportOrientation, getPageCount, getPageMetrics } from './pageGeometry';
 import { getCanonicalSmuflFontMeta, getExportFontFaceCss, resolveExportTextFamily } from '../export/exportFontAssets';
+import { buildScoreTextBoxesExportMarkup, describeScoreDocumentBlocksForExport } from '../document/scoreDocumentModel';
 
 const XMLNS = 'http://www.w3.org/2000/svg';
 const DEFAULT_PAGE_MARGIN_PX = 0;
@@ -201,6 +202,36 @@ function getRelativePosition (container, element) {
     el = el.offsetParent;
   }
   return { x, y };
+}
+
+/** Elemendi alumine serv konteineri suhtes (samad ühikud mis getRelativePosition). */
+function getElementBottomRelativeToContainer (container, element) {
+  if (!container || !element) return 0;
+  const containerRect = container.getBoundingClientRect?.();
+  const elementRect = element.getBoundingClientRect?.();
+  if (containerRect && elementRect && Number.isFinite(elementRect.bottom) && Number.isFinite(containerRect.top)) {
+    return Math.max(0, elementRect.bottom - containerRect.top + (container.scrollTop || 0));
+  }
+  const { y } = getRelativePosition(container, element);
+  return Math.max(0, y + (element.offsetHeight || 0));
+}
+
+/**
+ * Ribad, mis PDF/printis puuduvad (õpetaja tööriistariba) — muidu ty sisaldab nende kõrgust ja tekib kahekordne vahe t pealkirja ploki ja noodijoonestiku mudeli vahel.
+ */
+function sumExportChromeHeightBetween (container, headerBottomY, notationTopY) {
+  if (!container?.querySelectorAll) return 0;
+  const nodes = container.querySelectorAll('[data-score-export-chrome]');
+  let sum = 0;
+  nodes.forEach((el) => {
+    const top = getRelativePosition(container, el).y;
+    const h = el.offsetHeight || 0;
+    const bot = top + h;
+    if (bot > headerBottomY - 0.5 && top < notationTopY - 0.5) {
+      sum += h;
+    }
+  });
+  return sum;
 }
 
 /**
@@ -455,7 +486,17 @@ export function buildScoreSceneSnapshot (options = {}) {
   const sceneSvg = sceneMarkup
     ? `<g transform="translate(${snapshot.content.xPx + snapshot.score.offsetXPx}, ${snapshot.content.yPx + snapshot.score.offsetYPx}) scale(${snapshot.score.scale})"><svg xmlns="${XMLNS}" x="0" y="0" width="${sceneW}" height="${sceneH}" viewBox="${viewBox}" preserveAspectRatio="xMidYMin meet" overflow="visible">${sceneMarkup}</svg></g>`
     : '';
-  const contentString = `<g id="scoreContent">${textMarkup.titleText}${textMarkup.authorText}${sceneSvg}${overlayMarkup || ''}</g>`;
+  /** Tekstikastid: absoluutsed xy (scoreContainer), peavad olema noodiploki järel (z-order nagu ekraanil). */
+  const textBoxesSvg = buildScoreTextBoxesExportMarkup(options.textBoxes, {
+    defaultFontFamily: options.documentFontFamily,
+    defaultFill: '#78350f',
+  });
+  const contentString = `<g id="scoreContent">${textMarkup.titleText}${textMarkup.authorText}${sceneSvg}${textBoxesSvg}${overlayMarkup || ''}</g>`;
+  const documentBlocks = describeScoreDocumentBlocksForExport({
+    songTitle: options.songTitle,
+    author: options.author,
+    textBoxes: options.textBoxes,
+  });
   const pageModel = normalizePageModel({
     pageMetrics,
     flowDirection,
@@ -488,6 +529,7 @@ export function buildScoreSceneSnapshot (options = {}) {
       : { top: 0, right: 0, bottom: 0, left: 0 },
     pageDesignLayer: pageDesignLayer === 'inFront' ? 'inFront' : 'behind',
     layoutSnapshot: layoutSnapshot && typeof layoutSnapshot === 'object' ? layoutSnapshot : null,
+    documentBlocks,
   };
 }
 
@@ -532,6 +574,14 @@ export function scoreToSvg (container, options = {}) {
   // Always capture notation position relative to score container so preview/print
   // reflects user-selected horizontal alignment and other layout offsets.
   const { x: tx, y: ty } = getRelativePosition(container, notationSvg);
+  // buildScoreSceneSnapshot lisab pealkirja plokile ~headerHeight px (vektorpealkiri). ty on kogu tee konteineri ülast,
+  // sh ekraanipealkiri — muidu liidame topelt ja PDF/trükk näitab tohikut t pealkirja ja noodirea vahel.
+  const headerEl = container.querySelector?.('[data-score-export-header]');
+  const headerBottomPx = headerEl ? getElementBottomRelativeToContainer(container, headerEl) : 0;
+  const chromeH = headerBottomPx > 0 ? sumExportChromeHeightBetween(container, headerBottomPx, ty) : 0;
+  const sceneY = headerBottomPx > 0
+    ? Math.max(0, ty - headerBottomPx - chromeH)
+    : ty;
   const { width, height, viewBox } = getSvgIntrinsicDimensions(notationSvg, pageWidth);
   const sourceContentWidth = container.scrollWidth || pageWidth;
   const sourceContentHeight = container.scrollHeight || pageHeight;
@@ -557,7 +607,7 @@ export function scoreToSvg (container, options = {}) {
     contentHeight: Math.max(pageHeight, Number(explicitContentHeight) || sourceContentHeight),
     sceneMarkup: stripExportUiFromSvgInnerHtml(notationSvg.innerHTML),
     sceneX: tx,
-    sceneY: ty,
+    sceneY,
     sceneWidth: width,
     sceneHeight: height,
     sceneViewBox: viewBox,

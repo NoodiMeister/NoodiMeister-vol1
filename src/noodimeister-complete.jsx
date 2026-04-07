@@ -3066,6 +3066,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       footerText: copyrightFooter,
       documentFontFamily,
       titleFontFamily,
+      authorFontFamily,
       titleFontSize,
       authorFontSize,
       titleBold,
@@ -3074,6 +3075,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       authorItalic,
       titleAlignment,
       authorAlignment,
+      textBoxes,
       paperSize,
       pageOrientation,
       pageFlowDirection: pdfExportOptionsRef.current?.pageFlowDirection ?? 'vertical',
@@ -3091,6 +3093,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     copyrightFooter,
     documentFontFamily,
     titleFontFamily,
+    authorFontFamily,
     titleFontSize,
     authorFontSize,
     titleBold,
@@ -3099,6 +3102,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     authorItalic,
     titleAlignment,
     authorAlignment,
+    textBoxes,
     pageOrientation,
     paperSize,
     viewFitPage,
@@ -4669,6 +4673,62 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     else loadFromGoogle();
     return () => { cancelled = true; };
   }, [driveFileId, isOneDrive, importProject]);
+
+  // Poll cloud metadata to warn when same file changed on another device.
+  // Important: keep local openedCloudFile stamp unchanged, so save logic can still detect conflict.
+  useEffect(() => {
+    if (!openedCloudFile?.provider || !openedCloudFile?.fileId) return undefined;
+    let cancelled = false;
+    const checkRemoteChange = async () => {
+      if (cancelled || typeof document === 'undefined' || document.visibilityState !== 'visible') return;
+      try {
+        if (openedCloudFile.provider === 'google') {
+          const token = googleDrive.getStoredToken();
+          if (!token) return;
+          const meta = await googleDrive.getFileMetadata(token, openedCloudFile.fileId);
+          if (cancelled) return;
+          const knownModified = String(openedCloudFile.modifiedTime || '');
+          const remoteModified = String(meta?.modifiedTime || '');
+          if (knownModified && remoteModified && knownModified !== remoteModified) {
+            const noticeKey = `${openedCloudFile.provider}:${openedCloudFile.fileId}:${remoteModified}`;
+            if (lastRemoteCloudChangeNoticeRef.current !== noticeKey) {
+              lastRemoteCloudChangeNoticeRef.current = noticeKey;
+              setSaveFeedback('Pilvefail muutus teises seadmes. Laadi fail uuesti või salvesta koopia.');
+              setTimeout(() => setSaveFeedback(''), 5000);
+            }
+          }
+          return;
+        }
+        if (openedCloudFile.provider === 'onedrive') {
+          const token = authStorage.getStoredMicrosoftTokenFromAuth();
+          if (!token) return;
+          const meta = await oneDrive.getFileMetadata(token, openedCloudFile.fileId);
+          if (cancelled) return;
+          const knownETag = String(openedCloudFile.eTag || '');
+          const remoteETag = String(meta?.eTag || '');
+          if (knownETag && remoteETag && knownETag !== remoteETag) {
+            const noticeKey = `${openedCloudFile.provider}:${openedCloudFile.fileId}:${remoteETag}`;
+            if (lastRemoteCloudChangeNoticeRef.current !== noticeKey) {
+              lastRemoteCloudChangeNoticeRef.current = noticeKey;
+              setSaveFeedback('Pilvefail muutus teises seadmes. Laadi fail uuesti või salvesta koopia.');
+              setTimeout(() => setSaveFeedback(''), 5000);
+            }
+          }
+        }
+      } catch (_) {
+        // Metadata polling is best-effort only.
+      }
+    };
+    const onVisibilityChange = () => { checkRemoteChange(); };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    const interval = setInterval(checkRemoteChange, 45_000);
+    checkRemoteChange();
+    return () => {
+      cancelled = true;
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      clearInterval(interval);
+    };
+  }, [openedCloudFile]);
 
   // Kohene salvestamine localStorage'i, kui akordiplokkide seaded muutuvad – vältib seadete kaotust kiire värskenduse korral
   useEffect(() => {
@@ -8849,20 +8909,20 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                     boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.08)',
                     overflow: 'auto',
                     display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
+                    alignItems: 'flex-start',
+                    justifyContent: 'flex-start',
                   }}
                 >
-                  {/* Eelvaate zoom: 100% = noodileht täidab raami; <100% vähendab, >100% suurendab (keritav). Programmi zoom ei mõjuta eelvaate sisu (pildistatakse A4 1:1). */}
+                  {/* Eelvaate zoom: 100% = noodileht täidab raami; <100% vähendab, >100% suurendab (keritav). Programmi zoom ei mõjuta eelvaate sisu (pildistatakse A4 1:1). Üleval joondus = sama mis PDF/jsPDF ja brauseri print (mitte vertikaalne tsentreerimine). */}
                   {pdfPreviewPageSvgHtml ? (
                     <div
-                      className="box-border flex-shrink-0 flex items-center justify-center w-full"
+                      className="box-border flex-shrink-0 flex items-start justify-start w-full"
                       style={{
                         width: `${pdfPreviewZoom * 100}%`,
                         height: `${pdfPreviewZoom * 100}%`,
                         minWidth: 0,
                         minHeight: 0,
-                        alignSelf: 'center',
+                        alignSelf: 'flex-start',
                       }}
                     >
                       <div
@@ -11914,8 +11974,9 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                 }}
                 role="presentation"
               >
-              {/* Pealkiri muudetav otse lehel; pt-6 tagab, et pealkirja ei lõigata eksporti/trüki ülaosast. */}
+              {/* Pealkiri muudetav otse lehel; pt-6 tagab, et pealkirja ei lõigata eksporti/trüki ülaosast. data-score-export-header: scoreToSvg mõõdab alumist serva, et mitte liita topelt pealkirjakõrgust PDF/trüki Y-nihkesse. */}
               <div
+                data-score-export-header
                 className="pt-6 mb-4"
                 style={isHorizontalFlow ? { width: effectiveLayoutPageWidth, flexShrink: 0 } : undefined}
               >
@@ -11952,9 +12013,9 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                   title={t('textBox.documentFontHint')}
                 />
               </div>
-              {/* Õpetaja režiimi tööriistariba (pedagoogiline notatsioon) */}
+              {/* Õpetaja režiimi tööriistariba (pedagoogiline notatsioon); data-score-export-chrome — PDF/trükk ei joonista seda, kõrgus eemaldatakse noodile vertikaalsest nihkest. */}
               {notationMode === 'vabanotatsioon' && (
-                <div className="mb-3 flex flex-wrap items-center gap-3 px-2 py-2 rounded-lg bg-amber-50 border border-amber-200">
+                <div data-score-export-chrome className="mb-3 flex flex-wrap items-center gap-3 px-2 py-2 rounded-lg bg-amber-50 border border-amber-200">
                   <span className="text-xs font-semibold text-amber-800 uppercase tracking-wider">Õpetaja</span>
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input type="checkbox" checked={showAllNoteLabels} onChange={(e) => { dirtyRef.current = true; setShowAllNoteLabels(e.target.checked); }} className="rounded border-amber-400 text-amber-600" />

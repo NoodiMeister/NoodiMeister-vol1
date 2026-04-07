@@ -164,10 +164,11 @@ html, body {
   height: 100%;
 }
 @media print {
-  /* Üks @page reegel dokumendi kohta — vältib “vaikimisi A4 portrait” võitu üle page: nimetatud lehtede (Chrome). */
+  /* Üks @page reegel dokumendi kohta — vältib “vaikimisi A4 portrait” võitu üle page: nimetatud lehtede (Chrome).
+   * Margin 0: SVG on juba täislehe viewBox (sama mis jsPDF/svg2pdf), et Cmd/Ctrl+P eelvaade = PDF/print nupp. */
   @page {
     size: ${w}mm ${h}mm;
-    margin: 12mm;
+    margin: 0;
   }
   body {
     print-color-adjust: exact;
@@ -186,6 +187,8 @@ html, body {
     background: #ffffff !important;
   }
   .nm-print-svg-page {
+    line-height: 0;
+    font-size: 0;
     background: #ffffff !important;
     page-break-after: always;
     break-after: page;

@@ -19,8 +19,13 @@ async function main() {
   const exportFontAssets = await read('src/export/exportFontAssets.js');
   const smuflGlyphs = await read('src/notation/smufl/glyphs.js');
   const figurenotesView = await read('src/views/FigurenotesView.jsx');
+  const scoreDocumentModel = await read('src/document/scoreDocumentModel.js');
 
   assert(scoreToSvg.includes('export function buildScoreSceneSnapshot'), 'Missing DOM-free scene snapshot builder.');
+  assert(scoreDocumentModel.includes('describeScoreDocumentBlocksForExport'), 'Unified score document block model is missing.');
+  assert(scoreDocumentModel.includes('buildScoreTextBoxesExportMarkup'), 'Text box export markup must live in score document model.');
+  assert(scoreToSvg.includes('describeScoreDocumentBlocksForExport'), 'scoreToSvg must wire document block metadata.');
+  assert(app.includes('textBoxes,'), 'Export snapshot must pass textBoxes into scoreToSvg for unified document parity.');
   assert(!scoreToSvg.includes('local("serif")'), 'Export defs still depend on local serif fallback.');
   assert(app.includes('scoreToSvg(containerEl,'), 'Preview/PDF path is not using scoreToSvg snapshot builder.');
   assert(

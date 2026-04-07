@@ -544,6 +544,8 @@ html, body, #root {
     background: #ffffff !important;
   }
   html.nm-print-svg-mode .nm-print-svg-page {
+    line-height: 0;
+    font-size: 0;
     background: #ffffff !important;
     page-break-after: always;
     break-after: page;
@@ -567,35 +569,36 @@ html, body, #root {
 
 /* Print: only the notation sheet (score). One browser print page = one paper page (A4 210×297 mm). User can verify in print preview. */
 @media print {
-  /* Named page sizes: trüki eelvaates on üks leht = üks A4 (210×297 mm); sisu ei ületa ega jää põhjendamatult väikeseks. */
+  /* Named page sizes: trüki eelvaates on üks leht = üks A4 (210×297 mm); sisu ei ületa ega jää põhjendamatult väikeseks.
+   * margin: 0 — sama täislehe geomeetria mis scoreToSvg + jsPDF (väldi topelt “paberi serva” tühimikku). */
   @page a4-portrait {
     size: 210mm 297mm;
-    margin: 12mm;
+    margin: 0;
   }
   @page a4-landscape {
     size: 297mm 210mm;
-    margin: 12mm;
+    margin: 0;
   }
   @page a3-portrait {
     size: A3 portrait;
-    margin: 12mm;
+    margin: 0;
   }
   @page a3-landscape {
     size: A3 landscape;
-    margin: 12mm;
+    margin: 0;
   }
   @page a5-portrait {
     size: A5 portrait;
-    margin: 12mm;
+    margin: 0;
   }
   @page a5-landscape {
     size: A5 landscape;
-    margin: 12mm;
+    margin: 0;
   }
   /* Default when no class (legacy): A4 portrait */
   @page {
     size: A4 portrait;
-    margin: 12mm;
+    margin: 0;
   }
   body {
     print-color-adjust: exact;
