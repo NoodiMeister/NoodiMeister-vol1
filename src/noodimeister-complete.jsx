@@ -306,6 +306,32 @@ function minMeasuresNeededForNotesOnStaves(stavesSnapshot, staffIndexToReplace, 
   return 1 + measuresAfterFirst;
 }
 
+/** Sama loogika mis minMeasuresFromNotes (useMemo) — kasutusel pärast tühja takti eemaldamist, et addedMeasures ei jääks min-ist madalamaks. */
+function computeMinMeasuresFromStaves(stavesSnapshot, timeSignature, pickupEnabled, pickupQuantity, pickupDuration) {
+  let maxEndBeat = 0;
+  for (const staff of stavesSnapshot || []) {
+    const arr = staff?.notes || [];
+    let run = 0;
+    for (const n of arr) {
+      const beat = typeof n.beat === 'number' ? n.beat : run;
+      const dur = Number(n.duration) || 1;
+      maxEndBeat = Math.max(maxEndBeat, beat + dur);
+      run = beat + dur;
+    }
+  }
+  if (maxEndBeat <= 0) return 1;
+  const beatsPerMeasure = timeSignature.beats;
+  const beatUnit = timeSignature.beatUnit;
+  let firstMeasureBeats = beatsPerMeasure;
+  if (pickupEnabled && pickupQuantity > 0 && pickupDuration) {
+    const denom = parseInt(String(pickupDuration).split('/')[1], 10) || 4;
+    firstMeasureBeats = Math.max(0.25, Math.min((pickupQuantity * beatUnit) / denom, beatsPerMeasure - 0.25));
+  }
+  if (maxEndBeat <= firstMeasureBeats) return 1;
+  const measuresAfterFirst = Math.ceil((maxEndBeat - firstMeasureBeats) / beatsPerMeasure);
+  return 1 + measuresAfterFirst;
+}
+
 /** Kas antud taktiga kattub mõni noot/paus ühel noodireal (implitsiitne beatRun nagu minMeasuresFromNotes). */
 function measureOverlapsAnyNoteOnStaff(staffNotes, measure) {
   const EPS = 1e-6;
@@ -4735,30 +4761,10 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   }, []);
 
   // Minimum measures needed so that all notes in staves are visible (laadimise viga: kui addedMeasures puudub/vale, näitame ikkagi kõiki noote).
-  const minMeasuresFromNotes = useMemo(() => {
-    let maxEndBeat = 0;
-    for (const staff of staves || []) {
-      const notes = staff.notes || [];
-      let run = 0;
-      for (const n of notes) {
-        const beat = typeof n.beat === 'number' ? n.beat : run;
-        const dur = Number(n.duration) || 1;
-        maxEndBeat = Math.max(maxEndBeat, beat + dur);
-        run = beat + dur;
-      }
-    }
-    if (maxEndBeat <= 0) return 1;
-    const beatsPerMeasure = timeSignature.beats;
-    const beatUnit = timeSignature.beatUnit;
-    let firstMeasureBeats = beatsPerMeasure;
-    if (pickupEnabled && pickupQuantity > 0 && pickupDuration) {
-      const denom = parseInt(String(pickupDuration).split('/')[1], 10) || 4;
-      firstMeasureBeats = Math.max(0.25, Math.min((pickupQuantity * beatUnit) / denom, beatsPerMeasure - 0.25));
-    }
-    if (maxEndBeat <= firstMeasureBeats) return 1;
-    const measuresAfterFirst = Math.ceil((maxEndBeat - firstMeasureBeats) / beatsPerMeasure);
-    return 1 + measuresAfterFirst;
-  }, [staves, timeSignature, pickupEnabled, pickupQuantity, pickupDuration]);
+  const minMeasuresFromNotes = useMemo(
+    () => computeMinMeasuresFromStaves(staves, timeSignature, pickupEnabled, pickupQuantity, pickupDuration),
+    [staves, timeSignature, pickupEnabled, pickupQuantity, pickupDuration]
+  );
 
   useEffect(() => {
     minMeasuresFromNotesRef.current = minMeasuresFromNotes;
@@ -5708,6 +5714,13 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
 
   const handleToolboxSelection = (clickedIndex) => {
     if (!activeToolbox) return;
+    if (noteInputMode && !N_MODE_PRIMARY_TOOL_IDS.includes(activeToolbox)) {
+      setSaveFeedback('N-režiimis on paigutus ja taktimuudatused lukus. Kasuta SEL-režiimi.');
+      setTimeout(() => setSaveFeedback(''), 2400);
+      setActiveToolbox(null);
+      setSelectedOptionIndex(0);
+      return;
+    }
     const toolbox = toolboxes[activeToolbox];
     if (!toolbox?.options) return;
     const optionIndex = clickedIndex !== undefined ? clickedIndex : selectedOptionIndex;
@@ -6025,7 +6038,11 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       // Otherwise title/author/text fields can appear "disabled", especially if noteInputMode is on.
       const active = document.activeElement;
       const tag = (active?.tagName || '').toLowerCase();
-      const isTypingInInput = tag === 'input' || tag === 'textarea' || (active?.getAttribute?.('contenteditable') === 'true');
+      const isContentEditableNode = !!(
+        active?.isContentEditable
+        || active?.closest?.('[contenteditable]:not([contenteditable="false"])')
+      );
+      const isTypingInInput = tag === 'input' || tag === 'textarea' || isContentEditableNode;
       if (isInstrumentManagerOpen) {
         if (e.code === 'Escape') {
           e.preventDefault();
@@ -6522,6 +6539,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         e.preventDefault();
         setNoteInputMode(prev => {
           if (prev) {
+            restNextRef.current = false;
             setSelectedNoteIndex(-1);
             setSelectionStart(-1);
             setSelectionEnd(-1);
@@ -6659,7 +6677,11 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                 setStaves(nextStaves);
                 dirtyRef.current = true;
               }
-              setAddedMeasures((a) => Math.max(0, (a || 0) - 1));
+              const neededAfter = computeMinMeasuresFromStaves(nextStaves, timeSignature, pickupEnabled, pickupQuantity, pickupDuration);
+              setAddedMeasures((prev) => {
+                const dec = Math.max(0, (prev || 0) - 1);
+                return Math.max(dec, Math.max(0, neededAfter - 1));
+              });
               const prev = ms[cursorMeasureIndex - 1];
               const oneBeat = (prev.beatCount || timeSignature?.beats || 4) / (timeSignature?.beatUnit || 4);
               setCursorPosition(Math.max(prev.startBeat, prev.endBeat - oneBeat));
@@ -6796,6 +6818,11 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       if (key && toolboxShortcutToId[key]) {
         const newToolbox = toolboxShortcutToId[key];
         e.preventDefault();
+        if (noteInputMode && !N_MODE_PRIMARY_TOOL_IDS.includes(newToolbox)) {
+          setSaveFeedback('N-režiimis on paigutus ja taktimuudatused lukus. Kasuta SEL-režiimi.');
+          setTimeout(() => setSaveFeedback(''), 2400);
+          return;
+        }
         if (newToolbox === 'instruments') {
           setIsInstrumentManagerOpen((prev) => !prev);
           setCopyInstrumentConfirm(null);
@@ -7389,39 +7416,14 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
           return;
         }
 
-        // Note input (C-G) – kasuta globaalset aktiivset rütmi (lastDurationRef), et rütmipaneelist valimine kehtiks kohe
+        // Note input (C-G) – sama loogika mis addNoteAtCursor (kursori löök, mitte järjekorra lõppu kleebimine).
         const noteLetter = e.key.toLowerCase();
         if (['c', 'd', 'e', 'f', 'g', 'a', 'b'].includes(noteLetter)) {
           restNextRef.current = false;
           setGhostAccidentalIsExplicit(false);
-          const durationLabel = lastDurationRef.current ?? selectedDuration;
-          const effectiveDuration = getEffectiveDuration(durationLabel);
-          const pitch = noteLetter.toUpperCase();
-          const newNote = {
-            id: Date.now(),
-            pitch,
-            octave: ghostOctave,
-            duration: effectiveDuration,
-            durationLabel,
-            isDotted: isDotted,
-            isRest: isRest
-          };
-          const mergedKb = [...notes, newNote];
-          const provisionalMinKb = minMeasuresNeededForNotesOnStaves(
-            staves,
-            activeStaffIndex,
-            mergedKb,
-            timeSignature,
-            pickupEnabled,
-            pickupQuantity,
-            pickupDuration
-          );
-          const nextBeat = cursorPosition + effectiveDuration;
-          expandScoreForNoteInputAdvance(nextBeat, provisionalMinKb);
-          saveToHistory(notes);
-          setNotes(mergedKb);
-          setCursorPosition(nextBeat);
-          setGhostPitch(pitch);
+          e.preventDefault();
+          addNoteAtCursor(noteLetter.toUpperCase(), ghostOctave, undefined, { skipPlay: !playNoteOnInsert });
+          return;
         }
 
         // Backspace in N mode is handled earlier (before convert-selection-to-rest) so delete-at-cursor always works
@@ -7441,7 +7443,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     staves, activeStaffIndex, timeSignature, pickupEnabled, pickupQuantity, pickupDuration,
     handleSaveShortcut, handlePrint, addedMeasures, timeSignature, setAddedMeasures, setCursorPosition, measureRepeatMarks, setMeasureRepeatMarks,
     maxCursor, setScoreZoomLevel, durationToBeats, hasFullAccess, pickupEnabled, pickupQuantity, pickupDuration, isScorePlaybackPlaying, stopScorePlayback, isInstrumentManagerOpen,
-    effectiveShortcutPrefs, expandScoreForNoteInputAdvance
+    effectiveShortcutPrefs, expandScoreForNoteInputAdvance, addNoteAtCursor
   ]);
 
   // JO-võti: klõps väljaspool võtit lõpetab valiku
@@ -10312,11 +10314,17 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                     setSelectedNoteIndex(-1);
                     setSelectionStart(-1);
                     setSelectionEnd(-1);
+                    setMeasureSelection(null);
                     setActiveToolbox('rhythm');
                     if (notationStyle === 'TRADITIONAL' || notationMode === 'vabanotatsioon') {
                       setPianoStripVisible(true);
                     }
                   } else {
+                    restNextRef.current = false;
+                    setSelectedNoteIndex(-1);
+                    setSelectionStart(-1);
+                    setSelectionEnd(-1);
+                    setMeasureSelection(null);
                     setPianoStripVisible(false);
                     setActiveToolbox(null);
                   }

@@ -580,6 +580,22 @@ export function FigurenotesView({
               const measureX =
                 marginLeft +
                 measureWidths.slice(0, j).reduce((a, b) => a + b, 0);
+              const mBarForBeatBox = layoutSourceMeasures[measureIdx];
+              const prevBarForBeatBox =
+                j > 0 ? layoutSourceMeasures[sys.measureIndices[j - 1]] : null;
+              const leftBarRepeatForBeatBox = getLeftBarlineRepeatRender({
+                measureIndexInSystem: j,
+                measure: mBarForBeatBox,
+                prevMeasureInSystem: prevBarForBeatBox,
+              });
+              /**
+               * Täis-rect stroke jättis vertikaaltaktijoone alles ka siis, kui repeat-plokk
+               * joonistas sama kohta SMuFL glüüfi — tundus, nagu kordus ei asendaks taktijoont.
+               * Vertikaal: vasak äär ainult kui repeatBarlineResolve ei joonista seal midagi;
+               * parem äär mitte kunagi (joonistab repeat-plokk või järgmise takti vasak serv).
+               */
+              const hideBeatBoxLeftStroke =
+                leftBarRepeatForBeatBox.variant !== "none";
               const staffRowsForCombinedFigure = combinedRows
                 ? instruments
                 : [{ id: "_figure_single" }];
@@ -992,16 +1008,43 @@ export function FigurenotesView({
                             : undefined
                         }
                       >
-                        {/* Taktikast + löögivõre */}
-                        <rect
-                          x={measureX}
-                          y={sys.yOffset + padVertical}
-                          width={measureWidth}
-                          height={boxHeight}
-                          fill="transparent"
-                          stroke="#c8c8c8"
-                          strokeWidth="1.5"
-                        />
+                        {/* Taktikast + löögivõre (vertikaaltaktijoon eraldi repeat-plokis, et ei dubleeruks glüüfidega) */}
+                        {(() => {
+                          const topY = sys.yOffset + padVertical;
+                          const bottomY = sys.yOffset + melodyRowHeight - padVertical;
+                          const edge = "#c8c8c8";
+                          const sw = 1.5;
+                          return (
+                            <g>
+                              <line
+                                x1={measureX}
+                                y1={topY}
+                                x2={measureX + measureWidth}
+                                y2={topY}
+                                stroke={edge}
+                                strokeWidth={sw}
+                              />
+                              <line
+                                x1={measureX}
+                                y1={bottomY}
+                                x2={measureX + measureWidth}
+                                y2={bottomY}
+                                stroke={edge}
+                                strokeWidth={sw}
+                              />
+                              {!hideBeatBoxLeftStroke && (
+                                <line
+                                  x1={measureX}
+                                  y1={topY}
+                                  x2={measureX}
+                                  y2={bottomY}
+                                  stroke={edge}
+                                  strokeWidth={sw}
+                                />
+                              )}
+                            </g>
+                          );
+                        })()}
                         {Array.from(
                           {
                             length: Math.max(0, Math.ceil(beatsInMeasure) - 1),
