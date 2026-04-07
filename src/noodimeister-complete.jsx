@@ -5439,7 +5439,12 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     };
     const midiForStaff = (oct + 1) * 12 + (PITCH_TO_SEMI[pitch] ?? 0);
     const isGrandStaff = staves.length >= 2 && staves[0].braceGroupId && staves[0].braceGroupId === staves[1]?.braceGroupId;
-    const targetStaffIndex = isGrandStaff ? (midiForStaff < 60 ? 1 : 0) : activeStaffIndex;
+    // Tavaklaver: noot läheb automaatselt bassi/treblisse MIDI järgi. Figuurnotatsioonis valib kasutaja aktiivse rea
+    // (klõps, Cmd/Ctrl+↑↓) — MIDI-jaotus ignoreeriks seda ja paneks nt C4 alati ülemisele reale kuigi kursor on bassil.
+    const targetStaffIndex =
+      isGrandStaff && notationStyle !== 'FIGURENOTES'
+        ? (midiForStaff < 60 ? 1 : 0)
+        : activeStaffIndex;
 
     const insertIntoStaffNotes = (noteList) => {
       const withBeats = notesWithExplicitBeats(noteList);
