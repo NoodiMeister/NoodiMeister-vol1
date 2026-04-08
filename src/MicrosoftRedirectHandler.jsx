@@ -23,12 +23,6 @@ function getMicrosoftRedirectUri() {
   }
 }
 
-function getMicrosoftTesterEmails() {
-  const raw = import.meta.env?.VITE_MICROSOFT_TESTER_EMAILS || '';
-  if (!raw || typeof raw !== 'string') return [];
-  return raw.split(',').map((e) => e.trim().toLowerCase()).filter(Boolean);
-}
-
 function redirectToKonto() {
   try {
     const base = (import.meta.env?.BASE_URL || '').replace(/\/$/, '') || '';
@@ -136,15 +130,6 @@ export default function MicrosoftRedirectHandler() {
             if (!email) {
               setStatus('error');
               setErrorMessage(t['auth.emailNotReceived'] || 'E-maili ei saadud.');
-              return;
-            }
-            const allowed = getMicrosoftTesterEmails();
-            if (allowed.length > 0 && !allowed.includes(email)) {
-              setStatus('error');
-              setErrorMessage(
-                `Account ${email} is not in the tester list. ` +
-                'Set VITE_MICROSOFT_TESTER_EMAILS to this exact email in .env (or leave empty to allow all), then restart.'
-              );
               return;
             }
             const user = {

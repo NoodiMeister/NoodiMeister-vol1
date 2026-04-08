@@ -21,7 +21,7 @@ Quick handoff so you can continue where you left off.
 
 - **Auth**: Use Microsoft OAuth (e.g. [@azure/msal-browser](https://www.npmjs.com/package/@azure/msal-browser) or [react-aad-msal](https://www.npmjs.com/package/react-aad-msal), or [Microsoft identity platform docs](https://learn.microsoft.com/en-us/entra/identity-platform/)).
 - **Config**: Add env vars (e.g. `VITE_MICROSOFT_CLIENT_ID`, `VITE_MICROSOFT_TENANT_ID` or redirect URI) in `.env` and `.env.example`.
-- **Flow**: On success → get access token → call Microsoft Graph `https://graph.microsoft.com/v1.0/me` (or `/userinfo`) → get `email` and display name → **tester check:** if `getMicrosoftTesterEmails()` (in CloudLogin.jsx) returns a non-empty array, only allow login when `profile.email` is in that list; otherwise show a friendly message and don’t save session. Then build `user = { email, name, provider: 'microsoft' }` → save to same storage keys (`noodimeister-logged-in`, optionally a Microsoft token key if you add OneDrive later). **Tester list:** `.env` / `.env.example` has `VITE_MICROSOFT_TESTER_EMAILS=raido.lill@paikesekool.parnu.ee` (add more comma-separated as needed).
+- **Flow**: On success → get access token → call Microsoft Graph `https://graph.microsoft.com/v1.0/me` (or `/userinfo`) → get `email` and display name → build `user = { email, name, provider: 'microsoft' }` → save to same storage keys (`noodimeister-logged-in`, optionally a Microsoft token key if you add OneDrive later).
 - **Optional later**: OneDrive save/load (like `googleDrive.js`) using the same token.
 
 ### 2. Apple
