@@ -46,7 +46,7 @@ import {
   getAccidentalForPitchInKey,
 } from './utils/notationConstants';
 import { FIGURENOTES_COLORS, getFigureSymbol } from './utils/figurenotes';
-import { getOctave2CrossStyle } from './constants/FigureNotesLibrary';
+import { getFigureStyle, getShapePathsByOctave } from './constants/FigureNotesLibrary';
 import { getChromaNotesColor, getPedagogicalSymbol, getSchoolHandbellColor } from './notation/PedagogicalLogic';
 import { FigurenotesBlockIcon, RhythmIcon, RhythmPatternIcon, MeterIcon, PedagogicalMeterIcon } from './toolboxes';
 import { SmuflGlyph } from './notation/smufl/SmuflGlyph';
@@ -7014,7 +7014,8 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
           }
           return best;
         };
-        const cursorStep = e.shiftKey ? 0.25 : 1;
+        const selectedDurStep = Number(getDurationInBeats(selectedDuration)) || 1;
+        const cursorStep = Math.max(0.125, selectedDurStep);
         if (e.code === 'ArrowLeft') {
           e.preventDefault();
           // Ära tee esmalt taktitaseme “teleporti”: muidu kursor hüppab tühja koha (nt kustutatud figuurnoodi) üle
@@ -7073,7 +7074,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
           const ms = measuresRef.current;
           const idx = ms && ms.length ? ms.findIndex((m) => cursorPosition >= m.startBeat && cursorPosition < m.endBeat) : -1;
           const end = idx >= 0 ? ms[idx].endBeat : measureLengthInQuarterBeats(timeSignature);
-          const endBeat = Math.min(maxCursor, end > 0 ? end - 0.25 : 0);
+          const endBeat = Math.min(maxCursor, end > 0 ? Math.max(0, end - cursorStep) : 0);
           setCursorPosition(endBeat);
           playNoteAtBeatIfEnabled(endBeat);
           return;
@@ -7372,6 +7373,45 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
               setCursorPosition(focusM.startBeat);
               setSelectedNoteIndex(findFirstNoteIndexInMeasure(notes, focusM));
               playNoteAtBeatIfEnabled(focusM.startBeat);
+              return;
+            }
+            if (notationStyle === 'FIGURENOTES') {
+              const EPS = 1e-6;
+              const selectedDurStep = Number(getDurationInBeats(selectedDuration)) || 1;
+              const cursorStep = Math.max(0.125, selectedDurStep);
+              const spans = notesWithExplicitBeats(notes)
+                .slice()
+                .map((n) => {
+                  const start = Number(n?.beat) || 0;
+                  const dur = Number(n?.duration) || 1;
+                  return { start, end: start + dur };
+                })
+                .sort((a, b) => a.start - b.start);
+              const getNextWrittenBoundary = (dir) => {
+                let best = null;
+                for (let i = 0; i < spans.length; i += 1) {
+                  const s = spans[i];
+                  const candidates = [s.start, s.end];
+                  for (let c = 0; c < candidates.length; c += 1) {
+                    const b = candidates[c];
+                    if (dir > 0) {
+                      if (b > cursorPosition + EPS) best = best == null ? b : Math.min(best, b);
+                    } else if (b < cursorPosition - EPS) {
+                      best = best == null ? b : Math.max(best, b);
+                    }
+                  }
+                }
+                return best;
+              };
+              const dir = e.code === 'ArrowRight' ? 1 : -1;
+              const boundary = getNextWrittenBoundary(dir);
+              const stepped = cursorPosition + dir * cursorStep;
+              const targetBeat = boundary != null ? boundary : stepped;
+              const newBeat = Math.max(0, Math.min(maxCursor, targetBeat));
+              setMeasureSelection(null);
+              setCursorPosition(newBeat);
+              setSelectedNoteIndex(getNoteIndexForBeat(newBeat));
+              playNoteAtBeatIfEnabled(newBeat);
               return;
             }
             setMeasureSelection(null);
@@ -13271,7 +13311,7 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
 
   // Figurenotes rendering function (size from figurenotesSize setting); kujund = getFigureSymbol(pitch, octave)
   const renderFigurenote = (note, x, y, noteIndex) => {
-    const { color, shape } = getFigureSymbol(note.pitch, note.octave);
+    const { shape } = getFigureSymbol(note.pitch, note.octave);
     const size = figurenotesSize;
     const isSelected = isNoteSelected(noteIndex);
     const dur = note.durationLabel || '1/4';
@@ -13284,7 +13324,6 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
     const textColor = getFigurenoteTextColor(note.pitch);
     const shapeElement = (() => {
       const r = size / 2;
-      const strokeW = Math.max(2, size * 0.38);
       const strokeShape = isSelected ? '#2563eb' : (themeColors.isDark ? '#ffffff' : '#000');
       const strokeWShape = isSelected ? 3 : (themeColors.isDark ? 2.5 : 2);
       if (shape === 'none') {
@@ -13292,52 +13331,32 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
           <rect x={x - r} y={y - r} width={size} height={size} fill="none" stroke={strokeShape} strokeWidth={strokeWShape} strokeDasharray="2 2" opacity={0.6} />
         );
       }
-      if (shape === 'cross') {
-        const crossStyle = getOctave2CrossStyle(note.pitch);
-        const crossStrokeW = crossStyle.strokeWidth ? Math.max(0.5, size * 0.02) : 0;
-        const x0 = x - r, x1 = x - 0.8 * r, x2 = x - 0.68 * r, x3 = x + 0.68 * r, x4 = x + 0.8 * r, x5 = x + r;
-        const y0 = y - r, y1 = y - 0.8 * r, y2 = y - 0.68 * r, y3 = y + 0.68 * r, y4 = y + 0.8 * r, y5 = y + r;
-        return (
-          <g>
-            <path d={`M${x1} ${y1} L${x2} ${y2} L${x3} ${y3} L${x4} ${y4} L${x5} ${y3} L${x0} ${y2} Z`} fill={crossStyle.fill} stroke={crossStyle.stroke} strokeWidth={crossStrokeW} />
-            <path d={`M${x4} ${y1} L${x3} ${y2} L${x2} ${y3} L${x1} ${y4} L${x0} ${y3} L${x5} ${y2} Z`} fill={crossStyle.fill} stroke={crossStyle.stroke} strokeWidth={crossStrokeW} />
-            <rect x={x - r} y={y - r} width={size} height={size} fill="none" stroke={strokeShape} strokeWidth={strokeWShape} />
-          </g>
-        );
-      }
-      if (shape === 'circle') {
-        return (
-          <circle cx={x} cy={y} r={r} fill={color} stroke={strokeShape} strokeWidth={strokeWShape} />
-        );
-      }
-      if (shape === 'square') {
-        return (
-          <rect x={x - r} y={y - r} width={size} height={size} fill={color} stroke={strokeShape} strokeWidth={strokeWShape} />
-        );
-      }
-      if (shape === 'triangle') {
-        const h = size * 0.866;
-        return (
-          <path
-            d={`M ${x} ${y - h / 2} L ${x + size / 2} ${y + h / 2} L ${x - size / 2} ${y + h / 2} Z`}
-            fill={color}
-            stroke={strokeShape}
-            strokeWidth={strokeWShape}
-          />
-        );
-      }
-      if (shape === 'triangleDown') {
-        const h = size * 0.866;
-        return (
-          <path
-            d={`M ${x} ${y + h / 2} L ${x + size / 2} ${y - h / 2} L ${x - size / 2} ${y - h / 2} Z`}
-            fill={color}
-            stroke={strokeShape}
-            strokeWidth={strokeWShape}
-          />
-        );
-      }
-      return null;
+      const style = getFigureStyle(note.pitch, note.octave);
+      const shapePaths = getShapePathsByOctave(note.octave);
+      const svgX = x - size / 2;
+      const svgY = y - size / 2;
+      return (
+        <svg
+          x={svgX}
+          y={svgY}
+          width={size}
+          height={size}
+          viewBox="0 0 100 100"
+          preserveAspectRatio="xMidYMid meet"
+          style={{ overflow: 'visible' }}
+        >
+          {shapePaths.map((d, i) => (
+            <path
+              key={i}
+              d={d}
+              fill={style.fill}
+              stroke={isSelected ? '#2563eb' : style.stroke}
+              strokeWidth={isSelected ? 3 : style.strokeWidth}
+              vectorEffect="non-scaling-stroke"
+            />
+          ))}
+        </svg>
+      );
     })();
 
     const pad = Math.max(4, size * 0.25);
@@ -13699,7 +13718,7 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
   {/* Cursor + Ghost note / kleepimise kursor: nähtav noodisisestusrežiimis,
           pedagoogilisel taasesitusel/ekspordil ning SEL-režiimis, kui mõni noot on valitud.
           SEL-režiimis kuvatakse ainult püstjoont (ilma ringi/emojita), et näidata kleepimiskohta. */}
-      {(noteInputMode || isPedagogicalAudioPlaying || isExportingAnimation || (!noteInputMode && selectedNoteIndex >= 0)) && cursorInfo && (!isFigurenotesMode || isActiveStaff) && (() => {
+      {(noteInputMode || isPedagogicalAudioPlaying || isExportingAnimation || (!noteInputMode && (selectedNoteIndex >= 0 || isFigurenotesMode))) && cursorInfo && (!isFigurenotesMode || isActiveStaff) && (() => {
         const cursorX = (cursorSlotCenterX != null && Number.isFinite(cursorSlotCenterX)) ? cursorSlotCenterX : (marginLeft + 40);
         const cursorChar = (pedagogicalPlayheadEmoji || '').trim();
         const isSelectionCursor = !noteInputMode && !isPedagogicalAudioPlaying && !isExportingAnimation && selectedNoteIndex >= 0;
@@ -13805,35 +13824,51 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
               const cy = cursorInfo.system.yOffset + (notationMode === 'figurenotes' ? centerY + crOff : pitchY + crOff);
               const stemUp = pitchY > middleLineY;
               if (notationMode === 'figurenotes') {
-                const { color, shape } = getFigureSymbol(ghostPitch, ghostOctave);
+                const { shape } = getFigureSymbol(ghostPitch, ghostOctave);
                 const size = Math.max(8, Math.min(150, emojiSizePx));
                 const r = size / 2;
-                const strokeW = Math.max(2, size * 0.38);
                 let el;
                 if (shape === 'none') {
                   el = <rect x={cx - r} y={cy - r} width={size} height={size} fill="none" stroke="#2563eb" strokeWidth="2" strokeDasharray="2 2" opacity="0.9" />;
-                } else if (shape === 'cross') {
-                  const crossStyle = getOctave2CrossStyle(ghostPitch);
-                  const crossStrokeW = crossStyle.strokeWidth ? Math.max(0.5, size * 0.02) : 0;
-                  const x0 = cx - r, x1 = cx - 0.8 * r, x2 = cx - 0.68 * r, x3 = cx + 0.68 * r, x4 = cx + 0.8 * r, x5 = cx + r;
-                  const y0 = cy - r, y1 = cy - 0.8 * r, y2 = cy - 0.68 * r, y3 = cy + 0.68 * r, y4 = cy + 0.8 * r, y5 = cy + r;
+                } else {
+                  const style = getFigureStyle(ghostPitch, ghostOctave);
+                  const shapePaths = getShapePathsByOctave(ghostOctave);
+                  const svgX = cx - size / 2;
+                  const svgY = cy - size / 2;
                   el = (
                     <g>
-                      <path d={`M${x1} ${y1} L${x2} ${y2} L${x3} ${y3} L${x4} ${y4} L${x5} ${y3} L${x0} ${y2} Z`} fill={crossStyle.fill} stroke={crossStyle.stroke} strokeWidth={crossStrokeW} />
-                      <path d={`M${x4} ${y1} L${x3} ${y2} L${x2} ${y3} L${x1} ${y4} L${x0} ${y3} L${x5} ${y2} Z`} fill={crossStyle.fill} stroke={crossStyle.stroke} strokeWidth={crossStrokeW} />
-                      <rect x={cx - r} y={cy - r} width={size} height={size} fill="none" stroke="#2563eb" strokeWidth="2" />
+                      <svg
+                        x={svgX}
+                        y={svgY}
+                        width={size}
+                        height={size}
+                        viewBox="0 0 100 100"
+                        preserveAspectRatio="xMidYMid meet"
+                        style={{ overflow: 'visible' }}
+                      >
+                        {shapePaths.map((d, i) => (
+                          <path
+                            key={i}
+                            d={d}
+                            fill={style.fill}
+                            stroke={style.stroke}
+                            strokeWidth={style.strokeWidth}
+                            vectorEffect="non-scaling-stroke"
+                          />
+                        ))}
+                      </svg>
+                      <rect
+                        x={cx - r}
+                        y={cy - r}
+                        width={size}
+                        height={size}
+                        fill="none"
+                        stroke="#2563eb"
+                        strokeWidth="2"
+                        opacity="0.9"
+                      />
                     </g>
                   );
-                } else if (shape === 'square') {
-                  el = <rect x={cx - r} y={cy - r} width={size} height={size} fill={color} stroke="#2563eb" strokeWidth="2" opacity="0.9" />;
-                } else if (shape === 'triangle') {
-                  const h = size * 0.866;
-                  el = <path d={`M ${cx} ${cy - h/2} L ${cx + size/2} ${cy + h/2} L ${cx - size/2} ${cy + h/2} Z`} fill={color} stroke="#2563eb" strokeWidth="2" opacity="0.9" />;
-                } else if (shape === 'triangleDown') {
-                  const h = size * 0.866;
-                  el = <path d={`M ${cx} ${cy + h/2} L ${cx + size/2} ${cy - h/2} L ${cx - size/2} ${cy - h/2} Z`} fill={color} stroke="#2563eb" strokeWidth="2" opacity="0.9" />;
-                } else {
-                  el = <circle cx={cx} cy={cy} r={r} fill={color} stroke="#2563eb" strokeWidth="2" opacity="0.9" />;
                 }
                 return (
                   <g opacity="0.9">
