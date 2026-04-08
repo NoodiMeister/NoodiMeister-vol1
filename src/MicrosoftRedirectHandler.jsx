@@ -11,18 +11,7 @@ import {
   setLoggedInUser,
 } from './services/authStorage';
 import { LOCALE_STORAGE_KEY, DEFAULT_LOCALE, getTranslations } from './i18n';
-
-function getMicrosoftRedirectUri() {
-  try {
-    const pathname = typeof window !== 'undefined' ? (window.location.pathname || '') : '';
-    const base = (import.meta.env?.BASE_URL || '/').trim();
-    const normalized = base.endsWith('/') ? base : base + '/';
-    const returnPath = pathname === '/login' ? '/login' : (normalized.startsWith('/') ? normalized : '/' + normalized);
-    return (typeof window !== 'undefined' ? window.location.origin : '') + returnPath;
-  } catch {
-    return typeof window !== 'undefined' ? window.location.origin + '/' : '';
-  }
-}
+import { getMicrosoftRedirectUri } from './utils/microsoftRedirectUri';
 
 function redirectToKonto() {
   try {

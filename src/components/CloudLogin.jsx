@@ -3,6 +3,7 @@ import { useGoogleLogin } from '@react-oauth/google';
 import { useNavigate } from 'react-router-dom';
 import { getStorageForLogin, getStorageForRead, getLoggedInUser, isLoggedIn, setLoggedInUser, clearMicrosoftAuthSession, KEY_GOOGLE_TOKEN, KEY_GOOGLE_EXPIRY, KEY_MICROSOFT_TOKEN, KEY_MICROSOFT_EXPIRY, setGoogleGrantedScopes, setMicrosoftGrantedScopes } from '../services/authStorage';
 import { formatAuthError } from '../utils/authError';
+import { getMicrosoftRedirectUri } from '../utils/microsoftRedirectUri';
 import { LOCALE_STORAGE_KEY, DEFAULT_LOCALE, getTranslations } from '../i18n';
 
 function getT() {
@@ -108,19 +109,6 @@ function clearLocationHash() {
     window.history.replaceState(null, '', url.toString());
   } catch {
     // ignore
-  }
-}
-
-function getMicrosoftRedirectUri() {
-  try {
-    const base = (typeof import.meta !== 'undefined' && import.meta.env?.BASE_URL) || '/';
-    const normalizedBase = base.endsWith('/') ? base : base + '/';
-    const pathname = window.location.pathname || '';
-    // When user starts login from /login, use /login as return path so Microsoft redirects back to same URL (avoids losing #code when something would redirect / to /login)
-    const returnPath = pathname === '/login' ? '/login' : normalizedBase.startsWith('/') ? normalizedBase : '/' + normalizedBase;
-    return window.location.origin + returnPath;
-  } catch {
-    return window.location.origin + '/';
   }
 }
 

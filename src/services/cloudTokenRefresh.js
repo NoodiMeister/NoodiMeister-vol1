@@ -8,6 +8,7 @@ import {
   setGoogleGrantedScopes,
   setMicrosoftGrantedScopes,
 } from './authStorage';
+import { getMicrosoftRedirectUri } from '../utils/microsoftRedirectUri';
 
 const GOOGLE_GSI_SCRIPT_URL = 'https://accounts.google.com/gsi/client';
 const MSAL_CDN_URLS = [
@@ -122,7 +123,7 @@ async function getMsalInstance() {
     const clientId = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_MICROSOFT_CLIENT_ID) || '';
     const tenantId = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_MICROSOFT_TENANT_ID) || 'common';
     if (!clientId) throw new Error('Microsoft Client ID puudub.');
-    const redirectUri = window.location.origin + '/login';
+    const redirectUri = getMicrosoftRedirectUri();
     const instance = new window.msal.PublicClientApplication({
       auth: {
         clientId,
