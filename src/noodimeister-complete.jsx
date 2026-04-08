@@ -203,6 +203,7 @@ var LUCIDE_ICONS = [
 ];
 var STORAGE_KEY = 'noodimeister-data';
 var THEME_STORAGE_KEY = 'noodimeister-theme';
+var PROJECT_IO_STORAGE_KEY = 'noodimeister-project-io-prefs';
 
 /** Default: light; user must change color mode themselves. */
 function getStoredTheme() {
@@ -2065,6 +2066,27 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   const [pdfExportSaveLocation, setPdfExportSaveLocation] = useState('downloads'); // 'downloads' | 'custom'
   const [pdfExportFileHandle, setPdfExportFileHandle] = useState(null);
   const [pdfExportChosenPath, setPdfExportChosenPath] = useState('');
+  const [saveLoadOpen, setSaveLoadOpen] = useState(false);
+  const [projectSaveTarget, setProjectSaveTarget] = useState(() => {
+    try {
+      const raw = localStorage.getItem(PROJECT_IO_STORAGE_KEY);
+      const parsed = raw ? JSON.parse(raw) : null;
+      const target = parsed?.saveTarget;
+      if (target === 'cloud' || target === 'browser') return target;
+    } catch (_) { /* ignore */ }
+    return 'cloud';
+  });
+  const [projectLoadSource, setProjectLoadSource] = useState(() => {
+    try {
+      const raw = localStorage.getItem(PROJECT_IO_STORAGE_KEY);
+      const parsed = raw ? JSON.parse(raw) : null;
+      const source = parsed?.loadSource;
+      if (source === 'cloud' || source === 'browser') return source;
+    } catch (_) { /* ignore */ }
+    return 'cloud';
+  });
+  const [projectFileHandle, setProjectFileHandle] = useState(null);
+  const [projectChosenPath, setProjectChosenPath] = useState('');
   const pedagogicalAudioRef = useRef(null); // HTMLAudioElement
   const pedagogicalPlaybackIntervalRef = useRef(null);
   const scorePlaybackIntervalRef = useRef(null);
@@ -2291,14 +2313,14 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     if (bodyOverflowRef.current == null) {
       bodyOverflowRef.current = body.style.overflow || '';
     }
-    const hasBlockingModal = newWorkSetupOpen || saveCloudDialogOpen || googleLoadPickerOpen || settingsOpen || shortcutsOpen || showPdfExportPreview || isInstrumentManagerOpen;
+    const hasBlockingModal = newWorkSetupOpen || saveCloudDialogOpen || googleLoadPickerOpen || settingsOpen || shortcutsOpen || showPdfExportPreview || isInstrumentManagerOpen || saveLoadOpen;
     body.style.overflow = hasBlockingModal ? 'hidden' : bodyOverflowRef.current;
     return () => {
       if (body && bodyOverflowRef.current != null) {
         body.style.overflow = bodyOverflowRef.current;
       }
     };
-  }, [newWorkSetupOpen, saveCloudDialogOpen, googleLoadPickerOpen, settingsOpen, shortcutsOpen, showPdfExportPreview, isInstrumentManagerOpen]);
+  }, [newWorkSetupOpen, saveCloudDialogOpen, googleLoadPickerOpen, settingsOpen, shortcutsOpen, showPdfExportPreview, isInstrumentManagerOpen, saveLoadOpen]);
 
   useEffect(() => {
     if (isNewWorkFlow) setNewWorkSetupOpen(true);
@@ -3590,6 +3612,79 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     }
   }, [exportScoreToJSON]);
 
+  useEffect(() => {
+    try {
+      localStorage.setItem(PROJECT_IO_STORAGE_KEY, JSON.stringify({
+        saveTarget: projectSaveTarget,
+        loadSource: projectLoadSource,
+      }));
+    } catch (_) { /* ignore */ }
+  }, [projectSaveTarget, projectLoadSource]);
+
+  const saveToDesktop = useCallback(async ({ pickLocation = false } = {}) => {
+    try {
+      const data = exportScoreToJSON();
+      const json = JSON.stringify(data, null, 2);
+      const filename = ((data.songTitle || t('common.untitled')).replace(/\s+/g, '-').replace(/[^\w\-.]/g, '') || t('common.untitled')) + '.nm';
+      const canPick = typeof window !== 'undefined' && typeof window.showSaveFilePicker === 'function';
+      if (!canPick) {
+        downloadProject();
+        return;
+      }
+      let handle = projectFileHandle;
+      if (!handle || pickLocation) {
+        handle = await window.showSaveFilePicker({
+          suggestedName: filename,
+          types: [{ description: 'NoodiMeister project', accept: { 'application/json': ['.nm', '.json'] } }],
+        });
+        setProjectFileHandle(handle);
+      }
+      const writable = await handle.createWritable();
+      await writable.write(json);
+      await writable.close();
+      setProjectChosenPath(handle?.name || filename);
+      setSaveFeedback('Salvestatud arvutisse!');
+      setTimeout(() => setSaveFeedback(''), 2200);
+    } catch (e) {
+      if (e?.name === 'AbortError') return;
+      setSaveFeedback(e?.message || 'Arvutisse salvestamine ebaõnnestus');
+      setTimeout(() => setSaveFeedback(''), 3000);
+    }
+  }, [downloadProject, exportScoreToJSON, projectFileHandle, t]);
+
+  const openProjectFromDesktop = useCallback(async () => {
+    try {
+      const canPick = typeof window !== 'undefined' && typeof window.showOpenFilePicker === 'function';
+      if (!canPick) {
+        projectFileInputRef.current?.click();
+        return;
+      }
+      const [fileHandle] = await window.showOpenFilePicker({
+        multiple: false,
+        types: [{ description: 'NoodiMeister project', accept: { 'application/json': ['.nm', '.json'] } }],
+      });
+      if (!fileHandle) return;
+      const file = await fileHandle.getFile();
+      const text = await file.text();
+      const data = JSON.parse(text || '{}');
+      if (importProject(data)) {
+        setProjectChosenPath(fileHandle?.name || file?.name || '');
+      } else {
+        setSaveFeedback(t('feedback.invalidProject'));
+        setTimeout(() => setSaveFeedback(''), 2000);
+      }
+    } catch (e) {
+      if (e?.name === 'AbortError') return;
+      if (e instanceof SyntaxError) {
+        setSaveFeedback(t('feedback.invalidJson'));
+        setTimeout(() => setSaveFeedback(''), 2000);
+        return;
+      }
+      setSaveFeedback(e?.message || 'Faili avamine ebaõnnestus');
+      setTimeout(() => setSaveFeedback(''), 2500);
+    }
+  }, [importProject, t]);
+
   // Re-hydrate workspace from JSON (future: can receive from cloud API)
   const importProject = useCallback((data) => {
     if (!data || typeof data !== 'object') return false;
@@ -4382,12 +4477,17 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     }
   }, [openedCloudFile, songTitle, t, sessionSaveFolderId]);
 
-  /** Cmd/Ctrl+S: kui kasutaja on sisse logitud, salvesta ainult pilve. Kohalik fallback on ainult anonüümsele kasutajale. */
+  /** Cmd/Ctrl+S: salvesta valitud sihtkohta (Pilv/Arvuti/Brauser). */
   const handleSaveShortcut = useCallback(async () => {
-    if (!isLoggedIn()) {
+    if (projectSaveTarget === 'browser') {
       saveToStorageSync();
       setSaveFeedback(t('feedback.savedLocalOnly') || 'Salvestatud ainult selles brauseris/seadmes.');
       setTimeout(() => setSaveFeedback(''), 2600);
+      return;
+    }
+    if (!isLoggedIn()) {
+      setSaveFeedback('Salvestuskoht on Pilv. Vali konto või muuda salvestuskohta.');
+      setTimeout(() => setSaveFeedback(''), 3200);
       return;
     }
     const user = authStorage.getLoggedInUser();
@@ -4418,7 +4518,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     }
     setSaveFeedback(t('feedback.cloudError') || 'Pilve salvestamine ebaõnnestus');
     setTimeout(() => setSaveFeedback(''), 3200);
-  }, [isLoggedIn, saveToStorageSync, saveToCloud, saveToOneDrive, t]);
+  }, [projectSaveTarget, isLoggedIn, saveToStorageSync, saveToCloud, saveToOneDrive, t]);
 
   const loadGoogleDriveProjectById = useCallback(async (fileId) => {
     const token = googleDrive.getStoredToken?.();
@@ -4560,6 +4660,14 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       setGoogleLoadPickerLoading(false);
     }
   }, [t, importProject]);
+
+  const handleLoadBySelectedSource = useCallback(async () => {
+    if (projectLoadSource === 'browser') {
+      loadFromStorage();
+      return;
+    }
+    await loadFromCloud();
+  }, [projectLoadSource, loadFromStorage, loadFromCloud]);
 
   // Load from localStorage on mount (skip when opening as new work /app?new=1 or /app?fileId=...)
   // Use importProject so both staves and legacy notes format load in full (taktid, lehekülje disain jms).
@@ -7014,7 +7122,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
           }
           return best;
         };
-        const selectedDurStep = Number(getDurationInBeats(selectedDuration)) || 1;
+        const selectedDurStep = Number(durationLabelToQuarterBeats(selectedDuration)) || 1;
         const cursorStep = Math.max(0.125, selectedDurStep);
         if (e.code === 'ArrowLeft') {
           e.preventDefault();
@@ -7377,7 +7485,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
             }
             if (notationStyle === 'FIGURENOTES') {
               const EPS = 1e-6;
-              const selectedDurStep = Number(getDurationInBeats(selectedDuration)) || 1;
+              const selectedDurStep = Number(durationLabelToQuarterBeats(selectedDuration)) || 1;
               const cursorStep = Math.max(0.125, selectedDurStep);
               const spans = notesWithExplicitBeats(notes)
                 .slice()
@@ -9799,6 +9907,83 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         </div>
       )}
 
+      {saveLoadOpen && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/45 px-4" role="dialog" aria-modal="true" aria-label="Salvestus ja laadimine">
+          <div className="w-full max-w-2xl rounded-xl border border-slate-500 bg-slate-100 shadow-2xl overflow-hidden">
+            <div className="px-4 py-3 border-b border-slate-300 bg-slate-800 text-slate-100 flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-bold uppercase tracking-wide">Salvestus ja laadimine</h3>
+                <p className="text-xs text-slate-300">Cmd/Ctrl+S salvestab all valitud salvestuskohta.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSaveLoadOpen(false)}
+                className="px-3 py-1.5 rounded bg-slate-700 hover:bg-slate-600 text-xs font-semibold"
+              >
+                Sulge
+              </button>
+            </div>
+            <div className="p-4 space-y-4">
+              <div className="rounded-lg border border-slate-300 bg-white p-3">
+                <h4 className="text-xs font-bold uppercase tracking-wide text-slate-700 mb-2">Salvestuskoht</h4>
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    { id: 'cloud', label: 'Pilv (Google Drive / OneDrive)' },
+                    { id: 'browser', label: 'Brauseri kohalik salvestus' },
+                  ].map((opt) => (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      onClick={() => setProjectSaveTarget(opt.id)}
+                      className={`px-3 py-1.5 rounded text-sm font-semibold border ${projectSaveTarget === opt.id ? 'bg-emerald-600 text-white border-emerald-700' : 'bg-slate-100 text-slate-800 border-slate-300 hover:bg-slate-200'}`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleSaveShortcut()}
+                    className="px-3 py-1.5 rounded bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-500"
+                  >
+                    Salvesta kohe valitud kohta
+                  </button>
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-slate-300 bg-white p-3">
+                <h4 className="text-xs font-bold uppercase tracking-wide text-slate-700 mb-2">Laadimise allikas</h4>
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    { id: 'cloud', label: 'Pilvest' },
+                    { id: 'browser', label: 'Brauseri kohalikust salvestusest' },
+                  ].map((opt) => (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      onClick={() => setProjectLoadSource(opt.id)}
+                      className={`px-3 py-1.5 rounded text-sm font-semibold border ${projectLoadSource === opt.id ? 'bg-blue-700 text-white border-blue-800' : 'bg-slate-100 text-slate-800 border-slate-300 hover:bg-slate-200'}`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleLoadBySelectedSource()}
+                    className="px-3 py-1.5 rounded bg-blue-700 text-white text-sm font-semibold hover:bg-blue-600"
+                  >
+                    Laadi valitud allikast
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Seadete riba + tööriistavalikud magneetiliselt all – sticky üleval */}
       <div className="sticky top-0 z-30 flex flex-col flex-shrink-0 shadow-lg">
       <header className="flex-shrink-0 bg-gradient-to-r from-amber-900 via-orange-800 to-red-900 text-amber-50 dark:bg-black dark:text-white">
@@ -9892,19 +10077,39 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                     <div className="my-1 border-t border-slate-600" />
                     <button
                       type="button"
+                      onClick={() => { setPianoStripVisible(false); setSettingsOpen(true); setHeaderMenuOpen(null); setFileSubmenuOpen(null); }}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-amber-50 hover:bg-slate-600"
+                      title="Muuda teose andmeid (pealkiri, autor, helistik, taktimoot, eellook)"
+                    >
+                      <Type className="w-4 h-4" />
+                      Teose andmed
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setPianoStripVisible(false); setSettingsOpen(true); setHeaderMenuOpen(null); setFileSubmenuOpen(null); }}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-amber-50 hover:bg-slate-600"
+                      title="Muuda noodigraafika seadeid"
+                    >
+                      <Layout className="w-4 h-4" />
+                      Noodigraafika seaded
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setPianoStripVisible(false); setSaveLoadOpen(true); setHeaderMenuOpen(null); setFileSubmenuOpen(null); }}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-amber-50 hover:bg-slate-600"
+                      title="Salvestus ja laadimine"
+                    >
+                      <Save className="w-4 h-4" />
+                      Salvestus / laadimine
+                    </button>
+                    <div className="my-1 border-t border-slate-600" />
+                    <button
+                      type="button"
                       onClick={() => { saveToStorage(); setHeaderMenuOpen(null); }}
                       className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-amber-50 hover:bg-slate-600"
                     >
                       <Save className="w-4 h-4" /> {t('file.saveBrowser')}
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => { loadFromStorage(); setHeaderMenuOpen(null); }}
-                      className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-amber-50 hover:bg-slate-600"
-                    >
-                      <FolderOpen className="w-4 h-4" /> {t('file.loadBrowser')}
-                    </button>
-                    <div className="my-1 border-t border-slate-600" />
                     <button
                       type="button"
                       onClick={() => { setPianoStripVisible(false); saveToCloud(); setHeaderMenuOpen(null); }}
@@ -9921,6 +10126,22 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                         <CloudUpload className="w-4 h-4" /> {t('file.overwriteCloud')}
                       </button>
                     )}
+                    <button
+                      type="button"
+                      onClick={() => { makeCloudCopy(); setHeaderMenuOpen(null); }}
+                      disabled={!openedCloudFile?.fileId}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-amber-50 hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                      title={openedCloudFile?.fileId ? (t('file.copy') || 'Tee koopia') : 'Ava pilvefail, et teha koopia'}
+                    >
+                      <Save className="w-4 h-4" /> {t('file.copy') || 'Tee koopia'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { loadFromStorage(); setHeaderMenuOpen(null); }}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-amber-50 hover:bg-slate-600"
+                    >
+                      <FolderOpen className="w-4 h-4" /> {t('file.loadBrowser')}
+                    </button>
                     <button
                       type="button"
                       onClick={() => { setPianoStripVisible(false); loadFromCloud(); setHeaderMenuOpen(null); }}
@@ -9952,17 +10173,6 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                       Pedagoogiline notatsioon
                     </button>
                     <div className="my-1 border-t border-slate-600" />
-                    <button
-                      type="button"
-                      onClick={() => { makeCloudCopy(); setHeaderMenuOpen(null); }}
-                      disabled={!openedCloudFile?.fileId}
-                      className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-amber-50 hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed"
-                      title={openedCloudFile?.fileId ? (t('file.copy') || 'Tee koopia') : 'Ava pilvefail, et teha koopia'}
-                    >
-                      <Save className="w-4 h-4" /> {t('file.copy') || 'Tee koopia'}
-                    </button>
-                    <div className="my-1 border-t border-slate-600" />
-                    {/* Import – visible above Print */}
                     <button
                       type="button"
                       onClick={() => { pageDesignInputRef.current?.click(); setHeaderMenuOpen(null); }}
@@ -10057,16 +10267,6 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                       </div>
                     )}
                     {isPedagogicalProject && <div className="my-1 border-t border-slate-600" />}
-                    {/* Seaded – ava kohe seadete akna */}
-                    <button
-                      type="button"
-                      onClick={() => { setPianoStripVisible(false); setSettingsOpen(true); setHeaderMenuOpen(null); setFileSubmenuOpen(null); }}
-                      className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-amber-50 hover:bg-slate-600"
-                      title={t('file.settingsTitle')}
-                    >
-                      <Settings className="w-4 h-4" />
-                      {t('file.settings')}
-                    </button>
                     <button
                       type="button"
                       onClick={() => { setShortcutsOpen(true); setHeaderMenuOpen(null); setFileSubmenuOpen(null); }}
