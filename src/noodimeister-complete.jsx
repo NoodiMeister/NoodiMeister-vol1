@@ -67,6 +67,11 @@ import {
 } from './layout/traditionalMultiStaffGeometry';
 import { FIGURE_BASE_WIDTH, FIGURE_ROW_HEIGHT, calculateLayout } from './layout/LayoutEngine';
 import { transposeNotes } from './musical/transpose';
+import {
+  measureLengthInQuarterBeats,
+  durationLabelToQuarterNoteUnits,
+  oneMetricalBeatInQuarterBeats,
+} from './musical/timeSignature';
 import { useNoodimeisterOptional } from './store/NoodimeisterContext';
 import { useNotationOptional } from './store/NotationContext';
 import html2canvas from 'html2canvas';
@@ -300,15 +305,14 @@ function minMeasuresNeededForNotesOnStaves(stavesSnapshot, staffIndexToReplace, 
     }
   }
   if (maxEndBeat <= 0) return 1;
-  const beatsPerMeasure = timeSignature.beats;
-  const beatUnit = timeSignature.beatUnit;
-  let firstMeasureBeats = beatsPerMeasure;
+  const measureQuarters = measureLengthInQuarterBeats(timeSignature);
+  let firstMeasureBeats = measureQuarters;
   if (pickupEnabled && pickupQuantity > 0 && pickupDuration) {
-    const denom = parseInt(String(pickupDuration).split('/')[1], 10) || 4;
-    firstMeasureBeats = Math.max(0.25, Math.min((pickupQuantity * beatUnit) / denom, beatsPerMeasure - 0.25));
+    const pickupQuarters = pickupQuantity * durationLabelToQuarterNoteUnits(pickupDuration);
+    firstMeasureBeats = Math.max(0.25, Math.min(pickupQuarters, measureQuarters - 0.25));
   }
   if (maxEndBeat <= firstMeasureBeats) return 1;
-  const measuresAfterFirst = Math.ceil((maxEndBeat - firstMeasureBeats) / beatsPerMeasure);
+  const measuresAfterFirst = Math.ceil((maxEndBeat - firstMeasureBeats) / measureQuarters);
   return 1 + measuresAfterFirst;
 }
 
@@ -326,15 +330,14 @@ function computeMinMeasuresFromStaves(stavesSnapshot, timeSignature, pickupEnabl
     }
   }
   if (maxEndBeat <= 0) return 1;
-  const beatsPerMeasure = timeSignature.beats;
-  const beatUnit = timeSignature.beatUnit;
-  let firstMeasureBeats = beatsPerMeasure;
+  const measureQuarters = measureLengthInQuarterBeats(timeSignature);
+  let firstMeasureBeats = measureQuarters;
   if (pickupEnabled && pickupQuantity > 0 && pickupDuration) {
-    const denom = parseInt(String(pickupDuration).split('/')[1], 10) || 4;
-    firstMeasureBeats = Math.max(0.25, Math.min((pickupQuantity * beatUnit) / denom, beatsPerMeasure - 0.25));
+    const pickupQuarters = pickupQuantity * durationLabelToQuarterNoteUnits(pickupDuration);
+    firstMeasureBeats = Math.max(0.25, Math.min(pickupQuarters, measureQuarters - 0.25));
   }
   if (maxEndBeat <= firstMeasureBeats) return 1;
-  const measuresAfterFirst = Math.ceil((maxEndBeat - firstMeasureBeats) / beatsPerMeasure);
+  const measuresAfterFirst = Math.ceil((maxEndBeat - firstMeasureBeats) / measureQuarters);
   return 1 + measuresAfterFirst;
 }
 
@@ -497,15 +500,15 @@ function remapRepeatMarksAfterMeasureDelete(prevMap, startIdx, endIdx) {
   return next;
 }
 
-function getMeasureIndexForBeatMs(ms, beat, timeSigBeatsFallback) {
+function getMeasureIndexForBeatMs(ms, beat, measureLengthQuarterFallback) {
   const EPS = 1e-6;
   if (!Array.isArray(ms) || ms.length === 0) return 0;
   const i = ms.findIndex((m) => beat >= m.startBeat && beat < m.endBeat);
   if (i >= 0) return i;
   const last = ms[ms.length - 1];
   if (beat >= last.startBeat - EPS && beat <= last.endBeat + EPS) return ms.length - 1;
-  const bpm = Number(timeSigBeatsFallback) || 4;
-  return Math.min(Math.max(0, Math.floor((beat || 0) / bpm)), ms.length - 1);
+  const span = Number(measureLengthQuarterFallback) || 4;
+  return Math.min(Math.max(0, Math.floor((beat || 0) / span)), ms.length - 1);
 }
 
 function findFirstNoteIndexInMeasure(notes, measure) {
@@ -1467,6 +1470,8 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   const [noteInputMode, setNoteInputMode] = useState(false); // default SEL (selection) mode; N = note input
   /** Cursor tool: 'select' = pointer, select notes; 'hand' = grab, pan/drag layout; 'type' = click note to edit lyrics */
   const [cursorTool, setCursorTool] = useState('select');
+  const cursorToolRef = useRef(cursorTool);
+  cursorToolRef.current = cursorTool;
   const [selectedDuration, setSelectedDuration] = useState('1/4');
   // Tuplet mode: null = normal; { type: 3|5|6|7, inSpaceOf: 2|4 } – triool 3 in 2, kvintool 5 in 4, jne. Aktiveeritakse Cmd/Ctrl+3,5,6,7
   const [tupletMode, setTupletMode] = useState(null);
@@ -2581,13 +2586,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     return map[durationLabel] ?? 1;
   };
 
-  const beatsPerMeasureFromTimeSig = (ts) => {
-    const beats = Number(ts?.beats) || 4;
-    const beatUnit = Number(ts?.beatUnit) || 4;
-    // Internal unit in this editor is quarter=1. MusicXML divisions are also per quarter.
-    // Measure length in quarters = beats * (4/beatUnit). (If beatUnit is missing, defaults to 4/4.)
-    return beats * (4 / beatUnit);
-  };
+  const beatsPerMeasureFromTimeSig = (ts) => measureLengthInQuarterBeats(ts);
 
   const makeId = (prefix) => (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
@@ -4878,10 +4877,9 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     return Math.max(2, Math.min(6, currentOctave + direction));
   }, []);
 
-  // Pickup: convert duration label to beats (relative to time sig beat unit). E.g. 4/4 + 1/8 → 0.5 beats.
-  const durationToBeats = useCallback((durationLabel, beatUnit) => {
-    const denom = parseInt(String(durationLabel).split('/')[1], 10) || 4;
-    return beatUnit / denom;
+  // Noodi kestus neljandikühikutes (sama mis note.duration; sõltumata taktimõõdu kirjest).
+  const durationToBeats = useCallback((durationLabel, isDotted = false) => {
+    return durationLabelToQuarterNoteUnits(durationLabel, isDotted);
   }, []);
 
   // Minimum measures needed so that all notes in staves are visible (laadimise viga: kui addedMeasures puudub/vale, näitame ikkagi kõiki noote).
@@ -4907,21 +4905,20 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
 
   // Calculate measures (with optional pickup / eeltakt – exact rhythmic value). Pikkus = max kõigi ridade pikkus.
   const calculateMeasures = useCallback(() => {
-    const beatsPerMeasure = timeSignature.beats;
-    const beatUnit = timeSignature.beatUnit;
-    let firstMeasureBeats = beatsPerMeasure;
+    const measureQuarters = measureLengthInQuarterBeats(timeSignature);
+    let firstMeasureBeats = measureQuarters;
     if (pickupEnabled && pickupQuantity > 0 && pickupDuration) {
-      const oneUnitBeats = durationToBeats(pickupDuration, beatUnit);
-      firstMeasureBeats = pickupQuantity * oneUnitBeats;
-      firstMeasureBeats = Math.max(0.25, Math.min(firstMeasureBeats, beatsPerMeasure - 0.25));
+      const onePickupQuarters = durationLabelToQuarterNoteUnits(pickupDuration);
+      firstMeasureBeats = pickupQuantity * onePickupQuarters;
+      firstMeasureBeats = Math.max(0.25, Math.min(firstMeasureBeats, measureQuarters - 0.25));
     }
 
     const getMeasureBounds = (measureIndex) => {
       if (measureIndex === 0) {
         return { startBeat: 0, endBeat: firstMeasureBeats, beatCount: firstMeasureBeats };
       }
-      const startBeat = firstMeasureBeats + (measureIndex - 1) * beatsPerMeasure;
-      return { startBeat, endBeat: startBeat + beatsPerMeasure, beatCount: beatsPerMeasure };
+      const startBeat = firstMeasureBeats + (measureIndex - 1) * measureQuarters;
+      return { startBeat, endBeat: startBeat + measureQuarters, beatCount: measureQuarters };
     };
 
     // User-driven bar count (1 + addedMeasures), but at least minMeasuresFromNotes so laaditud fail näitab alati kõiki noote.
@@ -4936,22 +4933,21 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       measures.push({ ...b, notes: [] });
     }
     return applyDemoCap ? measures.slice(0, DEMO_MAX_MEASURES) : measures;
-  }, [timeSignature, addedMeasures, pickupEnabled, pickupQuantity, pickupDuration, durationToBeats, hasFullAccess, minMeasuresFromNotes]);
+  }, [timeSignature, addedMeasures, pickupEnabled, pickupQuantity, pickupDuration, hasFullAccess, minMeasuresFromNotes]);
 
   /** Viimase takti lõpu beat (sama loogika kui calculateMeasures) — kasutusel N-režiimi automaatse taktide laiendamise jaoks */
   const getScoreEndBeatForLayout = useCallback((addedMeas, minM) => {
-    const beatsPerMeasure = timeSignature.beats;
-    const beatUnit = timeSignature.beatUnit;
-    let firstMeasureBeats = beatsPerMeasure;
+    const measureQuarters = measureLengthInQuarterBeats(timeSignature);
+    let firstMeasureBeats = measureQuarters;
     if (pickupEnabled && pickupQuantity > 0 && pickupDuration) {
-      const oneUnitBeats = durationToBeats(pickupDuration, beatUnit);
-      firstMeasureBeats = pickupQuantity * oneUnitBeats;
-      firstMeasureBeats = Math.max(0.25, Math.min(firstMeasureBeats, beatsPerMeasure - 0.25));
+      const onePickupQuarters = durationLabelToQuarterNoteUnits(pickupDuration);
+      firstMeasureBeats = pickupQuantity * onePickupQuarters;
+      firstMeasureBeats = Math.max(0.25, Math.min(firstMeasureBeats, measureQuarters - 0.25));
     }
     const endBeatForIndex = (measureIndex) => {
       if (measureIndex === 0) return firstMeasureBeats;
-      const startBeat = firstMeasureBeats + (measureIndex - 1) * beatsPerMeasure;
-      return startBeat + beatsPerMeasure;
+      const startBeat = firstMeasureBeats + (measureIndex - 1) * measureQuarters;
+      return startBeat + measureQuarters;
     };
     let totalMeasures = Math.max(1, Math.max(1 + (addedMeas || 0), minM));
     if (!hasFullAccess) {
@@ -4959,7 +4955,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     }
     const idx = Math.max(0, totalMeasures - 1);
     return endBeatForIndex(idx);
-  }, [timeSignature, pickupEnabled, pickupQuantity, pickupDuration, durationToBeats, hasFullAccess]);
+  }, [timeSignature, pickupEnabled, pickupQuantity, pickupDuration, hasFullAccess]);
 
   const maxCursorAllowed = useMemo(() => {
     const ms = calculateMeasures();
@@ -5652,7 +5648,8 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     const ms = measuresRef.current;
     if (!Array.isArray(ms) || ms.length === 0) return;
     const idx = ms.findIndex((m) => cursorPosition >= m.startBeat && cursorPosition < m.endBeat);
-    const measureIndex = idx >= 0 ? idx : Math.min(Math.max(0, Math.floor((cursorPosition || 0) / (timeSignature?.beats || 4))), ms.length - 1);
+    const measureQuarters = measureLengthInQuarterBeats(timeSignature);
+    const measureIndex = idx >= 0 ? idx : Math.min(Math.max(0, Math.floor((cursorPosition || 0) / measureQuarters)), ms.length - 1);
     const targetMeasure = ms[measureIndex];
     if (!targetMeasure) return;
 
@@ -5690,7 +5687,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         return { ...n, beamGroupId: `${token}-${groupIndex}` };
       });
     });
-  }, [cursorPosition, notes, notesWithExplicitBeats, saveToHistory, timeSignature?.beats]);
+  }, [cursorPosition, notes, notesWithExplicitBeats, saveToHistory, timeSignature]);
 
   // Akordi lisamise asukoht: kursor (sisestusrežiim) või valitud noodi algus
   const getChordInsertBeat = useCallback(() => {
@@ -5820,7 +5817,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   }, [transposeChordSymbolSemitones, FLAT_KEYS, keySignature]);
 
   const getChordAtCursor = useCallback(() => {
-    const beatsPerMeasure = timeSignature?.beats ?? 4;
+    const beatsPerMeasure = measureLengthInQuarterBeats(timeSignature);
     const cursorMeasureIdx = Math.floor(cursorPosition / beatsPerMeasure);
     const measureStart = cursorMeasureIdx * beatsPerMeasure;
     const measureEnd = measureStart + beatsPerMeasure;
@@ -5839,7 +5836,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       if (cursorPosition >= start && cursorPosition < end) return c;
     }
     return undefined;
-  }, [chords, cursorPosition, timeSignature?.beats]);
+  }, [chords, cursorPosition, timeSignature]);
 
   const handleToolboxSelection = (clickedIndex) => {
     if (!activeToolbox) return;
@@ -6011,7 +6008,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
             const b = typeof beat === 'number' && Number.isFinite(beat) ? beat : 0;
             const i = ms.findIndex((m) => b >= m.startBeat && b < m.endBeat);
             if (i >= 0) return i;
-            return Math.min(Math.max(0, Math.floor(b / (timeSignature?.beats || 4))), ms.length - 1);
+            return Math.min(Math.max(0, Math.floor(b / measureLengthInQuarterBeats(timeSignature))), ms.length - 1);
           };
 
           const hasRangeSelection = selectionStart >= 0 && selectionEnd >= 0;
@@ -6610,19 +6607,18 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         }));
         const clipboardDuration = pastedNotes.reduce((sum, note) => sum + (Number(note.duration) || 1), 0);
         const insertBeat = notes.slice(0, insertIndex).reduce((s, n) => s + (Number(n.duration) || 1), 0);
-        const beatsPerMeasure = timeSignature.beats;
-        const beatUnit = timeSignature.beatUnit;
-        let firstMeasureBeats = beatsPerMeasure;
+        const measureQuarters = measureLengthInQuarterBeats(timeSignature);
+        let firstMeasureBeats = measureQuarters;
         if (pickupEnabled && pickupQuantity > 0 && pickupDuration) {
-          const oneUnitBeats = durationToBeats(pickupDuration, beatUnit);
-          firstMeasureBeats = Math.max(0.25, Math.min(pickupQuantity * oneUnitBeats, beatsPerMeasure - 0.25));
+          const onePickupQuarters = durationLabelToQuarterNoteUnits(pickupDuration);
+          firstMeasureBeats = Math.max(0.25, Math.min(pickupQuantity * onePickupQuarters, measureQuarters - 0.25));
         }
         const totalMeasures = Math.max(1, 1 + (addedMeasures || 0));
-        const endBeat = firstMeasureBeats + (totalMeasures - 1) * beatsPerMeasure;
+        const endBeat = firstMeasureBeats + (totalMeasures - 1) * measureQuarters;
         const availableBeats = Math.max(0, endBeat - insertBeat);
         const needExtraBeats = Math.max(0, clipboardDuration - availableBeats);
         const measuresToAdd = hasFullAccess && needExtraBeats > 0
-          ? Math.ceil(needExtraBeats / beatsPerMeasure)
+          ? Math.ceil(needExtraBeats / measureQuarters)
           : 0;
         if (measuresToAdd > 0) setAddedMeasures((prev) => prev + measuresToAdd);
         const newNotes = [...notes];
@@ -6643,7 +6639,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         const ms = measuresRef.current;
         if (ms && ms.length > 0) {
           const measureIndex = ms.findIndex((m) => cursorPosition >= m.startBeat && cursorPosition < m.endBeat);
-          const idx = measureIndex >= 0 ? measureIndex : Math.min(cursorPosition > 0 ? Math.floor(cursorPosition / (timeSignature?.beats || 4)) : 0, ms.length - 1);
+          const idx = measureIndex >= 0 ? measureIndex : Math.min(cursorPosition > 0 ? Math.floor(cursorPosition / measureLengthInQuarterBeats(timeSignature)) : 0, ms.length - 1);
           const delta = e.code === 'BracketLeft' ? -0.1 : 0.1;
           e.preventDefault();
           dirtyRef.current = true;
@@ -6817,7 +6813,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                 return Math.max(dec, Math.max(0, neededAfter - 1));
               });
               const prev = ms[cursorMeasureIndex - 1];
-              const oneBeat = (prev.beatCount || timeSignature?.beats || 4) / (timeSignature?.beatUnit || 4);
+              const oneBeat = oneMetricalBeatInQuarterBeats(timeSignature);
               setCursorPosition(Math.max(prev.startBeat, prev.endBeat - oneBeat));
               removedExcessBar = true;
             }
@@ -7076,7 +7072,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
           e.preventDefault();
           const ms = measuresRef.current;
           const idx = ms && ms.length ? ms.findIndex((m) => cursorPosition >= m.startBeat && cursorPosition < m.endBeat) : -1;
-          const end = idx >= 0 ? ms[idx].endBeat : (timeSignature?.beats ?? 4);
+          const end = idx >= 0 ? ms[idx].endBeat : measureLengthInQuarterBeats(timeSignature);
           const endBeat = Math.min(maxCursor, end > 0 ? end - 0.25 : 0);
           setCursorPosition(endBeat);
           playNoteAtBeatIfEnabled(endBeat);
@@ -7305,7 +7301,61 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
           const ms = measuresRef.current;
           if (Array.isArray(ms) && ms.length > 0) {
             e.preventDefault();
-            const curIdx = getMeasureIndexForBeatMs(ms, cursorPosition, timeSignature?.beats);
+            const curIdx = getMeasureIndexForBeatMs(ms, cursorPosition, measureLengthInQuarterBeats(timeSignature));
+            // Pointer tool + Shift + ◀/▶: extend note range along the score timeline (matches rhythm toolbox hint / teacher expectation).
+            if (e.shiftKey && cursorToolRef.current === 'select') {
+              const withBeats = notesWithExplicitBeats(notes);
+              const sorted = withBeats.map((n, i) => ({ n, i, beat: Number(n.beat) || 0 }))
+                .sort((a, b) => {
+                  if (a.beat !== b.beat) return a.beat - b.beat;
+                  const ma = noteToMidi(a.n);
+                  const mb = noteToMidi(b.n);
+                  if (ma !== mb) return ma - mb;
+                  return a.i - b.i;
+                });
+              const order = sorted.map((s) => s.i);
+              let noteRangeHandled = false;
+              if (order.length > 0) {
+                const posOf = (idx) => order.indexOf(idx);
+                const dir = e.code === 'ArrowRight' ? 1 : -1;
+                const applyNoteRange = (a, b, focusIdx) => {
+                  setMeasureSelection(null);
+                  setSelectionStart(Math.min(a, b));
+                  setSelectionEnd(Math.max(a, b));
+                  setSelectedNoteIndex(focusIdx);
+                  setCursorSubRow(0);
+                  const beat = getBeatAtNoteIndex(notes, focusIdx);
+                  setCursorPosition(beat);
+                  playNoteAtBeatIfEnabled(beat);
+                  noteRangeHandled = true;
+                };
+                if (selectionStart < 0 || selectionEnd < 0) {
+                  const baseIdx = selectedNoteIndex >= 0 ? selectedNoteIndex : getNoteIndexAtCursor();
+                  if (baseIdx >= 0) {
+                    const p = posOf(baseIdx);
+                    if (p >= 0) {
+                      const q = p + dir;
+                      if (q >= 0 && q < order.length) {
+                        applyNoteRange(baseIdx, order[q], order[q]);
+                      }
+                    }
+                  }
+                } else {
+                  const lo = Math.min(selectionStart, selectionEnd);
+                  const hi = Math.max(selectionStart, selectionEnd);
+                  const pLo = posOf(lo);
+                  const pHi = posOf(hi);
+                  if (pLo >= 0 && pHi >= 0) {
+                    if (dir > 0 && pHi < order.length - 1) {
+                      applyNoteRange(lo, order[pHi + 1], order[pHi + 1]);
+                    } else if (dir < 0 && pLo > 0) {
+                      applyNoteRange(order[pLo - 1], hi, order[pLo - 1]);
+                    }
+                  }
+                }
+              }
+              if (noteRangeHandled) return;
+            }
             setSelectionStart(-1);
             setSelectionEnd(-1);
             if (e.shiftKey) {
@@ -7577,7 +7627,8 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     staves, activeStaffIndex, timeSignature, pickupEnabled, pickupQuantity, pickupDuration,
     handleSaveShortcut, handlePrint, addedMeasures, timeSignature, setAddedMeasures, setCursorPosition, measureRepeatMarks, setMeasureRepeatMarks,
     maxCursor, setScoreZoomLevel, durationToBeats, hasFullAccess, pickupEnabled, pickupQuantity, pickupDuration, isScorePlaybackPlaying, stopScorePlayback, isInstrumentManagerOpen,
-    effectiveShortcutPrefs, expandScoreForNoteInputAdvance, addNoteAtCursor
+    effectiveShortcutPrefs,     expandScoreForNoteInputAdvance, addNoteAtCursor,
+    notesWithExplicitBeats, getBeatAtNoteIndex, noteToMidi,
   ]);
 
   // JO-võti: klõps väljaspool võtit lõpetab valiku
@@ -7606,7 +7657,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       startIdx = Math.min(msel.start, msel.end);
       endIdx = Math.max(msel.start, msel.end);
     } else {
-      const cur = getMeasureIndexForBeatMs(ms, cursorPosition, timeSignature?.beats);
+      const cur = getMeasureIndexForBeatMs(ms, cursorPosition, measureLengthInQuarterBeats(timeSignature));
       startIdx = endIdx = cur;
     }
     if (startIdx < 0 || endIdx >= ms.length || startIdx > endIdx) return false;
@@ -7638,7 +7689,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
 
     const prevMeasure = startIdx > 0 ? ms[startIdx - 1] : null;
     if (prevMeasure) {
-      const oneBeat = (prevMeasure.beatCount || timeSignature?.beats || 4) / (timeSignature?.beatUnit || 4);
+      const oneBeat = oneMetricalBeatInQuarterBeats(timeSignature);
       setCursorPosition(Math.max(prevMeasure.startBeat, prevMeasure.endBeat - oneBeat));
     } else {
       setCursorPosition(0);
@@ -8092,7 +8143,8 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   const beginSelectionDrag = useCallback((noteIndex, e) => {
     // Allow Shift+drag selection even when N-mode is ON in Figurenotes view,
     // because note input there happens via beat-box clicks rather than arrow keys.
-    if (noteInputModeRef.current && notationStyle !== 'FIGURENOTES') return;
+    // With the pointer (select) tool, allow Shift+drag in traditional view too — teachers need range select without turning N off.
+    if (noteInputModeRef.current && notationStyle !== 'FIGURENOTES' && cursorToolRef.current !== 'select') return;
     if (!e?.shiftKey) return;
     if (e.button !== 0) return;
     e.preventDefault();
@@ -11965,8 +12017,8 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                 onContextMenu={(e) => {
                   // Avatud kontekstimenüü: kopeeri / kleebi / tühista valik.
                   // Töötame ainult SEL-režiimis (noteInputModeRef.current === false),
-                  // et mitte segada N-režiimi noodisisestust.
-                  if (noteInputModeRef.current && notationStyle !== 'FIGURENOTES') return;
+                  // et mitte segada N-režiimi noodisisestust — välja arvatud valikutööriist + Shift-valik.
+                  if (noteInputModeRef.current && notationStyle !== 'FIGURENOTES' && cursorToolRef.current !== 'select') return;
                   e.preventDefault();
                   const hasSelection = selectedNoteIndex >= 0 || (selectionStart >= 0 && selectionEnd >= 0);
                   const hasClipboard = clipboard && clipboard.length > 0;
@@ -12432,8 +12484,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                         const durLabel = draft.durationLabel || selectedDuration || '1/4';
                         addNoteAtCursor(pitch, octave, undefined, { insertAtBeat: beat, overrideDurationLabel: durLabel });
                         try {
-                          const beatUnit = timeSignature?.beatUnit || 4;
-                          const step = durationToBeats(durLabel, beatUnit);
+                          const step = durationLabelToQuarterNoteUnits(durLabel);
                           setCursorPosition(Math.max(0, beat + (Number.isFinite(step) ? step : 1)));
                         } catch (_) {
                           setCursorPosition(Math.max(0, beat));
@@ -13385,7 +13436,7 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
     );
   };
 
-  const beatsPerMeasure = timeSignature.beats;
+  const beatsPerMeasure = measureLengthInQuarterBeats(timeSignature);
   const getSystemTotalBeats = (sys) => sys.measureIndices.reduce((sum, i) => sum + (effectiveMeasures[i]?.beatCount ?? beatsPerMeasure), 0);
   const findCursorSystem = () => {
     let beatAcc = 0;

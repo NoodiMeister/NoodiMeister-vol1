@@ -5,6 +5,7 @@
  */
 
 import { getPaperDimensionsPx } from '../utils/pageGeometry';
+import { measureLengthInQuarterBeats } from '../musical/timeSignature';
 
 const DEFAULT_PAGE_DIMS = getPaperDimensionsPx('a4', 'portrait');
 const DEFAULT_PAGE_DIMS_LANDSCAPE = getPaperDimensionsPx('a4', 'landscape');
@@ -71,7 +72,7 @@ export function computeLayout(measures, timeSignature, pixelsPerBeat, pageWidth,
   const w = Number(pageWidth) || LAYOUT.PAGE_WIDTH_MIN;
   const leftMargin = typeof layoutOptions.marginLeft === 'number' ? layoutOptions.marginLeft : LAYOUT.MARGIN_LEFT;
   const availableWidth = Math.max(200, w - leftMargin - LAYOUT.MARGIN_RIGHT);
-  const beatsPerMeasure = timeSignature?.beats ?? 4;
+  const beatsPerMeasure = measureLengthInQuarterBeats(timeSignature);
   const {
     measuresPerLine = 0,
     lineBreakBefore = [],

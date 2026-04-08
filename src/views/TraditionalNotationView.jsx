@@ -23,6 +23,7 @@ import {
   SMUFL_MUSIC_FONT_FAMILY,
 } from '../notation/smufl/glyphs';
 import { TIME_SIG_LAYOUT, getTraditionalTimeSignatureX } from '../notation/TimeSignatureLayout';
+import { measureLengthInQuarterBeats } from '../musical/timeSignature';
 import {
   getStaffLinePositions,
   getMiddleStaffLineY,
@@ -511,7 +512,7 @@ export function TraditionalNotationView({
     const sys = systems?.[0];
     if (!sys || !effectiveMeasuresProp) return [];
     const mw = sys.measureWidths ?? [];
-    const beatsPerMeasure = timeSignature?.beats ?? 4;
+    const beatsPerMeasure = measureLengthInQuarterBeats(timeSignature);
     const left = effectiveMarginLeft;
     return sys.measureIndices.map((measureIdx, j) => {
       const measure = effectiveMeasuresProp[measureIdx];
@@ -895,7 +896,7 @@ export function TraditionalNotationView({
 
                   {/* Taktid: jooned, akordid, nootid (per staff) */}
                   {Array.isArray(instMeasures) && (() => {
-                    const beatsPerMeasure = timeSignature?.beats ?? 4;
+                    const beatsPerMeasure = measureLengthInQuarterBeats(timeSignature);
                     return sys.measureIndices.map((measureIdx, j) => {
                       const measure = instMeasures[measureIdx];
                       if (!measure) return null;

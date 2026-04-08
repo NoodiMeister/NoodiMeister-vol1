@@ -10,6 +10,7 @@ import { createPortal } from 'react-dom';
 
 // —— Store & context ——
 import { NotationProvider, useNotation, DURATIONS, getEffectiveDuration, INSTRUMENT_PRESETS } from '../store/NotationContext';
+import { measureLengthInQuarterBeats } from '../musical/timeSignature';
 
 // —— Pitch input (klahv → kõrgus) ——
 import { getPitchFromMidi } from '../musical/PitchInputLogic';
@@ -98,7 +99,7 @@ const PIXELS_PER_BEAT = 80;
 
 /** Ühest noodide massiivist ja taktimõõdust ehitab mõõdud ja notesByMeasure. Igale noodile lisatakse beat (absoluutne takti aeg). */
 function buildMeasuresFromNotes(notes, timeSignature) {
-  const beatsPerMeasure = timeSignature?.beats ?? 4;
+  const beatsPerMeasure = measureLengthInQuarterBeats(timeSignature);
   const totalBeats = (notes || []).reduce((acc, n) => acc + n.duration, 0);
   const measureCount = Math.max(1, Math.ceil(totalBeats / beatsPerMeasure));
   const measures = [];
@@ -127,7 +128,7 @@ function buildMeasuresFromNotes(notes, timeSignature) {
 
 /** Kõikide instrumentide noodid: ühine taktide ahel, iga instrumendi effectiveMeasures eraldi. */
 function buildMeasuresFromInstruments(instruments, timeSignature) {
-  const beatsPerMeasure = timeSignature?.beats ?? 4;
+  const beatsPerMeasure = measureLengthInQuarterBeats(timeSignature);
   const totalBeats = (instruments || []).reduce((acc, inst) => {
     const sum = (inst.notes || []).reduce((s, n) => s + n.duration, 0);
     return Math.max(acc, sum);

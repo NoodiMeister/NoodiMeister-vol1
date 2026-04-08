@@ -20,6 +20,7 @@ import {
   getFigureStyle,
 } from "../constants/FigureNotesLibrary";
 import { getChordMidiNotes } from "../musical/chordPlayback";
+import { measureLengthInQuarterBeats } from "../musical/timeSignature";
 import { getAccidentalForPitchInKey } from "../utils/notationConstants";
 import {
   TIME_SIG_LAYOUT,
@@ -426,7 +427,7 @@ export function FigurenotesView({
     combinedRows && instruments[0]?.id
       ? (effectiveMeasuresPerInstrument[instruments[0].id] ?? effectiveMeasures)
       : effectiveMeasures;
-  const beatsPerMeasure = timeSignature?.beats ?? 4;
+  const beatsPerMeasure = measureLengthInQuarterBeats(timeSignature);
   const timeSigTextColor = themeColors?.textColor ?? "#333";
   const timeSigNoteFill = themeColors?.noteFill ?? "#333";
 

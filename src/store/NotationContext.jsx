@@ -18,7 +18,7 @@ export function useNotationOptional() {
   return useContext(NotationContext);
 }
 
-/** Noodi kestused (beatUnit väärtused). */
+/** Noodi kestused neljandikühikutes (1/4 = 1; sõltumata taktimõõdu kirjest). */
 export const DURATIONS = { '1/1': 4, '1/2': 2, '1/4': 1, '1/8': 0.5, '1/16': 0.25, '1/32': 0.125 };
 
 export function getEffectiveDuration(durationLabel, isDotted = false) {

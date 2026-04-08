@@ -4,6 +4,7 @@
  * Toetab mitut joonestikku (staff) süsteemi kohta – iga instrument oma joonestik.
  */
 import { computeLayout, getStaffHeight, LAYOUT } from './LayoutManager';
+import { measureLengthInQuarterBeats } from '../musical/timeSignature';
 
 /** Vaikimisi lehe mõõdud (px). A4 96 DPI: 794×1123 (portrait), 1123×794 (landscape); suhe 1 : 1.414. */
 export const PAGE_DIMENSIONS = {
@@ -120,7 +121,7 @@ function calculateFigureGrid(data, availableWidth, availablePageHeight = 0) {
   const lineBreakBefore = new Set(Array.isArray(data?.lineBreakBefore) ? data.lineBreakBefore : []);
   const pageBreakBefore = new Set(Array.isArray(data?.pageBreakBefore) ? data.pageBreakBefore : []);
   const timeSignature = data?.timeSignature ?? { beats: 4, beatUnit: 4 };
-  const beatsPerMeasure = timeSignature?.beats ?? 4;
+  const beatsPerMeasure = measureLengthInQuarterBeats(timeSignature);
   const staffSpacing = Math.max(FIGURE_ROW_HEIGHT, Number(data?.staffSpacing) || SYSTEM_GAP);
 
   // Reserve a small right-edge safety area so larger figure symbols never render past the page stripe.
