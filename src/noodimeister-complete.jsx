@@ -3683,7 +3683,9 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       setSaveFeedback(e?.message || 'Faili avamine ebaõnnestus');
       setTimeout(() => setSaveFeedback(''), 2500);
     }
-  }, [importProject, t]);
+  // NOTE: importProject is declared later in this component; avoid TDZ by not
+  // referencing it in this dependency array.
+  }, [t]);
 
   // Re-hydrate workspace from JSON (future: can receive from cloud API)
   const importProject = useCallback((data) => {
