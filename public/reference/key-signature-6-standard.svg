@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="680" viewBox="0 0 1000 680">
+  <defs>
+    <style type="text/css"><![CDATA[
+      @font-face {
+        font-family: 'Bravura';
+        font-style: normal;
+        font-weight: 400;
+        font-display: swap;
+        src: url('https://cdn.jsdelivr.net/npm/@fontsource/bravura@5.2.5/files/bravura-latin-400-normal.woff2') format('woff2');
+      }
+    ]]></style>
+  </defs>
+  <rect width="100%" height="100%" fill="#fafafa"/>
+  <text x="500" y="30" text-anchor="middle" font-family="Arial, sans-serif" font-size="22" font-weight="700" fill="#111">6-sharp and 6-flat key signature standard</text>
+  <text x="500" y="52" text-anchor="middle" font-family="Arial, sans-serif" font-size="13" fill="#555">Index model: 0 = bottom line, 8 = top line (half-space steps)</text>
+
+  <g transform="translate(40,80)">
+    <text x="0" y="-12" font-family="Arial, sans-serif" font-size="14" font-weight="700">Treble #6 (F#, C#, G#, D#, A#, E#) positions [8, 5, 9, 6, 3, 7]</text>
+    <line x1="0" y1="40" x2="420" y2="40" stroke="#000"/><line x1="0" y1="60" x2="420" y2="60" stroke="#000"/><line x1="0" y1="80" x2="420" y2="80" stroke="#000"/><line x1="0" y1="100" x2="420" y2="100" stroke="#000"/><line x1="0" y1="120" x2="420" y2="120" stroke="#000"/>
+    <text x="24" y="82" text-anchor="middle" dominant-baseline="middle" font-family="Arial, sans-serif" font-size="14" font-weight="700">TREBLE</text>
+    <text x="92" y="34" text-anchor="middle" dominant-baseline="middle" font-family="Bravura, serif" font-size="52">&#xE262;</text>
+    <text x="124" y="64" text-anchor="middle" dominant-baseline="middle" font-family="Bravura, serif" font-size="52">&#xE262;</text>
+    <text x="156" y="26" text-anchor="middle" dominant-baseline="middle" font-family="Bravura, serif" font-size="52">&#xE262;</text>
+    <text x="188" y="54" text-anchor="middle" dominant-baseline="middle" font-family="Bravura, serif" font-size="52">&#xE262;</text>
+    <text x="220" y="84" text-anchor="middle" dominant-baseline="middle" font-family="Bravura, serif" font-size="52">&#xE262;</text>
+    <text x="252" y="44" text-anchor="middle" dominant-baseline="middle" font-family="Bravura, serif" font-size="52">&#xE262;</text>
+  </g>
+
+  <g transform="translate(520,80)">
+    <text x="0" y="-12" font-family="Arial, sans-serif" font-size="14" font-weight="700">Bass #6 (F#, C#, G#, D#, A#, E#) positions [6, 3, 7, 4, 1, 5]</text>
+    <line x1="0" y1="40" x2="420" y2="40" stroke="#000"/><line x1="0" y1="60" x2="420" y2="60" stroke="#000"/><line x1="0" y1="80" x2="420" y2="80" stroke="#000"/><line x1="0" y1="100" x2="420" y2="100" stroke="#000"/><line x1="0" y1="120" x2="420" y2="120" stroke="#000"/>
+    <text x="24" y="82" text-anchor="middle" dominant-baseline="middle" font-family="Arial, sans-serif" font-size="14" font-weight="700">BASS</text>
+    <text x="92" y="54" text-anchor="middle" dominant-baseline="middle" font-family="Bravura, serif" font-size="52">&#xE262;</text>
+    <text x="124" y="84" text-anchor="middle" dominant-baseline="middle" font-family="Bravura, serif" font-size="52">&#xE262;</text>
+    <text x="156" y="43" text-anchor="middle" dominant-baseline="middle" font-family="Bravura, serif" font-size="52">&#xE262;</text>
+    <text x="188" y="74" text-anchor="middle" dominant-baseline="middle" font-family="Bravura, serif" font-size="52">&#xE262;</text>
+    <text x="220" y="104" text-anchor="middle" dominant-baseline="middle" font-family="Bravura, serif" font-size="52">&#xE262;</text>
+    <text x="252" y="64" text-anchor="middle" dominant-baseline="middle" font-family="Bravura, serif" font-size="52">&#xE262;</text>
+  </g>
+
+  <g transform="translate(40,340)">
+    <text x="0" y="-12" font-family="Arial, sans-serif" font-size="14" font-weight="700">Treble b6 (Bb, Eb, Ab, Db, Gb, Cb) positions [4, 7, 3, 6, 2, 5]</text>
+    <line x1="0" y1="40" x2="420" y2="40" stroke="#000"/><line x1="0" y1="60" x2="420" y2="60" stroke="#000"/><line x1="0" y1="80" x2="420" y2="80" stroke="#000"/><line x1="0" y1="100" x2="420" y2="100" stroke="#000"/><line x1="0" y1="120" x2="420" y2="120" stroke="#000"/>
+    <text x="24" y="82" text-anchor="middle" dominant-baseline="middle" font-family="Arial, sans-serif" font-size="14" font-weight="700">TREBLE</text>
+    <text x="92" y="80" text-anchor="middle" dominant-baseline="middle" font-family="Times New Roman, serif" font-size="30">&#9837;</text>
+    <text x="124" y="50" text-anchor="middle" dominant-baseline="middle" font-family="Times New Roman, serif" font-size="30">&#9837;</text>
+    <text x="156" y="90" text-anchor="middle" dominant-baseline="middle" font-family="Times New Roman, serif" font-size="30">&#9837;</text>
+    <text x="188" y="60" text-anchor="middle" dominant-baseline="middle" font-family="Times New Roman, serif" font-size="30">&#9837;</text>
+    <text x="220" y="100" text-anchor="middle" dominant-baseline="middle" font-family="Times New Roman, serif" font-size="30">&#9837;</text>
+    <text x="252" y="70" text-anchor="middle" dominant-baseline="middle" font-family="Times New Roman, serif" font-size="30">&#9837;</text>
+  </g>
+
+  <g transform="translate(520,340)">
+    <text x="0" y="-12" font-family="Arial, sans-serif" font-size="14" font-weight="700">Bass b6 (Bb, Eb, Ab, Db, Gb, Cb) positions [2, 5, 1, 4, 0, 3]</text>
+    <line x1="0" y1="40" x2="420" y2="40" stroke="#000"/><line x1="0" y1="60" x2="420" y2="60" stroke="#000"/><line x1="0" y1="80" x2="420" y2="80" stroke="#000"/><line x1="0" y1="100" x2="420" y2="100" stroke="#000"/><line x1="0" y1="120" x2="420" y2="120" stroke="#000"/>
+    <text x="24" y="82" text-anchor="middle" dominant-baseline="middle" font-family="Arial, sans-serif" font-size="14" font-weight="700">BASS</text>
+    <text x="92" y="100" text-anchor="middle" dominant-baseline="middle" font-family="Times New Roman, serif" font-size="30">&#9837;</text>
+    <text x="124" y="70" text-anchor="middle" dominant-baseline="middle" font-family="Times New Roman, serif" font-size="30">&#9837;</text>
+    <text x="156" y="110" text-anchor="middle" dominant-baseline="middle" font-family="Times New Roman, serif" font-size="30">&#9837;</text>
+    <text x="188" y="80" text-anchor="middle" dominant-baseline="middle" font-family="Times New Roman, serif" font-size="30">&#9837;</text>
+    <text x="220" y="120" text-anchor="middle" dominant-baseline="middle" font-family="Times New Roman, serif" font-size="30">&#9837;</text>
+    <text x="252" y="90" text-anchor="middle" dominant-baseline="middle" font-family="Times New Roman, serif" font-size="30">&#9837;</text>
+  </g>
+</svg>

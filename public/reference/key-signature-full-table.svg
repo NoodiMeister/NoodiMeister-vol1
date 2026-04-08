@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="1040" viewBox="0 0 1400 1040">
+  <rect width="100%" height="100%" fill="#fafafa"/>
+  <text x="700" y="34" text-anchor="middle" font-family="Arial, sans-serif" font-size="24" font-weight="700" fill="#111">
+    Key Signature Full Table (Treble + Bass)
+  </text>
+  <text x="700" y="58" text-anchor="middle" font-family="Arial, sans-serif" font-size="13" fill="#444">
+    staff index: 0 = bottom line, +1 = next space/line step
+  </text>
+
+  <!-- Header -->
+  <rect x="40" y="84" width="1320" height="34" fill="#e5e7eb" stroke="#cbd5e1"/>
+  <text x="56" y="106" font-family="Arial, sans-serif" font-size="13" font-weight="700">Key</text>
+  <text x="130" y="106" font-family="Arial, sans-serif" font-size="13" font-weight="700">Count</text>
+  <text x="200" y="106" font-family="Arial, sans-serif" font-size="13" font-weight="700">Accidentals</text>
+  <text x="520" y="106" font-family="Arial, sans-serif" font-size="13" font-weight="700">Treble positions</text>
+  <text x="780" y="106" font-family="Arial, sans-serif" font-size="13" font-weight="700">Bass positions</text>
+  <text x="1020" y="106" font-family="Arial, sans-serif" font-size="13" font-weight="700">Treble glyphs</text>
+  <text x="1230" y="106" font-family="Arial, sans-serif" font-size="13" font-weight="700">Bass glyphs</text>
+
+  <!-- Sharp keys -->
+  <text x="40" y="140" font-family="Arial, sans-serif" font-size="15" font-weight="700" fill="#111">Sharp keys (F#, C#, G#, D#, A#, E#, B#)</text>
+
+  <g font-family="Arial, sans-serif" font-size="12" fill="#111">
+    <text x="56" y="166">C</text><text x="130" y="166">0</text><text x="200" y="166">-</text><text x="520" y="166">[]</text><text x="780" y="166">[]</text><text x="1020" y="166">-</text><text x="1230" y="166">-</text>
+    <text x="56" y="190">G</text><text x="130" y="190">1</text><text x="200" y="190">F#</text><text x="520" y="190">[8]</text><text x="780" y="190">[6]</text><text x="1020" y="190">&#9839;</text><text x="1230" y="190">&#9839;</text>
+    <text x="56" y="214">D</text><text x="130" y="214">2</text><text x="200" y="214">F#, C#</text><text x="520" y="214">[8, 5]</text><text x="780" y="214">[6, 3]</text><text x="1020" y="214">&#9839; &#9839;</text><text x="1230" y="214">&#9839; &#9839;</text>
+    <text x="56" y="238">A</text><text x="130" y="238">3</text><text x="200" y="238">F#, C#, G#</text><text x="520" y="238">[8, 5, 9]</text><text x="780" y="238">[6, 3, 7]</text><text x="1020" y="238">&#9839; &#9839; &#9839;</text><text x="1230" y="238">&#9839; &#9839; &#9839;</text>
+    <text x="56" y="262">E</text><text x="130" y="262">4</text><text x="200" y="262">F#, C#, G#, D#</text><text x="520" y="262">[8, 5, 9, 6]</text><text x="780" y="262">[6, 3, 7, 4]</text><text x="1020" y="262">&#9839; &#9839; &#9839; &#9839;</text><text x="1230" y="262">&#9839; &#9839; &#9839; &#9839;</text>
+    <text x="56" y="286">B</text><text x="130" y="286">5</text><text x="200" y="286">F#, C#, G#, D#, A#</text><text x="520" y="286">[8, 5, 9, 6, 3]</text><text x="780" y="286">[6, 3, 7, 4, 1]</text><text x="1020" y="286">&#9839; &#9839; &#9839; &#9839; &#9839;</text><text x="1230" y="286">&#9839; &#9839; &#9839; &#9839; &#9839;</text>
+    <text x="56" y="310">F#</text><text x="130" y="310">6</text><text x="200" y="310">F#, C#, G#, D#, A#, E#</text><text x="520" y="310">[8, 5, 9, 6, 3, 7]</text><text x="780" y="310">[6, 3, 7, 4, 1, 5]</text><text x="1020" y="310">&#9839; &#9839; &#9839; &#9839; &#9839; &#9839;</text><text x="1230" y="310">&#9839; &#9839; &#9839; &#9839; &#9839; &#9839;</text>
+    <text x="56" y="334">C#</text><text x="130" y="334">7</text><text x="200" y="334">F#, C#, G#, D#, A#, E#, B#</text><text x="520" y="334">[8, 5, 9, 6, 3, 7, 4]</text><text x="780" y="334">[6, 3, 7, 4, 1, 5, 2]</text><text x="1020" y="334">&#9839; &#9839; &#9839; &#9839; &#9839; &#9839; &#9839;</text><text x="1230" y="334">&#9839; &#9839; &#9839; &#9839; &#9839; &#9839; &#9839;</text>
+  </g>
+
+  <line x1="40" y1="356" x2="1360" y2="356" stroke="#d1d5db"/>
+
+  <!-- Flat keys -->
+  <text x="40" y="386" font-family="Arial, sans-serif" font-size="15" font-weight="700" fill="#111">Flat keys (Bb, Eb, Ab, Db, Gb, Cb, Fb)</text>
+
+  <g font-family="Arial, sans-serif" font-size="12" fill="#111">
+    <text x="56" y="412">C</text><text x="130" y="412">0</text><text x="200" y="412">-</text><text x="520" y="412">[]</text><text x="780" y="412">[]</text><text x="1020" y="412">-</text><text x="1230" y="412">-</text>
+    <text x="56" y="436">F</text><text x="130" y="436">1</text><text x="200" y="436">Bb</text><text x="520" y="436">[4]</text><text x="780" y="436">[2]</text><text x="1020" y="436">&#9837;</text><text x="1230" y="436">&#9837;</text>
+    <text x="56" y="460">Bb</text><text x="130" y="460">2</text><text x="200" y="460">Bb, Eb</text><text x="520" y="460">[4, 7]</text><text x="780" y="460">[2, 5]</text><text x="1020" y="460">&#9837; &#9837;</text><text x="1230" y="460">&#9837; &#9837;</text>
+    <text x="56" y="484">Eb</text><text x="130" y="484">3</text><text x="200" y="484">Bb, Eb, Ab</text><text x="520" y="484">[4, 7, 3]</text><text x="780" y="484">[2, 5, 1]</text><text x="1020" y="484">&#9837; &#9837; &#9837;</text><text x="1230" y="484">&#9837; &#9837; &#9837;</text>
+    <text x="56" y="508">Ab</text><text x="130" y="508">4</text><text x="200" y="508">Bb, Eb, Ab, Db</text><text x="520" y="508">[4, 7, 3, 6]</text><text x="780" y="508">[2, 5, 1, 4]</text><text x="1020" y="508">&#9837; &#9837; &#9837; &#9837;</text><text x="1230" y="508">&#9837; &#9837; &#9837; &#9837;</text>
+    <text x="56" y="532">Db</text><text x="130" y="532">5</text><text x="200" y="532">Bb, Eb, Ab, Db, Gb</text><text x="520" y="532">[4, 7, 3, 6, 2]</text><text x="780" y="532">[2, 5, 1, 4, 0]</text><text x="1020" y="532">&#9837; &#9837; &#9837; &#9837; &#9837;</text><text x="1230" y="532">&#9837; &#9837; &#9837; &#9837; &#9837;</text>
+    <text x="56" y="556">Gb</text><text x="130" y="556">6</text><text x="200" y="556">Bb, Eb, Ab, Db, Gb, Cb</text><text x="520" y="556">[4, 7, 3, 6, 2, 5]</text><text x="780" y="556">[2, 5, 1, 4, 0, 3]</text><text x="1020" y="556">&#9837; &#9837; &#9837; &#9837; &#9837; &#9837;</text><text x="1230" y="556">&#9837; &#9837; &#9837; &#9837; &#9837; &#9837;</text>
+    <text x="56" y="580">Cb</text><text x="130" y="580">7</text><text x="200" y="580">Bb, Eb, Ab, Db, Gb, Cb, Fb</text><text x="520" y="580">[4, 7, 3, 6, 2, 5, 1]</text><text x="780" y="580">[2, 5, 1, 4, 0, 3, -1]</text><text x="1020" y="580">&#9837; &#9837; &#9837; &#9837; &#9837; &#9837; &#9837;</text><text x="1230" y="580">&#9837; &#9837; &#9837; &#9837; &#9837; &#9837; &#9837;</text>
+  </g>
+
+  <line x1="40" y1="612" x2="1360" y2="612" stroke="#d1d5db"/>
+  <text x="40" y="638" font-family="Arial, sans-serif" font-size="12" fill="#444">
+    Source of truth: src/notation/keySignatureStandard.js
+  </text>
+  <text x="40" y="658" font-family="Arial, sans-serif" font-size="12" fill="#444">
+    Treble sharps [8,5,9,6,3,7,4], treble flats [4,7,3,6,2,5,1], bass sharps [6,3,7,4,1,5,2], bass flats [2,5,1,4,0,3,-1]
+  </text>
+</svg>

@@ -63,6 +63,10 @@ import { renderFiguredBassFigurations } from '../notation/figuredBassFigurations
 import { hasBundledOptionalFont } from '../export/exportFontAssets';
 import { getAccidentalForPitchInKey } from '../utils/notationConstants';
 import {
+  KEY_SIGNATURE_COUNT_BY_KEY,
+  KEY_SIGNATURE_STAFF_POSITIONS,
+} from '../notation/keySignatureStandard';
+import {
   resolveInstrumentRangeMidi,
   toNoteMidi,
   isMidiOutOfInstrumentRange,
@@ -94,34 +98,23 @@ const GAP_BEFORE_CLEF_PX = 6;
 const TREBLE_CLEF_LINE_INDEX = 2; // 0=top line ... 4=bottom line
 const OUT_OF_RANGE_COLOR = '#dc2626';
 
-const KEY_SIGNATURE_SHARPS = { G: 1, D: 2, A: 3, E: 4, B: 5 };
-const KEY_SIGNATURE_FLATS = { F: 1, Bb: 2, Eb: 3 };
-const SHARP_POSITIONS_BY_CLEF = {
-  treble: [3, 0, 4, 1, 5],
-  bass: [4, 1, 5, 2, 6],
-  alto: [0, 4, 1, 5, 2],
-  tenor: [1, 5, 2, 6, 3],
-};
-const FLAT_POSITIONS_BY_CLEF = {
-  treble: [1, 4, 0],
-  bass: [2, 5, 1],
-  alto: [5, 1, 4],
-  tenor: [6, 2, 5],
-};
-
 function getKeySignatureInfo(keySignature) {
   if (!keySignature || keySignature === 'C') return { count: 0, symbol: null };
-  const sharpCount = KEY_SIGNATURE_SHARPS[keySignature] || 0;
+  const sharpCount = KEY_SIGNATURE_COUNT_BY_KEY.sharps[keySignature] || 0;
   if (sharpCount > 0) return { count: sharpCount, symbol: '♯' };
-  const flatCount = KEY_SIGNATURE_FLATS[keySignature] || 0;
+  const flatCount = KEY_SIGNATURE_COUNT_BY_KEY.flats[keySignature] || 0;
   if (flatCount > 0) return { count: flatCount, symbol: '♭' };
   return { count: 0, symbol: null };
 }
 
 function getKeySignatureStaffPosition(clef, symbol, idx) {
   const safeClef = clef === 'bass' || clef === 'alto' || clef === 'tenor' ? clef : 'treble';
-  if (symbol === '♯') return (SHARP_POSITIONS_BY_CLEF[safeClef] || SHARP_POSITIONS_BY_CLEF.treble)[idx] ?? 0;
-  return (FLAT_POSITIONS_BY_CLEF[safeClef] || FLAT_POSITIONS_BY_CLEF.treble)[idx] ?? 0;
+  if (symbol === '♯') {
+    const byClef = KEY_SIGNATURE_STAFF_POSITIONS.sharps[safeClef] || KEY_SIGNATURE_STAFF_POSITIONS.sharps.treble;
+    return byClef[idx] ?? 0;
+  }
+  const byClef = KEY_SIGNATURE_STAFF_POSITIONS.flats[safeClef] || KEY_SIGNATURE_STAFF_POSITIONS.flats.treble;
+  return byClef[idx] ?? 0;
 }
 
 
