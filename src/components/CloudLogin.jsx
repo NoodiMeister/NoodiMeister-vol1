@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useGoogleLogin } from '@react-oauth/google';
 import { useNavigate } from 'react-router-dom';
-import { getStorageForLogin, getStorageForRead, getLoggedInUser, isLoggedIn, setLoggedInUser, clearMicrosoftAuthSession, KEY_GOOGLE_TOKEN, KEY_GOOGLE_EXPIRY } from '../services/authStorage';
+import { getStorageForLogin, getStorageForRead, getLoggedInUser, isLoggedIn, setLoggedInUser, clearMicrosoftAuthSession, KEY_GOOGLE_TOKEN, KEY_GOOGLE_EXPIRY, KEY_MICROSOFT_TOKEN, KEY_MICROSOFT_EXPIRY, setGoogleGrantedScopes, setMicrosoftGrantedScopes } from '../services/authStorage';
 import { formatAuthError } from '../utils/authError';
 import { LOCALE_STORAGE_KEY, DEFAULT_LOCALE, getTranslations } from '../i18n';
 
@@ -18,6 +18,10 @@ const googleClientId = (typeof import.meta !== 'undefined' && import.meta.env?.V
 
 const microsoftClientId = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_MICROSOFT_CLIENT_ID) || '';
 const microsoftTenantId = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_MICROSOFT_TENANT_ID) || 'common';
+const GOOGLE_SCOPE_READ = 'openid email profile https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/drive.install';
+const GOOGLE_SCOPE_WRITE = 'openid email profile https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.install';
+const MICROSOFT_SCOPE_READ = ['User.Read', 'Files.Read'];
+const MICROSOFT_SCOPE_WRITE = ['User.Read', 'Files.ReadWrite'];
 
 /** Heuristics to detect mobile / tablet (especially iPadOS where popups are fragile). */
 function isMobileOrTablet() {
@@ -255,7 +259,7 @@ function redirectToKonto() {
   }
 }
 
-function useCloudLoginWithProvider(mode = 'login', stayLoggedIn = false, onError) {
+function useCloudLoginWithProvider(mode = 'login', stayLoggedIn = false, onError, options = {}) {
   const navigate = useNavigate();
   const [microsoftInProgress, setMicrosoftInProgress] = useState(false);
 
@@ -342,6 +346,7 @@ function useCloudLoginWithProvider(mode = 'login', stayLoggedIn = false, onError
             storage.setItem(KEY_GOOGLE_TOKEN, tokenResponse.access_token);
             const expiresAt = tokenResponse.expires_in ? Date.now() + tokenResponse.expires_in * 1000 : 0;
             storage.setItem(KEY_GOOGLE_EXPIRY, String(expiresAt));
+            setGoogleGrantedScopes(tokenResponse.scope || options.googleScope || GOOGLE_SCOPE_READ);
           }
           // Vercel fix: suuna alles siis, kui auth andmed on kinnitatud (loe tagasi), et /app ei laadi enne kui isLoggedIn() töötab.
           // COOP: ära kasuta window.close() – sisselogimine suunab /app poole; close() põhjustaks Cross-Origin-Opener-Policy vigu.
@@ -392,7 +397,7 @@ function useCloudLoginWithProvider(mode = 'login', stayLoggedIn = false, onError
     if (!googleClientId || typeof window === 'undefined') return;
     rememberGoogleReturnUrl();
     const redirectUri = getGoogleRedirectUri();
-    const scope = encodeURIComponent('email profile https://www.googleapis.com/auth/drive');
+    const scope = encodeURIComponent(options.googleScope || GOOGLE_SCOPE_READ);
     const state = encodeURIComponent(JSON.stringify({ ts: Date.now(), mode }));
     const url =
       'https://accounts.google.com/o/oauth2/v2/auth' +
@@ -429,7 +434,7 @@ function useCloudLoginWithProvider(mode = 'login', stayLoggedIn = false, onError
       }
     },
     flow: 'implicit',
-    scope: 'email profile https://www.googleapis.com/auth/drive'
+    scope: options.googleScope || GOOGLE_SCOPE_READ
   });
 
   const handleGoogleClick = () => {
@@ -476,8 +481,9 @@ function useCloudLoginWithProvider(mode = 'login', stayLoggedIn = false, onError
         return;
       }
 
-      // User.Read (profile) + Files.ReadWrite so we can list/create folders and save files in OneDrive.
-      const loginScopes = ['User.Read', 'Files.ReadWrite'];
+      const loginScopes = Array.isArray(options.microsoftScopes) && options.microsoftScopes.length > 0
+        ? options.microsoftScopes
+        : MICROSOFT_SCOPE_READ;
       const msal = await ensureMsalReady();
       if (!msal) throw new Error('Microsofti sisselogimise teek ei laadinud. Lülita reklaamide või skriptide blokeerija välja sellel lehel või proovi teist brauserit või privaatakent.');
 
@@ -531,8 +537,8 @@ function useCloudLoginWithProvider(mode = 'login', stayLoggedIn = false, onError
   return { handleGoogleClick, handleMicrosoftClick, microsoftInProgress };
 }
 
-function CloudLoginButtonsInner({ mode = 'login', stayLoggedIn = false, onError }) {
-  const { handleGoogleClick, handleMicrosoftClick, microsoftInProgress } = useCloudLoginWithProvider(mode, stayLoggedIn, onError);
+function CloudLoginButtonsInner({ mode = 'login', stayLoggedIn = false, onError, googleScope = GOOGLE_SCOPE_READ, microsoftScopes = MICROSOFT_SCOPE_READ }) {
+  const { handleGoogleClick, handleMicrosoftClick, microsoftInProgress } = useCloudLoginWithProvider(mode, stayLoggedIn, onError, { googleScope, microsoftScopes });
   const t = getT();
   const label = mode === 'register' ? (t['auth.registerCloud'] || 'Või registreeru pilveteenusega') : (t['auth.loginOrRegisterCloud'] || 'Või logi sisse pilveteenusega');
   const googleEnabled = !!googleClientId;
@@ -597,6 +603,73 @@ function CloudLoginButtonsInner({ mode = 'login', stayLoggedIn = false, onError 
   );
 }
 
-export function CloudLoginButtons({ mode = 'login', stayLoggedIn = false, onError }) {
-  return <CloudLoginButtonsInner mode={mode} stayLoggedIn={stayLoggedIn} onError={onError} />;
+export function CloudLoginButtons({ mode = 'login', stayLoggedIn = false, onError, googleScope = GOOGLE_SCOPE_READ, microsoftScopes = MICROSOFT_SCOPE_READ }) {
+  return <CloudLoginButtonsInner mode={mode} stayLoggedIn={stayLoggedIn} onError={onError} googleScope={googleScope} microsoftScopes={microsoftScopes} />;
 }
+
+export async function requestGoogleReadPermission() {
+  if (!googleClientId || typeof window === 'undefined') throw new Error('Google Client ID puudub.');
+  await new Promise((resolve, reject) => {
+    const script = document.querySelector(`script[src="https://accounts.google.com/gsi/client"]`);
+    if (window.google?.accounts?.oauth2?.initTokenClient) return resolve();
+    if (script) {
+      const t = setInterval(() => {
+        if (window.google?.accounts?.oauth2?.initTokenClient) {
+          clearInterval(t);
+          resolve();
+        }
+      }, 100);
+      setTimeout(() => { clearInterval(t); reject(new Error('Google OAuth teek ei laadinud.')); }, 8000);
+      return;
+    }
+    const s = document.createElement('script');
+    s.src = 'https://accounts.google.com/gsi/client';
+    s.async = true;
+    s.onload = () => resolve();
+    s.onerror = () => reject(new Error('Google OAuth teek ei laadinud.'));
+    document.head.appendChild(s);
+  });
+  const response = await new Promise((resolve, reject) => {
+    const tokenClient = window.google.accounts.oauth2.initTokenClient({
+      client_id: googleClientId,
+      scope: GOOGLE_SCOPE_READ,
+      prompt: 'consent',
+      callback: (resp) => {
+        if (resp?.error) reject(new Error(resp.error_description || resp.error));
+        else resolve(resp);
+      },
+    });
+    tokenClient.requestAccessToken({ prompt: 'consent' });
+  });
+  const storage = getStorageForRead();
+  if (response?.access_token && storage) {
+    storage.setItem(KEY_GOOGLE_TOKEN, response.access_token);
+    storage.setItem(KEY_GOOGLE_EXPIRY, String(Date.now() + Number(response.expires_in || 3600) * 1000));
+    setGoogleGrantedScopes(response.scope || GOOGLE_SCOPE_READ);
+  }
+  return response;
+}
+
+export async function requestMicrosoftReadPermission() {
+  const msal = await ensureMsalReady();
+  if (!msal) throw new Error('Microsofti sisselogimise teek ei laadinud.');
+  await msal.handleRedirectPromise().catch(() => null);
+  const user = getLoggedInUser();
+  const email = String(user?.email || '').toLowerCase();
+  const accounts = msal.getAllAccounts();
+  const account = accounts.find((a) => String(a?.username || '').toLowerCase() === email) || accounts[0];
+  const tokenResponse = await msal.acquireTokenPopup({
+    scopes: MICROSOFT_SCOPE_READ,
+    account: account || undefined,
+    prompt: 'select_account',
+  });
+  const storage = getStorageForRead();
+  if (tokenResponse?.accessToken && storage) {
+    storage.setItem(KEY_MICROSOFT_TOKEN, tokenResponse.accessToken);
+    storage.setItem(KEY_MICROSOFT_EXPIRY, String(Date.now() + Number(tokenResponse.expiresIn || 3600) * 1000));
+    setMicrosoftGrantedScopes(tokenResponse.scopes || MICROSOFT_SCOPE_READ);
+  }
+  return tokenResponse;
+}
+
+export { GOOGLE_SCOPE_READ, GOOGLE_SCOPE_WRITE, MICROSOFT_SCOPE_READ, MICROSOFT_SCOPE_WRITE };

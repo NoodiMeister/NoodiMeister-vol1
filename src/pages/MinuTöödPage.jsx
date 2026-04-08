@@ -181,8 +181,8 @@ export default function MinuTöödPage() {
 
   const token = googleDrive.getStoredToken();
   const microsoftToken = authStorage.getStoredMicrosoftTokenFromAuth();
-  const hasGoogle = !!token;
-  const hasMicrosoft = !!microsoftToken;
+  const hasGoogle = !!token && authStorage.hasGoogleReadPermission();
+  const hasMicrosoft = !!microsoftToken && authStorage.hasMicrosoftReadPermission();
   const provider = user?.provider || (hasGoogle ? 'google' : hasMicrosoft ? 'microsoft' : null);
 
   const refreshFolders = useCallback(() => {

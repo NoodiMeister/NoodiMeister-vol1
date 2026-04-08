@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { UserPlus, Mail, Lock, User } from 'lucide-react';
-import { CloudLoginButtons } from '../components/CloudLogin';
+import { CloudLoginButtons, GOOGLE_SCOPE_READ, MICROSOFT_SCOPE_READ } from '../components/CloudLogin';
 import { AuthErrorBlock } from '../components/AuthErrorBlock';
 import { AppLogo } from '../components/AppLogo';
 import { formatAuthError } from '../utils/authError';
@@ -21,6 +21,7 @@ export default function RegisterPage() {
   const [errorDetail, setErrorDetail] = useState(null);
   const [stayLoggedIn, setStayLoggedIn] = useState(false);
   const [hashStrippedHint, setHashStrippedHint] = useState(false);
+  const [requestCloudReadPermission, setRequestCloudReadPermission] = useState(true);
 
   useEffect(() => {
     try {
@@ -202,8 +203,21 @@ export default function RegisterPage() {
             <CloudLoginButtons
               mode="register"
               stayLoggedIn={stayLoggedIn}
+              googleScope={requestCloudReadPermission ? GOOGLE_SCOPE_READ : 'openid email profile'}
+              microsoftScopes={requestCloudReadPermission ? MICROSOFT_SCOPE_READ : ['User.Read']}
               onError={(payload) => setError(payload.fullMessage, payload)}
             />
+            <label className="flex items-start gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={requestCloudReadPermission}
+                onChange={(e) => setRequestCloudReadPermission(e.target.checked)}
+                className="w-4 h-4 mt-0.5 rounded border-amber-300 dark:border-white/30 text-amber-600 focus:ring-amber-500 dark:focus:ring-white/30"
+              />
+              <span className="text-sm text-amber-800 dark:text-white">
+                Noodimeister küsib sinult luba, et avada sinu noodifailid otse Google Drive&apos;ist või OneDrive&apos;ist. Me ei muuda faile ilma sind teavitamata ega ilma sinu nõusolekuta.
+              </span>
+            </label>
             <p className="text-center text-sm text-amber-700 dark:text-white/80">
               Juba konto? <Link to="/login" className="font-semibold text-amber-800 dark:text-white hover:underline">Logi sisse</Link>
             </p>

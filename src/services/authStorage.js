@@ -9,6 +9,8 @@ export const KEY_GOOGLE_TOKEN = 'noodimeister-google-token';
 export const KEY_GOOGLE_EXPIRY = 'noodimeister-google-token-expiry';
 export const KEY_MICROSOFT_TOKEN = 'noodimeister-microsoft-token';
 export const KEY_MICROSOFT_EXPIRY = 'noodimeister-microsoft-token-expiry';
+export const KEY_GOOGLE_SCOPES = 'noodimeister-google-scopes';
+export const KEY_MICROSOFT_SCOPES = 'noodimeister-microsoft-scopes';
 export const KEY_GOOGLE_SAVE_FOLDER = 'noodimeister-google-save-folder';
 export const KEY_GOOGLE_SAVE_FOLDERS = 'noodimeister-google-save-folders';
 export const KEY_ONEDRIVE_SAVE_FOLDER = 'noodimeister-onedrive-save-folder';
@@ -233,6 +235,7 @@ export function clearGoogleAuthSession() {
       if (s) {
         s.removeItem(KEY_GOOGLE_TOKEN);
         s.removeItem(KEY_GOOGLE_EXPIRY);
+        s.removeItem(KEY_GOOGLE_SCOPES);
       }
     });
   } catch (_) {}
@@ -245,6 +248,7 @@ export function clearMicrosoftAuthSession() {
       if (s) {
         s.removeItem(KEY_MICROSOFT_TOKEN);
         s.removeItem(KEY_MICROSOFT_EXPIRY);
+        s.removeItem(KEY_MICROSOFT_SCOPES);
       }
     });
     clearMsalCache();
@@ -279,6 +283,73 @@ export function getStoredMicrosoftTokenFromAuth() {
     return null;
   }
   return token;
+}
+
+function normalizeScopeList(input) {
+  if (Array.isArray(input)) return input.map((v) => String(v || '').trim()).filter(Boolean);
+  if (typeof input === 'string') return input.split(/\s+/).map((v) => v.trim()).filter(Boolean);
+  return [];
+}
+
+export function setGoogleGrantedScopes(scopes) {
+  if (typeof window === 'undefined') return;
+  const list = normalizeScopeList(scopes);
+  try {
+    [window.sessionStorage, window.localStorage].forEach((s) => {
+      if (s) s.setItem(KEY_GOOGLE_SCOPES, JSON.stringify(list));
+    });
+  } catch (_) {}
+}
+
+export function setMicrosoftGrantedScopes(scopes) {
+  if (typeof window === 'undefined') return;
+  const list = normalizeScopeList(scopes);
+  try {
+    [window.sessionStorage, window.localStorage].forEach((s) => {
+      if (s) s.setItem(KEY_MICROSOFT_SCOPES, JSON.stringify(list));
+    });
+  } catch (_) {}
+}
+
+function getGrantedScopesByKey(key) {
+  const storage = getStorageForRead();
+  if (!storage) return [];
+  try {
+    const raw = storage.getItem(key);
+    const parsed = JSON.parse(raw || '[]');
+    return Array.isArray(parsed) ? parsed.map((v) => String(v || '').trim()).filter(Boolean) : [];
+  } catch (_) {
+    return [];
+  }
+}
+
+export function getGoogleGrantedScopes() {
+  return getGrantedScopesByKey(KEY_GOOGLE_SCOPES);
+}
+
+export function getMicrosoftGrantedScopes() {
+  return getGrantedScopesByKey(KEY_MICROSOFT_SCOPES);
+}
+
+export function hasGoogleReadPermission() {
+  const token = getStoredTokenFromAuth();
+  if (!token) return false;
+  const scopes = getGoogleGrantedScopes();
+  if (scopes.length === 0) return true;
+  return scopes.includes('https://www.googleapis.com/auth/drive.readonly')
+    || scopes.includes('https://www.googleapis.com/auth/drive')
+    || scopes.includes('https://www.googleapis.com/auth/drive.file');
+}
+
+export function hasMicrosoftReadPermission() {
+  const token = getStoredMicrosoftTokenFromAuth();
+  if (!token) return false;
+  const scopes = getMicrosoftGrantedScopes();
+  if (scopes.length === 0) return true;
+  return scopes.includes('Files.Read')
+    || scopes.includes('Files.ReadWrite')
+    || scopes.includes('Files.ReadWrite.All')
+    || scopes.includes('Files.ReadWrite.AppFolder');
 }
 
 /** Loeb legacy kausta ID kas localStorage või sessionStorage'ist (kumbki, kus väärtus on). */
@@ -612,8 +683,10 @@ export function clearAuth() {
         s.removeItem(KEY_LOGGED_IN);
         s.removeItem(KEY_GOOGLE_TOKEN);
         s.removeItem(KEY_GOOGLE_EXPIRY);
+        s.removeItem(KEY_GOOGLE_SCOPES);
         s.removeItem(KEY_MICROSOFT_TOKEN);
         s.removeItem(KEY_MICROSOFT_EXPIRY);
+        s.removeItem(KEY_MICROSOFT_SCOPES);
       }
     });
     clearMsalCache();

@@ -5,6 +5,8 @@ import {
   KEY_GOOGLE_EXPIRY,
   KEY_MICROSOFT_TOKEN,
   KEY_MICROSOFT_EXPIRY,
+  setGoogleGrantedScopes,
+  setMicrosoftGrantedScopes,
 } from './authStorage';
 
 const GOOGLE_GSI_SCRIPT_URL = 'https://accounts.google.com/gsi/client';
@@ -74,7 +76,7 @@ export async function refreshGoogleTokenSilently() {
       const timer = setTimeout(() => done(reject, new Error('Google token refresh timeout')), 12000);
       const tokenClient = window.google.accounts.oauth2.initTokenClient({
         client_id: clientId,
-        scope: 'email profile https://www.googleapis.com/auth/drive',
+        scope: 'openid email profile https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/drive.install',
         prompt: '',
         callback: (resp) => {
           clearTimeout(timer);
@@ -87,6 +89,7 @@ export async function refreshGoogleTokenSilently() {
 
     if (!tokenResponse?.access_token) throw new Error('Google token refresh ebaõnnestus.');
     storeGoogleToken(tokenResponse.access_token, tokenResponse.expires_in);
+    setGoogleGrantedScopes(tokenResponse.scope || 'openid email profile https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/drive.install');
     return tokenResponse.access_token;
   })();
   try {
@@ -143,7 +146,7 @@ export async function refreshMicrosoftTokenSilently() {
   if (microsoftRefreshPromise) return microsoftRefreshPromise;
   microsoftRefreshPromise = (async () => {
     const instance = await getMsalInstance();
-    const scopes = ['User.Read', 'Files.ReadWrite'];
+    const scopes = ['User.Read', 'Files.Read'];
     const userEmail = getLoggedInUser()?.email || '';
     const accounts = instance.getAllAccounts();
     const account = accounts.find((a) => String(a?.username || '').toLowerCase() === String(userEmail).toLowerCase()) || accounts[0];
@@ -159,6 +162,7 @@ export async function refreshMicrosoftTokenSilently() {
     }
     if (!tokenResponse?.accessToken) throw new Error('Microsoft token refresh ebaõnnestus.');
     storeMicrosoftToken(tokenResponse.accessToken, tokenResponse.expiresIn);
+    setMicrosoftGrantedScopes(tokenResponse.scopes || scopes);
     return tokenResponse.accessToken;
   })();
   try {

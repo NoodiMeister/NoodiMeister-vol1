@@ -20,7 +20,12 @@ import {
   clearOneDriveSaveFolder,
   updateOneDriveSaveFolderName,
   clearAuth,
+  clearGoogleAuthSession,
+  clearMicrosoftAuthSession,
+  hasGoogleReadPermission,
+  hasMicrosoftReadPermission,
 } from '../services/authStorage';
+import { requestGoogleReadPermission, requestMicrosoftReadPermission } from '../components/CloudLogin';
 import * as googleDrive from '../services/googleDrive';
 import {
   getOneDriveProfile,
@@ -76,6 +81,10 @@ export default function AccountPage() {
 
   const [googleToken, setGoogleToken] = useState(null);
   const [microsoftToken, setMicrosoftToken] = useState(null);
+  const [googleReadEnabled, setGoogleReadEnabled] = useState(false);
+  const [oneDriveReadEnabled, setOneDriveReadEnabled] = useState(false);
+  const [permissionBusy, setPermissionBusy] = useState({ google: false, onedrive: false });
+  const [permissionError, setPermissionError] = useState('');
   const [oneDriveProfile, setOneDriveProfile] = useState({ state: 'idle', data: null, error: null });
   const [oneDriveFiles, setOneDriveFiles] = useState({ state: 'idle', data: [], error: null });
   const [googleFiles, setGoogleFiles] = useState({ state: 'idle', data: [], error: null });
@@ -116,13 +125,17 @@ export default function AccountPage() {
     }
     try {
       setGoogleToken(getStoredTokenFromAuth());
+      setGoogleReadEnabled(hasGoogleReadPermission());
     } catch {
       setGoogleToken(null);
+      setGoogleReadEnabled(false);
     }
     try {
       setMicrosoftToken(getStoredMicrosoftTokenFromAuth());
+      setOneDriveReadEnabled(hasMicrosoftReadPermission());
     } catch {
       setMicrosoftToken(null);
+      setOneDriveReadEnabled(false);
     }
     setGoogleSaveFolderIdState(getGoogleSaveFolderId());
     setOneDriveSaveFolderIdState(getOneDriveSaveFolderId());
@@ -388,6 +401,59 @@ export default function AccountPage() {
     }
   };
 
+  const refreshPermissionState = useCallback(() => {
+    try {
+      setGoogleToken(getStoredTokenFromAuth());
+      setGoogleReadEnabled(hasGoogleReadPermission());
+    } catch {
+      setGoogleToken(null);
+      setGoogleReadEnabled(false);
+    }
+    try {
+      setMicrosoftToken(getStoredMicrosoftTokenFromAuth());
+      setOneDriveReadEnabled(hasMicrosoftReadPermission());
+    } catch {
+      setMicrosoftToken(null);
+      setOneDriveReadEnabled(false);
+    }
+  }, []);
+
+  const handleGooglePermissionToggle = useCallback(async (next) => {
+    setPermissionError('');
+    if (!next) {
+      clearGoogleAuthSession();
+      refreshPermissionState();
+      return;
+    }
+    setPermissionBusy((prev) => ({ ...prev, google: true }));
+    try {
+      await requestGoogleReadPermission();
+      refreshPermissionState();
+    } catch (e) {
+      setPermissionError(e?.message || (t['auth.loginError'] || 'Sisselogimise viga'));
+    } finally {
+      setPermissionBusy((prev) => ({ ...prev, google: false }));
+    }
+  }, [refreshPermissionState, t]);
+
+  const handleOneDrivePermissionToggle = useCallback(async (next) => {
+    setPermissionError('');
+    if (!next) {
+      clearMicrosoftAuthSession();
+      refreshPermissionState();
+      return;
+    }
+    setPermissionBusy((prev) => ({ ...prev, onedrive: true }));
+    try {
+      await requestMicrosoftReadPermission();
+      refreshPermissionState();
+    } catch (e) {
+      setPermissionError(e?.message || (t['auth.loginError'] || 'Sisselogimise viga'));
+    } finally {
+      setPermissionBusy((prev) => ({ ...prev, onedrive: false }));
+    }
+  }, [refreshPermissionState, t]);
+
   return (
     <div className="account-page min-h-screen flex flex-col">
       <header className="flex-shrink-0 border-b border-amber-200/60 dark:border-white/20 bg-white/70 dark:bg-black/90 backdrop-blur-sm">
@@ -507,7 +573,7 @@ export default function AccountPage() {
               <p className="text-sm text-amber-800 dark:text-white/90">
                 {t['account.myWorkFilesHint']}
               </p>
-              {googleToken && (
+              {googleToken && googleReadEnabled && (
                 <div className="space-y-2">
                   <h3 className="text-sm font-semibold text-amber-900 dark:text-white">{t['account.googleDriveSection']}</h3>
                   {googleFiles.state === 'loading' && (
@@ -548,7 +614,7 @@ export default function AccountPage() {
                   )}
                 </div>
               )}
-              {microsoftToken && (
+              {microsoftToken && oneDriveReadEnabled && (
                 <div className="space-y-2">
                   <h3 className="text-sm font-semibold text-amber-900 dark:text-white">{t['account.oneDriveSection']}</h3>
                   {oneDriveFiles.state === 'loading' && (
@@ -589,11 +655,45 @@ export default function AccountPage() {
                   )}
                 </div>
               )}
-              {!googleToken && !microsoftToken && (
+              {(!googleToken || !googleReadEnabled) && (!microsoftToken || !oneDriveReadEnabled) && (
                 <p className="text-sm text-amber-800 dark:text-white/80">
-                  {t['account.noCloudFiles']}
+                  {t['account.cloudOpenDisabledHint'] || 'Otse pilvest avamine on välja lülitatud. Ava fail Noodimeister.ee rakendusest või anna allpool lugemisõigus.'}
                 </p>
               )}
+            </section>
+
+            <section className="space-y-2">
+              <h2 className="text-lg font-semibold text-amber-900 dark:text-white flex items-center gap-2">
+                <Cloud className="w-5 h-5 text-amber-700 dark:text-white/80" /> {t['account.cloudPermissionsTitle'] || 'Pilve ligipääsu load'}
+              </h2>
+              <p className="text-sm text-amber-800 dark:text-white/90">
+                {t['account.cloudPermissionsHint'] || 'Luba on vajalik ainult failide avamiseks otse pilvest. Ilma loata ava fail Noodimeister.ee rakenduse seest.'}
+              </p>
+              <div className="space-y-2 rounded-xl border border-amber-200 dark:border-white/20 bg-amber-50/70 dark:bg-white/10 p-4">
+                <label className="flex items-center justify-between gap-3 text-sm text-amber-900 dark:text-white">
+                  <span>Google Drive: {t['account.cloudReadOpenLabel'] || 'Ava ja loe'}</span>
+                  <input
+                    type="checkbox"
+                    checked={googleReadEnabled}
+                    onChange={(e) => handleGooglePermissionToggle(e.target.checked)}
+                    disabled={permissionBusy.google}
+                    className="w-4 h-4 rounded border-amber-300 dark:border-white/30 text-amber-600"
+                  />
+                </label>
+                <label className="flex items-center justify-between gap-3 text-sm text-amber-900 dark:text-white">
+                  <span>OneDrive: {t['account.cloudReadOpenLabel'] || 'Ava ja loe'}</span>
+                  <input
+                    type="checkbox"
+                    checked={oneDriveReadEnabled}
+                    onChange={(e) => handleOneDrivePermissionToggle(e.target.checked)}
+                    disabled={permissionBusy.onedrive}
+                    className="w-4 h-4 rounded border-amber-300 dark:border-white/30 text-amber-600"
+                  />
+                </label>
+                {permissionError && (
+                  <p className="text-sm text-red-700 dark:text-red-400">{permissionError}</p>
+                )}
+              </div>
             </section>
 
             <section className="space-y-2">
