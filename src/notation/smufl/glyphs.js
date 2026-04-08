@@ -15,7 +15,8 @@ export const SMUFL_GLYPH = Object.freeze({
   cClef: '\uE05C',
   fClef: '\uE062',
 
-  // Accidentals (key signatures, etc.)
+  // Accidentals (key signatures, note accidentals — Leland stroke weight)
+  accidentalFlat: '\uE260',
   accidentalSharp: '\uE262',
 
   // Noteheads (for beamed notes or when stem length is custom)

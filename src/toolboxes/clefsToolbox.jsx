@@ -1,6 +1,6 @@
 /**
- * Noodivõtmete tööriistakast: JO, viiuli-, bassi-, alto/tenor võtme visuaalsed sümbolid.
- * Treble clef uses Leland (SMuFL gClef) for the toolbox button.
+ * Noodivõtmed (tööriistakasti ikoonid): JO, viiuli-, bassi-, C-võtme sümbolid.
+ * Viiulivõti: Leland (SMuFL gClef).
  */
 import React from 'react';
 import { JoClefSymbol } from '../components/ClefSymbols';

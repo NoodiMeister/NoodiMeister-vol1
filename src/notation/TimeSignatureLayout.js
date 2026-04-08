@@ -38,11 +38,22 @@ export const TIME_SIG_LAYOUT = {
 
 /** MuseScore-like visual spacing: place time signature after clef+key and before first measure content. */
 export const TIME_SIG_SPACING = {
-  AFTER_CLEF_PX: 6,
-  KEY_SIG_STEP_PX: 12,
+  /** Gap after clef column before first key-signature accidental (visual: tuck time sig after key). */
+  AFTER_CLEF_PX: 2,
+  /** Horizontal distance between consecutive key-signature accidentals (max 5px). */
+  KEY_SIG_STEP_PX: 5,
+  /** Rough right extent past last accidental center for SMuFL glyph (Leland ~1 em). */
+  KEY_SIG_GLYPH_TAIL_PX: 16,
   BEFORE_FIRST_MEASURE_PX: 6,
   FIGURE_BEFORE_FIRST_MEASURE_PX: 14,
 };
+
+/** Max horizontal span of key signature from clef’s right edge (for min measure start / layout). */
+export function estimateKeySignatureWidthPx(accidentalCount) {
+  const n = Math.max(0, Math.min(7, Math.floor(Number(accidentalCount) || 0)));
+  if (n === 0) return 0;
+  return TIME_SIG_SPACING.AFTER_CLEF_PX + (n - 1) * TIME_SIG_SPACING.KEY_SIG_STEP_PX + TIME_SIG_SPACING.KEY_SIG_GLYPH_TAIL_PX;
+}
 
 export function getTraditionalTimeSignatureX({
   staffLeft = 10,
@@ -62,4 +73,42 @@ export function getTraditionalTimeSignatureX({
 export function getFigureTimeSignatureX(measureStartX, fallbackX = 45) {
   if (typeof measureStartX !== 'number' || !Number.isFinite(measureStartX)) return fallbackX;
   return Math.max(12, measureStartX - TIME_SIG_SPACING.FIGURE_BEFORE_FIRST_MEASURE_PX);
+}
+
+/** Pedagoogiline (suhteline) võtmemärk: horisontaalne ulatus pärast võtmekolonni algust — sama arvutus mis TraditionalNotationView. */
+const PEDAGOGICAL_REL_KEY_SIG_FIRST_OFFSET_PX = -4;
+
+export function getPedagogicalRelativeKeySignatureWidthPx(ksCount, ksFontSize) {
+  const n = Math.max(0, Math.floor(Number(ksCount) || 0));
+  if (n === 0) return 0;
+  const fs = Number(ksFontSize) || 16;
+  return (
+    PEDAGOGICAL_REL_KEY_SIG_FIRST_OFFSET_PX +
+    Math.max(0, n - 1) * TIME_SIG_SPACING.KEY_SIG_STEP_PX +
+    Math.round(fs * 0.35)
+  );
+}
+
+/**
+ * Pedagoogiline režiim: taktimõõt pärast (valikuline) trad. võtit, võtmemärki ja JO-võtit.
+ * clefX = esimese sümboli (trad. võti või võtmemärk või JO) vasak serv.
+ */
+export function getPedagogicalTimeSignatureX({
+  clefX,
+  clefColumnWidth = 45,
+  showTraditionalClef,
+  keySigCount = 0,
+  ksFontSize,
+  joClefWidthPx,
+  measureStartX,
+}) {
+  let x = clefX;
+  if (showTraditionalClef) x += clefColumnWidth;
+  x += getPedagogicalRelativeKeySignatureWidthPx(keySigCount, ksFontSize);
+  x += Math.max(0, Number(joClefWidthPx) || 0);
+  x += TIME_SIG_SPACING.AFTER_CLEF_PX;
+  if (typeof measureStartX === 'number' && Number.isFinite(measureStartX)) {
+    return Math.min(x, Math.max(0, measureStartX - TIME_SIG_SPACING.BEFORE_FIRST_MEASURE_PX));
+  }
+  return x;
 }

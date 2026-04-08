@@ -1497,6 +1497,15 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   const [mouseInsertDraft, setMouseInsertDraft] = useState(null); // { startBeat, currentBeat, pitch, octave, durationLabel }
   const [activeToolbox, setActiveToolbox] = useState(null);
   const [selectedOptionIndex, setSelectedOptionIndex] = useState(0);
+  /** Helistikute tööriistakast: täielik ruudustik lahtis / kokku pandud (vähem vertikaalset ruumi). */
+  const [keySignaturesListExpanded, setKeySignaturesListExpanded] = useState(true);
+  useEffect(() => {
+    if (activeToolbox !== 'keySignatures') return;
+    const opts = toolboxes.keySignatures?.options;
+    if (!opts?.length) return;
+    const kIdx = opts.findIndex((o) => o.value === keySignature);
+    if (kIdx >= 0) setSelectedOptionIndex(kIdx);
+  }, [activeToolbox, keySignature, toolboxes]);
   const [scoreDragOver, setScoreDragOver] = useState(false);
   // Nähtavad tööriistad: millised tööriistakastid on külgribas nähtavad (seotud notatsiooni sisestusmeetodiga)
   const [visibleToolIds, setVisibleToolIds] = useState(() => TOOLBOX_ORDER.slice());
@@ -7068,8 +7077,16 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
           setCopyInstrumentConfirm(null);
           return;
         }
-        setActiveToolbox(activeToolbox === newToolbox ? null : newToolbox);
-        setSelectedOptionIndex(0);
+        const nextTb = activeToolbox === newToolbox ? null : newToolbox;
+        setActiveToolbox(nextTb);
+        if (nextTb === 'keySignatures') {
+          const opts = toolboxes.keySignatures?.options;
+          const kIdx = opts?.findIndex((o) => o.value === keySignature) ?? -1;
+          setSelectedOptionIndex(kIdx >= 0 ? kIdx : 0);
+          setKeySignaturesListExpanded(true);
+        } else {
+          setSelectedOptionIndex(0);
+        }
         return;
       }
 
@@ -10814,17 +10831,24 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       {(() => {
         const showTopToolDrawer = noteInputMode || (activeToolbox && toolboxes[activeToolbox]) || (pianoStripVisible && !activeToolbox);
         const isRhythmWideInNMode = noteInputMode && (activeToolbox === 'rhythm' || !activeToolbox);
+        const isKeySignaturesToolbox = activeToolbox === 'keySignatures';
         return (
           <div
             className={`flex-shrink-0 flex justify-center border-t-2 border-amber-300 bg-amber-100/80 transition-all duration-200 ease-out origin-top ${
-              showTopToolDrawer ? 'max-h-56 py-2 opacity-100 translate-y-0' : 'max-h-0 py-0 opacity-0 -translate-y-2 pointer-events-none'
+              showTopToolDrawer
+                ? isKeySignaturesToolbox
+                  ? 'max-h-[min(72vh,30rem)] py-2 opacity-100 translate-y-0'
+                  : 'max-h-56 py-2 opacity-100 translate-y-0'
+                : 'max-h-0 py-0 opacity-0 -translate-y-2 pointer-events-none'
             }`}
           >
             <div
-              className={`px-3 py-2 rounded-lg bg-gradient-to-b from-amber-100 to-amber-50 border border-amber-300 shadow-inner overflow-auto max-h-[7.5rem] transition-all duration-200 ${
+              className={`px-3 py-2 rounded-lg bg-gradient-to-b from-amber-100 to-amber-50 border border-amber-300 shadow-inner overflow-auto transition-all duration-200 ${
                 isRhythmWideInNMode
-                  ? 'w-[min(100vw-2rem,78rem)]'
-                  : 'w-max max-w-[min(100vw-2rem,28rem)]'
+                  ? 'w-[min(100vw-2rem,78rem)] max-h-[7.5rem]'
+                  : isKeySignaturesToolbox
+                    ? 'w-[min(100vw-2rem,44rem)] max-h-[min(68vh,28rem)]'
+                    : 'w-max max-w-[min(100vw-2rem,28rem)] max-h-[7.5rem]'
               }`}
             >
             {(noteInputMode || activeToolbox === 'rhythm') && toolboxes.rhythm ? (
@@ -11207,39 +11231,107 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                     </div>
                   )}
                   {activeToolbox === 'clefs' && toolboxes.clefs?.options && (
-                    <div className="grid grid-cols-2 gap-2" role="group" aria-label={t('toolbox.clefs')}>
-                      {(toolboxes.clefs.options.filter((o) => o.value !== 'jo' || notationMode === 'vabanotatsioon')).map((option) => {
-                        const idx = toolboxes.clefs.options.findIndex((opt) => opt.id === option.id);
-                        const isClefActive = option.value === 'jo' ? notationMode === 'vabanotatsioon' : notationMode === 'traditional' && option.value === clefType;
-                        const boxSize = 56;
-                        const center = boxSize / 2;
-                        return (
-                          <button
-                            key={option.id}
-                            type="button"
-                            onClick={() => handleToolboxSelection(idx)}
-                            aria-pressed={isClefActive}
-                            aria-label={option.label}
-                            className={`min-w-[56px] min-h-[56px] rounded-lg flex flex-col items-center justify-center gap-0.5 p-2 transition-all border-2 ${isClefActive ? 'border-[var(--primary-color)] bg-amber-100 shadow-md' : 'border-amber-200 bg-white hover:bg-amber-50 hover:border-amber-300'}`}
-                          >
-                            <svg viewBox={`0 0 ${boxSize} ${boxSize}`} className="w-12 h-12 shrink-0 text-amber-900" aria-hidden="true">
-                              {option.value === 'jo' && <JoClefSymbol x={8} centerY={center} staffSpacing={6} stroke="currentColor" />}
-                              {option.value === 'treble' && <TrebleClefSymbol x={center} y={center} height={36} fill="currentColor" />}
-                              {option.value === 'bass' && <BassClefSymbol x={center} y={center} height={28} fill="currentColor" staffSpace={6} />}
-                              {option.value === 'alto' && (
-                                <text x={center} y={center + 2} textAnchor="middle" dominantBaseline="middle" fontSize="28" fontFamily="serif" fontWeight="bold" fill="currentColor">C</text>
-                              )}
-                            </svg>
-                            <span className="text-xs font-medium text-amber-900 truncate max-w-full">{option.label}</span>
-                          </button>
-                        );
-                      })}
+                    <>
+                      <div className="grid grid-cols-2 gap-2" role="group" aria-label={t('toolbox.clefs')}>
+                        {(toolboxes.clefs.options.filter((o) => o.value !== 'jo' || notationMode === 'vabanotatsioon')).map((option) => {
+                          const idx = toolboxes.clefs.options.findIndex((opt) => opt.id === option.id);
+                          const isClefActive = option.value === 'jo' ? notationMode === 'vabanotatsioon' : notationMode === 'traditional' && option.value === clefType;
+                          const boxSize = 56;
+                          const center = boxSize / 2;
+                          return (
+                            <button
+                              key={option.id}
+                              type="button"
+                              onClick={() => handleToolboxSelection(idx)}
+                              aria-pressed={isClefActive}
+                              aria-label={option.label}
+                              className={`min-w-[56px] min-h-[56px] rounded-lg flex flex-col items-center justify-center gap-0.5 p-2 transition-all border-2 ${isClefActive ? 'border-[var(--primary-color)] bg-amber-100 shadow-md' : 'border-amber-200 bg-white hover:bg-amber-50 hover:border-amber-300'}`}
+                            >
+                              <svg viewBox={`0 0 ${boxSize} ${boxSize}`} className="w-12 h-12 shrink-0 text-amber-900" aria-hidden="true">
+                                {option.value === 'jo' && <JoClefSymbol x={8} centerY={center} staffSpacing={6} stroke="currentColor" />}
+                                {option.value === 'treble' && <TrebleClefSymbol x={center} y={center} height={36} fill="currentColor" />}
+                                {option.value === 'bass' && <BassClefSymbol x={center} y={center} height={28} fill="currentColor" staffSpace={6} />}
+                                {option.value === 'alto' && (
+                                  <text x={center} y={center + 2} textAnchor="middle" dominantBaseline="middle" fontSize="28" fontFamily="serif" fontWeight="bold" fill="currentColor">C</text>
+                                )}
+                              </svg>
+                              <span className="text-xs font-medium text-amber-900 truncate max-w-full">{option.label}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                      {notationMode === 'vabanotatsioon' && (
+                        <div className="w-full mt-3 pt-3 border-t border-amber-200">
+                          <label className="flex items-start gap-2 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              className="mt-0.5 rounded border-amber-400 text-amber-600 focus:ring-amber-500"
+                              checked={relativeNotationShowTraditionalClef}
+                              onChange={(e) => { dirtyRef.current = true; setRelativeNotationShowTraditionalClef(e.target.checked); }}
+                            />
+                            <span className="text-xs font-medium text-amber-900 leading-snug">{t('toolbox.pedagogicalShowTrebleBassClef')}</span>
+                          </label>
+                        </div>
+                      )}
+                    </>
+                  )}
+                  {activeToolbox === 'keySignatures' && toolboxes.keySignatures?.options && (
+                    <div className="w-full space-y-2">
+                      {notationMode === 'vabanotatsioon' && (
+                        <div className="pb-2 border-b border-amber-200">
+                          <label className="flex items-start gap-2 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              className="mt-0.5 rounded border-amber-400 text-amber-600 focus:ring-amber-500"
+                              checked={relativeNotationShowKeySignature}
+                              onChange={(e) => { dirtyRef.current = true; setRelativeNotationShowKeySignature(e.target.checked); }}
+                            />
+                            <span className="text-xs font-medium text-amber-900 leading-snug">{t('toolbox.pedagogicalShowKeySignatureMarks')}</span>
+                          </label>
+                        </div>
+                      )}
+                      <button
+                        type="button"
+                        className="flex w-full items-center justify-between gap-2 rounded-lg border border-amber-200 bg-white/90 px-2 py-1.5 text-left hover:bg-amber-50"
+                        onClick={() => setKeySignaturesListExpanded((e) => !e)}
+                        aria-expanded={keySignaturesListExpanded}
+                        title={keySignaturesListExpanded ? t('toolbox.keySignaturesCollapsePicker') : t('toolbox.keySignaturesExpandPicker')}
+                      >
+                        <span className="text-xs font-semibold text-amber-900">{t('toolbox.keySignaturesPickerLabel')}</span>
+                        <span className="flex min-w-0 flex-1 items-center justify-end gap-1">
+                          <span className="truncate text-xs font-medium text-amber-800">
+                            {toolboxes.keySignatures.options.find((o) => o.value === keySignature)?.label ?? keySignature}
+                          </span>
+                          <ChevronDown className={`h-4 w-4 shrink-0 text-amber-700 transition-transform ${keySignaturesListExpanded ? 'rotate-180' : ''}`} aria-hidden />
+                        </span>
+                      </button>
+                      {keySignaturesListExpanded && (
+                        <div className="grid w-full grid-cols-3 gap-1.5 sm:grid-cols-4" role="group" aria-label={t('toolbox.keySignaturesPickerLabel')}>
+                          {toolboxes.keySignatures.options.map((option, idx) => {
+                            const isActive = option.value === keySignature;
+                            return (
+                              <button
+                                key={option.id}
+                                type="button"
+                                onClick={() => handleToolboxSelection(idx)}
+                                className={`flex min-h-[2.25rem] items-center justify-center gap-1 rounded px-2 py-1.5 text-sm transition-all ${
+                                  isActive ? 'bg-amber-200 ring-2 ring-[var(--primary-color)]' : 'bg-white/80 hover:bg-amber-100'
+                                } border border-amber-200`}
+                              >
+                                <span className="font-medium text-amber-900">{option.label}</span>
+                                {isActive && <Check className="h-3.5 w-3.5 shrink-0 text-amber-600" />}
+                                {option.key != null && <kbd className="ml-0.5 rounded bg-amber-200/80 px-1 font-mono text-[10px] text-amber-900">{option.key}</kbd>}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
                   )}
                   {activeToolbox === 'repeatsJumps' && (
                     <p className="text-xs text-amber-700 mt-1 mb-2 px-1" title={t('repeat.hint')}>{t('repeat.hint')}</p>
                   )}
-                  {activeToolbox && activeToolbox !== 'pianoKeyboard' && activeToolbox !== 'rhythm' && activeToolbox !== 'textBox' && activeToolbox !== 'clefs' && activeToolbox !== 'instruments' && toolboxes[activeToolbox]?.options?.map((option, idx) => {
+                  {activeToolbox && activeToolbox !== 'pianoKeyboard' && activeToolbox !== 'rhythm' && activeToolbox !== 'textBox' && activeToolbox !== 'clefs' && activeToolbox !== 'instruments' && activeToolbox !== 'keySignatures' && toolboxes[activeToolbox]?.options?.map((option, idx) => {
                     if ((activeToolbox === 'instruments' || activeToolbox === 'repeatsJumps') && option.type === 'category') return <div key={option.id} className="pt-1.5 pb-0.5 px-1.5 text-xs font-bold text-amber-800 uppercase tracking-wide border-b border-amber-200 first:pt-0">{option.label}</div>;
                     const isActive = activeToolbox === 'timeSignature' && option.value === 'mode-toggle' ? false : activeToolbox === 'keySignatures' ? option.value === keySignature : activeToolbox === 'transpose' ? option.value === keySignature : activeToolbox === 'notehead' ? (option.value.startsWith('shape:') ? noteheadShape === option.value.slice(7) : option.value === notationMode) : activeToolbox === 'instruments' ? option.type === 'option' && option.value === instrument : activeToolbox === 'layout' ? (option.value === 'gridOnly' && notationStyle === 'FIGURENOTES') || (option.id === 'staff-5' && notationStyle === 'TRADITIONAL' && staffLines === 5) || (option.id === 'staff-1' && notationStyle === 'TRADITIONAL' && staffLines === 1) || (option.id?.startsWith('spacing-') && pixelsPerBeat === option.value) : selectedOptionIndex === idx;
                     return (
@@ -11900,10 +11992,19 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                         setActiveToolbox(null);
                         return false;
                       });
+                      setSelectedOptionIndex(0);
                     } else {
-                      setActiveToolbox(activeToolbox === id ? null : id);
+                      const nextOpen = activeToolbox === id ? null : id;
+                      setActiveToolbox(nextOpen);
+                      if (nextOpen === 'keySignatures') {
+                        const opts = toolboxes.keySignatures?.options;
+                        const kIdx = opts?.findIndex((o) => o.value === keySignature) ?? -1;
+                        setSelectedOptionIndex(kIdx >= 0 ? kIdx : 0);
+                        setKeySignaturesListExpanded(true);
+                      } else {
+                        setSelectedOptionIndex(0);
+                      }
                     }
-                    setSelectedOptionIndex(0);
                   }}
                   className={`w-full rounded-lg text-left transition-all flex items-center justify-between ${
                     (id === 'pianoKeyboard' ? pianoStripVisible : activeToolbox === id)

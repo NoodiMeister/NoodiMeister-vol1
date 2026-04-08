@@ -1,7 +1,6 @@
 /**
- * ClefToolbox – noodivõtme valija.
- * Viiulivõti ja bassivõti on alati nähtavad.
- * JO-võti ilmub ainult pedagoogilises režiimis (notationMode === 'pedagogical').
+ * ClefToolbox – noodivõtme valija (eraldi komponent; põhirakenduses on samad valikud tööriistakastis „Noodivõtmed“).
+ * Viiulivõti ja bassivõti on vaikimisi nähtavad; JO on pedagoogilises režiimis.
  */
 import React from 'react';
 import { useNotationOptional } from '../store/NotationContext';
@@ -32,7 +31,7 @@ export function ClefToolbox({
     <div
       className={`clef-selector grid grid-cols-2 gap-2 ${className}`}
       role="group"
-      aria-label="Noodivõtid"
+      aria-label="Noodivõtmed"
       {...rest}
     >
       <button

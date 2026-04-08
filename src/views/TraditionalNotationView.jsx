@@ -22,7 +22,14 @@ import {
   smuflPrecomposedTypeForDurationLabel,
   SMUFL_MUSIC_FONT_FAMILY,
 } from '../notation/smufl/glyphs';
-import { TIME_SIG_LAYOUT, getTraditionalTimeSignatureX } from '../notation/TimeSignatureLayout';
+import {
+  TIME_SIG_LAYOUT,
+  TIME_SIG_SPACING,
+  getTraditionalTimeSignatureX,
+  estimateKeySignatureWidthPx,
+  getPedagogicalTimeSignatureX,
+  getPedagogicalRelativeKeySignatureWidthPx,
+} from '../notation/TimeSignatureLayout';
 import { measureLengthInQuarterBeats } from '../musical/timeSignature';
 import {
   getStaffLinePositions,
@@ -78,6 +85,8 @@ import {
 } from '../notation/repeatBarlineResolve';
 
 const LAYOUT = { MARGIN_LEFT: 60, CLEF_WIDTH: 45, MEASURE_MIN_WIDTH: 28 };
+/** First key-sig accidental center X = clefX + CLEF_WIDTH + offset (negative = closer to clef). */
+const KEY_SIG_FIRST_CENTER_OFFSET_PX = -4;
 
 /** Leland thinThickBarlineSeparation: kaks selget joont (õhuke, siis paks), keskpunktid taktirea lõpus. */
 function getFinalDoubleBarlineCentersX (rightEdgeX, staffSpace) {
@@ -99,17 +108,17 @@ const TREBLE_CLEF_LINE_INDEX = 2; // 0=top line ... 4=bottom line
 const OUT_OF_RANGE_COLOR = '#dc2626';
 
 function getKeySignatureInfo(keySignature) {
-  if (!keySignature || keySignature === 'C') return { count: 0, symbol: null };
+  if (!keySignature || keySignature === 'C') return { count: 0, kind: null };
   const sharpCount = KEY_SIGNATURE_COUNT_BY_KEY.sharps[keySignature] || 0;
-  if (sharpCount > 0) return { count: sharpCount, symbol: '♯' };
+  if (sharpCount > 0) return { count: sharpCount, kind: 'sharp' };
   const flatCount = KEY_SIGNATURE_COUNT_BY_KEY.flats[keySignature] || 0;
-  if (flatCount > 0) return { count: flatCount, symbol: '♭' };
-  return { count: 0, symbol: null };
+  if (flatCount > 0) return { count: flatCount, kind: 'flat' };
+  return { count: 0, kind: null };
 }
 
-function getKeySignatureStaffPosition(clef, symbol, idx) {
+function getKeySignatureStaffPosition(clef, kind, idx) {
   const safeClef = clef === 'bass' || clef === 'alto' || clef === 'tenor' ? clef : 'treble';
-  if (symbol === '♯') {
+  if (kind === 'sharp') {
     const byClef = KEY_SIGNATURE_STAFF_POSITIONS.sharps[safeClef] || KEY_SIGNATURE_STAFF_POSITIONS.sharps.treble;
     return byClef[idx] ?? 0;
   }
@@ -470,6 +479,7 @@ export function TraditionalNotationView({
   onRemoveRepeatMark, // (measureIndex, markType: 'repeatStart'|'repeatEnd'|'segno'|'coda'|'volta1'|'volta2') => void
 }) {
   const spacing = staffSpaceProp ?? STAFF_SPACE;
+  const isVabanotatsioon = notationMode === 'vabanotatsioon';
   const centerY = timelineHeight / 2;
   const timeSigTextColor = themeColors?.textColor ?? '#333';
   const timeSigNoteFill = themeColors?.noteFill ?? '#333';
@@ -497,7 +507,19 @@ export function TraditionalNotationView({
   const staffLeft = (isFirstInBraceGroup && braceGroupSize >= 2) ? STAFF_LEFT_WITH_BRACE : STAFF_LEFT_WITHOUT_BRACE;
   const clefX = staffLeft + GAP_BEFORE_CLEF_PX;
   const timeSigWidthPx = 28;
-  const minContentStart = staffLeft + 1 + LAYOUT.CLEF_WIDTH + 1 + 24 + timeSigWidthPx + 2;
+  const keySigWidthWorstCase = estimateKeySignatureWidthPx(7);
+  const ksFontForLayout = getGlyphFontSize(spacing);
+  const pedagogicalLeftPrefixWorstCase =
+    LAYOUT.CLEF_WIDTH +
+    getPedagogicalRelativeKeySignatureWidthPx(7, ksFontForLayout) +
+    getJoClefPixelWidth(spacing);
+  const traditionalLeftPrefixWorstCase = LAYOUT.CLEF_WIDTH + keySigWidthWorstCase;
+  const minContentStart =
+    staffLeft +
+    1 +
+    (isVabanotatsioon ? pedagogicalLeftPrefixWorstCase : traditionalLeftPrefixWorstCase) +
+    timeSigWidthPx +
+    2;
   const effectiveMarginLeft = Math.max(marginLeft, minContentStart);
 
   // Measure layout for getBeatFromX (first system only; notation starts at effectiveMarginLeft after clef/key/time sig)
@@ -591,7 +613,6 @@ export function TraditionalNotationView({
 
   // JO-võti: ankur ja abijooned. Kordub IGA rea alguses.
   const joKeyY = getYFromStaffPosition(joClefStaffPosition, centerY, 5, spacing);
-  const isVabanotatsioon = notationMode === 'vabanotatsioon';
   const showTraditionalKeySignature = !isVabanotatsioon && !!keySignature && keySignature !== 'C';
   const showRelativeKeySignature = isVabanotatsioon && relativeNotationShowKeySignature && !!keySignature && keySignature !== 'C';
   const shouldDrawAnyKeySignature = showTraditionalKeySignature || showRelativeKeySignature;
@@ -770,6 +791,33 @@ export function TraditionalNotationView({
                         const joClefCenterY = staffY + joKeyY;
                         const { above: ledgerAbove, below: ledgerBelow } = getLedgerLineCountExact(joKeyY, firstLineY, lastLineY, spacing);
                         const joClefWidthPx = getJoClefPixelWidth(spacing);
+                        /* Järjekord: trad. võti (kui lubatud) → võtmemärk (kui lubatud) → JO-võti → taktimõõt (eraldi kiht). */
+                        if (relativeNotationShowTraditionalClef) {
+                          const tradY = clefType === 'treble' ? staffY + trebleGLine : clefType === 'bass' ? staffY + bassFLine : clefType === 'tenor' ? staffY + cClefTenorLine : staffY + cClefAltoLine;
+                          g.push(<StaffClefSymbol key="trad-clef" x={currentX} y={tradY} height={clefFontSize} clefType={clefType} fill="#000" staffSpace={spacing} />);
+                          currentX += LAYOUT.CLEF_WIDTH;
+                        }
+                        if (relativeNotationShowKeySignature && keySignature && keySignature !== 'C') {
+                          const sharpCount = { G: 1, D: 2, A: 3, E: 4, B: 5 }[keySignature] || 0;
+                          const flatCount = { F: 1, Bb: 2, Eb: 3 }[keySignature] || 0;
+                          const ksKind = flatCount ? 'flat' : 'sharp';
+                          const ksGlyph = ksKind === 'flat' ? SMUFL_GLYPH.accidentalFlat : SMUFL_GLYPH.accidentalSharp;
+                          const ksCount = Math.max(sharpCount, flatCount);
+                          const ksFont = getGlyphFontSize(spacing);
+                          for (let i = 0; i < ksCount; i++) {
+                            g.push(
+                              <SmuflGlyph
+                                key={`ks-${i}`}
+                                x={currentX + KEY_SIG_FIRST_CENTER_OFFSET_PX + i * TIME_SIG_SPACING.KEY_SIG_STEP_PX}
+                                y={staffY + centerY - 8}
+                                glyph={ksGlyph}
+                                fontSize={ksFont}
+                                fill="#1a1a1a"
+                              />
+                            );
+                          }
+                          currentX += KEY_SIG_FIRST_CENTER_OFFSET_PX + Math.max(0, ksCount - 1) * TIME_SIG_SPACING.KEY_SIG_STEP_PX + Math.round(ksFont * 0.35);
+                        }
                         const joClefEl = (
                           <JoClefSymbol
                             x={currentX}
@@ -794,25 +842,10 @@ export function TraditionalNotationView({
                           >
                             {joClefEl}
                             {joClefFocused && isFirstSystem && (
-                              <rect x={currentX - 2} y={joClefCenterY - spacing * 2 - 4} width={24} height={spacing * 4 + 8} fill="none" stroke="#0ea5e9" strokeWidth="2" strokeDasharray="4 2" rx="2" />
+                              <rect x={currentX - 2} y={joClefCenterY - spacing * 2 - 4} width={joClefWidthPx + 4} height={spacing * 4 + 8} fill="none" stroke="#0ea5e9" strokeWidth="2" strokeDasharray="4 2" rx="2" />
                             )}
                           </g>
                         );
-                        currentX += LAYOUT.CLEF_WIDTH;
-                        if (relativeNotationShowTraditionalClef) {
-                          const tradY = clefType === 'treble' ? staffY + trebleGLine : clefType === 'bass' ? staffY + bassFLine : clefType === 'tenor' ? staffY + cClefTenorLine : staffY + cClefAltoLine;
-                          g.push(<StaffClefSymbol key="trad-clef" x={currentX} y={tradY} height={clefFontSize} clefType={clefType} fill="#000" staffSpace={spacing} />);
-                          currentX += LAYOUT.CLEF_WIDTH;
-                        }
-                        if (relativeNotationShowKeySignature && keySignature && keySignature !== 'C') {
-                          const sharpCount = { G: 1, D: 2, A: 3, E: 4, B: 5 }[keySignature] || 0;
-                          const flatCount = { F: 1, Bb: 2, Eb: 3 }[keySignature] || 0;
-                          const sym = flatCount ? '♭' : '♯';
-                          for (let i = 0; i < (sharpCount || flatCount); i++) {
-                            g.push(<text key={`ks-${i}`} x={currentX + i * 10} y={staffY + centerY - 8} fontSize="20" fontFamily="serif" fill="#333" textAnchor="middle" dominantBaseline="middle">{sym}</text>);
-                          }
-                          currentX += Math.max(sharpCount, flatCount) * 12;
-                        }
                         return <g>{g}</g>;
                       }
                       const clefY = clefType === 'treble' ? staffY + trebleGLine : clefType === 'bass' ? staffY + bassFLine : clefType === 'tenor' ? staffY + cClefTenorLine : staffY + cClefAltoLine;
@@ -828,25 +861,23 @@ export function TraditionalNotationView({
                           staffSpace={spacing}
                         />
                       );
-                      if (showTraditionalKeySignature && keySignatureInfo.count > 0 && keySignatureInfo.symbol) {
-                        const keySigStartX = clefX + LAYOUT.CLEF_WIDTH;
-                        const keySigDx = Math.max(8, spacing * 1.0);
+                      if (showTraditionalKeySignature && keySignatureInfo.count > 0 && keySignatureInfo.kind) {
+                        const keySigStartX = clefX + LAYOUT.CLEF_WIDTH + KEY_SIG_FIRST_CENTER_OFFSET_PX;
+                        const keySigGlyph =
+                          keySignatureInfo.kind === 'flat' ? SMUFL_GLYPH.accidentalFlat : SMUFL_GLYPH.accidentalSharp;
+                        const ksFontSize = getGlyphFontSize(spacing);
                         for (let i = 0; i < keySignatureInfo.count; i += 1) {
-                          const staffPos = getKeySignatureStaffPosition(clefType, keySignatureInfo.symbol, i);
+                          const staffPos = getKeySignatureStaffPosition(clefType, keySignatureInfo.kind, i);
                           const glyphY = staffY + getYFromStaffPosition(staffPos, centerY, staffLines, spacing);
                           symbols.push(
-                            <text
+                            <SmuflGlyph
                               key={`ks-trad-${sys.systemIndex}-${staffIndex}-${i}`}
-                              x={keySigStartX + i * keySigDx}
+                              x={keySigStartX + i * TIME_SIG_SPACING.KEY_SIG_STEP_PX}
                               y={glyphY}
-                              fontSize={Math.round(spacing * 1.8)}
-                              fontFamily="serif"
-                              fill="#333"
-                              textAnchor="middle"
-                              dominantBaseline="middle"
-                            >
-                              {keySignatureInfo.symbol}
-                            </text>
+                              glyph={keySigGlyph}
+                              fontSize={ksFontSize}
+                              fill="#1a1a1a"
+                            />
                           );
                         }
                       }
@@ -874,13 +905,24 @@ export function TraditionalNotationView({
                   {sys.systemIndex === 0 && staffIndex === 0 && (
                     (() => {
                       const keySigCount = shouldDrawAnyKeySignature ? keySignatureInfo.count : 0;
-                      const timeSigX = getTraditionalTimeSignatureX({
-                        staffLeft,
-                        clefWidth: LAYOUT.CLEF_WIDTH,
-                        keySigCount,
-                        extraLeft: 0,
-                        measureStartX: effectiveMarginLeft,
-                      });
+                      const ksFont = getGlyphFontSize(spacing);
+                      const timeSigX = isVabanotatsioon
+                        ? getPedagogicalTimeSignatureX({
+                            clefX,
+                            clefColumnWidth: LAYOUT.CLEF_WIDTH,
+                            showTraditionalClef: relativeNotationShowTraditionalClef,
+                            keySigCount: showRelativeKeySignature ? keySignatureInfo.count : 0,
+                            ksFontSize: ksFont,
+                            joClefWidthPx: getJoClefPixelWidth(spacing),
+                            measureStartX: effectiveMarginLeft,
+                          })
+                        : getTraditionalTimeSignatureX({
+                            staffLeft,
+                            clefWidth: LAYOUT.CLEF_WIDTH,
+                            keySigCount,
+                            extraLeft: 0,
+                            measureStartX: effectiveMarginLeft,
+                          });
                       return (
                         <g transform={`translate(${timeSigX}, ${staffY})`}>{renderTimeSignature(timeSignature, timeSignatureMode, centerY, timeSigTextColor, timeSigNoteFill, 0)}</g>
                       );
