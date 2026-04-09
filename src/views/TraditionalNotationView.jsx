@@ -69,6 +69,8 @@ import {
 import { renderFiguredBassFigurations } from '../notation/figuredBassFigurations';
 import { hasBundledOptionalFont } from '../export/exportFontAssets';
 import { getAccidentalForPitchInKey } from '../utils/notationConstants';
+import { getSchoolHandbellColor } from '../notation/PedagogicalLogic';
+import { HandbellIcon } from '../components/icons/HandbellIcon';
 import {
   KEY_SIGNATURE_COUNT_BY_KEY,
   KEY_SIGNATURE_STAFF_POSITIONS,
@@ -85,8 +87,6 @@ import {
 } from '../notation/repeatBarlineResolve';
 
 const LAYOUT = { MARGIN_LEFT: 60, CLEF_WIDTH: 45, MEASURE_MIN_WIDTH: 28 };
-/** First key-sig accidental center X = clefX + CLEF_WIDTH + offset (negative = closer to clef). */
-const KEY_SIG_FIRST_CENTER_OFFSET_PX = -4;
 
 /** Leland thinThickBarlineSeparation: kaks selget joont (õhuke, siis paks), keskpunktid taktirea lõpus. */
 function getFinalDoubleBarlineCentersX (rightEdgeX, staffSpace) {
@@ -151,6 +151,7 @@ function StaffClefSymbol({ x, y, height, clefType, fill = '#000', staffSpace = 1
   }
   return <TrebleClefSymbol x={x} y={y} height={height} fill={fill} />;
 }
+
 
 /** Returns Leland glyph for notehead, or null when shape is 'emoji' (caller draws noteheadEmoji as text). */
 function getNoteheadGlyph(durationLabel, noteheadShape = 'oval', noteheadEmoji = '♪') {
@@ -358,7 +359,7 @@ function TimeSigDigits({ x, y, fontSize, number, fill }) {
   );
 }
 
-function renderTimeSignature(timeSignature, timeSignatureMode, centerY, textColor = '#333', noteFill = '#333', x = 45) {
+function renderTimeSignature(timeSignature, timeSignatureMode, centerY, textColor = '#333', noteFill = '#333', x = 45, pedagogicalOptions = {}) {
   const L = TIME_SIG_LAYOUT;
   const y = centerY - 2;
   const extraVerticalGapPx = 5;
@@ -368,24 +369,43 @@ function renderTimeSignature(timeSignature, timeSignatureMode, centerY, textColo
   const fDen = 52;
   const fDenFallback = 50;
   const numeratorDigits = <TimeSigDigits x={x} y={y + L.Y_NUM - halfGap - 10} fontSize={fNum} number={timeSignature.beats} fill={textColor} />;
+  const denType = pedagogicalOptions.denominatorType || 'rhythm';
+  const denColor = pedagogicalOptions.denominatorColor || noteFill || textColor;
+  const denInstrument = pedagogicalOptions.denominatorInstrument || 'handbell';
+  const denEmoji = pedagogicalOptions.denominatorEmoji || '🥁';
+
   if (timeSignatureMode === 'pedagogical') {
     const stemX = x + L.STEM_X_OFFSET;
-    const getNoteSymbolForDenominator = () => {
-      const noteX = x + L.NOTE_X_OFFSET;
-      const noteY = y + L.NOTE_Y;
-      const stemY1 = y + L.STEM_Y1;
-      const stemY2 = y + L.STEM_Y2;
+    const noteX = x + L.NOTE_X_OFFSET;
+    const noteY = y + L.NOTE_Y;
+    const stemY1 = y + L.STEM_Y1;
+    const stemY2 = y + L.STEM_Y2;
+
+    const getRhythmSymbolForDenominator = () => {
       switch (timeSignature.beatUnit) {
         case 1: return <ellipse cx={noteX} cy={noteY} rx={L.WHOLE_RX} ry={L.WHOLE_RY} fill="none" stroke={textColor} strokeWidth="1.5" />;
         case 2: return (<><ellipse cx={noteX} cy={noteY} rx={L.ELLIPSE_RX} ry={L.ELLIPSE_RY} fill="none" stroke={textColor} strokeWidth="1.5" /><line x1={stemX} y1={stemY1} x2={stemX} y2={stemY2} stroke={textColor} strokeWidth="1.5" /></>);
-        case 4: return (<><ellipse cx={noteX} cy={noteY} rx={L.ELLIPSE_RX} ry={L.ELLIPSE_RY} fill={noteFill} /><line x1={stemX} y1={stemY1} x2={stemX} y2={stemY2} stroke={textColor} strokeWidth="1.5" /></>);
-        case 8: return (<><ellipse cx={noteX} cy={noteY} rx={L.ELLIPSE_RX} ry={L.ELLIPSE_RY} fill={noteFill} /><line x1={stemX} y1={stemY1} x2={stemX} y2={stemY2} stroke={textColor} strokeWidth="1.5" /><path d={`M ${stemX} ${stemY2} Q ${stemX - 6} ${stemY2 - 2} ${stemX} ${stemY2 - 5}`} fill={noteFill} /></>);
-        case 16: return (<><ellipse cx={noteX} cy={noteY} rx={L.ELLIPSE_RX} ry={L.ELLIPSE_RY} fill={noteFill} /><line x1={stemX} y1={stemY1} x2={stemX} y2={stemY2} stroke={textColor} strokeWidth="1.5" /><path d={`M ${stemX} ${stemY2} Q ${stemX - 6} ${stemY2 - 2} ${stemX} ${stemY2 - 5} M ${stemX} ${stemY2 - 3} Q ${stemX - 6} ${stemY2 - 5} ${stemX} ${stemY2 - 8}`} fill={noteFill} /></>);
+        case 4: return (<><ellipse cx={noteX} cy={noteY} rx={L.ELLIPSE_RX} ry={L.ELLIPSE_RY} fill={denColor} /><line x1={stemX} y1={stemY1} x2={stemX} y2={stemY2} stroke={textColor} strokeWidth="1.5" /></>);
+        case 8: return (<><ellipse cx={noteX} cy={noteY} rx={L.ELLIPSE_RX} ry={L.ELLIPSE_RY} fill={denColor} /><line x1={stemX} y1={stemY1} x2={stemX} y2={stemY2} stroke={textColor} strokeWidth="1.5" /><path d={`M ${stemX} ${stemY2} Q ${stemX - 6} ${stemY2 - 2} ${stemX} ${stemY2 - 5}`} fill={denColor} /></>);
+        case 16: return (<><ellipse cx={noteX} cy={noteY} rx={L.ELLIPSE_RX} ry={L.ELLIPSE_RY} fill={denColor} /><line x1={stemX} y1={stemY1} x2={stemX} y2={stemY2} stroke={textColor} strokeWidth="1.5" /><path d={`M ${stemX} ${stemY2} Q ${stemX - 6} ${stemY2 - 2} ${stemX} ${stemY2 - 5} M ${stemX} ${stemY2 - 3} Q ${stemX - 6} ${stemY2 - 5} ${stemX} ${stemY2 - 8}`} fill={denColor} /></>);
         default: return <TimeSigDigits x={noteX} y={stemY2} fontSize={fDenFallback} number={timeSignature.beatUnit} fill={textColor} />;
       }
     };
-    return (<g><g stroke="none">{numeratorDigits}</g><line x1={x - L.LINE_HALF} y1={yLine} x2={x + L.LINE_HALF} y2={yLine} stroke={textColor} strokeWidth="1.5" />{getNoteSymbolForDenominator()}</g>);
+
+    const getDenominatorVisual = () => {
+      if (denType === 'number') return <TimeSigDigits x={noteX} y={stemY2} fontSize={fDenFallback} number={timeSignature.beatUnit} fill={denColor} />;
+      if (denType === 'emoji') return <text x={noteX} y={stemY2 + 2} textAnchor="middle" fontSize={Math.max(18, fDenFallback)}>{denEmoji}</text>;
+      if (denType === 'instrument') {
+        if (denInstrument === 'boomwhacker') return <rect x={noteX - 8} y={noteY - 6} width={16} height={12} rx={6} fill={denColor} stroke={textColor} strokeWidth="1.2" />;
+        if (denInstrument === 'triangle') return <path d={`M ${noteX} ${noteY - 7} L ${noteX - 7} ${noteY + 6} L ${noteX + 7} ${noteY + 6} Z`} fill="none" stroke={denColor} strokeWidth="1.8" />;
+        return (<><circle cx={noteX} cy={noteY - 1} r={6} fill={denColor} /><rect x={noteX - 1.2} y={noteY + 5} width={2.4} height={10} rx={1.2} fill={denColor} /></>);
+      }
+      return getRhythmSymbolForDenominator();
+    };
+
+    return (<g><g stroke="none">{numeratorDigits}</g><line x1={x - L.LINE_HALF} y1={yLine} x2={x + L.LINE_HALF} y2={yLine} stroke={textColor} strokeWidth="1.5" />{getDenominatorVisual()}</g>);
   }
+
   return (
     <g>
       {numeratorDigits}
@@ -394,6 +414,7 @@ function renderTimeSignature(timeSignature, timeSignatureMode, centerY, textColo
     </g>
   );
 }
+
 
 function renderStandardRest(note, x, y, staffSpace) {
   const glyph = smuflRestForDurationLabel(note.durationLabel || '1/4');
@@ -419,6 +440,10 @@ export function TraditionalNotationView({
   pageWidth,
   timeSignature,
   timeSignatureMode,
+  pedagogicalTimeSigDenominatorType = 'rhythm',
+  pedagogicalTimeSigDenominatorColor = '#1a1a1a',
+  pedagogicalTimeSigDenominatorInstrument = 'handbell',
+  pedagogicalTimeSigDenominatorEmoji = '🥁',
   staffLines = 5,
   staffSpace: staffSpaceProp,
   clefType = 'treble',
@@ -513,7 +538,10 @@ export function TraditionalNotationView({
     LAYOUT.CLEF_WIDTH +
     getPedagogicalRelativeKeySignatureWidthPx(7, ksFontForLayout) +
     getJoClefPixelWidth(spacing);
-  const traditionalLeftPrefixWorstCase = LAYOUT.CLEF_WIDTH + keySigWidthWorstCase;
+  const traditionalLeftPrefixWorstCase =
+    LAYOUT.CLEF_WIDTH +
+    keySigWidthWorstCase +
+    (keySigWidthWorstCase > 0 ? TIME_SIG_SPACING.GAP_AFTER_KEY_SIG_BEFORE_TIME_SIG_PX : 0);
   const minContentStart =
     staffLeft +
     1 +
@@ -808,7 +836,7 @@ export function TraditionalNotationView({
                             g.push(
                               <SmuflGlyph
                                 key={`ks-${i}`}
-                                x={currentX + KEY_SIG_FIRST_CENTER_OFFSET_PX + i * TIME_SIG_SPACING.KEY_SIG_STEP_PX}
+                                x={currentX + TIME_SIG_SPACING.KEY_SIG_FIRST_CENTER_OFFSET_PX + i * TIME_SIG_SPACING.KEY_SIG_STEP_PX}
                                 y={staffY + centerY - 8}
                                 glyph={ksGlyph}
                                 fontSize={ksFont}
@@ -816,7 +844,7 @@ export function TraditionalNotationView({
                               />
                             );
                           }
-                          currentX += KEY_SIG_FIRST_CENTER_OFFSET_PX + Math.max(0, ksCount - 1) * TIME_SIG_SPACING.KEY_SIG_STEP_PX + Math.round(ksFont * 0.35);
+                          currentX += TIME_SIG_SPACING.KEY_SIG_FIRST_CENTER_OFFSET_PX + Math.max(0, ksCount - 1) * TIME_SIG_SPACING.KEY_SIG_STEP_PX + Math.round(ksFont * 0.35);
                         }
                         const joClefEl = (
                           <JoClefSymbol
@@ -862,7 +890,7 @@ export function TraditionalNotationView({
                         />
                       );
                       if (showTraditionalKeySignature && keySignatureInfo.count > 0 && keySignatureInfo.kind) {
-                        const keySigStartX = clefX + LAYOUT.CLEF_WIDTH + KEY_SIG_FIRST_CENTER_OFFSET_PX;
+                        const keySigStartX = clefX + LAYOUT.CLEF_WIDTH + TIME_SIG_SPACING.KEY_SIG_FIRST_CENTER_OFFSET_PX;
                         const keySigGlyph =
                           keySignatureInfo.kind === 'flat' ? SMUFL_GLYPH.accidentalFlat : SMUFL_GLYPH.accidentalSharp;
                         const ksFontSize = getGlyphFontSize(spacing);
@@ -917,14 +945,13 @@ export function TraditionalNotationView({
                             measureStartX: effectiveMarginLeft,
                           })
                         : getTraditionalTimeSignatureX({
-                            staffLeft,
+                            clefX,
                             clefWidth: LAYOUT.CLEF_WIDTH,
                             keySigCount,
-                            extraLeft: 0,
                             measureStartX: effectiveMarginLeft,
                           });
                       return (
-                        <g transform={`translate(${timeSigX}, ${staffY})`}>{renderTimeSignature(timeSignature, timeSignatureMode, centerY, timeSigTextColor, timeSigNoteFill, 0)}</g>
+                        <g transform={`translate(${timeSigX}, ${staffY})`}>{renderTimeSignature(timeSignature, timeSignatureMode, centerY, timeSigTextColor, timeSigNoteFill, 0, { denominatorType: pedagogicalTimeSigDenominatorType, denominatorColor: pedagogicalTimeSigDenominatorColor, denominatorInstrument: pedagogicalTimeSigDenominatorInstrument, denominatorEmoji: pedagogicalTimeSigDenominatorEmoji })}</g>
                       );
                     })()
                   )}
@@ -968,6 +995,9 @@ export function TraditionalNotationView({
                   return measureX + (beatIndex + slotCenter) * beatWidth;
                 };
 
+                /** Käsikellad: pedagoogika — ära kasuta keskjoonest tulenevat varre suunda (varred alati üles). */
+                const isHandbellsStaff = String((multiStaff ? inst?.instrumentId : instrument) || '') === 'handbells';
+
                 const noteheadRx = getNoteheadRx(spacing);
                 const beamGroupsRaw = computeBeamGroups(measure.notes, measure.startBeat, timeSignature);
                 const beamGroups = beamGroupsRaw.map((gr) => {
@@ -979,36 +1009,50 @@ export function TraditionalNotationView({
                     const py = n.pitch && typeof n.octave === 'number' ? staffResolvePitchY(n.pitch, n.octave) : staffCenterY;
                     noteCys[k] = py;
                   }
-                  // VexFlow/MuseScore reegel: alla keskmise joone = vars üles; üle keskmise joone = vars alla.
-                  let stemUp = noteCys[gr.start] > middleLineY;
-                  if (gr.end >= gr.start) {
-                    let sum = 0;
-                    let count = 0;
-                    for (let k = gr.start; k <= gr.end; k++) {
-                      if (typeof noteCys[k] === 'number') {
-                        sum += noteCys[k];
-                        count++;
+                  // VexFlow/MuseScore: alla keskmise joone = vars üles; üle keskmise = vars alla. Käsikellad: alati üles.
+                  let stemUp;
+                  if (isHandbellsStaff) {
+                    stemUp = true;
+                  } else {
+                    stemUp = noteCys[gr.start] > middleLineY;
+                    if (gr.end >= gr.start) {
+                      let sum = 0;
+                      let count = 0;
+                      for (let k = gr.start; k <= gr.end; k++) {
+                        if (typeof noteCys[k] === 'number') {
+                          sum += noteCys[k];
+                          count++;
+                        }
                       }
+                      const avg = count > 0 ? (sum / count) : middleLineY;
+                      stemUp = avg > middleLineY;
                     }
-                    const avg = count > 0 ? (sum / count) : middleLineY;
-                    stemUp = avg > middleLineY;
                   }
                   const geom = computeBeamGeometry(gr, measure.notes, noteXs, noteCys, stemUp, spacing);
                   return { ...gr, ...geom, noteXs, noteCys };
                 });
                 const getBeamGroup = (noteIdx) => beamGroups.find(g => noteIdx >= g.start && noteIdx <= g.end);
-                const systemConnectedSpan = Math.max(0, systemBottomStaffLineY - systemTopStaffLineY);
                 const connectedY1 = systemTopStaffLineY;
                 const connectedY2 = systemBottomStaffLineY;
                 const barY1 =
                   connectedBarlines && staffIndexInScore === 0 ? connectedY1 : staffY + firstLineY;
                 const barY2 =
                   connectedBarlines && staffIndexInScore === 0 ? connectedY2 : staffY + lastLineY;
-                const barCenterY = (barY1 + barY2) / 2;
-                const connectedScale =
-                  connectedBarlines && staffIndexInScore === 0
-                    ? Math.max(1, systemConnectedSpan / Math.max(1, lastLineY - firstLineY))
-                    : 1;
+                const measureRightX = measureX + measureWidth;
+                const finalBarlineGeomForRepeat = measure.barlineFinal
+                  ? getFinalDoubleBarlineCentersX(measureRightX, spacing)
+                  : null;
+                const repeatEndAnchoredToFinalBarline = !!(
+                  measure.repeatEnd
+                  && drawRepeatEndGlyphRight
+                  && finalBarlineGeomForRepeat
+                );
+                const repeatRightGlyphX = repeatEndAnchoredToFinalBarline
+                  ? finalBarlineGeomForRepeat.thinCx
+                  : measureRightX;
+                const repeatRightTextAnchor = repeatEndAnchoredToFinalBarline ? 'middle' : 'start';
+                const repeatGlyphY = staffY + ((firstLineY + lastLineY) / 2);
+                const repeatGlyphFontSize = getGlyphFontSize(spacing);
 
                 return (
                   <g key={measureIdx}>
@@ -1021,7 +1065,7 @@ export function TraditionalNotationView({
                         <path d={`M ${measureX + measureWidth / 2 - 4} ${staffY - 10} L ${measureX + measureWidth / 2} ${staffY - 14} L ${measureX + measureWidth / 2 + 4} ${staffY - 10}`} fill="none" stroke="#92400e" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
                       </g>
                     )}
-                    {drawConnectedBarlinesHere && (
+                    {(
                       <>
                         {/* Left barline: E040 / E042 (Leland); ühine loogika repeatBarlineResolve */}
                         {leftBarlineRepeat.variant === 'both' ? (
@@ -1037,10 +1081,11 @@ export function TraditionalNotationView({
                             <SmuflGlyph
                               glyph={leftBarlineRepeat.glyph}
                               x={measureX}
-                              y={barCenterY}
-                              fontSize={getGlyphFontSize(spacing) * connectedScale}
+                              y={repeatGlyphY}
+                              fontSize={repeatGlyphFontSize}
                               fill="#1a1a1a"
                               textAnchor="middle"
+                              dominantBaseline="central"
                               fontFamily={SMUFL_MUSIC_FONT_FAMILY}
                             />
                             {onRemoveRepeatMark && (
@@ -1056,17 +1101,18 @@ export function TraditionalNotationView({
                             <SmuflGlyph
                               glyph={leftBarlineRepeat.glyph}
                               x={measureX}
-                              y={barCenterY}
-                              fontSize={getGlyphFontSize(spacing) * connectedScale}
+                              y={repeatGlyphY}
+                              fontSize={repeatGlyphFontSize}
                               fill="#1a1a1a"
                               textAnchor="end"
+                              dominantBaseline="central"
                               fontFamily={SMUFL_MUSIC_FONT_FAMILY}
                             />
                             {onRemoveRepeatMark && (
                               <rect x={measureX - spacing * 2} y={staffY + firstLineY - spacing} width={spacing * 2} height={lastLineY - firstLineY + spacing * 2} fill="transparent" />
                             )}
                           </g>
-                        ) : leftBarlineRepeat.variant === 'barline' ? (
+                        ) : leftBarlineRepeat.variant === 'barline' && drawConnectedBarlinesHere ? (
                           <line
                             x1={measureX}
                             y1={barY1}
@@ -1085,18 +1131,35 @@ export function TraditionalNotationView({
                           >
                             <SmuflGlyph
                               glyph={SMUFL_GLYPH.repeatRight}
-                              x={measureX + measureWidth}
-                              y={barCenterY}
-                              fontSize={getGlyphFontSize(spacing) * connectedScale}
+                              x={repeatRightGlyphX}
+                              y={repeatGlyphY}
+                              fontSize={repeatGlyphFontSize}
                               fill="#1a1a1a"
-                              textAnchor="start"
+                              textAnchor={repeatRightTextAnchor}
+                              dominantBaseline="central"
                               fontFamily={SMUFL_MUSIC_FONT_FAMILY}
                             />
+                            {repeatEndAnchoredToFinalBarline && drawConnectedBarlinesHere && (
+                              <line
+                                x1={finalBarlineGeomForRepeat.thickCx}
+                                y1={barY1}
+                                x2={finalBarlineGeomForRepeat.thickCx}
+                                y2={barY2}
+                                stroke="#1a1a1a"
+                                strokeWidth={finalBarlineGeomForRepeat.thickW}
+                              />
+                            )}
                             {onRemoveRepeatMark && (
-                              <rect x={measureX + measureWidth} y={staffY + firstLineY - spacing} width={spacing * 2} height={lastLineY - firstLineY + spacing * 2} fill="transparent" />
+                              <rect
+                                x={Math.min(repeatRightGlyphX, measureRightX) - spacing * 2}
+                                y={staffY + firstLineY - spacing}
+                                width={Math.abs(measureRightX - repeatRightGlyphX) + spacing * 4}
+                                height={lastLineY - firstLineY + spacing * 2}
+                                fill="transparent"
+                              />
                             )}
                           </g>
-                        ) : measureIdx === sys.measureIndices[sys.measureIndices.length - 1] ? (
+                        ) : drawConnectedBarlinesHere && measureIdx === sys.measureIndices[sys.measureIndices.length - 1] ? (
                           (measureIdx === instMeasures.length - 1 || measure.barlineFinal) ? (
                             (() => {
                               const { thinCx, thickCx, thinW, thickW } = getFinalDoubleBarlineCentersX(measureX + measureWidth, spacing);
@@ -1133,7 +1196,7 @@ export function TraditionalNotationView({
                               strokeWidth={getThinBarlineThickness(spacing)}
                             />
                           )
-                        ) : measure.barlineFinal ? (
+                        ) : drawConnectedBarlinesHere && measure.barlineFinal ? (
                           (() => {
                             const { thinCx, thickCx, thinW, thickW } = getFinalDoubleBarlineCentersX(measureX + measureWidth, spacing);
                             const y1b = barY1;
@@ -1230,7 +1293,11 @@ export function TraditionalNotationView({
                       const pitchY = note.pitch && typeof note.octave === 'number' ? staffResolvePitchY(note.pitch, note.octave) : staffCenterY;
                       const noteY = staffY + pitchY;
                       const beamGroup = getBeamGroup(noteIdx);
-                      const stemUp = beamGroup ? beamGroup.stemUp : (pitchY > middleLineY);
+                      const stemUp = beamGroup
+                        ? beamGroup.stemUp
+                        : isHandbellsStaff
+                          ? true
+                          : (pitchY > middleLineY);
                       const canDragPitch = !note.isRest && typeof onNotePitchChange === 'function' && typeof getPitchFromY === 'function' && !canHandDragNotes;
                       const canDragBeat = canHandDragNotes && typeof onNoteBeatChange === 'function';
                       const noteGroupProps = {
@@ -1299,7 +1366,9 @@ export function TraditionalNotationView({
                         : getAccidentalForPitchInKey(note.pitch, keySignature);
                       const noteMidi = toNoteMidi(note.pitch, note.octave, resolvedAccidental);
                       const isOutOfRange = isMidiOutOfInstrumentRange(noteMidi, instrumentRangeMidi);
-                      const noteFillColor = isOutOfRange ? OUT_OF_RANGE_COLOR : 'var(--note-fill, #1a1a1a)';
+                      const isHandbellsInstrument = isHandbellsStaff;
+                      const handbellColor = getSchoolHandbellColor(note.pitch, resolvedAccidental || 0);
+                      const noteFillColor = isOutOfRange ? OUT_OF_RANGE_COLOR : (isHandbellsInstrument ? handbellColor : 'var(--note-fill, #1a1a1a)');
                       const ledgerHalfWidth = getLedgerHalfWidth(spacing);
                       const { above: nLedgerAbove, below: nLedgerBelow } = getLedgerLineCountExact(pitchY, firstLineY, lastLineY, spacing);
                       const glyph = getNoteheadGlyph(note.durationLabel, noteheadShape, noteheadEmoji);
@@ -1341,7 +1410,9 @@ export function TraditionalNotationView({
                             />
                           ) : (
                             <>
-                              {glyph ? (
+                              {isHandbellsInstrument ? (
+                                <HandbellIcon x={noteX} y={noteY} size={Math.max(14, spacing * 1.75)} fill={noteFillColor} />
+                              ) : glyph ? (
                                 <SmuflGlyph
                                   x={noteX}
                                   y={noteY}

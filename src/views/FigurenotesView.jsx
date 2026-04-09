@@ -1232,6 +1232,7 @@ export function FigurenotesView({
                                     fontSize={repeatGlyphSize}
                                     fill="#1a1a1a"
                                     textAnchor="middle"
+                                    dominantBaseline="central"
                                     fontFamily={SMUFL_MUSIC_FONT_FAMILY}
                                   />
                                 ) : leftR.variant === "start" ? (
@@ -1242,6 +1243,7 @@ export function FigurenotesView({
                                     fontSize={repeatGlyphSize}
                                     fill="#1a1a1a"
                                     textAnchor="end"
+                                    dominantBaseline="central"
                                     fontFamily={SMUFL_MUSIC_FONT_FAMILY}
                                   />
                                 ) : leftR.variant === "barline" ? (
@@ -1262,6 +1264,7 @@ export function FigurenotesView({
                                     fontSize={repeatGlyphSize}
                                     fill="#1a1a1a"
                                     textAnchor="start"
+                                    dominantBaseline="central"
                                     fontFamily={SMUFL_MUSIC_FONT_FAMILY}
                                   />
                                 ) : (
@@ -2128,6 +2131,35 @@ export function FigurenotesView({
                       const barLineTopY = sys.yOffset + barLineInset;
                       const barLineCenterY = (barLineTopY + barLineBottomY) / 2;
                       const barLineHeight = barLineBottomY - barLineTopY;
+                      const perRowBarHeight =
+                        (chordLineHeight > 0
+                          ? melodyRowHeight + chordLineGap + chordLineHeight
+                          : melodyRowHeight) -
+                        barLineInset * 2;
+                      const repeatGlyphSizePerRow = Math.max(
+                        18,
+                        Math.round(perRowBarHeight * 0.95),
+                      );
+                      const repeatRowCenterYs = Array.from(
+                        { length: nStaffRows },
+                        (_, rowIdx) => {
+                          const rowTopY =
+                            sys.yOffset + rowIdx * rowStepPx + barLineInset;
+                          const rowBottomY =
+                            chordLineHeight > 0
+                              ? sys.yOffset +
+                                rowIdx * rowStepPx +
+                                melodyRowHeight +
+                                chordLineGap +
+                                chordLineHeight -
+                                barLineInset
+                              : sys.yOffset +
+                                rowIdx * rowStepPx +
+                                melodyRowHeight -
+                                barLineInset;
+                          return (rowTopY + rowBottomY) / 2;
+                        },
+                      );
                       const isRightBarlineOfSystem =
                         measureIdx ===
                         sys.measureIndices[sys.measureIndices.length - 1];
@@ -2158,25 +2190,33 @@ export function FigurenotesView({
                       return (
                         <>
                           {leftR.variant === "both" ? (
-                            <SmuflGlyph
-                              glyph={leftR.glyph}
-                              x={measureX}
-                              y={barLineCenterY}
-                              fontSize={repeatGlyphSize}
-                              fill="#1a1a1a"
-                              textAnchor="middle"
-                              fontFamily={SMUFL_MUSIC_FONT_FAMILY}
-                            />
+                            repeatRowCenterYs.map((rowCenterY, rowIdx) => (
+                              <SmuflGlyph
+                                key={`repeat-left-both-${measureIdx}-${rowIdx}`}
+                                glyph={leftR.glyph}
+                                x={measureX}
+                                y={rowCenterY}
+                                fontSize={repeatGlyphSizePerRow}
+                                fill="#1a1a1a"
+                                textAnchor="middle"
+                                dominantBaseline="central"
+                                fontFamily={SMUFL_MUSIC_FONT_FAMILY}
+                              />
+                            ))
                           ) : leftR.variant === "start" ? (
-                            <SmuflGlyph
-                              glyph={leftR.glyph}
-                              x={measureX}
-                              y={barLineCenterY}
-                              fontSize={repeatGlyphSize}
-                              fill="#1a1a1a"
-                              textAnchor="end"
-                              fontFamily={SMUFL_MUSIC_FONT_FAMILY}
-                            />
+                            repeatRowCenterYs.map((rowCenterY, rowIdx) => (
+                              <SmuflGlyph
+                                key={`repeat-left-start-${measureIdx}-${rowIdx}`}
+                                glyph={leftR.glyph}
+                                x={measureX}
+                                y={rowCenterY}
+                                fontSize={repeatGlyphSizePerRow}
+                                fill="#1a1a1a"
+                                textAnchor="end"
+                                dominantBaseline="central"
+                                fontFamily={SMUFL_MUSIC_FONT_FAMILY}
+                              />
+                            ))
                           ) : leftR.variant === "barline" ? (
                             <line
                               x1={measureX}
@@ -2188,15 +2228,19 @@ export function FigurenotesView({
                             />
                           ) : null}
                           {drawEnd ? (
-                            <SmuflGlyph
-                              glyph={SMUFL_GLYPH.repeatRight}
-                              x={xRight}
-                              y={barLineCenterY}
-                              fontSize={repeatGlyphSize}
-                              fill="#1a1a1a"
-                              textAnchor="start"
-                              fontFamily={SMUFL_MUSIC_FONT_FAMILY}
-                            />
+                            repeatRowCenterYs.map((rowCenterY, rowIdx) => (
+                              <SmuflGlyph
+                                key={`repeat-right-${measureIdx}-${rowIdx}`}
+                                glyph={SMUFL_GLYPH.repeatRight}
+                                x={xRight}
+                                y={rowCenterY}
+                                fontSize={repeatGlyphSizePerRow}
+                                fill="#1a1a1a"
+                                textAnchor="start"
+                                dominantBaseline="central"
+                                fontFamily={SMUFL_MUSIC_FONT_FAMILY}
+                              />
+                            ))
                           ) : (
                             isRightBarlineOfSystem &&
                             !showFinalBar && (
