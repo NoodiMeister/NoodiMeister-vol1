@@ -30,6 +30,7 @@ import {
   getPedagogicalTimeSignatureX,
   getPedagogicalRelativeKeySignatureWidthPx,
 } from '../notation/TimeSignatureLayout';
+import { ensureGlyphHorizontalGapPx, ensureMinGlyphHorizontalGapPx } from '../notation/glyphSpacing';
 import { measureLengthInQuarterBeats } from '../musical/timeSignature';
 import {
   getStaffLinePositions,
@@ -994,6 +995,46 @@ export function TraditionalNotationView({
                   const slotCenter = (slotIndex + 0.5) / slotsPerBeat;
                   return measureX + (beatIndex + slotCenter) * beatWidth;
                 };
+                const noteXOverrides = new Map();
+                const simultaneousBeatGroups = new Map();
+                for (let idx = 0; idx < measure.notes.length; idx += 1) {
+                  const n = measure.notes[idx];
+                  if (!n || n.isRest || typeof n.beat !== 'number') continue;
+                  // Quantize beat key for stable grouping of truly simultaneous notes.
+                  const beatKey = Math.round((n.beat - measure.startBeat) * 1024) / 1024;
+                  if (!simultaneousBeatGroups.has(beatKey)) simultaneousBeatGroups.set(beatKey, []);
+                  simultaneousBeatGroups.get(beatKey).push(idx);
+                }
+                const chordHorizontalShiftPx = ensureGlyphHorizontalGapPx(spacing * 0.75);
+                const secondIntervalThresholdPx = spacing * 0.75;
+                simultaneousBeatGroups.forEach((indices) => {
+                  if (!Array.isArray(indices) || indices.length < 2) return;
+                  const sorted = [...indices].sort((a, b) => {
+                    const na = measure.notes[a];
+                    const nb = measure.notes[b];
+                    const pyA = na?.pitch && typeof na?.octave === 'number' ? staffResolvePitchY(na.pitch, na.octave) : staffCenterY;
+                    const pyB = nb?.pitch && typeof nb?.octave === 'number' ? staffResolvePitchY(nb.pitch, nb.octave) : staffCenterY;
+                    return pyA - pyB;
+                  });
+                  // MuseScore/Finale/Sibelius style: seconds on same beat interlock into two columns.
+                  let prevPitchY = null;
+                  let column = 0;
+                  for (const noteIdxInMeasure of sorted) {
+                    const n = measure.notes[noteIdxInMeasure];
+                    const py = n?.pitch && typeof n?.octave === 'number' ? staffResolvePitchY(n.pitch, n.octave) : staffCenterY;
+                    if (prevPitchY != null && Math.abs(py - prevPitchY) < secondIntervalThresholdPx) {
+                      column = column === 0 ? 1 : 0;
+                    } else {
+                      column = 0;
+                    }
+                    if (column === 1) noteXOverrides.set(noteIdxInMeasure, chordHorizontalShiftPx);
+                    prevPitchY = py;
+                  }
+                });
+                const getRenderedNoteCenterX = (note, noteIdx) => {
+                  const baseX = getNoteSlotCenterX(note);
+                  return baseX + (noteXOverrides.get(noteIdx) ?? 0);
+                };
 
                 /** Käsikellad: pedagoogika — ära kasuta keskjoonest tulenevat varre suunda (varred alati üles). */
                 const isHandbellsStaff = String((multiStaff ? inst?.instrumentId : instrument) || '') === 'handbells';
@@ -1005,7 +1046,7 @@ export function TraditionalNotationView({
                   const noteCys = new Array(measure.notes.length);
                   for (let k = gr.start; k <= gr.end; k++) {
                     const n = measure.notes[k];
-                    noteXs[k] = getNoteSlotCenterX(n);
+                    noteXs[k] = getRenderedNoteCenterX(n, k);
                     const py = n.pitch && typeof n.octave === 'number' ? staffResolvePitchY(n.pitch, n.octave) : staffCenterY;
                     noteCys[k] = py;
                   }
@@ -1286,7 +1327,7 @@ export function TraditionalNotationView({
                       );
                     })}
                     {measure.notes.map((note, noteIdx) => {
-                      const noteX = getNoteSlotCenterX(note);
+                      const noteX = getRenderedNoteCenterX(note, noteIdx);
                       let globalNoteIndex = 0;
                       for (let i = 0; i < measureIdx; i++) globalNoteIndex += (instMeasures[i]?.notes?.length ?? 0);
                       globalNoteIndex += noteIdx;
@@ -1397,7 +1438,7 @@ export function TraditionalNotationView({
                           ))}
                           {isSelected && <rect x={noteX - 18} y={noteY - 22} width={36} height={44} fill="#93c5fd" opacity="0.3" rx="4" />}
                           {(note.accidental === 1 || note.accidental === -1 || (note.accidental === 0 && getAccidentalForPitchInKey(note.pitch, keySignature) !== 0)) && (
-                            <text x={noteX - (noteheadRx + spacing * 0.5)} y={noteY} textAnchor="middle" dominantBaseline="central" fontSize={Math.round(spacing * 1.4)} fill={noteFillColor} fontFamily="serif">{note.accidental === 1 ? '♯' : note.accidental === -1 ? '♭' : '♮'}</text>
+                            <text x={noteX - (noteheadRx + ensureMinGlyphHorizontalGapPx(spacing * 0.5))} y={noteY} textAnchor="middle" dominantBaseline="central" fontSize={Math.round(spacing * 1.4)} fill={noteFillColor} fontFamily="serif">{note.accidental === 1 ? '♯' : note.accidental === -1 ? '♭' : '♮'}</text>
                           )}
                           {useLelandPrecomposedRhythm ? (
                             <SmuflGlyph

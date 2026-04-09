@@ -9,6 +9,8 @@
  * Teine variant (pedagoogiline 4/4): lugeja, kriips, noodipea+varras – NOTE_X_OFFSET, NOTE_Y, STEM_X_OFFSET, STEM_Y1, STEM_Y2, ELLIPSE_RX, ELLIPSE_RY.
  * Kasutus: TraditionalNotationView, FigurenotesView, timeSignatureToolbox (PedagogicalMeterIcon), noodimeister-complete.jsx (importib toolboxist).
  */
+import { MIN_GLYPH_HORIZONTAL_GAP_PX, ensureMinGlyphHorizontalGapPx } from './glyphSpacing';
+
 export const TIME_SIG_LAYOUT = {
   /** Lugeja baseline y (tsentrist) – 3 ühikut kriipsust üles */
   Y_NUM: -11,
@@ -38,12 +40,18 @@ export const TIME_SIG_LAYOUT = {
 
 /** MuseScore-like visual spacing: place time signature after clef+key and before first measure content. */
 export const TIME_SIG_SPACING = {
+  /** Hard floor: minimum horizontal gap between adjacent SMuFL/glyph blocks. */
+  MIN_GLYPH_HORIZONTAL_GAP_PX,
   /** Gap after clef column before first key-signature accidental (visual: tuck time sig after key). */
   AFTER_CLEF_PX: 2,
+  /** First key-sig accidental center X offset from clef’s right edge (negative = closer to clef). Must match TraditionalNotationView. */
+  KEY_SIG_FIRST_CENTER_OFFSET_PX: -4,
   /** Horizontal distance between consecutive key-signature accidentals (max 5px). */
   KEY_SIG_STEP_PX: 5,
   /** Rough right extent past last accidental center for SMuFL glyph (Leland ~1 em). */
   KEY_SIG_GLYPH_TAIL_PX: 16,
+  /** Clear gap between last key-sig accidental and time signature (no overlap). */
+  GAP_AFTER_KEY_SIG_BEFORE_TIME_SIG_PX: 8,
   BEFORE_FIRST_MEASURE_PX: 6,
   FIGURE_BEFORE_FIRST_MEASURE_PX: 14,
 };
@@ -52,20 +60,44 @@ export const TIME_SIG_SPACING = {
 export function estimateKeySignatureWidthPx(accidentalCount) {
   const n = Math.max(0, Math.min(7, Math.floor(Number(accidentalCount) || 0)));
   if (n === 0) return 0;
-  return TIME_SIG_SPACING.AFTER_CLEF_PX + (n - 1) * TIME_SIG_SPACING.KEY_SIG_STEP_PX + TIME_SIG_SPACING.KEY_SIG_GLYPH_TAIL_PX;
+  return (
+    TIME_SIG_SPACING.KEY_SIG_FIRST_CENTER_OFFSET_PX +
+    (n - 1) * TIME_SIG_SPACING.KEY_SIG_STEP_PX +
+    TIME_SIG_SPACING.KEY_SIG_GLYPH_TAIL_PX
+  );
 }
 
+/**
+ * Traditsiooniline režiim: taktimõõdu keskpunkti X (sama koordinaat mis renderTimeSignature `x`).
+ * Peab olema pärast viimast võtmemärki + selge vahe, et diees/bemoll ja taktimõõt ei kattuks.
+ */
 export function getTraditionalTimeSignatureX({
-  staffLeft = 10,
+  clefX,
   clefWidth = 45,
   keySigCount = 0,
-  extraLeft = 0,
   measureStartX,
 }) {
-  const count = Math.max(0, Number(keySigCount) || 0);
-  const baseX = staffLeft + 1 + extraLeft + clefWidth + TIME_SIG_SPACING.AFTER_CLEF_PX + count * TIME_SIG_SPACING.KEY_SIG_STEP_PX;
+  const n = Math.max(0, Math.min(7, Math.floor(Number(keySigCount) || 0)));
+  const clefRightX = clefX + clefWidth;
+  const afterClefGap = ensureMinGlyphHorizontalGapPx(TIME_SIG_SPACING.AFTER_CLEF_PX);
+  const afterKeySigGap = ensureMinGlyphHorizontalGapPx(TIME_SIG_SPACING.GAP_AFTER_KEY_SIG_BEFORE_TIME_SIG_PX);
+  let baseX;
+  if (n === 0) {
+    baseX = clefRightX + afterClefGap;
+  } else {
+    const keySigRightX =
+      clefRightX +
+      TIME_SIG_SPACING.KEY_SIG_FIRST_CENTER_OFFSET_PX +
+      (n - 1) * TIME_SIG_SPACING.KEY_SIG_STEP_PX +
+      TIME_SIG_SPACING.KEY_SIG_GLYPH_TAIL_PX;
+    baseX = keySigRightX + afterKeySigGap;
+  }
   if (typeof measureStartX === 'number' && Number.isFinite(measureStartX)) {
-    return Math.min(baseX, Math.max(0, measureStartX - TIME_SIG_SPACING.BEFORE_FIRST_MEASURE_PX));
+    // Invariant: key signature and time signature must never overlap.
+    // If there is not enough room before the first measure start, keep time signature
+    // after key signature; caller/layout must provide enough left prefix width.
+    const rightBound = Math.max(0, measureStartX - TIME_SIG_SPACING.BEFORE_FIRST_MEASURE_PX);
+    return baseX > rightBound ? baseX : rightBound;
   }
   return baseX;
 }
@@ -85,7 +117,7 @@ export function getPedagogicalRelativeKeySignatureWidthPx(ksCount, ksFontSize) {
   return (
     PEDAGOGICAL_REL_KEY_SIG_FIRST_OFFSET_PX +
     Math.max(0, n - 1) * TIME_SIG_SPACING.KEY_SIG_STEP_PX +
-    Math.round(fs * 0.35)
+    ensureMinGlyphHorizontalGapPx(Math.round(fs * 0.35))
   );
 }
 
@@ -102,11 +134,12 @@ export function getPedagogicalTimeSignatureX({
   joClefWidthPx,
   measureStartX,
 }) {
+  const afterClefGap = ensureMinGlyphHorizontalGapPx(TIME_SIG_SPACING.AFTER_CLEF_PX);
   let x = clefX;
   if (showTraditionalClef) x += clefColumnWidth;
   x += getPedagogicalRelativeKeySignatureWidthPx(keySigCount, ksFontSize);
   x += Math.max(0, Number(joClefWidthPx) || 0);
-  x += TIME_SIG_SPACING.AFTER_CLEF_PX;
+  x += afterClefGap;
   if (typeof measureStartX === 'number' && Number.isFinite(measureStartX)) {
     return Math.min(x, Math.max(0, measureStartX - TIME_SIG_SPACING.BEFORE_FIRST_MEASURE_PX));
   }

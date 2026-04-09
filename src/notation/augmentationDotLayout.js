@@ -5,6 +5,7 @@
 
 import { DOT_NOTE_DISTANCE, DOT_REST_DISTANCE } from './musescoreStyle';
 import { getNoteheadRx } from './StaffConstants';
+import { ensureMinGlyphHorizontalGapPx } from './glyphSpacing';
 
 const ON_LINE_EPS = 0.12;
 
@@ -25,12 +26,12 @@ export function getAugmentationDotCenterPitchY(pitchY, firstLineY, spacing) {
 
 export function getAugmentationDotXFromNoteCenter(noteX, staffSpace) {
   const rx = getNoteheadRx(staffSpace);
-  return noteX + rx + DOT_NOTE_DISTANCE * staffSpace;
+  return noteX + rx + ensureMinGlyphHorizontalGapPx(DOT_NOTE_DISTANCE * staffSpace);
 }
 
 export function getAugmentationDotXFromRestCenter(restCenterX, staffSpace) {
   const rx = getNoteheadRx(staffSpace);
-  return restCenterX + rx + DOT_REST_DISTANCE * staffSpace;
+  return restCenterX + rx + ensureMinGlyphHorizontalGapPx(DOT_REST_DISTANCE * staffSpace);
 }
 
 /** Middle staff space center (treble 5-line: between lines 2 and 3 from top). */
