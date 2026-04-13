@@ -1,4 +1,4 @@
-import { PublicClientApplication } from '@azure/msal-browser';
+import { PublicClientApplication, ResponseMode } from '@azure/msal-browser';
 import { getMicrosoftRedirectUri } from '../utils/microsoftRedirectUri';
 
 const clientId = String((typeof import.meta !== 'undefined' && import.meta.env?.VITE_MICROSOFT_CLIENT_ID) || '').trim();
@@ -22,6 +22,8 @@ export async function getMsalPublicClientApplication() {
           clientId,
           authority,
           redirectUri,
+          // Entra / Azure AD SPA tagastab koodi ?code=… päringus; MSAL v5 vaikimisi loeb hash’ist (fragment) → null.
+          OIDCOptions: { responseMode: ResponseMode.QUERY },
         },
         cache: {
           cacheLocation: 'localStorage',

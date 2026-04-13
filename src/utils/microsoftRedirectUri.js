@@ -3,6 +3,7 @@
  * (CloudLogin, MicrosoftRedirectHandler, cloudTokenRefresh).
  * Kui need erinevad, tekib localStorage’is kaks erinevat MSAL konfiguratsiooni ja
  * handleRedirectPromise / vaikne token võivad ebaõnnestuda (nt pärast teist lehte).
+ * MSAL: OIDCOptions.responseMode peab olema "query" (Azure tagastab ?code=…), mitte vaikimisi fragment.
  *
  * Kasutame alati Vite BASE_URL juurt (tavaliselt `/`), mitte konkreetset marsruuti
  * nagu `/tood` — Azure → Authentication → SPA redirect URI peab olema täpselt see string

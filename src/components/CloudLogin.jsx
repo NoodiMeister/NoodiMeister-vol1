@@ -389,7 +389,7 @@ function useCloudLoginWithProvider(mode = 'login', stayLoggedIn = false, onError
       // Katkenud redirect jätab MSAL ajutise oleku (session + mõnikord localStorage) — loginRedirect võib vaikselt ebaõnnestuda
       clearMsalPreRedirectKeys();
       // Clear any leftover redirect state so interaction_in_progress does not block the next attempt
-      await msal.handleRedirectPromise().catch(() => null);
+      await msal.handleRedirectPromise({ navigateToLoginRequestUrl: false }).catch(() => null);
       await msal.loginRedirect({
         scopes: loginScopes,
         prompt: 'select_account',
@@ -555,7 +555,7 @@ export async function requestGoogleReadPermission() {
 export async function requestMicrosoftReadPermission() {
   const msal = await ensureMsalReady();
   if (!msal) throw new Error('Microsofti sisselogimise teek ei laadinud.');
-  await msal.handleRedirectPromise().catch(() => null);
+  await msal.handleRedirectPromise({ navigateToLoginRequestUrl: false }).catch(() => null);
   const user = getLoggedInUser();
   const email = String(user?.email || '').toLowerCase();
   const accounts = msal.getAllAccounts();

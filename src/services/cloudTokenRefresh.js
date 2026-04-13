@@ -99,7 +99,7 @@ export async function refreshGoogleTokenSilently() {
 async function getMsalInstance() {
   const instance = await getMsalPublicClientApplication();
   if (!instance) throw new Error('Microsoft Client ID puudub.');
-  await instance.handleRedirectPromise().catch(() => null);
+  await instance.handleRedirectPromise({ navigateToLoginRequestUrl: false }).catch(() => null);
   return instance;
 }
 

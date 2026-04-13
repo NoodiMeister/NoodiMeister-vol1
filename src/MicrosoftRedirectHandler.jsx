@@ -36,7 +36,7 @@ export default function MicrosoftRedirectHandler() {
 
   useEffect(() => {
     let cancelled = false;
-    const clientId = import.meta.env.VITE_MICROSOFT_CLIENT_ID || '';
+    const clientId = String(import.meta.env.VITE_MICROSOFT_CLIENT_ID || '').trim();
 
     if (!clientId) {
       setStatus('error');
@@ -63,7 +63,8 @@ export default function MicrosoftRedirectHandler() {
           setErrorMessage(t['auth.configMissingClientId'] || 'Microsofti klient puudub.');
           return;
         }
-        const result = await pca.handleRedirectPromise();
+        // Ära suuna tagasi /login jms — redirect_uri on juur /; muidu kaob ?code= ja handleRedirectPromise ei käivitu teisel lehel.
+        const result = await pca.handleRedirectPromise({ navigateToLoginRequestUrl: false });
         if (cancelled) return;
         if (!result?.account) {
           const hash = window.location.hash || '';
