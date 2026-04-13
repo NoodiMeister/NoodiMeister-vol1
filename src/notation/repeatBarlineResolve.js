@@ -2,6 +2,7 @@ import { SMUFL_GLYPH } from './smufl/glyphs';
 
 /**
  * Kordus-taktijooned: ühine otsustus kõikide vaadete jaoks.
+ * Vertikaal-/X-paigutus (fontSize = taktijoone kõrgus, lõpujoon thinCx): `repeatBarlineLayout.js`.
  * Leland / SMuFL: algus U+E040, lõpp U+E041, mõlemad ühel joonel (rea sees) U+E042.
  *
  * U+E042 kasutatakse ainult sama süsteemirea kahe naabertakti piiril (j > 0),

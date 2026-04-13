@@ -51,8 +51,6 @@ import {
   getGlyphFontSize,
   getRestFontSize,
   TEXT_FONT_FAMILY,
-  getThickBarlineThickness,
-  BARLINE_SEPARATION,
 } from '../notation/musescoreStyle';
 import {
   computeBeamGroups,
@@ -86,18 +84,13 @@ import {
   getLeftBarlineRepeatRender,
   shouldDrawRepeatEndGlyphOnRight,
 } from '../notation/repeatBarlineResolve';
+import {
+  getFinalDoubleBarlineCentersX,
+  getRepeatBarlineSmuflPlacement,
+} from '../notation/repeatBarlineLayout';
 
 const LAYOUT = { MARGIN_LEFT: 60, CLEF_WIDTH: 45, MEASURE_MIN_WIDTH: 28 };
 
-/** Leland thinThickBarlineSeparation: kaks selget joont (õhuke, siis paks), keskpunktid taktirea lõpus. */
-function getFinalDoubleBarlineCentersX (rightEdgeX, staffSpace) {
-  const thinW = getThinBarlineThickness(staffSpace);
-  const thickW = getThickBarlineThickness(staffSpace);
-  const gap = BARLINE_SEPARATION * staffSpace;
-  const thickCx = rightEdgeX;
-  const thinCx = thickCx - (thickW / 2 + gap + thinW / 2);
-  return { thinCx, thickCx, thinW, thickW };
-}
 const PAGE_BREAK_GAP = 80;
 const STAFF_SPACE = 10;
 /** Left edge of staff lines: after system bracket + instrument brace (piano). Clef is 1px to the right. */
@@ -1080,20 +1073,24 @@ export function TraditionalNotationView({
                 const barY2 =
                   connectedBarlines && staffIndexInScore === 0 ? connectedY2 : staffY + lastLineY;
                 const measureRightX = measureX + measureWidth;
-                const finalBarlineGeomForRepeat = measure.barlineFinal
-                  ? getFinalDoubleBarlineCentersX(measureRightX, spacing)
-                  : null;
                 const repeatEndAnchoredToFinalBarline = !!(
                   measure.repeatEnd
                   && drawRepeatEndGlyphRight
-                  && finalBarlineGeomForRepeat
+                  && measure.barlineFinal
                 );
-                const repeatRightGlyphX = repeatEndAnchoredToFinalBarline
+                const finalBarlineGeomForRepeat = repeatEndAnchoredToFinalBarline
+                  ? getFinalDoubleBarlineCentersX(measureRightX, spacing)
+                  : null;
+                const repeatRightGlyphX = finalBarlineGeomForRepeat
                   ? finalBarlineGeomForRepeat.thinCx
                   : measureRightX;
-                const repeatRightTextAnchor = repeatEndAnchoredToFinalBarline ? 'middle' : 'start';
-                const repeatGlyphY = staffY + ((firstLineY + lastLineY) / 2);
-                const repeatGlyphFontSize = getGlyphFontSize(spacing);
+                const repeatRightTextAnchor = finalBarlineGeomForRepeat ? 'middle' : 'start';
+                const rowBarTop = staffY + firstLineY;
+                const rowBarBottom = staffY + lastLineY;
+                const repeatSmufl = getRepeatBarlineSmuflPlacement({
+                  barTopY: rowBarTop,
+                  barBottomY: rowBarBottom,
+                });
 
                 return (
                   <g key={measureIdx}>
@@ -1122,11 +1119,11 @@ export function TraditionalNotationView({
                             <SmuflGlyph
                               glyph={leftBarlineRepeat.glyph}
                               x={measureX}
-                              y={repeatGlyphY}
-                              fontSize={repeatGlyphFontSize}
+                              y={repeatSmufl.y}
+                              fontSize={repeatSmufl.fontSize}
                               fill="#1a1a1a"
                               textAnchor="middle"
-                              dominantBaseline="central"
+                              dominantBaseline={repeatSmufl.dominantBaseline}
                               fontFamily={SMUFL_MUSIC_FONT_FAMILY}
                             />
                             {onRemoveRepeatMark && (
@@ -1142,11 +1139,11 @@ export function TraditionalNotationView({
                             <SmuflGlyph
                               glyph={leftBarlineRepeat.glyph}
                               x={measureX}
-                              y={repeatGlyphY}
-                              fontSize={repeatGlyphFontSize}
+                              y={repeatSmufl.y}
+                              fontSize={repeatSmufl.fontSize}
                               fill="#1a1a1a"
                               textAnchor="end"
-                              dominantBaseline="central"
+                              dominantBaseline={repeatSmufl.dominantBaseline}
                               fontFamily={SMUFL_MUSIC_FONT_FAMILY}
                             />
                             {onRemoveRepeatMark && (
@@ -1173,11 +1170,11 @@ export function TraditionalNotationView({
                             <SmuflGlyph
                               glyph={SMUFL_GLYPH.repeatRight}
                               x={repeatRightGlyphX}
-                              y={repeatGlyphY}
-                              fontSize={repeatGlyphFontSize}
+                              y={repeatSmufl.y}
+                              fontSize={repeatSmufl.fontSize}
                               fill="#1a1a1a"
                               textAnchor={repeatRightTextAnchor}
-                              dominantBaseline="central"
+                              dominantBaseline={repeatSmufl.dominantBaseline}
                               fontFamily={SMUFL_MUSIC_FONT_FAMILY}
                             />
                             {repeatEndAnchoredToFinalBarline && drawConnectedBarlinesHere && (

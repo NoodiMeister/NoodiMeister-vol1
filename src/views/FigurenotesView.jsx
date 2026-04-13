@@ -30,6 +30,7 @@ import {
   getLeftBarlineRepeatRender,
   shouldDrawRepeatEndGlyphOnRight,
 } from "../notation/repeatBarlineResolve";
+import { getRepeatBarlineSmuflPlacement } from "../notation/repeatBarlineLayout";
 
 const LAYOUT = { MARGIN_LEFT: 60, MEASURE_MIN_WIDTH: 28 };
 const FIGURE_START_PADDING = 8;
@@ -1194,9 +1195,10 @@ export function FigurenotesView({
                                   barLineInset
                                 : sys.yOffset + melodyRowHeight - barLineInset;
                             const barLineTopY = sys.yOffset + barLineInset;
-                            const barLineCenterY =
-                              (barLineTopY + barLineBottomY) / 2;
-                            const barLineHeight = barLineBottomY - barLineTopY;
+                            const repeatSmufl = getRepeatBarlineSmuflPlacement({
+                              barTopY: barLineTopY,
+                              barBottomY: barLineBottomY,
+                            });
                             const isRightBarlineOfSystem =
                               measureIdx ===
                               sys.measureIndices[sys.measureIndices.length - 1];
@@ -1206,10 +1208,8 @@ export function FigurenotesView({
                               (isLastMeasureOfScore || mBar.barlineFinal) &&
                               !mBar.repeatEnd;
                             const xRight = measureX + measureWidth;
-                            const repeatGlyphSize = Math.max(
-                              18,
-                              Math.round(barLineHeight * 0.95),
-                            );
+                            const repeatEndAnchoredToFinalBarline =
+                              !!(mBar.repeatEnd && drawEnd && mBar.barlineFinal);
                             const finalGeom = showFinalBar
                               ? getFinalDoubleBarlineGeometry({
                                   measureRightX: xRight,
@@ -1222,28 +1222,45 @@ export function FigurenotesView({
                                   chordLineGap,
                                 })
                               : null;
+                            const repeatEndFinalGeom =
+                              repeatEndAnchoredToFinalBarline
+                                ? getFinalDoubleBarlineGeometry({
+                                    measureRightX: xRight,
+                                    notationScale,
+                                    figurenotesSize,
+                                    yOffset: sys.yOffset,
+                                    melodyRowHeight,
+                                    padVertical,
+                                    chordLineHeight,
+                                    chordLineGap,
+                                  })
+                                : null;
+                            const repeatRightX =
+                              repeatEndFinalGeom?.thinX ?? xRight;
+                            const repeatRightAnchor =
+                              repeatEndFinalGeom ? "middle" : "start";
                             return (
                               <>
                                 {leftR.variant === "both" ? (
                                   <SmuflGlyph
                                     glyph={leftR.glyph}
                                     x={measureX}
-                                    y={barLineCenterY}
-                                    fontSize={repeatGlyphSize}
+                                    y={repeatSmufl.y}
+                                    fontSize={repeatSmufl.fontSize}
                                     fill="#1a1a1a"
                                     textAnchor="middle"
-                                    dominantBaseline="central"
+                                    dominantBaseline={repeatSmufl.dominantBaseline}
                                     fontFamily={SMUFL_MUSIC_FONT_FAMILY}
                                   />
                                 ) : leftR.variant === "start" ? (
                                   <SmuflGlyph
                                     glyph={leftR.glyph}
                                     x={measureX}
-                                    y={barLineCenterY}
-                                    fontSize={repeatGlyphSize}
+                                    y={repeatSmufl.y}
+                                    fontSize={repeatSmufl.fontSize}
                                     fill="#1a1a1a"
                                     textAnchor="end"
-                                    dominantBaseline="central"
+                                    dominantBaseline={repeatSmufl.dominantBaseline}
                                     fontFamily={SMUFL_MUSIC_FONT_FAMILY}
                                   />
                                 ) : leftR.variant === "barline" ? (
@@ -1257,16 +1274,28 @@ export function FigurenotesView({
                                   />
                                 ) : null}
                                 {drawEnd ? (
-                                  <SmuflGlyph
-                                    glyph={SMUFL_GLYPH.repeatRight}
-                                    x={xRight}
-                                    y={barLineCenterY}
-                                    fontSize={repeatGlyphSize}
-                                    fill="#1a1a1a"
-                                    textAnchor="start"
-                                    dominantBaseline="central"
-                                    fontFamily={SMUFL_MUSIC_FONT_FAMILY}
-                                  />
+                                  <>
+                                    <SmuflGlyph
+                                      glyph={SMUFL_GLYPH.repeatRight}
+                                      x={repeatRightX}
+                                      y={repeatSmufl.y}
+                                      fontSize={repeatSmufl.fontSize}
+                                      fill="#1a1a1a"
+                                      textAnchor={repeatRightAnchor}
+                                      dominantBaseline={repeatSmufl.dominantBaseline}
+                                      fontFamily={SMUFL_MUSIC_FONT_FAMILY}
+                                    />
+                                    {repeatEndFinalGeom && (
+                                      <line
+                                        x1={repeatEndFinalGeom.thickX}
+                                        y1={repeatEndFinalGeom.topY}
+                                        x2={repeatEndFinalGeom.thickX}
+                                        y2={repeatEndFinalGeom.bottomY}
+                                        stroke="#1a1a1a"
+                                        strokeWidth={repeatEndFinalGeom.thickW}
+                                      />
+                                    )}
+                                  </>
                                 ) : (
                                   isRightBarlineOfSystem &&
                                   !showFinalBar && (
@@ -2129,18 +2158,7 @@ export function FigurenotesView({
                             melodyRowHeight -
                             barLineInset;
                       const barLineTopY = sys.yOffset + barLineInset;
-                      const barLineCenterY = (barLineTopY + barLineBottomY) / 2;
-                      const barLineHeight = barLineBottomY - barLineTopY;
-                      const perRowBarHeight =
-                        (chordLineHeight > 0
-                          ? melodyRowHeight + chordLineGap + chordLineHeight
-                          : melodyRowHeight) -
-                        barLineInset * 2;
-                      const repeatGlyphSizePerRow = Math.max(
-                        18,
-                        Math.round(perRowBarHeight * 0.95),
-                      );
-                      const repeatRowCenterYs = Array.from(
+                      const repeatSmuflPerRow = Array.from(
                         { length: nStaffRows },
                         (_, rowIdx) => {
                           const rowTopY =
@@ -2157,7 +2175,10 @@ export function FigurenotesView({
                                 rowIdx * rowStepPx +
                                 melodyRowHeight -
                                 barLineInset;
-                          return (rowTopY + rowBottomY) / 2;
+                          return getRepeatBarlineSmuflPlacement({
+                            barTopY: rowTopY,
+                            barBottomY: rowBottomY,
+                          });
                         },
                       );
                       const isRightBarlineOfSystem =
@@ -2169,10 +2190,12 @@ export function FigurenotesView({
                         (isLastMeasureOfScore || measureBar.barlineFinal) &&
                         !measureBar.repeatEnd;
                       const xRight = measureX + measureWidth;
-                      const repeatGlyphSize = Math.max(
-                        18,
-                        Math.round(barLineHeight * 0.95),
-                      );
+                      const repeatEndAnchoredToFinalBarline =
+                        !!(
+                          measureBar.repeatEnd &&
+                          drawEnd &&
+                          measureBar.barlineFinal
+                        );
                       const finalGeom = showFinalBar
                         ? getFinalDoubleBarlineGeometry({
                             measureRightX: xRight,
@@ -2187,33 +2210,51 @@ export function FigurenotesView({
                             combinedRowStepPx: rowStepPx,
                           })
                         : null;
+                      const repeatEndFinalGeom = repeatEndAnchoredToFinalBarline
+                        ? getFinalDoubleBarlineGeometry({
+                            measureRightX: xRight,
+                            notationScale,
+                            figurenotesSize,
+                            yOffset: sys.yOffset,
+                            melodyRowHeight,
+                            padVertical,
+                            chordLineHeight,
+                            chordLineGap,
+                            combinedStaffRowCount: nStaffRows,
+                            combinedRowStepPx: rowStepPx,
+                          })
+                        : null;
+                      const repeatRightX = repeatEndFinalGeom?.thinX ?? xRight;
+                      const repeatRightAnchor = repeatEndFinalGeom
+                        ? "middle"
+                        : "start";
                       return (
                         <>
                           {leftR.variant === "both" ? (
-                            repeatRowCenterYs.map((rowCenterY, rowIdx) => (
+                            repeatSmuflPerRow.map((rp, rowIdx) => (
                               <SmuflGlyph
                                 key={`repeat-left-both-${measureIdx}-${rowIdx}`}
                                 glyph={leftR.glyph}
                                 x={measureX}
-                                y={rowCenterY}
-                                fontSize={repeatGlyphSizePerRow}
+                                y={rp.y}
+                                fontSize={rp.fontSize}
                                 fill="#1a1a1a"
                                 textAnchor="middle"
-                                dominantBaseline="central"
+                                dominantBaseline={rp.dominantBaseline}
                                 fontFamily={SMUFL_MUSIC_FONT_FAMILY}
                               />
                             ))
                           ) : leftR.variant === "start" ? (
-                            repeatRowCenterYs.map((rowCenterY, rowIdx) => (
+                            repeatSmuflPerRow.map((rp, rowIdx) => (
                               <SmuflGlyph
                                 key={`repeat-left-start-${measureIdx}-${rowIdx}`}
                                 glyph={leftR.glyph}
                                 x={measureX}
-                                y={rowCenterY}
-                                fontSize={repeatGlyphSizePerRow}
+                                y={rp.y}
+                                fontSize={rp.fontSize}
                                 fill="#1a1a1a"
                                 textAnchor="end"
-                                dominantBaseline="central"
+                                dominantBaseline={rp.dominantBaseline}
                                 fontFamily={SMUFL_MUSIC_FONT_FAMILY}
                               />
                             ))
@@ -2228,16 +2269,16 @@ export function FigurenotesView({
                             />
                           ) : null}
                           {drawEnd ? (
-                            repeatRowCenterYs.map((rowCenterY, rowIdx) => (
+                            repeatSmuflPerRow.map((rp, rowIdx) => (
                               <SmuflGlyph
                                 key={`repeat-right-${measureIdx}-${rowIdx}`}
                                 glyph={SMUFL_GLYPH.repeatRight}
-                                x={xRight}
-                                y={rowCenterY}
-                                fontSize={repeatGlyphSizePerRow}
+                                x={repeatRightX}
+                                y={rp.y}
+                                fontSize={rp.fontSize}
                                 fill="#1a1a1a"
-                                textAnchor="start"
-                                dominantBaseline="central"
+                                textAnchor={repeatRightAnchor}
+                                dominantBaseline={rp.dominantBaseline}
                                 fontFamily={SMUFL_MUSIC_FONT_FAMILY}
                               />
                             ))
@@ -2253,6 +2294,16 @@ export function FigurenotesView({
                                 strokeWidth={barLineWidth}
                               />
                             )
+                          )}
+                          {repeatEndFinalGeom && (
+                            <line
+                              x1={repeatEndFinalGeom.thickX}
+                              y1={repeatEndFinalGeom.topY}
+                              x2={repeatEndFinalGeom.thickX}
+                              y2={repeatEndFinalGeom.bottomY}
+                              stroke="#1a1a1a"
+                              strokeWidth={repeatEndFinalGeom.thickW}
+                            />
                           )}
                           {showFinalBar && finalGeom && (
                             <g>
