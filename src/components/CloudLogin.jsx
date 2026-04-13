@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useGoogleLogin } from '@react-oauth/google';
 import { useNavigate } from 'react-router-dom';
-import { getStorageForLogin, getStorageForRead, getLoggedInUser, isLoggedIn, setLoggedInUser, clearMicrosoftAuthSession, clearMsalSessionStorageKeys, KEY_GOOGLE_TOKEN, KEY_GOOGLE_EXPIRY, KEY_MICROSOFT_TOKEN, KEY_MICROSOFT_EXPIRY, setGoogleGrantedScopes, setMicrosoftGrantedScopes } from '../services/authStorage';
+import { getStorageForLogin, getStorageForRead, getLoggedInUser, isLoggedIn, setLoggedInUser, clearMicrosoftAuthSession, clearMsalPreRedirectKeys, KEY_GOOGLE_TOKEN, KEY_GOOGLE_EXPIRY, KEY_MICROSOFT_TOKEN, KEY_MICROSOFT_EXPIRY, setGoogleGrantedScopes, setMicrosoftGrantedScopes } from '../services/authStorage';
 import { formatAuthError } from '../utils/authError';
 import { getMsalPublicClientApplication } from '../services/msalBrowser';
 import { LOCALE_STORAGE_KEY, DEFAULT_LOCALE, getTranslations } from '../i18n';
@@ -17,11 +17,15 @@ function getT() {
 
 const googleClientId = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_GOOGLE_CLIENT_ID) || '';
 
-const microsoftClientId = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_MICROSOFT_CLIENT_ID) || '';
+const microsoftClientId = String((typeof import.meta !== 'undefined' && import.meta.env?.VITE_MICROSOFT_CLIENT_ID) || '').trim();
 const GOOGLE_SCOPE_READ = 'openid email profile https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/drive.install';
 const GOOGLE_SCOPE_WRITE = 'openid email profile https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.install';
-const MICROSOFT_SCOPE_READ = ['User.Read', 'Files.Read'];
-const MICROSOFT_SCOPE_WRITE = ['User.Read', 'Files.ReadWrite'];
+/** MSAL v5 / OIDC: openid (+ profile, offline_access) peab olemas olema koos Graph scope'idega. */
+const MICROSOFT_OIDC_BASE = ['openid', 'profile', 'offline_access'];
+const MICROSOFT_SCOPE_READ = [...MICROSOFT_OIDC_BASE, 'User.Read', 'Files.Read'];
+const MICROSOFT_SCOPE_WRITE = [...MICROSOFT_OIDC_BASE, 'User.Read', 'Files.ReadWrite'];
+/** Registreerimine ilma Drive loata — ainult konto + Graph User.Read */
+const MICROSOFT_SCOPE_REGISTER_MIN = [...MICROSOFT_OIDC_BASE, 'User.Read'];
 
 /** Heuristics to detect mobile / tablet (especially iPadOS where popups are fragile). */
 function isMobileOrTablet() {
@@ -382,8 +386,8 @@ function useCloudLoginWithProvider(mode = 'login', stayLoggedIn = false, onError
       const msal = await ensureMsalReady();
       if (!msal) throw new Error('Microsofti sisselogimise teek ei laadinud. Proovi teist brauserit või võrku; mõnikord blokeeritakse Microsofti skripte.');
 
-      // Katkenud redirect jätab MSAL sessionStorage'i — loginRedirect ei pruugi midagi teha ilma veateateta
-      clearMsalSessionStorageKeys();
+      // Katkenud redirect jätab MSAL ajutise oleku (session + mõnikord localStorage) — loginRedirect võib vaikselt ebaõnnestuda
+      clearMsalPreRedirectKeys();
       // Clear any leftover redirect state so interaction_in_progress does not block the next attempt
       await msal.handleRedirectPromise().catch(() => null);
       await msal.loginRedirect({
@@ -394,7 +398,7 @@ function useCloudLoginWithProvider(mode = 'login', stayLoggedIn = false, onError
     })().catch((err) => {
       const isPopupClosed = err?.errorCode === 'user_cancelled' || err?.errorCode === 'popup_window_error' || err?.errorMessage?.includes('user_cancelled');
       const isInteractionInProgress = err?.errorCode === 'interaction_in_progress' || (err?.message && String(err.message).includes('interaction_in_progress'));
-      if (isInteractionInProgress) clearMsalSessionStorageKeys();
+      if (isInteractionInProgress) clearMsalPreRedirectKeys();
       if (!isPopupClosed) {
         const msg = isInteractionInProgress
           ? 'Eelmine Microsofti sisselogimine jäi pooleli. Proovi Microsofti nuppu uuesti (vajadusel värskenda lehte).'
@@ -570,4 +574,4 @@ export async function requestMicrosoftReadPermission() {
   return tokenResponse;
 }
 
-export { GOOGLE_SCOPE_READ, GOOGLE_SCOPE_WRITE, MICROSOFT_SCOPE_READ, MICROSOFT_SCOPE_WRITE };
+export { GOOGLE_SCOPE_READ, GOOGLE_SCOPE_WRITE, MICROSOFT_SCOPE_READ, MICROSOFT_SCOPE_WRITE, MICROSOFT_SCOPE_REGISTER_MIN };

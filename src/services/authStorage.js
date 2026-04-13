@@ -690,6 +690,34 @@ export function clearMsalSessionStorageKeys() {
   } catch (_) {}
 }
 
+/** MSAL ajutised võtmed localStorage'is (nt interaction.status) — katkenud redirect võib jätta need alles ja blokeerida uue loginRedirect'i. */
+const MSAL_TEMP_KEY_MARKERS = [
+  'interaction.status',
+  'request.params',
+  'code.verifier',
+  'request.origin',
+  'request.native',
+  'urlHash',
+];
+
+/**
+ * Enne uut Microsofti redirect-login'i: tühjenda sessionStorage msal.* + localStorage msal.* ajutised võtmed.
+ * Ära kutsu tagasi suunamisel (?code=) enne handleRedirectPromise — see eemaldab PKCE oleku.
+ */
+export function clearMsalPreRedirectKeys() {
+  clearMsalSessionStorageKeys();
+  if (typeof window === 'undefined' || !window.localStorage) return;
+  try {
+    const keys = [];
+    for (let i = 0; i < window.localStorage.length; i++) {
+      const key = window.localStorage.key(i);
+      if (!key || !key.startsWith('msal.')) continue;
+      if (MSAL_TEMP_KEY_MARKERS.some((m) => key.includes(m))) keys.push(key);
+    }
+    keys.forEach((k) => window.localStorage.removeItem(k));
+  } catch (_) {}
+}
+
 /** Tühjenda sisselogimine ja token (väljalogimine). Kaustade nimekirjad on kasutajati (e-posti järgi); teise kasutaja sisselogimisel kuvatakse ainult tema kaustad. */
 export function clearAuth() {
   if (typeof window === 'undefined') return;

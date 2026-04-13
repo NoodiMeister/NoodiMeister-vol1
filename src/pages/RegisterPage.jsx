@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { UserPlus, Mail, Lock, User } from 'lucide-react';
-import { CloudLoginButtons, GOOGLE_SCOPE_READ, MICROSOFT_SCOPE_READ } from '../components/CloudLogin';
+import { CloudLoginButtons, GOOGLE_SCOPE_READ, MICROSOFT_SCOPE_READ, MICROSOFT_SCOPE_REGISTER_MIN } from '../components/CloudLogin';
 import { AuthErrorBlock } from '../components/AuthErrorBlock';
 import { AppLogo } from '../components/AppLogo';
 import { formatAuthError } from '../utils/authError';
@@ -216,7 +216,7 @@ export default function RegisterPage() {
               mode="register"
               stayLoggedIn={stayLoggedIn}
               googleScope={requestCloudReadPermission ? GOOGLE_SCOPE_READ : 'openid email profile'}
-              microsoftScopes={requestCloudReadPermission ? MICROSOFT_SCOPE_READ : ['User.Read']}
+              microsoftScopes={requestCloudReadPermission ? MICROSOFT_SCOPE_READ : MICROSOFT_SCOPE_REGISTER_MIN}
               onError={(payload) => setError(payload.fullMessage, payload)}
             />
             <label className="flex items-start gap-2 cursor-pointer">

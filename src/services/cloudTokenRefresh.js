@@ -108,7 +108,7 @@ export async function refreshMicrosoftTokenSilently() {
   if (microsoftRefreshPromise) return microsoftRefreshPromise;
   microsoftRefreshPromise = (async () => {
     const instance = await getMsalInstance();
-    const scopes = ['User.Read', 'Files.Read'];
+    const scopes = ['openid', 'profile', 'offline_access', 'User.Read', 'Files.Read'];
     const userEmail = getLoggedInUser()?.email || '';
     const accounts = instance.getAllAccounts();
     const account = accounts.find((a) => String(a?.username || '').toLowerCase() === String(userEmail).toLowerCase()) || accounts[0];

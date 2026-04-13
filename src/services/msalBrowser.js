@@ -1,8 +1,8 @@
 import { PublicClientApplication } from '@azure/msal-browser';
 import { getMicrosoftRedirectUri } from '../utils/microsoftRedirectUri';
 
-const clientId = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_MICROSOFT_CLIENT_ID) || '';
-const tenantId = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_MICROSOFT_TENANT_ID) || 'common';
+const clientId = String((typeof import.meta !== 'undefined' && import.meta.env?.VITE_MICROSOFT_CLIENT_ID) || '').trim();
+const tenantId = String((typeof import.meta !== 'undefined' && import.meta.env?.VITE_MICROSOFT_TENANT_ID) || 'common').trim() || 'common';
 
 let pcaPromise = null;
 
