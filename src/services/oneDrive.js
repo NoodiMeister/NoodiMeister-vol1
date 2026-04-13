@@ -24,15 +24,19 @@ async function graphGet(token, path) {
   });
   const body = await res.json().catch(() => ({}));
   if (!res.ok) {
+    const code = body?.error?.code || '';
     const msg =
       body?.error?.message ||
       body?.message ||
-      (res.status === 403
-        ? 'Õigused OneDrive\'i lugemiseks puuduvad (võib vajada administraatori nõusolekut).'
-        : `HTTP ${res.status}`);
+      (res.status === 404
+        ? 'OneDrive ei ole selle Microsofti konto jaoks kättesaadav (404). Mõnel töö-/koolikontol puudub isiklik cloud-salvestus; proovi @outlook.com / @live kontot või konto administraatorit.'
+        : res.status === 403
+          ? 'Õigused OneDrive\'i juurdepääsuks puuduvad (403). Kaustade loomiseks ja salvestamiseks on vaja Files.ReadWrite — logi Microsoftist välja ja uuesti sisse (uuendatud load), või lisa Azure\'is API permission + admin consent.'
+          : `HTTP ${res.status}`);
     const err = new Error(msg);
     err.status = res.status;
     err.body = body;
+    err.graphCode = code;
     throw err;
   }
   return body;
@@ -164,7 +168,14 @@ export async function createFolder(token, parentId, folderName) {
     });
     const body = await res.json().catch(() => ({}));
     if (!res.ok) {
-      const msg = body?.error?.message || body?.message || `HTTP ${res.status}`;
+      const msg =
+        body?.error?.message ||
+        body?.message ||
+        (res.status === 403
+          ? 'Kausta ei saa luua: tokenil puudub Files.ReadWrite (logi Microsoftist välja ja uuesti sisse) või admin ei ole Graphi õigust kinnitanud.'
+          : res.status === 404
+            ? 'OneDrive\'i juurkaust puudub või pole saadaval (404). Proovi teist Microsofti kontot.'
+            : `HTTP ${res.status}`);
       return { ok: false, error: msg };
     }
     return { ok: true, id: body.id, name: body.name || folderName };

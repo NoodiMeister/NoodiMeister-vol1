@@ -22,8 +22,10 @@ const GOOGLE_SCOPE_READ = 'openid email profile https://www.googleapis.com/auth/
 const GOOGLE_SCOPE_WRITE = 'openid email profile https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.install';
 /** MSAL v5 / OIDC: openid (+ profile, offline_access) peab olemas olema koos Graph scope'idega. */
 const MICROSOFT_OIDC_BASE = ['openid', 'profile', 'offline_access'];
-const MICROSOFT_SCOPE_READ = [...MICROSOFT_OIDC_BASE, 'User.Read', 'Files.Read'];
-const MICROSOFT_SCOPE_WRITE = [...MICROSOFT_OIDC_BASE, 'User.Read', 'Files.ReadWrite'];
+/** OneDrive (kaustad, salvestus): Graph POST /children nõuab Files.ReadWrite — ainult Files.Read annab 403. */
+const MICROSOFT_SCOPE_ONEDRIVE = [...MICROSOFT_OIDC_BASE, 'User.Read', 'Files.ReadWrite'];
+const MICROSOFT_SCOPE_READ = MICROSOFT_SCOPE_ONEDRIVE;
+const MICROSOFT_SCOPE_WRITE = MICROSOFT_SCOPE_ONEDRIVE;
 /** Registreerimine ilma Drive loata — ainult konto + Graph User.Read */
 const MICROSOFT_SCOPE_REGISTER_MIN = [...MICROSOFT_OIDC_BASE, 'User.Read'];
 

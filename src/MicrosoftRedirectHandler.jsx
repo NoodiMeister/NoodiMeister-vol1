@@ -120,7 +120,7 @@ export default function MicrosoftRedirectHandler() {
         storage.setItem(KEY_MICROSOFT_TOKEN, accessToken);
         const expiresAt = result.expiresOn ? result.expiresOn.getTime() : 0;
         storage.setItem(KEY_MICROSOFT_EXPIRY, String(expiresAt));
-        setMicrosoftGrantedScopes(result.scopes || ['User.Read', 'Files.Read']);
+            setMicrosoftGrantedScopes(result.scopes || ['User.Read', 'Files.ReadWrite']);
         if (!getLoggedInUser()?.email || !isLoggedIn()) {
           setStatus('error');
           setErrorMessage(t['auth.confirmationFailed'] || 'Kinnitamine ebaõnnestus.');
