@@ -5,9 +5,12 @@ import { lazyWithRetry } from './utils/lazyWithRetry';
 import LandingPage from './pages/LandingPage';
 // Lazy load, et vältida TDZ-viga ühes suures bundle'is; chunk load error → üks taaskoormus
 const RegisterPage = lazyWithRetry(() => import('./pages/RegisterPage'));
+const ForgotPasswordPage = lazyWithRetry(() => import('./pages/ForgotPasswordPage'));
+const ResetPasswordPage = lazyWithRetry(() => import('./pages/ResetPasswordPage'));
 const LoginPage = lazyWithRetry(() => import('./pages/LoginPage'));
 const HinnakiriPage = lazyWithRetry(() => import('./pages/HinnakiriPage'));
 const ToetaPage = lazyWithRetry(() => import('./pages/ToetaPage'));
+const AboutPage = lazyWithRetry(() => import('./pages/AboutPage'));
 const AdminGrantSupportPage = lazyWithRetry(() => import('./pages/AdminGrantSupportPage'));
 const AdminRegistrationPage = lazyWithRetry(() => import('./pages/AdminRegistrationPage'));
 const UserDashboard = lazyWithRetry(() => import('./components/UserDashboard'));
@@ -246,6 +249,8 @@ function AppRoutes() {
           <Route path="/konto" element={<AccountOrRedirect />} />
           <Route path="/login" element={<LoginOrRedirect />} />
           <Route path="/registreeru" element={<RegisterOrRedirect />} />
+          <Route path="/parool/taasta" element={<ForgotPasswordPage />} />
+          <Route path="/parool/uus" element={<ResetPasswordPage />} />
           <Route
             path="/hinnakiri"
             element={SHOW_SUPPORT_AND_PRICING_UI ? <HinnakiriPage /> : <Navigate to="/" replace />}
@@ -254,6 +259,8 @@ function AppRoutes() {
             path="/toeta"
             element={SHOW_SUPPORT_AND_PRICING_UI ? <ToetaPage /> : <Navigate to="/" replace />}
           />
+          <Route path="/teave" element={<AboutPage />} />
+          <Route path="/about" element={<Navigate to="/teave" replace />} />
           <Route path="/administraator" element={<AdminGrantSupportPage />} />
           <Route path="/administraator/register" element={<AdminRegistrationPage />} />
           <Route path="/administraator-registreerimine" element={<Navigate to="/administraator/register" replace />} />

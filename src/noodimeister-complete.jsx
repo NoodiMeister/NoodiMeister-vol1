@@ -531,13 +531,15 @@ var PITCH_NAME_TO_NATURAL = { C: 'C', 'C#': 'C', Db: 'C', D: 'D', 'D#': 'D', Eb:
 // Joonestiku/instrumentide konstandid var'iga faili alguses
 var INSTRUMENT_CATEGORIES = [
   { id: 'singleStaff', labelKey: 'cat.singleStaff', instruments: ['single-staff-treble', 'single-staff-bass'] },
-  { id: 'classroom', labelKey: 'cat.classroom', instruments: ['boomwhackers', 'handbells'] },
+  { id: 'orffTuned', labelKey: 'cat.orffTuned', instruments: ['boomwhackers', 'handbells'] },
+  { id: 'orffMallets', labelKey: 'cat.orffMallets', instruments: ['soprano-xylophone', 'alto-xylophone', 'bass-xylophone', 'soprano-metallophone', 'alto-metallophone', 'bass-metallophone', 'glockenspiel'] },
+  { id: 'orffPercussion', labelKey: 'cat.orffPercussion', instruments: ['triangle', 'claves', 'woodblock', 'temple-blocks', 'castanets', 'shakers', 'maracas', 'guiro', 'agogo', 'cowbell', 'cymbals', 'sleighbells', 'djembe', 'cajon'] },
   { id: 'keyboard', labelKey: 'cat.keyboard', instruments: ['piano', 'electric-piano', 'organ', 'harpsichord', 'accordion', 'celesta'] },
   { id: 'stringsPlucked', labelKey: 'cat.stringsPlucked', instruments: ['guitar', 'ukulele-sopran', 'ukulele-tenor', 'ukulele-bariton', 'ukulele-bass'] },
   { id: 'stringsBowed', labelKey: 'cat.stringsBowed', instruments: ['violin', 'viola', 'cello', 'double-bass', 'strings-ensemble'] },
   { id: 'woodwinds', labelKey: 'cat.woodwinds', instruments: ['flute', 'recorder', 'clarinet', 'oboe', 'bassoon'] },
   { id: 'brass', labelKey: 'cat.brass', instruments: ['trumpet', 'trombone', 'tuba', 'french-horn'] },
-  { id: 'nonOrchestral', labelKey: 'cat.nonOrchestral', instruments: ['tin-whistle-d', 'tin-whistle-c', 'tin-whistle-bb', 'tin-whistle-a', 'tin-whistle-g', 'tin-whistle-f', 'saxophone', 'glockenspiel', 'xylophone', 'marimba', 'vibraphone'] },
+  { id: 'nonOrchestral', labelKey: 'cat.nonOrchestral', instruments: ['tin-whistle-d', 'tin-whistle-c', 'tin-whistle-bb', 'tin-whistle-a', 'tin-whistle-g', 'tin-whistle-f', 'saxophone', 'xylophone', 'marimba', 'vibraphone'] },
   { id: 'bass', labelKey: 'cat.bass', instruments: ['acoustic-bass', 'electric-bass'] },
   { id: 'synth', labelKey: 'cat.synth', instruments: ['synth-lead', 'synth-pad'] },
   { id: 'other', labelKey: 'cat.other', instruments: ['voice'] }
@@ -547,6 +549,26 @@ var INSTRUMENT_CONFIG_BASE = {
   'single-staff-bass':   { value: 'single-staff-bass', range: 'E2-G4', type: 'standard', defaultClef: 'bass' },
   boomwhackers: { value: 'boomwhackers', range: 'C4-C6', type: 'standard', defaultClef: 'treble', colorSystem: 'chromaNotes' },
   handbells:    { value: 'handbells', range: 'C4-C6', type: 'standard', defaultClef: 'treble', colorSystem: 'schoolHandbells' },
+  'soprano-xylophone': { value: 'soprano-xylophone', range: 'C5-A6', type: 'standard', defaultClef: 'treble', family: 'orff-mallet' },
+  'alto-xylophone': { value: 'alto-xylophone', range: 'C4-A5', type: 'standard', defaultClef: 'treble', family: 'orff-mallet' },
+  'bass-xylophone': { value: 'bass-xylophone', range: 'C3-A4', type: 'standard', defaultClef: 'bass', family: 'orff-mallet' },
+  'soprano-metallophone': { value: 'soprano-metallophone', range: 'C5-A6', type: 'standard', defaultClef: 'treble', family: 'orff-mallet' },
+  'alto-metallophone': { value: 'alto-metallophone', range: 'C4-A5', type: 'standard', defaultClef: 'treble', family: 'orff-mallet' },
+  'bass-metallophone': { value: 'bass-metallophone', range: 'C3-A4', type: 'standard', defaultClef: 'bass', family: 'orff-mallet' },
+  triangle: { value: 'triangle', range: 'C5-C5', type: 'standard', defaultClef: 'treble', family: 'orff-percussion' },
+  claves: { value: 'claves', range: 'C5-C5', type: 'standard', defaultClef: 'treble', family: 'orff-percussion' },
+  woodblock: { value: 'woodblock', range: 'C5-C5', type: 'standard', defaultClef: 'treble', family: 'orff-percussion' },
+  'temple-blocks': { value: 'temple-blocks', range: 'C5-C5', type: 'standard', defaultClef: 'treble', family: 'orff-percussion' },
+  castanets: { value: 'castanets', range: 'C5-C5', type: 'standard', defaultClef: 'treble', family: 'orff-percussion' },
+  shakers: { value: 'shakers', range: 'C5-C5', type: 'standard', defaultClef: 'treble', family: 'orff-percussion' },
+  maracas: { value: 'maracas', range: 'C5-C5', type: 'standard', defaultClef: 'treble', family: 'orff-percussion' },
+  guiro: { value: 'guiro', range: 'C5-C5', type: 'standard', defaultClef: 'treble', family: 'orff-percussion' },
+  agogo: { value: 'agogo', range: 'C5-C5', type: 'standard', defaultClef: 'treble', family: 'orff-percussion' },
+  cowbell: { value: 'cowbell', range: 'C5-C5', type: 'standard', defaultClef: 'treble', family: 'orff-percussion' },
+  cymbals: { value: 'cymbals', range: 'C5-C5', type: 'standard', defaultClef: 'treble', family: 'orff-percussion' },
+  sleighbells: { value: 'sleighbells', range: 'C5-C5', type: 'standard', defaultClef: 'treble', family: 'orff-percussion' },
+  djembe: { value: 'djembe', range: 'C4-C4', type: 'standard', defaultClef: 'bass', family: 'orff-percussion' },
+  cajon: { value: 'cajon', range: 'C4-C4', type: 'standard', defaultClef: 'bass', family: 'orff-percussion' },
   'electric-piano': { value: 'electric-piano', range: 'A0-C8', type: 'standard', defaultClef: 'treble' },
   organ:      { value: 'organ', range: 'C2-C6', type: 'figuredBass', defaultClef: 'treble' },
   harpsichord:{ value: 'harpsichord', range: 'F1-F6', type: 'figuredBass', defaultClef: 'treble' },
@@ -594,6 +616,26 @@ var INSTRUMENT_I18N_KEYS = {
   'single-staff-treble': 'inst.singleStaffTreble', 'single-staff-bass': 'inst.singleStaffBass',
   boomwhackers: 'inst.boomwhackers',
   handbells: 'inst.handbells',
+  'soprano-xylophone': 'inst.sopranoXylophone',
+  'alto-xylophone': 'inst.altoXylophone',
+  'bass-xylophone': 'inst.bassXylophone',
+  'soprano-metallophone': 'inst.sopranoMetallophone',
+  'alto-metallophone': 'inst.altoMetallophone',
+  'bass-metallophone': 'inst.bassMetallophone',
+  triangle: 'inst.triangle',
+  claves: 'inst.claves',
+  woodblock: 'inst.woodblock',
+  'temple-blocks': 'inst.templeBlocks',
+  castanets: 'inst.castanets',
+  shakers: 'inst.shakers',
+  maracas: 'inst.maracas',
+  guiro: 'inst.guiro',
+  agogo: 'inst.agogo',
+  cowbell: 'inst.cowbell',
+  cymbals: 'inst.cymbals',
+  sleighbells: 'inst.sleighbells',
+  djembe: 'inst.djembe',
+  cajon: 'inst.cajon',
   organ: 'inst.organ', harpsichord: 'inst.harpsichord', accordion: 'inst.accordion', piano: 'inst.piano',
   'electric-piano': 'inst.electricPiano', celesta: 'inst.celesta',
   guitar: 'inst.guitar', 'ukulele-sopran': 'inst.ukuleleSopran', 'ukulele-tenor': 'inst.ukuleleTenor',
@@ -615,6 +657,12 @@ var INSTRUMENT_I18N_KEYS = {
 };
 var INSTRUMENT_TO_GM_PROGRAM = {
   'single-staff-treble': 0, 'single-staff-bass': 0,
+  boomwhackers: 115, handbells: 14,
+  'soprano-xylophone': 13, 'alto-xylophone': 13, 'bass-xylophone': 13,
+  'soprano-metallophone': 10, 'alto-metallophone': 10, 'bass-metallophone': 10,
+  triangle: 115, claves: 115, woodblock: 115, 'temple-blocks': 115, castanets: 115,
+  shakers: 115, maracas: 115, guiro: 115, agogo: 115, cowbell: 115, cymbals: 115, sleighbells: 115,
+  djembe: 115, cajon: 115,
   piano: 0, 'electric-piano': 4, organ: 19, harpsichord: 6, accordion: 21, celesta: 8,
   guitar: 24, 'ukulele-sopran': 24, 'ukulele-tenor': 24, 'ukulele-bariton': 24, 'ukulele-bass': 32,
   violin: 40, viola: 41, cello: 42, 'double-bass': 43, 'strings-ensemble': 48, 'acoustic-bass': 32, 'electric-bass': 33,
@@ -624,6 +672,12 @@ var INSTRUMENT_TO_GM_PROGRAM = {
 };
 var INSTRUMENT_TO_SOUNDFONT_NAME = {
   'single-staff-treble': 'acoustic_grand_piano', 'single-staff-bass': 'acoustic_grand_piano',
+  boomwhackers: 'woodblock', handbells: 'tubular_bells',
+  'soprano-xylophone': 'xylophone', 'alto-xylophone': 'xylophone', 'bass-xylophone': 'xylophone',
+  'soprano-metallophone': 'glockenspiel', 'alto-metallophone': 'glockenspiel', 'bass-metallophone': 'glockenspiel',
+  triangle: 'woodblock', claves: 'woodblock', woodblock: 'woodblock', 'temple-blocks': 'woodblock', castanets: 'woodblock',
+  shakers: 'woodblock', maracas: 'woodblock', guiro: 'woodblock', agogo: 'woodblock', cowbell: 'woodblock', cymbals: 'woodblock', sleighbells: 'woodblock',
+  djembe: 'woodblock', cajon: 'woodblock',
   piano: 'acoustic_grand_piano', 'electric-piano': 'electric_piano_1', organ: 'church_organ', harpsichord: 'harpsichord', accordion: 'accordion', celesta: 'celesta',
   guitar: 'acoustic_guitar_nylon', 'ukulele-sopran': 'acoustic_guitar_nylon', 'ukulele-tenor': 'acoustic_guitar_nylon', 'ukulele-bariton': 'acoustic_guitar_nylon', 'ukulele-bass': 'acoustic_bass',
   violin: 'violin', viola: 'viola', cello: 'cello', 'double-bass': 'contrabass', 'strings-ensemble': 'string_ensemble_1', 'acoustic-bass': 'acoustic_bass', 'electric-bass': 'electric_bass_finger',
@@ -1565,6 +1619,10 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   const [timeSignatureMode, setTimeSignatureMode] = useState('pedagogical'); // 'classic' or 'pedagogical'
   const [timeSignatureEditField, setTimeSignatureEditField] = useState('numerator'); // 'numerator' or 'denominator'
   const [timeSignatureSize, setTimeSignatureSize] = useState(36); // Time signature font size in figurenotation (12–200), one value per project
+  const [pedagogicalTimeSigDenominatorType, setPedagogicalTimeSigDenominatorType] = useState('rhythm'); // 'number' | 'rhythm' | 'instrument' | 'emoji'
+  const [pedagogicalTimeSigDenominatorColor, setPedagogicalTimeSigDenominatorColor] = useState('#1a1a1a');
+  const [pedagogicalTimeSigDenominatorInstrument, setPedagogicalTimeSigDenominatorInstrument] = useState('handbell'); // handbell | boomwhacker | triangle
+  const [pedagogicalTimeSigDenominatorEmoji, setPedagogicalTimeSigDenominatorEmoji] = useState('🥁');
 
   // Stage V: Selection and editing state
   const [selectedNoteIndex, setSelectedNoteIndex] = useState(-1);
@@ -3508,6 +3566,10 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     figurenotesChordBlocksShowTones,
     figurenotesMelodyShowNoteNames,
     timeSignatureSize,
+    pedagogicalTimeSigDenominatorType,
+    pedagogicalTimeSigDenominatorColor,
+    pedagogicalTimeSigDenominatorInstrument,
+    pedagogicalTimeSigDenominatorEmoji,
     showBarNumbers,
     barNumberSize,
     showRhythmSyllables,
@@ -3556,7 +3618,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     lyricFontSize,
     noteheadShape,
     noteheadEmoji
-  }), [staves, activeStaffIndex, staffYOffsets, measureStretchFactors, systemYOffsets, visibleStaves, instrumentPartGroups, intermissionLabels, timeSignature, timeSignatureMode, keySignature, staffLines, notationStyle, pixelsPerBeat, notationMode, instrumentNotationVariant, linkedNotationByStaffId, tinWhistleLinkedFingeringScalePercent, cursorPosition, addedMeasures, measureRepeatMarks, setupCompleted, songTitle, author, pickupEnabled, pickupQuantity, pickupDuration, pageOrientation, paperSize, layoutMeasuresPerLine, layoutLineBreakBefore, layoutPageBreakBefore, layoutExtraPages, layoutSystemGap, layoutPartsGap, layoutPartsGapMm, layoutSizeUnit, layoutConnectedBarlines, layoutGlobalSpacingMultiplier, viewMode, partLayoutMeasuresPerLine, partLayoutLineBreakBefore, partLayoutPageBreakBefore, partLayoutExtraPages, showPageNavigator, pageFlowDirection, viewFitPage, viewSmartPage, visibleToolIds, tuningReferenceNote, tuningReferenceOctave, tuningReferenceHz, playNoteOnInsert, figurenotesSize, figurenotesStems, figurenotesChordLineGap, figurenotesChordBlocks, figurenotesChordBlocksShowTones, figurenotesMelodyShowNoteNames, timeSignatureSize, showBarNumbers, barNumberSize, showRhythmSyllables, showAllNoteLabels, enableEmojiOverlays, joClefStaffPosition, relativeNotationShowKeySignature, relativeNotationShowTraditionalClef, isPedagogicalProject, pedagogicalAudioBpm, pedagogicalAudioPlaybackRate, pedagogicalPlayheadStyle, pedagogicalPlayheadEmoji, pedagogicalPlayheadEmojiSize, cursorLineStrokeWidth, pedagogicalPlayheadMovement, chords, textBoxes, documentFontFamily, lyricFontFamily, titleFontSize, authorFontSize, titleFontFamily, authorFontFamily, titleBold, titleItalic, authorBold, authorItalic, titleAlignment, authorAlignment, staffRowAlignment, pageDesignDataUrl, pageDesignOpacity, pageDesignFit, pageDesignPositionX, pageDesignPositionY, pageDesignCrop, lyricLineIndex, lyricLineYOffset, lyricFontSize, noteheadShape, noteheadEmoji]);
+  }), [staves, activeStaffIndex, staffYOffsets, measureStretchFactors, systemYOffsets, visibleStaves, instrumentPartGroups, intermissionLabels, timeSignature, timeSignatureMode, keySignature, staffLines, notationStyle, pixelsPerBeat, notationMode, instrumentNotationVariant, linkedNotationByStaffId, tinWhistleLinkedFingeringScalePercent, cursorPosition, addedMeasures, measureRepeatMarks, setupCompleted, songTitle, author, pickupEnabled, pickupQuantity, pickupDuration, pageOrientation, paperSize, layoutMeasuresPerLine, layoutLineBreakBefore, layoutPageBreakBefore, layoutExtraPages, layoutSystemGap, layoutPartsGap, layoutPartsGapMm, layoutSizeUnit, layoutConnectedBarlines, layoutGlobalSpacingMultiplier, viewMode, partLayoutMeasuresPerLine, partLayoutLineBreakBefore, partLayoutPageBreakBefore, partLayoutExtraPages, showPageNavigator, pageFlowDirection, viewFitPage, viewSmartPage, visibleToolIds, tuningReferenceNote, tuningReferenceOctave, tuningReferenceHz, playNoteOnInsert, figurenotesSize, figurenotesStems, figurenotesChordLineGap, figurenotesChordBlocks, figurenotesChordBlocksShowTones, figurenotesMelodyShowNoteNames, timeSignatureSize, pedagogicalTimeSigDenominatorType, pedagogicalTimeSigDenominatorColor, pedagogicalTimeSigDenominatorInstrument, pedagogicalTimeSigDenominatorEmoji, showBarNumbers, barNumberSize, showRhythmSyllables, showAllNoteLabels, enableEmojiOverlays, joClefStaffPosition, relativeNotationShowKeySignature, relativeNotationShowTraditionalClef, isPedagogicalProject, pedagogicalAudioBpm, pedagogicalAudioPlaybackRate, pedagogicalPlayheadStyle, pedagogicalPlayheadEmoji, pedagogicalPlayheadEmojiSize, cursorLineStrokeWidth, pedagogicalPlayheadMovement, chords, textBoxes, documentFontFamily, lyricFontFamily, titleFontSize, authorFontSize, titleFontFamily, authorFontFamily, titleBold, titleItalic, authorBold, authorItalic, titleAlignment, authorAlignment, staffRowAlignment, pageDesignDataUrl, pageDesignOpacity, pageDesignFit, pageDesignPositionX, pageDesignPositionY, pageDesignCrop, lyricLineIndex, lyricLineYOffset, lyricFontSize, noteheadShape, noteheadEmoji]);
 
   const saveToStorageSync = useCallback(() => {
     try {
@@ -3740,6 +3802,10 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       if ('figurenotesChordBlocksShowTones' in data) setFigurenotesChordBlocksShowTones(!!data.figurenotesChordBlocksShowTones);
       if ('figurenotesMelodyShowNoteNames' in data) setFigurenotesMelodyShowNoteNames(!!data.figurenotesMelodyShowNoteNames);
       if (data.timeSignatureSize != null) setTimeSignatureSize(Math.max(12, Math.min(48, data.timeSignatureSize)));
+      if (data.pedagogicalTimeSigDenominatorType) setPedagogicalTimeSigDenominatorType(String(data.pedagogicalTimeSigDenominatorType));
+      if (data.pedagogicalTimeSigDenominatorColor) setPedagogicalTimeSigDenominatorColor(String(data.pedagogicalTimeSigDenominatorColor));
+      if (data.pedagogicalTimeSigDenominatorInstrument) setPedagogicalTimeSigDenominatorInstrument(String(data.pedagogicalTimeSigDenominatorInstrument));
+      if (data.pedagogicalTimeSigDenominatorEmoji != null) setPedagogicalTimeSigDenominatorEmoji(String(data.pedagogicalTimeSigDenominatorEmoji || '🥁'));
       if (data.isPedagogicalProject != null) setIsPedagogicalProject(!!data.isPedagogicalProject);
       if (data.pedagogicalAudioBpm != null) setPedagogicalAudioBpm(Math.max(20, Math.min(300, data.pedagogicalAudioBpm)));
       if (data.pedagogicalAudioPlaybackRate != null) setPedagogicalAudioPlaybackRate(clampNumber(Number(data.pedagogicalAudioPlaybackRate) || 1, 0.5, 2));
@@ -4047,6 +4113,10 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       if ('figurenotesChordBlocksShowTones' in data) setFigurenotesChordBlocksShowTones(!!data.figurenotesChordBlocksShowTones);
       if ('figurenotesMelodyShowNoteNames' in data) setFigurenotesMelodyShowNoteNames(!!data.figurenotesMelodyShowNoteNames);
       if (data.timeSignatureSize != null) setTimeSignatureSize(Math.max(12, Math.min(48, data.timeSignatureSize)));
+      if (data.pedagogicalTimeSigDenominatorType) setPedagogicalTimeSigDenominatorType(String(data.pedagogicalTimeSigDenominatorType));
+      if (data.pedagogicalTimeSigDenominatorColor) setPedagogicalTimeSigDenominatorColor(String(data.pedagogicalTimeSigDenominatorColor));
+      if (data.pedagogicalTimeSigDenominatorInstrument) setPedagogicalTimeSigDenominatorInstrument(String(data.pedagogicalTimeSigDenominatorInstrument));
+      if (data.pedagogicalTimeSigDenominatorEmoji != null) setPedagogicalTimeSigDenominatorEmoji(String(data.pedagogicalTimeSigDenominatorEmoji || '🥁'));
       if (data.notationMode) setNotationMode(data.notationMode);
       if (data.noteheadShape) setNoteheadShape(data.noteheadShape);
       if (data.noteheadEmoji != null) setNoteheadEmoji(data.noteheadEmoji);
@@ -10514,6 +10584,16 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                         {t('theme.dark')}
                       </button>
                     </div>
+                    <div className="border-t border-slate-600 my-1" />
+                    <Link
+                      to="/teave"
+                      onClick={() => setHeaderMenuOpen(null)}
+                      className="mx-2 mt-1 flex items-center justify-between rounded px-2.5 py-2 text-xs font-medium text-amber-50 hover:bg-slate-600 transition-colors"
+                      title="About / Teave"
+                    >
+                      <span>About / Teave</span>
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </Link>
                   </div>
                 )}
               </div>
@@ -10950,6 +11030,41 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                       </div>
                     </div>
                     <div className="text-xs text-center text-amber-600 mt-2">{t('timesig.tabHint')}</div>
+                    {timeSignatureMode === 'pedagogical' && (
+                      <div className="mt-3 pt-3 border-t border-amber-200 space-y-2">
+                        <div className="grid grid-cols-2 gap-2">
+                          <label className="text-xs font-semibold text-amber-900">
+                            {t('timesig.denominatorType')}
+                            <select value={pedagogicalTimeSigDenominatorType} onChange={(e) => { dirtyRef.current = true; setPedagogicalTimeSigDenominatorType(e.target.value); }} className="mt-1 w-full rounded border border-amber-300 bg-amber-50 px-2 py-1 text-xs">
+                              <option value="number">{t('timesig.denominatorType.number')}</option>
+                              <option value="rhythm">{t('timesig.denominatorType.rhythm')}</option>
+                              <option value="instrument">{t('timesig.denominatorType.instrument')}</option>
+                              <option value="emoji">{t('timesig.denominatorType.emoji')}</option>
+                            </select>
+                          </label>
+                          <label className="text-xs font-semibold text-amber-900">
+                            {t('timesig.denominatorColor')}
+                            <input type="color" value={pedagogicalTimeSigDenominatorColor} onChange={(e) => { dirtyRef.current = true; setPedagogicalTimeSigDenominatorColor(e.target.value); }} className="mt-1 h-8 w-full rounded border border-amber-300 bg-amber-50 px-1" />
+                          </label>
+                        </div>
+                        {pedagogicalTimeSigDenominatorType === 'instrument' && (
+                          <label className="block text-xs font-semibold text-amber-900">
+                            {t('timesig.denominatorInstrument')}
+                            <select value={pedagogicalTimeSigDenominatorInstrument} onChange={(e) => { dirtyRef.current = true; setPedagogicalTimeSigDenominatorInstrument(e.target.value); }} className="mt-1 w-full rounded border border-amber-300 bg-amber-50 px-2 py-1 text-xs">
+                              <option value="handbell">{t('timesig.instrument.handbell')}</option>
+                              <option value="boomwhacker">{t('timesig.instrument.boomwhacker')}</option>
+                              <option value="triangle">{t('timesig.instrument.triangle')}</option>
+                            </select>
+                          </label>
+                        )}
+                        {pedagogicalTimeSigDenominatorType === 'emoji' && (
+                          <label className="block text-xs font-semibold text-amber-900">
+                            {t('timesig.denominatorEmoji')}
+                            <input type="text" maxLength={4} value={pedagogicalTimeSigDenominatorEmoji} onChange={(e) => { dirtyRef.current = true; setPedagogicalTimeSigDenominatorEmoji(e.target.value || '🥁'); }} className="mt-1 w-full rounded border border-amber-300 bg-amber-50 px-2 py-1 text-sm" placeholder="🥁" />
+                          </label>
+                        )}
+                      </div>
+                    )}
                     {notationStyle === 'FIGURENOTES' && (
                       <div className="flex items-center gap-2 mt-3 pt-3 border-t border-amber-200">
                         <label htmlFor="timesig-size" className="text-xs font-semibold text-amber-900 shrink-0">{t('timesig.size')}</label>
@@ -12916,6 +13031,10 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                   figurenotesRowHeight={figurenotesRowHeight}
                   figurenotesChordLineHeight={figurenotesChordBlocks ? figurenotesChordLineHeight : 0}
                   timeSignatureSize={timeSignatureSize}
+                  pedagogicalTimeSigDenominatorType={pedagogicalTimeSigDenominatorType}
+                  pedagogicalTimeSigDenominatorColor={pedagogicalTimeSigDenominatorColor}
+                  pedagogicalTimeSigDenominatorInstrument={pedagogicalTimeSigDenominatorInstrument}
+                  pedagogicalTimeSigDenominatorEmoji={pedagogicalTimeSigDenominatorEmoji}
                   themeColors={themeColors}
                   pedagogicalPlayheadStyle={pedagogicalPlayheadStyle}
                   pedagogicalPlayheadEmoji={pedagogicalPlayheadEmoji}
@@ -13245,7 +13364,7 @@ function getFingeringForNote(pitch, octave, instrumentId) {
 }
 
 // Timeline Component – multi-system layout (VexFlow loogika). (PAGE_BREAK_GAP on defineeritud üleval.)
-function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, pageWidth, cursorPosition, notationMode, staffLines, clefType, keySignature = 'C', relativeNotationShowKeySignature = false, relativeNotationShowTraditionalClef = false, onJoClefPositionChange, joClefFocused = false, onJoClefFocus, instrument = 'single-staff-treble', instrumentNotationVariant = 'standard', instrumentConfig = {}, showBarNumbers = true, barNumberSize = 11, showRhythmSyllables = false, joClefStaffPosition: joClefStaffPositionProp, showAllNoteLabels = false, enableEmojiOverlays = true, noteheadShape = 'oval', noteheadEmoji = '♪', onNoteTeacherLabelChange, onNoteLabelClick, chords = [], isDotted, isRest, selectedDuration, noteInputMode, selectedNoteIndex, isNoteSelected, notes: allNotes, onStaffAddNote, onNoteClick, onNoteMouseDown, onNoteMouseEnter, onNotePitchChange, onNoteBeatChange, canHandDragNotes = false, ghostPitch, ghostOctave, ghostAccidental = 0, ghostAccidentalIsExplicit = false, onFigureBeatClick, onChordLineMouseMove, onChordLineClick, notationStyle, layoutMeasuresPerLine = 4, layoutLineBreakBefore = [], layoutPageBreakBefore = [], layoutSystemGap = 120, layoutPartsGap, layoutConnectedBarlines = false, staffRowAlignment = 'center', staffIndexInScore = 0, systemTotalHeight, layoutGlobalSpacingMultiplier = 1, systems: systemsProp, baseYOffset = 0, isActiveStaff = true, staffCount = 1, staffHeight: staffHeightProp, figurenotesSize = 16, figurenotesStems = false, figurenotesChordLineGap = 6, figurenotesChordBlocks = false, figurenotesChordBlocksShowTones = true, figurenotesMelodyShowNoteNames = true, figurenotesRowHeight: figurenotesRowHeightProp, figurenotesChordLineHeight: figurenotesChordLineHeightProp, timeSignatureSize = 16, themeColors: themeColorsProp, pedagogicalPlayheadStyle = 'line', pedagogicalPlayheadEmoji = '🎵', pedagogicalPlayheadEmojiSize = 32, cursorSizePx, cursorLineStrokeWidth = 4, cursorSubRow = 0, pedagogicalPlayheadMovement = 'arch', isPedagogicalAudioPlaying = false, isExportingAnimation = false, exportCursorRef, scoreContainerRef, pageFlowDirection = 'vertical', pageOrientation = 'portrait', isFirstInBraceGroup = false, braceGroupSize = 0, lyricFontFamily = 'sans-serif', lyricFontSize = 12, lyricLineYOffset = 0, translateLabel, showLayoutBreakIcons = false, showStaffSpacerHandles = false, onSystemYOffsetChange, onToggleLineBreakAfter, onRemoveRepeatMark, activeLyricNoteIndex = null, physicalPageGapPx = 3, disablePhysicalPageGaps = false, hideCursorOverlay = false, exportNotationSvgRef = null, multiStaffInstruments = null, multiStaffMeasuresByInstrument = null, combinedCursorRowOffsetPx = 0, combinedActiveStaffRowIndex = 0, cursorStaffClefType = null, tinWhistleLinkedFingeringScale = 1, linkedNotationByStaffId = null }) {
+function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, pageWidth, cursorPosition, notationMode, staffLines, clefType, keySignature = 'C', relativeNotationShowKeySignature = false, relativeNotationShowTraditionalClef = false, onJoClefPositionChange, joClefFocused = false, onJoClefFocus, instrument = 'single-staff-treble', instrumentNotationVariant = 'standard', instrumentConfig = {}, showBarNumbers = true, barNumberSize = 11, showRhythmSyllables = false, joClefStaffPosition: joClefStaffPositionProp, showAllNoteLabels = false, enableEmojiOverlays = true, noteheadShape = 'oval', noteheadEmoji = '♪', onNoteTeacherLabelChange, onNoteLabelClick, chords = [], isDotted, isRest, selectedDuration, noteInputMode, selectedNoteIndex, isNoteSelected, notes: allNotes, onStaffAddNote, onNoteClick, onNoteMouseDown, onNoteMouseEnter, onNotePitchChange, onNoteBeatChange, canHandDragNotes = false, ghostPitch, ghostOctave, ghostAccidental = 0, ghostAccidentalIsExplicit = false, onFigureBeatClick, onChordLineMouseMove, onChordLineClick, notationStyle, layoutMeasuresPerLine = 4, layoutLineBreakBefore = [], layoutPageBreakBefore = [], layoutSystemGap = 120, layoutPartsGap, layoutConnectedBarlines = false, staffRowAlignment = 'center', staffIndexInScore = 0, systemTotalHeight, layoutGlobalSpacingMultiplier = 1, systems: systemsProp, baseYOffset = 0, isActiveStaff = true, staffCount = 1, staffHeight: staffHeightProp, figurenotesSize = 16, figurenotesStems = false, figurenotesChordLineGap = 6, figurenotesChordBlocks = false, figurenotesChordBlocksShowTones = true, figurenotesMelodyShowNoteNames = true, figurenotesRowHeight: figurenotesRowHeightProp, figurenotesChordLineHeight: figurenotesChordLineHeightProp, timeSignatureSize = 16, pedagogicalTimeSigDenominatorType = 'rhythm', pedagogicalTimeSigDenominatorColor = '#1a1a1a', pedagogicalTimeSigDenominatorInstrument = 'handbell', pedagogicalTimeSigDenominatorEmoji = '🥁', themeColors: themeColorsProp, pedagogicalPlayheadStyle = 'line', pedagogicalPlayheadEmoji = '🎵', pedagogicalPlayheadEmojiSize = 32, cursorSizePx, cursorLineStrokeWidth = 4, cursorSubRow = 0, pedagogicalPlayheadMovement = 'arch', isPedagogicalAudioPlaying = false, isExportingAnimation = false, exportCursorRef, scoreContainerRef, pageFlowDirection = 'vertical', pageOrientation = 'portrait', isFirstInBraceGroup = false, braceGroupSize = 0, lyricFontFamily = 'sans-serif', lyricFontSize = 12, lyricLineYOffset = 0, translateLabel, showLayoutBreakIcons = false, showStaffSpacerHandles = false, onSystemYOffsetChange, onToggleLineBreakAfter, onRemoveRepeatMark, activeLyricNoteIndex = null, physicalPageGapPx = 3, disablePhysicalPageGaps = false, hideCursorOverlay = false, exportNotationSvgRef = null, multiStaffInstruments = null, multiStaffMeasuresByInstrument = null, combinedCursorRowOffsetPx = 0, combinedActiveStaffRowIndex = 0, cursorStaffClefType = null, tinWhistleLinkedFingeringScale = 1, linkedNotationByStaffId = null }) {
   const themeColors = themeColorsProp || { staffLineColor: '#000', noteFill: '#1a1a1a', textColor: '#1a1a1a', isDark: false };
   const safeKey = keySignature ?? 'C';
   // Alati lõplik number (mitte NaN) — varajane `return null` enne hookide kasutamist rikkus Reacti hookide reeglid ja võis jätta noodiala tühjaks.
@@ -13961,6 +14080,10 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
           pageWidth={pageWidth || LAYOUT.PAGE_WIDTH_MIN}
           timeSignature={timeSignature}
           timeSignatureMode={timeSignatureMode}
+          pedagogicalTimeSigDenominatorType={pedagogicalTimeSigDenominatorType}
+          pedagogicalTimeSigDenominatorColor={pedagogicalTimeSigDenominatorColor}
+          pedagogicalTimeSigDenominatorInstrument={pedagogicalTimeSigDenominatorInstrument}
+          pedagogicalTimeSigDenominatorEmoji={pedagogicalTimeSigDenominatorEmoji}
           staffLines={staffLines}
           clefType={clefType}
           keySignature={safeKey}

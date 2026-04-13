@@ -12,6 +12,7 @@ import {
 } from './services/authStorage';
 import { LOCALE_STORAGE_KEY, DEFAULT_LOCALE, getTranslations } from './i18n';
 import { getMicrosoftRedirectUri } from './utils/microsoftRedirectUri';
+import { getMsalPublicClientApplication } from './services/msalBrowser';
 
 function redirectToKonto() {
   try {
@@ -25,7 +26,7 @@ function redirectToKonto() {
 
 /**
  * Shown when the app loads with ?code= or #code= (Microsoft redirect flow).
- * Uses window.msal from CDN, runs handleRedirectPromise(), then saves user and redirects to /konto (Minu konto).
+ * Kasutab jagatud MSAL instantsi; handleRedirectPromise → salvestus → /konto.
  */
 export default function MicrosoftRedirectHandler() {
   const [status, setStatus] = useState('processing');
@@ -36,42 +37,11 @@ export default function MicrosoftRedirectHandler() {
   useEffect(() => {
     let cancelled = false;
     const clientId = import.meta.env.VITE_MICROSOFT_CLIENT_ID || '';
-    const tenantId = import.meta.env.VITE_MICROSOFT_TENANT_ID || 'common';
-    const redirectUri = getMicrosoftRedirectUri();
 
     if (!clientId) {
       setStatus('error');
       setErrorMessage(t['auth.configMissingClientId'] || 'VITE_MICROSOFT_CLIENT_ID puudub.');
-      return;
-    }
-
-    function run() {
-      if (!window.msal?.PublicClientApplication) return Promise.resolve(null);
-      const authority = `https://login.microsoftonline.com/${encodeURIComponent(tenantId)}`;
-      const pca = new window.msal.PublicClientApplication({
-        auth: { clientId, authority, redirectUri },
-        cache: { cacheLocation: 'localStorage', storeAuthStateInCookie: false },
-      });
-      return pca.initialize().then(() => pca.handleRedirectPromise());
-    }
-
-    function waitForMsal() {
-      if (window.msal?.PublicClientApplication) return Promise.resolve();
-      return new Promise((resolve) => {
-        let attempts = 0;
-        const t = setInterval(() => {
-          attempts++;
-          if (window.msal?.PublicClientApplication) {
-            clearInterval(t);
-            resolve();
-            return;
-          }
-          if (attempts >= 50) {
-            clearInterval(t);
-            resolve();
-          }
-        }, 200);
-      });
+      return undefined;
     }
 
     function getUrlParams(fragmentOrQuery) {
@@ -84,21 +54,28 @@ export default function MicrosoftRedirectHandler() {
       return params;
     }
 
-    waitForMsal()
-      .then(() => run())
-      .then((result) => {
+    (async () => {
+      try {
+        const pca = await getMsalPublicClientApplication();
+        if (cancelled) return;
+        if (!pca) {
+          setStatus('error');
+          setErrorMessage(t['auth.configMissingClientId'] || 'Microsofti klient puudub.');
+          return;
+        }
+        const result = await pca.handleRedirectPromise();
         if (cancelled) return;
         if (!result?.account) {
           const hash = window.location.hash || '';
           const search = window.location.search || '';
           const params = { ...getUrlParams(hash), ...getUrlParams(search) };
           const errMsg = params.error_description || params.error || '';
-          const redirectUri = getMicrosoftRedirectUri();
+          const redirectUriHint = getMicrosoftRedirectUri();
           setStatus('error');
           setErrorMessage(
             errMsg
               ? `Microsoft: ${errMsg}`
-              : `No login data received. In Azure Portal → App registrations → NoodiMeister → Authentication, add this exact Redirect URI under "Single-page application": ${redirectUri} (then try again).`
+              : `No login data received. In Azure Portal → App registrations → NoodiMeister → Authentication, add this exact Redirect URI under "Single-page application": ${redirectUriHint} (then try again).`
           );
           return;
         }
@@ -109,61 +86,58 @@ export default function MicrosoftRedirectHandler() {
           setErrorMessage(t['auth.accessTokenMissing'] || 'Access token puudub.');
           return;
         }
-        return fetch('https://graph.microsoft.com/v1.0/me', {
+        const r = await fetch('https://graph.microsoft.com/v1.0/me', {
           headers: { Authorization: `Bearer ${accessToken}` },
-        })
-          .then((r) => r.json().catch(() => ({})))
-          .then((profile) => {
-            if (cancelled) return;
-            const emailRaw = profile.mail || profile.userPrincipalName || account.username || '';
-            const email = String(emailRaw || '').trim().toLowerCase();
-            if (!email) {
-              setStatus('error');
-              setErrorMessage(t['auth.emailNotReceived'] || 'E-maili ei saadud.');
-              return;
-            }
-            const user = {
-              email,
-              name: profile.displayName || account.name || email.split('@')[0],
-              provider: 'microsoft',
-            };
-            const storage = getStorageForLogin(false);
-            if (!storage) {
-              setStatus('error');
-              setErrorMessage(t['auth.storageNotAvailable'] || 'Salvestus ei ole saadaval.');
-              return;
-            }
-            const sessionUser = setLoggedInUser(user, false);
-            if (!sessionUser?.email) {
-              setStatus('error');
-              setErrorMessage(t['auth.storageNotAvailable'] || 'Salvestus ei ole saadaval.');
-              return;
-            }
-            clearGoogleAuthSession();
-            storage.setItem(KEY_MICROSOFT_TOKEN, accessToken);
-            const expiresAt = result.expiresOn ? result.expiresOn.getTime() : 0;
-            storage.setItem(KEY_MICROSOFT_EXPIRY, String(expiresAt));
-            setMicrosoftGrantedScopes(result.scopes || ['User.Read', 'Files.Read']);
-            if (!getLoggedInUser()?.email || !isLoggedIn()) {
-              setStatus('error');
-              setErrorMessage(t['auth.confirmationFailed'] || 'Kinnitamine ebaõnnestus.');
-              return;
-            }
-            setStatus('redirect');
-            try { sessionStorage.setItem('noodimeister-show-welcome', '1'); } catch (_) {}
-            // Clear hash/query so refresh doesn't re-run handler; then redirect
-            try {
-              window.history.replaceState(null, '', window.location.pathname || '/');
-            } catch (_) {}
-            setTimeout(() => redirectToKonto(), 100);
-          });
-      })
-      .catch((err) => {
+        });
+        const profile = await r.json().catch(() => ({}));
+        if (cancelled) return;
+        const emailRaw = profile.mail || profile.userPrincipalName || account.username || '';
+        const email = String(emailRaw || '').trim().toLowerCase();
+        if (!email) {
+          setStatus('error');
+          setErrorMessage(t['auth.emailNotReceived'] || 'E-maili ei saadud.');
+          return;
+        }
+        const user = {
+          email,
+          name: profile.displayName || account.name || email.split('@')[0],
+          provider: 'microsoft',
+        };
+        const storage = getStorageForLogin(false);
+        if (!storage) {
+          setStatus('error');
+          setErrorMessage(t['auth.storageNotAvailable'] || 'Salvestus ei ole saadaval.');
+          return;
+        }
+        const sessionUser = setLoggedInUser(user, false);
+        if (!sessionUser?.email) {
+          setStatus('error');
+          setErrorMessage(t['auth.storageNotAvailable'] || 'Salvestus ei ole saadaval.');
+          return;
+        }
+        clearGoogleAuthSession();
+        storage.setItem(KEY_MICROSOFT_TOKEN, accessToken);
+        const expiresAt = result.expiresOn ? result.expiresOn.getTime() : 0;
+        storage.setItem(KEY_MICROSOFT_EXPIRY, String(expiresAt));
+        setMicrosoftGrantedScopes(result.scopes || ['User.Read', 'Files.Read']);
+        if (!getLoggedInUser()?.email || !isLoggedIn()) {
+          setStatus('error');
+          setErrorMessage(t['auth.confirmationFailed'] || 'Kinnitamine ebaõnnestus.');
+          return;
+        }
+        setStatus('redirect');
+        try { sessionStorage.setItem('noodimeister-show-welcome', '1'); } catch (_) {}
+        try {
+          window.history.replaceState(null, '', window.location.pathname || '/');
+        } catch (_) {}
+        setTimeout(() => redirectToKonto(), 100);
+      } catch (err) {
         if (cancelled) return;
         console.error('[MicrosoftRedirectHandler]', err);
         setStatus('error');
         setErrorMessage(err?.message || err?.errorMessage || String(err));
-      });
+      }
+    })();
 
     return () => { cancelled = true; };
   }, []);

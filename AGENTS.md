@@ -83,6 +83,13 @@ Kõik muudatused peavad hoidma kasutaja teekonnad tervena:
   - sisestusvoogudes ei tohi olla märgatavat lag'i, topeltsisestust, vahelejätmisi ega cursor-jitter'it
   - enne sisestusloogika muutmist võrdle käitumist MuseScore/Finale/Sibelius tüüpi töövoogudega
 
+- **Standard: parooli taastamine (kohalik e-post + parool)**
+  - **Ulatus:** kehtib **ainult** `provider: local` kontodele (e-post + parool brauseris). **Google/Microsoft** parooli ja identiteedi taastamine jääb vastavalt Google’ile ja Microsoftile; Noodimeister ei saada neile läbi oma e-kirja SSO parooli resetti.
+  - **Server on tõde parooli räsi jaoks:** Vercel KV-s hoitakse `nm:auth:local:{email}` kirjet (scrypt räsi + sool). **Ülekirjutamine:** uus serverikirje luuakse `POST /api/auth/sync-local-account` kaudu **ainult kui** kirjet pole; olemasolevat ei tohi üle kirjutada ilma kehtiva parooli või kehtiva ühekordse taastamistokenita.
+  - **Sisselogimine:** eelistatud tee on `POST /api/auth/verify-local-login`; kui serveris kirjet pole (404), võib rakendus **üks kord** kasutada legacy `localStorage` parooli vastavust ja seejärel teha **sünk** serverisse. Kui serveris kirje on ja parool on vale (401), **ei tohi** aktsepteerida ainult kohalikku `localStorage` vastavust (server on allikas).
+  - **Taastamisvoog:** `POST /api/auth/request-password-reset` ei tohi paljastada, kas e-post on süsteemis; vastus peab olema kasutajale **sama sõnastus** olenemata olemasolust. Taastamistoken on **ühekordne**, lühiaegne (≈1 h), hoitakse KV-s räsi võtmena; kiri läheb **Resend** (või asendaja) kaudu; lingi baas tuleb `NM_PUBLIC_SITE_URL` (tootmise kanooniline URL).
+  - **Keskkond:** tootmises peavad olema `KV_*`, `RESEND_API_KEY`, `RESEND_FROM`, `NM_PUBLIC_SITE_URL`. Kohalikus dev-is kasuta `NM_DEV_API_PROXY` (vite proxy) või `vercel dev`, muidu `/api/auth/*` ei tööta.
+
 ### Filosoofia vs regressioonid (AI jaoks kohustuslik eristus)
 
 - **Filosoofia** (eesmärk, prioriteedid) ütleb *kuhu* liigume ja *mida* ei tohi ohverdada.

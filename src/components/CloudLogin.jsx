@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { useGoogleLogin } from '@react-oauth/google';
 import { useNavigate } from 'react-router-dom';
-import { getStorageForLogin, getStorageForRead, getLoggedInUser, isLoggedIn, setLoggedInUser, clearMicrosoftAuthSession, KEY_GOOGLE_TOKEN, KEY_GOOGLE_EXPIRY, KEY_MICROSOFT_TOKEN, KEY_MICROSOFT_EXPIRY, setGoogleGrantedScopes, setMicrosoftGrantedScopes } from '../services/authStorage';
+import { getStorageForLogin, getStorageForRead, getLoggedInUser, isLoggedIn, setLoggedInUser, clearMicrosoftAuthSession, clearMsalSessionStorageKeys, KEY_GOOGLE_TOKEN, KEY_GOOGLE_EXPIRY, KEY_MICROSOFT_TOKEN, KEY_MICROSOFT_EXPIRY, setGoogleGrantedScopes, setMicrosoftGrantedScopes } from '../services/authStorage';
 import { formatAuthError } from '../utils/authError';
-import { getMicrosoftRedirectUri } from '../utils/microsoftRedirectUri';
+import { getMsalPublicClientApplication } from '../services/msalBrowser';
 import { LOCALE_STORAGE_KEY, DEFAULT_LOCALE, getTranslations } from '../i18n';
 
 function getT() {
@@ -18,7 +18,6 @@ function getT() {
 const googleClientId = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_GOOGLE_CLIENT_ID) || '';
 
 const microsoftClientId = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_MICROSOFT_CLIENT_ID) || '';
-const microsoftTenantId = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_MICROSOFT_TENANT_ID) || 'common';
 const GOOGLE_SCOPE_READ = 'openid email profile https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/drive.install';
 const GOOGLE_SCOPE_WRITE = 'openid email profile https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.install';
 const MICROSOFT_SCOPE_READ = ['User.Read', 'Files.Read'];
@@ -112,106 +111,14 @@ function clearLocationHash() {
   }
 }
 
-const MSAL_CDN_URLS = [
-  'https://alcdn.msauth.net/browser/2.38.0/js/msal-browser.min.js',
-  'https://cdn.jsdelivr.net/npm/@azure/msal-browser@2.38.0/dist/msal-browser.min.js',
-];
-
-/** Load one MSAL script; on failure try next URL. */
-function loadMsalScript(urls, index = 0) {
-  if (index >= urls.length) return Promise.reject(new Error('MSAL script failed to load'));
-  const url = urls[index];
-  if (document.querySelector(`script[src="${url}"]`)) return Promise.resolve();
-  return new Promise((resolve, reject) => {
-    const script = document.createElement('script');
-    script.src = url;
-    script.crossOrigin = 'anonymous';
-    script.onload = () => resolve();
-    script.onerror = () => {
-      loadMsalScript(urls, index + 1).then(resolve).catch(reject);
-    };
-    document.head.appendChild(script);
-  });
-}
-
-/** Ensure MSAL script is in the page; if not, add it dynamically (helps when index.html script is blocked). */
-function ensureMsalScriptLoaded() {
-  if (window.msal?.PublicClientApplication) return Promise.resolve();
-  return loadMsalScript(MSAL_CDN_URLS);
-}
-
-/** Wait for window.msal (poll up to 12s). Tries dynamic script load once if still missing after 10s. */
-function waitForMsal() {
-  if (typeof window === 'undefined') return Promise.resolve(false);
-  if (window.msal?.PublicClientApplication) return Promise.resolve(true);
-  return new Promise((resolve) => {
-    let attempts = 0;
-    const maxAttempts = 50;
-    const interval = setInterval(() => {
-      attempts++;
-      if (window.msal?.PublicClientApplication) {
-        clearInterval(interval);
-        resolve(true);
-        return;
-      }
-      if (attempts >= maxAttempts) {
-        clearInterval(interval);
-        ensureMsalScriptLoaded()
-          .then(() => {
-            const again = setInterval(() => {
-              if (window.msal?.PublicClientApplication) {
-                clearInterval(again);
-                resolve(true);
-              }
-            }, 200);
-            setTimeout(() => {
-              clearInterval(again);
-              resolve(!!window.msal?.PublicClientApplication);
-            }, 4000);
-          })
-          .catch(() => {
-            console.error('[CloudLogin] MSAL CDN script ei laadinud.');
-            resolve(false);
-          });
-      }
-    }, 200);
-  });
-}
-
-/** Promise that resolves to an already-initialized MSAL instance (global msal from CDN). */
-let msalPromiseByOrigin = {};
-function getOrCreateMsalPromise() {
-  if (typeof window === 'undefined' || !microsoftClientId) return null;
-  if (!window.msal?.PublicClientApplication) return null;
-  const origin = window.location.origin;
-  if (msalPromiseByOrigin[origin]) return msalPromiseByOrigin[origin];
-  const redirectUri = getMicrosoftRedirectUri();
-  const authority = `https://login.microsoftonline.com/${encodeURIComponent(microsoftTenantId || 'common')}`;
-  const instance = new window.msal.PublicClientApplication({
-    auth: {
-      clientId: microsoftClientId,
-      authority,
-      redirectUri,
-    },
-    cache: {
-      cacheLocation: 'localStorage',
-      storeAuthStateInCookie: false,
-    },
-  });
-  const promise = instance.initialize().then(() => instance).catch((e) => {
-    delete msalPromiseByOrigin[origin];
-    throw e;
-  });
-  msalPromiseByOrigin[origin] = promise;
-  return promise;
-}
-
 async function ensureMsalReady() {
-  const ok = await waitForMsal();
-  if (!ok) return null;
-  const p = getOrCreateMsalPromise();
-  if (!p) return null;
-  return p;
+  if (!microsoftClientId) return null;
+  try {
+    return await getMsalPublicClientApplication();
+  } catch (e) {
+    console.error('[CloudLogin] MSAL ei käivitunud:', e?.message || e);
+    return null;
+  }
 }
 
 /** Vercel/sisselogimise eelne kontroll: kas salvestus on kirjutatav ja loetav (vältib "kinnitamine ebaõnnestus"). */
@@ -473,8 +380,10 @@ function useCloudLoginWithProvider(mode = 'login', stayLoggedIn = false, onError
         ? options.microsoftScopes
         : MICROSOFT_SCOPE_READ;
       const msal = await ensureMsalReady();
-      if (!msal) throw new Error('Microsofti sisselogimise teek ei laadinud. Lülita reklaamide või skriptide blokeerija välja sellel lehel või proovi teist brauserit või privaatakent.');
+      if (!msal) throw new Error('Microsofti sisselogimise teek ei laadinud. Proovi teist brauserit või võrku; mõnikord blokeeritakse Microsofti skripte.');
 
+      // Katkenud redirect jätab MSAL sessionStorage'i — loginRedirect ei pruugi midagi teha ilma veateateta
+      clearMsalSessionStorageKeys();
       // Clear any leftover redirect state so interaction_in_progress does not block the next attempt
       await msal.handleRedirectPromise().catch(() => null);
       await msal.loginRedirect({
@@ -485,9 +394,10 @@ function useCloudLoginWithProvider(mode = 'login', stayLoggedIn = false, onError
     })().catch((err) => {
       const isPopupClosed = err?.errorCode === 'user_cancelled' || err?.errorCode === 'popup_window_error' || err?.errorMessage?.includes('user_cancelled');
       const isInteractionInProgress = err?.errorCode === 'interaction_in_progress' || (err?.message && String(err.message).includes('interaction_in_progress'));
+      if (isInteractionInProgress) clearMsalSessionStorageKeys();
       if (!isPopupClosed) {
         const msg = isInteractionInProgress
-          ? 'Sisselogimise aken on juba avatud või eelmine proovimine ei lõppenud. Sulge kõik Microsofti aknad, oota mõni sekund ja proovi uuesti.'
+          ? 'Eelmine Microsofti sisselogimine jäi pooleli. Proovi Microsofti nuppu uuesti (vajadusel värskenda lehte).'
           : (err?.message || err?.errorMessage || err?.error_description || (err && typeof err === 'object' ? JSON.stringify(err) : String(err)));
         const t = getT();
         alert((t['auth.loginError'] || 'Sisselogimise viga') + ': ' + msg);
@@ -532,10 +442,10 @@ function CloudLoginButtonsInner({ mode = 'login', stayLoggedIn = false, onError,
   const googleEnabled = !!googleClientId;
   const microsoftEnabled = !!microsoftClientId;
 
-  // Start MSAL initialization as soon as login/register page is shown so it's ready when user clicks Microsoft.
+  // Eellaadimine: MSAL initialize enne Microsofti nuppu (kiirem esimene klikk).
   useEffect(() => {
     if (microsoftClientId && typeof window !== 'undefined') {
-      getOrCreateMsalPromise();
+      getMsalPublicClientApplication().catch(() => {});
     }
   }, []);
 

@@ -674,6 +674,22 @@ function clearMsalCache() {
   } catch (_) {}
 }
 
+/**
+ * MSAL hoiab sessionStorage'is nt interaction oleku; katkenud redirect võib jätta
+ * "interaction_in_progress" ja loginRedirect ei suuna Microsofti lehele (ilma selge veata).
+ */
+export function clearMsalSessionStorageKeys() {
+  if (typeof window === 'undefined' || !window.sessionStorage) return;
+  try {
+    const keys = [];
+    for (let i = 0; i < window.sessionStorage.length; i++) {
+      const key = window.sessionStorage.key(i);
+      if (key && key.startsWith('msal.')) keys.push(key);
+    }
+    keys.forEach((k) => window.sessionStorage.removeItem(k));
+  } catch (_) {}
+}
+
 /** Tühjenda sisselogimine ja token (väljalogimine). Kaustade nimekirjad on kasutajati (e-posti järgi); teise kasutaja sisselogimisel kuvatakse ainult tema kaustad. */
 export function clearAuth() {
   if (typeof window === 'undefined') return;

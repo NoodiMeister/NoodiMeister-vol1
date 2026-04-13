@@ -4,7 +4,8 @@ import { LogIn, Mail, Lock } from 'lucide-react';
 import { CloudLoginButtons } from '../components/CloudLogin';
 import { AuthErrorBlock } from '../components/AuthErrorBlock';
 import { AppLogo } from '../components/AppLogo';
-import { getStorageForLogin, getLoggedInUser, getStoredUsers, isLoggedIn, setLoggedInUser } from '../services/authStorage';
+import { getStorageForLogin, getLoggedInUser, getStoredUsers, isLoggedIn, setLoggedInUser, upsertUserAccount } from '../services/authStorage';
+import { verifyLocalLoginOnServer, syncLocalAccountToServer } from '../services/authServer';
 import { formatAuthError } from '../utils/authError';
 import { useForceLightTheme } from '../hooks/useForceLightTheme';
 
@@ -35,7 +36,36 @@ export default function LoginPage() {
     setErrorDetail(detail ?? null);
   };
 
-  const handleSubmit = (e) => {
+  const finishLocalLogin = (user) => {
+    const loggedInUser = setLoggedInUser({ email: user.email, name: user.name, provider: 'local' }, stayLoggedIn);
+    if (!loggedInUser) {
+      const payload = formatAuthError('brauser', { message: 'Salvestamine ebaõnnestus (brauser võib blokeerida andmeid). Proovi teist brauserit või lülita privaatse režiimi välja.' });
+      setError(payload.fullMessage, payload);
+      return false;
+    }
+    const confirmedUser = getLoggedInUser();
+    const loggedIn = isLoggedIn();
+    if (!confirmedUser?.email || !loggedIn) {
+      setError('Sisselogimine salvestati, kuid kinnitamine ebaõnnestus. Proovi uuesti.', null);
+      return false;
+    }
+    setMessage('Sisselogimine õnnestus.');
+    setErrorDetail(null);
+    requestAnimationFrame(() => {
+      setTimeout(() => {
+        try {
+          navigate(safeRedirect, { replace: true });
+        } catch {
+          const base = (typeof import.meta !== 'undefined' && import.meta.env?.BASE_URL) || '';
+          const path = (base.replace(/\/$/, '') || '') + safeRedirect;
+          window.location.assign(window.location.origin + path);
+        }
+      }, 400);
+    });
+    return true;
+  };
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setMessage('');
     setErrorDetail(null);
@@ -62,50 +92,54 @@ export default function LoginPage() {
         setError(payload.fullMessage, payload);
         return;
       }
-      if (!Array.isArray(users)) {
-        console.error('[LoginPage] users ei ole massiiv:', typeof users);
-        users = [];
-      }
+      if (!Array.isArray(users)) users = [];
+
       const normalizedEmail = String(email || '').trim().toLowerCase();
-      const user = users.find((u) =>
-        u &&
-        String(u.email || '').trim().toLowerCase() === normalizedEmail &&
-        String(u.provider || 'local').trim().toLowerCase() === 'local' &&
-        u.password === password
-      );
-      if (!user) {
+
+      const server = await verifyLocalLoginOnServer(normalizedEmail, password);
+      if (server.status === 200 && server.data?.ok && server.data.email) {
+        upsertUserAccount(
+          { email: server.data.email, name: server.data.name, password, provider: 'local' },
+          { provider: 'local' }
+        );
+        finishLocalLogin({ email: server.data.email, name: server.data.name });
+        return;
+      }
+      if (server.status === 401) {
         const payload = formatAuthError('e-mail/parool', { code: 'invalid_credentials', message: 'Vale e-mail või parool.' });
         setError(payload.fullMessage, payload);
         return;
       }
-      const loggedInUser = setLoggedInUser({ email: user.email, name: user.name, provider: 'local' }, stayLoggedIn);
-      if (!loggedInUser) {
-        console.error('[LoginPage] setLoggedInUser tagastas null. stayLoggedIn:', stayLoggedIn, 'window:', typeof window);
-        const payload = formatAuthError('brauser', { message: 'Salvestamine ebaõnnestus (brauser võib blokeerida andmeid). Proovi teist brauserit või lülita privaatse režiimi välja.' });
+
+      const localUser = users.find(
+        (u) =>
+          u &&
+          String(u.email || '').trim().toLowerCase() === normalizedEmail &&
+          String(u.provider || 'local').trim().toLowerCase() === 'local' &&
+          u.password === password
+      );
+
+      if (localUser) {
+        void syncLocalAccountToServer({
+          email: localUser.email,
+          password,
+          name: localUser.name,
+        });
+        finishLocalLogin(localUser);
+        return;
+      }
+
+      if (server.networkError || (server.status >= 500 && server.status < 600)) {
+        const payload = formatAuthError('e-mail/parool', {
+          message:
+            'Serveriga ei saanud ühendust. Kui sul on ainult brauseris olev kohalik konto, proovi hiljem uuesti; muidu kontrolli võrku.',
+        });
         setError(payload.fullMessage, payload);
         return;
       }
-      // Vercel fix: suuna alles siis, kui auth on kinnitatud (loe tagasi), et /app ei laadi enne kui isLoggedIn() töötab
-      const confirmedUser = getLoggedInUser();
-      const loggedIn = isLoggedIn();
-      if (!confirmedUser?.email || !loggedIn) {
-        console.error('[LoginPage] Pärast salvestust auth ei kinnitunud:', { confirmedUser: !!confirmedUser, hasEmail: !!confirmedUser?.email, isLoggedIn: loggedIn });
-        setError('Sisselogimine salvestati, kuid kinnitamine ebaõnnestus. Proovi uuesti.', null);
-        return;
-      }
-      setMessage('Sisselogimine õnnestus.');
-      setErrorDetail(null);
-      requestAnimationFrame(() => {
-        setTimeout(() => {
-          try {
-            navigate(safeRedirect, { replace: true });
-          } catch (navErr) {
-            const base = (typeof import.meta !== 'undefined' && import.meta.env?.BASE_URL) || '';
-            const path = (base.replace(/\/$/, '') || '') + safeRedirect;
-            window.location.assign(window.location.origin + path);
-          }
-        }, 400);
-      });
+
+      const payload = formatAuthError('e-mail/parool', { code: 'invalid_credentials', message: 'Vale e-mail või parool.' });
+      setError(payload.fullMessage, payload);
     } catch (err) {
       console.error('[LoginPage] Ootamata viga sisselogimisel:', err?.message, err);
       const payload = formatAuthError('e-mail/parool', err);
@@ -165,7 +199,15 @@ export default function LoginPage() {
               </div>
             </div>
             <div>
-              <label className="block text-sm font-semibold text-amber-900 dark:text-white mb-1">Parool</label>
+              <div className="flex items-center justify-between gap-2 mb-1">
+                <label className="block text-sm font-semibold text-amber-900 dark:text-white">Parool</label>
+                <Link
+                  to="/parool/taasta"
+                  className="text-xs font-semibold text-amber-700 dark:text-amber-200 hover:underline"
+                >
+                  Unustasid parooli?
+                </Link>
+              </div>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-amber-500 dark:text-white/70" />
                 <input

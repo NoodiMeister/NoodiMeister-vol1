@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="1280" height="520" viewBox="0 0 1280 520" role="img" aria-label="Handbells notation example">
+  <defs>
+    <style>
+      .title { font-family: "Noto Sans", Arial, sans-serif; font-size: 26px; fill: #1f2937; font-weight: 700; }
+      .subtitle { font-family: "Noto Sans", Arial, sans-serif; font-size: 16px; fill: #4b5563; }
+      .staff { stroke: #111827; stroke-width: 2; }
+      .bar { stroke: #111827; stroke-width: 3; }
+      .timesig { font-family: "Noto Sans", Arial, sans-serif; font-size: 44px; fill: #111827; font-weight: 700; }
+      .lyric { font-family: "Noto Sans", Arial, sans-serif; font-size: 13px; fill: #374151; }
+    </style>
+    <!-- Sama siluet mis src/components/icons/HandbellIcon.jsx — korpus currentColor, sang tumedam -->
+    <symbol id="handbell-note" viewBox="0 0 24 24">
+      <rect x="9" y="0.55" width="6" height="10.5" rx="0.45" ry="0.45" fill="#141414" stroke="#5c2d0e" stroke-width="0.5"/>
+      <path
+        d="M 9 11.05 L 15 11.05 C 17 13.1 19 14.55 19.25 16.55 C 19.5 18.2 18.5 19.3 17.8 19.65 Q 12 21.35 6.2 19.65 C 5.5 19.3 4.5 18.2 4.75 16.55 C 5 14.55 7 13.1 9 11.05 Z"
+        fill="currentColor"
+        stroke="#5c2d0e"
+        stroke-width="1.08"
+        stroke-linejoin="round"
+      />
+      <ellipse cx="7.15" cy="15.2" rx="1.65" ry="3.05" fill="rgba(255,255,255,0.36)"/>
+      <circle cx="12" cy="19.4" r="1.35" fill="#5c2d0e"/>
+    </symbol>
+  </defs>
+
+  <rect x="0" y="0" width="1280" height="520" fill="#ffffff"/>
+  <text x="48" y="52" class="title">Handbells notation example (pedagogical visual)</text>
+  <text x="48" y="82" class="subtitle">Handbell silhouette matches in-app HandbellIcon (24×24, scaled).</text>
+
+  <!-- Staff -->
+  <line x1="48" y1="170" x2="1232" y2="170" class="staff"/>
+  <line x1="48" y1="200" x2="1232" y2="200" class="staff"/>
+  <line x1="48" y1="230" x2="1232" y2="230" class="staff"/>
+  <line x1="48" y1="260" x2="1232" y2="260" class="staff"/>
+  <line x1="48" y1="290" x2="1232" y2="290" class="staff"/>
+
+  <!-- Bar lines -->
+  <line x1="110" y1="170" x2="110" y2="290" class="bar"/>
+  <line x1="410" y1="170" x2="410" y2="290" class="bar"/>
+  <line x1="710" y1="170" x2="710" y2="290" class="bar"/>
+  <line x1="1010" y1="170" x2="1010" y2="290" class="bar"/>
+  <line x1="1232" y1="170" x2="1232" y2="290" class="bar"/>
+
+  <!-- Time signature -->
+  <text x="148" y="215" class="timesig">4</text>
+  <text x="148" y="268" class="timesig">4</text>
+
+  <text x="72" y="255" style="font-family: 'Bravura', 'Noto Music', serif; font-size: 94px; fill: #111827;">&#x1D11E;</text>
+
+  <!-- Noot + käsikell: sama Y-koordinaadid mis varem (takt jääb paika) -->
+  <g transform="translate(230,0)">
+    <line x1="0" y1="260" x2="0" y2="200" stroke="#111827" stroke-width="2"/>
+    <ellipse cx="0" cy="260" rx="1.5" ry="1.5" fill="#111827"/>
+    <use href="#handbell-note" xlink:href="#handbell-note" width="24" height="24" fill="#ef4444" color="#ef4444" transform="translate(0,200) scale(1.15) translate(-12,-12)"/>
+  </g>
+  <g transform="translate(300,0)">
+    <line x1="0" y1="245" x2="0" y2="185" stroke="#111827" stroke-width="2"/>
+    <ellipse cx="0" cy="245" rx="1.5" ry="1.5" fill="#111827"/>
+    <use href="#handbell-note" xlink:href="#handbell-note" width="24" height="24" fill="#f59e0b" color="#f59e0b" transform="translate(0,185) scale(1.15) translate(-12,-12)"/>
+  </g>
+  <g transform="translate(370,0)">
+    <line x1="0" y1="230" x2="0" y2="170" stroke="#111827" stroke-width="2"/>
+    <ellipse cx="0" cy="230" rx="1.5" ry="1.5" fill="#111827"/>
+    <use href="#handbell-note" xlink:href="#handbell-note" width="24" height="24" fill="#10b981" color="#10b981" transform="translate(0,170) scale(1.15) translate(-12,-12)"/>
+  </g>
+
+  <g transform="translate(500,0)">
+    <line x1="0" y1="215" x2="0" y2="155" stroke="#111827" stroke-width="2"/>
+    <ellipse cx="0" cy="215" rx="1.5" ry="1.5" fill="#111827"/>
+    <use href="#handbell-note" xlink:href="#handbell-note" width="24" height="24" fill="#22c55e" color="#22c55e" transform="translate(0,155) scale(1.15) translate(-12,-12)"/>
+  </g>
+  <g transform="translate(570,0)">
+    <line x1="0" y1="200" x2="0" y2="140" stroke="#111827" stroke-width="2"/>
+    <ellipse cx="0" cy="200" rx="1.5" ry="1.5" fill="#111827"/>
+    <use href="#handbell-note" xlink:href="#handbell-note" width="24" height="24" fill="#3b82f6" color="#3b82f6" transform="translate(0,140) scale(1.15) translate(-12,-12)"/>
+  </g>
+  <g transform="translate(640,0)">
+    <line x1="0" y1="185" x2="0" y2="125" stroke="#111827" stroke-width="2"/>
+    <ellipse cx="0" cy="185" rx="1.5" ry="1.5" fill="#111827"/>
+    <use href="#handbell-note" xlink:href="#handbell-note" width="24" height="24" fill="#8b5cf6" color="#8b5cf6" transform="translate(0,125) scale(1.15) translate(-12,-12)"/>
+  </g>
+
+  <g transform="translate(800,0)">
+    <line x1="0" y1="260" x2="0" y2="200" stroke="#111827" stroke-width="2"/>
+    <ellipse cx="0" cy="260" rx="1.5" ry="1.5" fill="#111827"/>
+    <use href="#handbell-note" xlink:href="#handbell-note" width="24" height="24" fill="#f97316" color="#f97316" transform="translate(0,200) scale(1.15) translate(-12,-12)"/>
+  </g>
+  <g transform="translate(870,0)">
+    <line x1="0" y1="230" x2="0" y2="170" stroke="#111827" stroke-width="2"/>
+    <ellipse cx="0" cy="230" rx="1.5" ry="1.5" fill="#111827"/>
+    <use href="#handbell-note" xlink:href="#handbell-note" width="24" height="24" fill="#14b8a6" color="#14b8a6" transform="translate(0,170) scale(1.15) translate(-12,-12)"/>
+  </g>
+  <g transform="translate(940,0)">
+    <line x1="0" y1="200" x2="0" y2="140" stroke="#111827" stroke-width="2"/>
+    <ellipse cx="0" cy="200" rx="1.5" ry="1.5" fill="#111827"/>
+    <use href="#handbell-note" xlink:href="#handbell-note" width="24" height="24" fill="#6366f1" color="#6366f1" transform="translate(0,140) scale(1.15) translate(-12,-12)"/>
+  </g>
+
+  <g transform="translate(1080,0)">
+    <line x1="0" y1="245" x2="0" y2="185" stroke="#111827" stroke-width="2"/>
+    <ellipse cx="0" cy="245" rx="1.5" ry="1.5" fill="#111827"/>
+    <use href="#handbell-note" xlink:href="#handbell-note" width="24" height="24" fill="#ec4899" color="#ec4899" transform="translate(0,185) scale(1.15) translate(-12,-12)"/>
+  </g>
+  <g transform="translate(1150,0)">
+    <line x1="0" y1="215" x2="0" y2="155" stroke="#111827" stroke-width="2"/>
+    <ellipse cx="0" cy="215" rx="1.5" ry="1.5" fill="#111827"/>
+    <use href="#handbell-note" xlink:href="#handbell-note" width="24" height="24" fill="#84cc16" color="#84cc16" transform="translate(0,155) scale(1.15) translate(-12,-12)"/>
+  </g>
+
+  <text x="48" y="360" class="subtitle">Legend:</text>
+  <text x="48" y="386" class="lyric">- Icon = HandbellIcon component (same paths as scorepage)</text>
+  <text x="48" y="408" class="lyric">- Vertical position = pitch on staff</text>
+  <text x="48" y="430" class="lyric">- Fill = school handbell color (example palette)</text>
+</svg>

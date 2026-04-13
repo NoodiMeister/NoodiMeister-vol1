@@ -8,13 +8,9 @@ import {
   setGoogleGrantedScopes,
   setMicrosoftGrantedScopes,
 } from './authStorage';
-import { getMicrosoftRedirectUri } from '../utils/microsoftRedirectUri';
+import { getMsalPublicClientApplication } from './msalBrowser';
 
 const GOOGLE_GSI_SCRIPT_URL = 'https://accounts.google.com/gsi/client';
-const MSAL_CDN_URLS = [
-  'https://alcdn.msauth.net/browser/2.38.0/js/msal-browser.min.js',
-  'https://cdn.jsdelivr.net/npm/@azure/msal-browser@2.38.0/dist/msal-browser.min.js',
-];
 
 function storeGoogleToken(token, expiresInSeconds) {
   const storage = getStorageForRead();
@@ -100,46 +96,11 @@ export async function refreshGoogleTokenSilently() {
   }
 }
 
-async function ensureMsal() {
-  if (typeof window === 'undefined') throw new Error('Brauseri keskkond puudub');
-  if (window.msal?.PublicClientApplication) return;
-  let lastError = null;
-  for (const src of MSAL_CDN_URLS) {
-    try {
-      await loadScriptOnce(src);
-      if (window.msal?.PublicClientApplication) return;
-    } catch (e) {
-      lastError = e;
-    }
-  }
-  throw lastError || new Error('MSAL scripti laadimine ebaõnnestus.');
-}
-
-let msalInstancePromise = null;
 async function getMsalInstance() {
-  if (msalInstancePromise) return msalInstancePromise;
-  msalInstancePromise = (async () => {
-    await ensureMsal();
-    const clientId = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_MICROSOFT_CLIENT_ID) || '';
-    const tenantId = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_MICROSOFT_TENANT_ID) || 'common';
-    if (!clientId) throw new Error('Microsoft Client ID puudub.');
-    const redirectUri = getMicrosoftRedirectUri();
-    const instance = new window.msal.PublicClientApplication({
-      auth: {
-        clientId,
-        authority: `https://login.microsoftonline.com/${encodeURIComponent(tenantId)}`,
-        redirectUri,
-      },
-      cache: {
-        cacheLocation: 'localStorage',
-        storeAuthStateInCookie: false,
-      },
-    });
-    await instance.initialize();
-    await instance.handleRedirectPromise().catch(() => null);
-    return instance;
-  })();
-  return msalInstancePromise;
+  const instance = await getMsalPublicClientApplication();
+  if (!instance) throw new Error('Microsoft Client ID puudub.');
+  await instance.handleRedirectPromise().catch(() => null);
+  return instance;
 }
 
 let microsoftRefreshPromise = null;

@@ -43,8 +43,7 @@
     <noscript>
       <p style="padding:24px;font-family:sans-serif;color:#92400e;">NoodiMeister vajab JavaScripti. Luba JS brauseris või proovi teist brauserit.</p>
     </noscript>
-    <!-- MSAL browser UMD from Microsoft CDN (global window.msal). No integrity= to avoid SRI mismatch if CDN updates. -->
-    <script src="https://alcdn.msauth.net/browser/2.38.0/js/msal-browser.min.js" crossorigin="anonymous"></script>
+    <!-- MSAL: @azure/msal-browser npm kaudu (Vite bundle), mitte CDN — vältib alcdn.msauth.net blokeeringuid. -->
     <script>
       window.__nmLoadCheck = function() {
         setTimeout(function() {

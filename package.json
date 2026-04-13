@@ -19,6 +19,7 @@
     "build-gallery": "node scripts/build-gallery-html.js"
   },
   "dependencies": {
+    "@vercel/kv": "^3.0.0",
     "@azure/msal-browser": "^5.4.0",
     "@fontsource/bravura": "^5.2.5",
     "@fontsource/noto-sans": "^5.2.10",

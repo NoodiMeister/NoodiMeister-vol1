@@ -7,6 +7,7 @@ import { AppLogo } from '../components/AppLogo';
 import { formatAuthError } from '../utils/authError';
 import { useForceLightTheme } from '../hooks/useForceLightTheme';
 import { getStoredUsers, upsertUserAccount } from '../services/authStorage';
+import { syncLocalAccountToServer } from '../services/authServer';
 
 export default function RegisterPage() {
   useForceLightTheme();
@@ -78,6 +79,15 @@ export default function RegisterPage() {
         password: form.password,
         provider: 'local',
       }, { provider: 'local' });
+      void syncLocalAccountToServer({
+        email: normalizedEmail,
+        password: form.password,
+        name: form.name,
+      }).then((res) => {
+        if (res?.status === 409) {
+          console.warn('[RegisterPage] Serveris on sama e-post juba olemas — kasuta sisselogimist.');
+        }
+      });
       setMessage('Registreerumine õnnestus! Konto on loodud. Suuname sisselogimise lehele…');
       setErrorDetail(null);
       setTimeout(() => navigate('/login'), 2200);
@@ -200,6 +210,8 @@ export default function RegisterPage() {
               />
               <span className="text-sm text-amber-800 dark:text-white">Jäta mind meelde</span>
             </label>
+          </form>
+          <div className="px-8 pb-8 space-y-4 -mt-2">
             <CloudLoginButtons
               mode="register"
               stayLoggedIn={stayLoggedIn}
@@ -221,7 +233,7 @@ export default function RegisterPage() {
             <p className="text-center text-sm text-amber-700 dark:text-white/80">
               Juba konto? <Link to="/login" className="font-semibold text-amber-800 dark:text-white hover:underline">Logi sisse</Link>
             </p>
-          </form>
+          </div>
         </div>
       </main>
     </div>

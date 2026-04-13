@@ -120,6 +120,9 @@ function spaFallbackPlugin() {
   };
 }
 
+/** Kui seatud, suunatakse /api/* Verceli (või vercel dev) poole — parooli taastamise API kohalikus dev-is. */
+const nmDevApiProxy = (process.env.NM_DEV_API_PROXY || '').trim().replace(/\/$/, '');
+
 export default defineConfig({
   plugins: [react(), devReportAuthErrorPlugin(), spaFallbackPlugin()],
   base: '/',
@@ -149,6 +152,17 @@ export default defineConfig({
     port: 5197,
     strictPort: true,
     open: '/demo-intro',
+    ...(nmDevApiProxy
+      ? {
+          proxy: {
+            '/api': {
+              target: nmDevApiProxy,
+              changeOrigin: true,
+              secure: true,
+            },
+          },
+        }
+      : {}),
     // Devis ära kasuta browser cache'i, et iga muudatus tuleks kohe nähtavale.
     headers: {
       'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',

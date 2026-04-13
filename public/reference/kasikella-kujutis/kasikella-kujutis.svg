@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg"
+     width="320"
+     height="360"
+     viewBox="0 0 320 360"
+     role="img"
+     aria-labelledby="kasikella-title kasikella-desc">
+  <title id="kasikella-title">K&#228;sikella kujutis (lihtne)</title>
+  <desc id="kasikella-desc">
+    Eraldi SVG-projekt: must sang + valge vahe; kellakeha &#252;mar kitsas &#252;laserv,
+    lainelised k&#252;ljed (keskel laiem), alumine kaar ja klapp. viewBox 0 0 24 28.
+  </desc>
+  <defs>
+    <style>
+      .meta { font-family: "Noto Sans", Arial, sans-serif; fill: #374151; }
+      .h1 { font-size: 20px; font-weight: 700; }
+      .h2 { font-size: 13px; fill: #6b7280; }
+    </style>
+  </defs>
+  <rect width="320" height="360" fill="#ffffff"/>
+  <text x="24" y="36" class="meta h1">K&#228;sikella kujutis</text>
+  <text x="24" y="58" class="meta h2">public/reference/kasikella-kujutis/kasikella-kujutis.svg</text>
+  <text x="24" y="78" class="meta h2">Lihtne variant (pole Noodimeistri toote HandbellIcon)</text>
+
+  <!-- Ikoon: viewBox 0 0 24 28, keskpunkt ~(12,14); scale(10) -->
+  <g transform="translate(160, 215) scale(10) translate(-12, -14)">
+    <rect x="10" y="3" width="4" height="10" rx="0.35" ry="0.35" fill="#1f2937"/>
+    <rect x="4" y="13" width="16" height="0.5" fill="#ffffff"/>
+    <path d="M 10 13.5 Q 12 13.05 14 13.5 C 14.5 14.8 17.2 16.2 19 18.5 C 19.6 21 17.5 22.5 18 23.5 Q 12 25.8 6 23.5 C 5.4 22.5 4.4 21 5.5 18.5 C 6.8 16.2 9.5 14.8 10 13.5 Z" fill="#f97316" stroke="#1f2937" stroke-width="1.15" stroke-linejoin="round"/>
+    <line x1="5.45" y1="22" x2="18.55" y2="22" stroke="#1f2937" stroke-width="1"/>
+    <circle cx="12" cy="23.2" r="1.35" fill="#1f2937"/>
+  </g>
+
+  <text x="24" y="310" class="meta h2">Puhas SVG: kasikella-lihtne-24.svg (24&#215;28, sama geomeetria).</text>
+  <text x="24" y="330" class="meta h2">V&#228;rvid on n&#228;idis; kopeeri &lt;g&gt; sisu v&#245;i kasuta lihtsat faili.</text>
+</svg>
