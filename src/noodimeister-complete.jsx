@@ -6052,6 +6052,21 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     return undefined;
   }, [chords, cursorPosition, timeSignature]);
 
+  /** Akordipaleti valik (kas dual-ribal ilma aktiivse „chords“ tööriistata või tavapärane). */
+  const applyChordToolboxOptionAtIndex = (optionIndex) => {
+    const option = toolboxes.chords?.options?.[optionIndex];
+    if (!option) return;
+    if (option.value === 'custom') {
+      setActiveToolbox('chords');
+      setSelectedOptionIndex(optionIndex);
+      setTimeout(() => customChordInputRef.current?.focus(), 0);
+      return;
+    }
+    addChordAt(getChordInsertBeat(), option.value, '');
+    setActiveToolbox(null);
+    setSelectedOptionIndex(0);
+  };
+
   const handleToolboxSelection = (clickedIndex) => {
     if (!activeToolbox) return;
     if (noteInputMode && !N_MODE_PRIMARY_TOOL_IDS.includes(activeToolbox)) {
@@ -6261,14 +6276,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         break;
       }
       case 'chords':
-        if (option.value === 'custom') {
-          setSelectedOptionIndex(optionIndex);
-          setTimeout(() => customChordInputRef.current?.focus(), 0);
-          return;
-        }
-        addChordAt(getChordInsertBeat(), option.value, '');
-        setActiveToolbox(null);
-        setSelectedOptionIndex(0);
+        applyChordToolboxOptionAtIndex(optionIndex);
         return;
     }
     setActiveToolbox(null);
@@ -6278,6 +6286,20 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   // Noot kursori all (rütmi järgi); meloodiareal = kursor lugemisel meloodiareal (mitte akordireal)
   const hasChordRow = notationStyle === 'FIGURENOTES' && figurenotesChordBlocks;
   const cursorOnMelodyRow = !hasChordRow || cursorSubRow === 0;
+  /** N + figuurnoti akordirida: lülita tööriistaribal automaatselt akordid ↔ rütm (meloodia tagasi tulles ainult kui just lahkusid akordirealt). */
+  const prevCursorSubRowForToolboxRef = useRef(cursorSubRow);
+  useEffect(() => {
+    const prev = prevCursorSubRowForToolboxRef.current;
+    prevCursorSubRowForToolboxRef.current = cursorSubRow;
+    if (!noteInputMode || !hasChordRow) return;
+    if (cursorSubRow === 1) {
+      setActiveToolbox('chords');
+      return;
+    }
+    if (prev === 1 && cursorSubRow === 0) {
+      setActiveToolbox((tb) => (tb === 'chords' ? 'rhythm' : tb));
+    }
+  }, [noteInputMode, hasChordRow, cursorSubRow]);
   const noteIndexAtCursor = useMemo(() => {
     const withBeats = notesWithExplicitBeats(notes);
     // Sort by beat so "read" follows timeline, not array order.
@@ -7997,6 +8019,18 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   const scoreContentRef = useRef(null); // noodiala sisu (pealkiri + SVG); tekstikastid kasutavad scoreContainerRef koordinaate
   const textboxInteractionRef = useRef(null); // { type: 'move'|'resize', id, startX, startY, boxStartX?, boxStartY?, boxStartW?, boxStartH?, handle? }
   const textboxDragStartRef = useRef(null); // { id, startX, startY, boxStartX, boxStartY } – click vs drag
+  /** Figuurnoti N-režiimi dual tööriistariba (rütm | akordid): lohistatav vahe vertical splitter. */
+  const dualToolboxSplitRowRef = useRef(null);
+  const dualToolboxSplitDragRef = useRef(null); // { startX, startRatio, width }
+  const dualToolboxSplitFractionRef = useRef(0.52);
+  const [dualToolboxRhythmFraction, setDualToolboxRhythmFraction] = useState(() => {
+    try {
+      const raw = typeof localStorage !== 'undefined' ? localStorage.getItem('nm:dualToolboxRhythmFraction') : null;
+      const v = parseFloat(raw || '');
+      if (Number.isFinite(v) && v >= 0.22 && v <= 0.78) return v;
+    } catch (_) { /* ignore */ }
+    return 0.52;
+  });
   const selectionDragRef = useRef(null); // { startIndex, pointerDown: boolean, shift: boolean }
   const handPanRef = useRef({ active: false, startX: 0, startY: 0, startScrollLeft: 0, startScrollTop: 0 });
   const [isHandPanning, setIsHandPanning] = useState(false);
@@ -8504,6 +8538,38 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     };
   }, []);
 
+  useEffect(() => {
+    dualToolboxSplitFractionRef.current = dualToolboxRhythmFraction;
+  }, [dualToolboxRhythmFraction]);
+
+  useEffect(() => {
+    const onMove = (e) => {
+      const d = dualToolboxSplitDragRef.current;
+      if (!d) return;
+      const w = d.width;
+      if (w <= 10) return;
+      const delta = (e.clientX - d.startX) / w;
+      const next = Math.min(0.78, Math.max(0.22, d.startRatio + delta));
+      dualToolboxSplitFractionRef.current = next;
+      setDualToolboxRhythmFraction(next);
+    };
+    const onUp = () => {
+      if (!dualToolboxSplitDragRef.current) return;
+      dualToolboxSplitDragRef.current = null;
+      try {
+        if (typeof localStorage !== 'undefined') {
+          localStorage.setItem('nm:dualToolboxRhythmFraction', String(dualToolboxSplitFractionRef.current));
+        }
+      } catch (_) { /* ignore */ }
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+    return () => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    };
+  }, []);
+
   // Text box drag (move) and resize: document-level mousemove/mouseup
   useEffect(() => {
     const onMouseMove = (e) => {
@@ -8523,12 +8589,26 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         const dy = e.clientY - current.startY;
         setTextBoxes((prev) => prev.map((b) => b.id === current.id ? { ...b, x: current.boxStartX + dx, y: current.boxStartY + dy } : b));
       } else if (current.type === 'resize' && current.handle) {
-        const dx = e.clientX - state.startX;
-        const dy = e.clientY - state.startY;
+        const dx = e.clientX - current.startX;
+        const dy = e.clientY - current.startY;
         const minW = 60;
         const minH = 30;
         let { x, y, width, height } = { x: current.boxStartX, y: current.boxStartY, width: current.boxStartW, height: current.boxStartH };
         switch (current.handle) {
+          case 'n':
+            y = current.boxStartY + dy;
+            height = Math.max(minH, current.boxStartH - dy);
+            break;
+          case 's':
+            height = Math.max(minH, current.boxStartH + dy);
+            break;
+          case 'e':
+            width = Math.max(minW, current.boxStartW + dx);
+            break;
+          case 'w':
+            x = current.boxStartX + dx;
+            width = Math.max(minW, current.boxStartW - dx);
+            break;
           case 'se':
             width = Math.max(minW, current.boxStartW + dx);
             height = Math.max(minH, current.boxStartH + dy);
@@ -10942,26 +11022,42 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         const showTopToolDrawer = noteInputMode || (activeToolbox && toolboxes[activeToolbox]) || (pianoStripVisible && !activeToolbox);
         const isRhythmWideInNMode = noteInputMode && (activeToolbox === 'rhythm' || !activeToolbox);
         const isKeySignaturesToolbox = activeToolbox === 'keySignatures';
+        const dualFigurenotesChordStrip =
+          noteInputMode &&
+          notationStyle === 'FIGURENOTES' &&
+          figurenotesChordBlocks &&
+          toolboxes.chords &&
+          (activeToolbox === 'rhythm' || !activeToolbox);
+        const rhythmStripCondition =
+          toolboxes.rhythm &&
+          (dualFigurenotesChordStrip
+            ? activeToolbox === 'rhythm' || !activeToolbox
+            : activeToolbox === 'rhythm' || (noteInputMode && activeToolbox !== 'chords'));
         return (
           <div
             className={`flex-shrink-0 flex justify-center border-t-2 border-amber-300 bg-amber-100/80 transition-all duration-200 ease-out origin-top ${
               showTopToolDrawer
                 ? isKeySignaturesToolbox
                   ? 'max-h-[min(72vh,30rem)] py-2 opacity-100 translate-y-0'
-                  : 'max-h-56 py-2 opacity-100 translate-y-0'
+                  : dualFigurenotesChordStrip
+                    ? 'max-h-[min(72vh,30rem)] py-2 opacity-100 translate-y-0'
+                    : 'max-h-56 py-2 opacity-100 translate-y-0'
                 : 'max-h-0 py-0 opacity-0 -translate-y-2 pointer-events-none'
             }`}
           >
             <div
               className={`px-3 py-2 rounded-lg bg-gradient-to-b from-amber-100 to-amber-50 border border-amber-300 shadow-inner overflow-auto transition-all duration-200 ${
-                isRhythmWideInNMode
-                  ? 'w-[min(100vw-2rem,78rem)] max-h-[7.5rem]'
-                  : isKeySignaturesToolbox
-                    ? 'w-[min(100vw-2rem,44rem)] max-h-[min(68vh,28rem)]'
-                    : 'w-max max-w-[min(100vw-2rem,28rem)] max-h-[7.5rem]'
+                dualFigurenotesChordStrip
+                  ? 'w-full max-w-[min(100vw-2rem,92rem)] max-h-[min(50vh,18rem)] xl:max-h-[min(56vh,22rem)]'
+                  : isRhythmWideInNMode
+                    ? 'w-[min(100vw-2rem,78rem)] max-h-[7.5rem]'
+                    : isKeySignaturesToolbox
+                      ? 'w-[min(100vw-2rem,44rem)] max-h-[min(68vh,28rem)]'
+                      : 'w-max max-w-[min(100vw-2rem,28rem)] max-h-[7.5rem]'
               }`}
             >
-            {toolboxes.rhythm && (activeToolbox === 'rhythm' || (noteInputMode && activeToolbox !== 'chords')) ? (
+            {rhythmStripCondition ? (() => {
+              const rhythmBody = (
               <div className="flex flex-col gap-1.5">
                 <div className="flex flex-wrap items-center justify-center gap-2">
                   <span className="text-xs font-bold text-amber-800 uppercase tracking-wider mr-1 self-center">{t('toolbox.rhythm')}</span>
@@ -11037,7 +11133,74 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                   </div>
                 )}
               </div>
-            ) : (activeToolbox || pianoStripVisible) && activeToolbox !== 'rhythm' ? (
+              );
+              if (dualFigurenotesChordStrip) {
+                const chordOpts = toolboxes.chords?.options ?? [];
+                const rFrac = dualToolboxRhythmFraction;
+                const chordPresetRow = (
+                  <div className="flex flex-wrap items-center justify-center gap-2 xl:justify-start">
+                    <span className="mr-1 self-center text-xs font-bold tracking-wider text-amber-800 uppercase">
+                      {toolboxes.chords?.name ?? t('toolbox.chords')}
+                    </span>
+                    {chordOpts.map((option, idx) => {
+                      if (option.value === 'custom') return null;
+                      const isSel = activeToolbox === 'chords' && selectedOptionIndex === idx;
+                      return (
+                        <button
+                          key={option.id}
+                          type="button"
+                          onClick={() => applyChordToolboxOptionAtIndex(idx)}
+                          className={`flex flex-wrap items-center gap-2 rounded border px-2 py-1 text-left text-sm transition-all ${
+                            isSel ? 'border-amber-600 bg-amber-200 ring-2 ring-[var(--primary-color)]' : 'border-amber-200 bg-white/80 hover:bg-amber-100'
+                          }`}
+                        >
+                          <span className="truncate font-medium">{option.label}</span>
+                          {option.key != null && (
+                            <kbd className="rounded bg-amber-200/80 px-1 font-mono text-[10px] text-amber-900">{option.key}</kbd>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                );
+                return (
+                  <div
+                    ref={dualToolboxSplitRowRef}
+                    className="flex w-full flex-col gap-3 xl:flex-row xl:items-stretch xl:gap-0"
+                  >
+                    <div className="min-w-0 w-full xl:min-h-0" style={{ flex: `${rFrac} 1 0%` }}>
+                      {rhythmBody}
+                    </div>
+                    <div
+                      className="hidden xl:flex flex-shrink-0 w-3 min-h-[4rem] select-none items-center justify-center self-stretch cursor-col-resize rounded border border-amber-300/70 bg-amber-200/40 hover:bg-amber-300/55 touch-none mx-1"
+                      role="separator"
+                      aria-orientation="vertical"
+                      aria-label={t('toolbox.dualSplitResize')}
+                      title={t('toolbox.dualSplitResize')}
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        const row = dualToolboxSplitRowRef.current;
+                        if (!row) return;
+                        dualToolboxSplitDragRef.current = {
+                          startX: e.clientX,
+                          startRatio: dualToolboxSplitFractionRef.current,
+                          width: row.getBoundingClientRect().width,
+                        };
+                      }}
+                    >
+                      <span className="pointer-events-none h-12 w-0.5 rounded-full bg-amber-700/60" aria-hidden />
+                    </div>
+                    <div
+                      className="flex min-w-0 w-full flex-col gap-1.5 border-t border-amber-200/80 pt-2 xl:min-h-0 xl:border-t-0 xl:pt-0 xl:pl-1"
+                      style={{ flex: `${1 - rFrac} 1 0%` }}
+                    >
+                      {chordPresetRow}
+                    </div>
+                  </div>
+                );
+              }
+              return rhythmBody;
+            })() : (activeToolbox || pianoStripVisible) && activeToolbox !== 'rhythm' ? (
               <>
                 <h4 className="text-xs font-bold text-amber-900 uppercase mb-2">{activeToolbox ? toolboxes[activeToolbox]?.name : (toolboxes.pianoKeyboard?.name || t('toolbox.pianoKeyboard'))}</h4>
                 {activeToolbox === 'timeSignature' && selectedOptionIndex === 0 && (
@@ -13127,8 +13290,8 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
               </p>
             </div>
           )}
-          {/* Teksti kastid overlay – vabalt paigutatavad laulutekstid, kommentaarid ja tempo */}
-          <div className="absolute inset-0 pointer-events-none" aria-hidden="true">
+          {/* Teksti kastid overlay – peab olema kõrgemal kui scoreContentRef (z-index1), muidu figuurnoodi SVG neelab klõpsud ja kaste ei saa valida. */}
+          <div className="absolute inset-0 z-[2] pointer-events-none" aria-hidden="true">
             {textBoxes.map((box) => {
               const w = box.width ?? 200;
               const h = box.height ?? 60;
@@ -13187,6 +13350,38 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                   </div>
                   {isSelected && (
                     <>
+                      {(['n', 'e', 's', 'w']).map((handle) => {
+                        const edgeStyle = {
+                          n: { top: -5, left: 10, right: 10, height: 10, cursor: 'ns-resize' },
+                          s: { bottom: -5, left: 10, right: 10, height: 10, cursor: 'ns-resize' },
+                          e: { right: -5, top: 10, bottom: 10, width: 10, cursor: 'ew-resize' },
+                          w: { left: -5, top: 10, bottom: 10, width: 10, cursor: 'ew-resize' },
+                        }[handle];
+                        return (
+                          <div
+                            key={`edge-${handle}`}
+                            data-resize-handle
+                            className="absolute z-10 rounded-sm bg-amber-500/35 hover:bg-amber-500/55"
+                            style={edgeStyle}
+                            onMouseDown={(e) => {
+                              e.stopPropagation();
+                              e.preventDefault();
+                              textboxDragStartRef.current = null;
+                              textboxInteractionRef.current = {
+                                type: 'resize',
+                                id: box.id,
+                                startX: e.clientX,
+                                startY: e.clientY,
+                                boxStartX: box.x,
+                                boxStartY: box.y,
+                                boxStartW: w,
+                                boxStartH: h,
+                                handle,
+                              };
+                            }}
+                          />
+                        );
+                      })}
                       {['nw', 'ne', 'sw', 'se'].map((handle) => {
                         const pos = { nw: { top: -2, left: -2 }, ne: { top: -2, right: -2 }, sw: { bottom: -2, left: -2 }, se: { bottom: -2, right: -2 } }[handle];
                         const cursor = (handle === 'nw' || handle === 'se') ? 'nwse-resize' : 'nesw-resize';
