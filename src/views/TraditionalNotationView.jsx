@@ -366,14 +366,13 @@ function TimeSigDigits({ x, y, fontSize, number, fill }) {
 
 function renderTimeSignature(timeSignature, timeSignatureMode, centerY, textColor = '#333', noteFill = '#333', x = 45, pedagogicalOptions = {}) {
   const L = TIME_SIG_LAYOUT;
-  const y = centerY - 2;
-  const extraVerticalGapPx = 5;
-  const halfGap = extraVerticalGapPx / 2;
+  // Sama ankur mis FigurenotesView: keskjoon = staff keskjoon (ilma y = centerY - 2 / -10 hack’ita).
+  const y = centerY;
   const yLine = y + L.Y_LINE;
   const fNum = 52;
   const fDen = 52;
   const fDenFallback = 50;
-  const numeratorDigits = <TimeSigDigits x={x} y={y + L.Y_NUM - halfGap - 10} fontSize={fNum} number={timeSignature.beats} fill={textColor} />;
+  const numeratorDigits = <TimeSigDigits x={x} y={y + L.Y_NUM} fontSize={fNum} number={timeSignature.beats} fill={textColor} />;
   const denType = pedagogicalOptions.denominatorType || 'rhythm';
   const denColor = pedagogicalOptions.denominatorColor || noteFill || textColor;
   const denInstrument = pedagogicalOptions.denominatorInstrument || 'handbell';
@@ -415,7 +414,7 @@ function renderTimeSignature(timeSignature, timeSignatureMode, centerY, textColo
     <g>
       {numeratorDigits}
       <line x1={x - L.LINE_HALF} y1={yLine} x2={x + L.LINE_HALF} y2={yLine} stroke={textColor} strokeWidth="1.5" />
-      <TimeSigDigits x={x} y={y + L.Y_DEN + halfGap} fontSize={fDen} number={timeSignature.beatUnit} fill={textColor} />
+      <TimeSigDigits x={x} y={y + L.Y_DEN} fontSize={fDen} number={timeSignature.beatUnit} fill={textColor} />
     </g>
   );
 }
@@ -1107,10 +1106,13 @@ export function TraditionalNotationView({
                 const repeatRightGlyphX = finalBarlineGeomForRepeat
                   ? finalBarlineGeomForRepeat.thinCx
                   : measureRightX;
-                const repeatRightTextAnchor = finalBarlineGeomForRepeat ? 'middle' : 'start';
+                const repeatRightTextAnchor = 'middle';
+                const rowBarTop = staffY + firstLineY;
+                const rowBarBottom = staffY + lastLineY;
                 const repeatSmufl = getRepeatBarlineSmuflPlacement({
-                  barTopY: barY1,
-                  barBottomY: barY2,
+                  barTopY: rowBarTop,
+                  barBottomY: rowBarBottom,
+                  staffSpace: spacing,
                 });
 
                 return (
@@ -1163,7 +1165,7 @@ export function TraditionalNotationView({
                               y={repeatSmufl.y}
                               fontSize={repeatSmufl.fontSize}
                               fill="#1a1a1a"
-                              textAnchor="end"
+                              textAnchor="middle"
                               dominantBaseline={repeatSmufl.dominantBaseline}
                               fontFamily={SMUFL_MUSIC_FONT_FAMILY}
                             />

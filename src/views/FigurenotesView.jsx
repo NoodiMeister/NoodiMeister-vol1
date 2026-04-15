@@ -1198,6 +1198,7 @@ export function FigurenotesView({
                             const repeatSmufl = getRepeatBarlineSmuflPlacement({
                               barTopY: barLineTopY,
                               barBottomY: barLineBottomY,
+                              staffSpace: 10 * notationScale,
                             });
                             const isRightBarlineOfSystem =
                               measureIdx ===
@@ -2178,6 +2179,7 @@ export function FigurenotesView({
                           return getRepeatBarlineSmuflPlacement({
                             barTopY: rowTopY,
                             barBottomY: rowBottomY,
+                            staffSpace: 10 * notationScale,
                           });
                         },
                       );

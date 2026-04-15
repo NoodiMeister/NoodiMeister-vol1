@@ -1576,7 +1576,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   const pianoStripWrapperRef = useRef(null); // klaviatuuri wrapper – laius mõõdetakse ResizeObserveriga
   const [pianoRangeNumbers, setPianoRangeNumbers] = useState({ first: 48, last: 72 }); // klaviatuuri vahemik MIDI (first, last); piirang 21–108
   const [pianoStripVisible, setPianoStripVisible] = useState(false); // klaviatuuri riba all – nähtav ka siis, kui avatud on Rütm vms
-  const N_MODE_PRIMARY_TOOL_IDS = useMemo(() => ['rhythm', 'pitchInput', 'pianoKeyboard'], []);
+  const N_MODE_PRIMARY_TOOL_IDS = useMemo(() => ['rhythm', 'pitchInput', 'pianoKeyboard', 'chords'], []);
   const PIANO_RANGE_PRESETS = useMemo(() => [
     { id: 'C3-C5', label: 'C3-C5', first: 48, last: 72 },
     { id: 'C2-C5', label: 'C2-C5', first: 36, last: 72 },
@@ -10943,7 +10943,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                     : 'w-max max-w-[min(100vw-2rem,28rem)] max-h-[7.5rem]'
               }`}
             >
-            {(noteInputMode || activeToolbox === 'rhythm') && toolboxes.rhythm ? (
+            {toolboxes.rhythm && (activeToolbox === 'rhythm' || (noteInputMode && activeToolbox !== 'chords')) ? (
               <div className="flex flex-col gap-1.5">
                 <div className="flex flex-wrap items-center justify-center gap-2">
                   <span className="text-xs font-bold text-amber-800 uppercase tracking-wider mr-1 self-center">{t('toolbox.rhythm')}</span>
@@ -12140,7 +12140,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                         ? 'bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed'
                         : 'bg-amber-50 text-amber-900 hover:bg-amber-100 border border-amber-200'
                   } ${noteInputMode ? 'p-3' : 'p-2.5'}`}
-                  title={noteInputMode && !N_MODE_PRIMARY_TOOL_IDS.includes(id) ? 'N-režiimis on aktiivsed Rhythm, Pitch ja Klaviatuur' : undefined}
+                  title={noteInputMode && !N_MODE_PRIMARY_TOOL_IDS.includes(id) ? 'N-režiimis on aktiivsed Rhythm, Pitch, Klaviatuur ja Akordid' : undefined}
                 >
                   <div className="flex items-center gap-2">
                     {renderIcon()}
@@ -14154,12 +14154,11 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
 
 
   {/* Cursor + Ghost note / kleepimise kursor: nähtav noodisisestusrežiimis,
-          pedagoogilisel taasesitusel/ekspordil ning SEL-režiimis, kui mõni noot on valitud.
-          SEL-režiimis kuvatakse ainult püstjoont (ilma ringi/emojita), et näidata kleepimiskohta. */}
-      {(noteInputMode || isPedagogicalAudioPlaying || isExportingAnimation || (!noteInputMode && (selectedNoteIndex >= 0 || isFigurenotesMode))) && cursorInfo && (!isFigurenotesMode || isActiveStaff) && (() => {
+          pedagoogilisel taasesitusel/ekspordil ning SEL-režiimis (ka ilma valitud noodita). */}
+      {(noteInputMode || isPedagogicalAudioPlaying || isExportingAnimation || !noteInputMode) && cursorInfo && (!isFigurenotesMode || isActiveStaff) && (() => {
         const cursorX = (cursorSlotCenterX != null && Number.isFinite(cursorSlotCenterX)) ? cursorSlotCenterX : (marginLeft + 40);
         const cursorChar = (pedagogicalPlayheadEmoji || '').trim();
-        const isSelectionCursor = !noteInputMode && !isPedagogicalAudioPlaying && !isExportingAnimation && selectedNoteIndex >= 0;
+        const isSelectionCursor = !noteInputMode && !isPedagogicalAudioPlaying && !isExportingAnimation;
         const showLine = isSelectionCursor || cursorChar === '';
         const displayEmoji = isSelectionCursor ? '' : (cursorChar || '🎵');
         const emojiSizePx = Math.max(1, Math.min(500, cursorSizePx ?? pedagogicalPlayheadEmojiSize));

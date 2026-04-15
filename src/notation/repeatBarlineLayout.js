@@ -24,21 +24,35 @@ export function getFinalDoubleBarlineCentersX(rightEdgeX, staffSpace) {
 const MIN_REPEAT_SMUFL_FONT_PX = 10;
 
 /**
+ * Leland U+E040–E042: SVG `dominantBaseline="middle"` + em-ruut ei anna sama
+ * optilist keskpunkti mis geomeetriline taktijoon (staff ülemine → alumine joon).
+ * Nihutame kergelt alla staff-space'i skaalas (empiiriline optiline joondus).
+ */
+const REPEAT_SMUFL_OPTICAL_DOWN_STAFF_SPACES = 0.32;
+
+/**
  * SMuFL kordus-taktijoon (E040–E042): fontSize ja Y peavad järgima **sama**
  * vertikaalulatust mis `<line y1 y2>` taktijoonel — muidu märk “hõljub”.
  *
  * @param {object} opts
  * @param {number} opts.barTopY – ülemine Y (px, SVG)
  * @param {number} opts.barBottomY – alumine Y (px)
+ * @param {number} [opts.staffSpace] – staff-space (px); kui puudu, hinnatakse span/4 (5-liiniline tava)
  * @returns {{ y: number, fontSize: number, dominantBaseline: 'middle' }}
  */
-export function getRepeatBarlineSmuflPlacement({ barTopY, barBottomY }) {
+export function getRepeatBarlineSmuflPlacement({ barTopY, barBottomY, staffSpace }) {
   const top = Number(barTopY);
   const bottom = Number(barBottomY);
   const span = Math.max(1, bottom - top);
+  const inferredSp = span / 4;
+  const sp =
+    Number.isFinite(Number(staffSpace)) && Number(staffSpace) > 0
+      ? Number(staffSpace)
+      : inferredSp;
   const fontSize = Math.max(MIN_REPEAT_SMUFL_FONT_PX, span);
+  const opticalDown = REPEAT_SMUFL_OPTICAL_DOWN_STAFF_SPACES * sp;
   return {
-    y: top + span / 2,
+    y: top + span / 2 + opticalDown,
     fontSize,
     dominantBaseline: 'middle',
   };

@@ -3,7 +3,7 @@
  * JO-võti, noodiväärtused ja vaikimisi kuvatavad seaded.
  */
 
-/** JO (toonika) vaikimisi staff-positsioon: -2 = C, 2 = G, 4 = D jne (viiulivõtme skaala). */
+/** JO (toonika) vaikimisi staff-positsioon viiulivõtme skaalas (E4 alumine joon = 0): nt -2 = C4, -1 = D4, 0 = E4, 1 = F4, 2 = G4. */
 export const DEFAULT_JO_CLEF_STAFF_POSITION = -2;
 
 /** JO-võtme lubatud vahemik (üles/alla nooltega). */

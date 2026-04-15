@@ -13,6 +13,7 @@ import {
   STEM_LENGTH,
   getThinBarlineThickness as getThinBarlineThicknessFromStyle,
 } from './musescoreStyle.js';
+import { getSemitonesFromKey } from '../utils/notationConstants';
 
 /** Standardne vahe kahe joone vahel (px). Kõik joonestiku mõõdud tuletatakse sellest. */
 export const STAFF_SPACE = 10;
@@ -153,29 +154,71 @@ export function getYFromStaffPosition(position, centerY, staffLines = 5, staffSp
  */
 const PITCH_INDEX = { C: 0, D: 1, E: 2, F: 3, G: 4, A: 5, B: 6 };
 
-/** Helistiku toonika (JO) viiulivõtme staff-positsioon (poolspace sammud, E4=0). Legacy lookup for known keys. */
-const TONIC_STAFF_POSITION = { C: -2, G: 2, D: 4, A: 5, E: 7, B: 9, F: 3, Bb: 8, Eb: 6 };
-
 /** Rule: tonic staff position = treble position of the key's letter in octave 4 (accidentals don't change line/space). */
 function getTonicStaffPositionFromKeyName(keyName) {
   const letter = (keyName && keyName.trim().slice(0, 1).toUpperCase()) || 'C';
   return getStaffPositionTreble(PITCH_INDEX[letter] !== undefined ? letter : 'C', 4);
 }
 
+/** Major keys used for JO noolenavigatsioon ja toonika-asukoht (sama sõnastus mis võtmemärgi valikus). */
+const MAJOR_KEYS_FOR_JO_NAV = [
+  'C', 'G', 'D', 'A', 'E', 'B', 'F#', 'C#',
+  'F', 'Bb', 'Eb', 'Ab', 'Db', 'Gb', 'Cb',
+];
+
+function circularSemitoneDistance(a, b) {
+  const d = Math.abs(a - b) % 12;
+  return Math.min(d, 12 - d);
+}
+
 /**
  * Tagastab toonika (JO) staff-positsiooni viiulivõtme skaalas (0 = alumine joon E4, negatiivne = abijooned all).
  * Kasutatakse JO-võtme vaikimisi asukoha ja ankurina.
- * Rule-based: unknown keys use letter of key name + octave 4; known keys use legacy table for consistency.
+ * Alati oktaav 4 toonika täht (bemollid/dieesid ei muuda joont/vahet).
  */
 export function getTonicStaffPosition(keySignature = 'C') {
-  return TONIC_STAFF_POSITION[keySignature] ?? getTonicStaffPositionFromKeyName(keySignature);
+  return getTonicStaffPositionFromKeyName(keySignature);
 }
 
-/** Staff-positsioon → helistik (JO-võtme liigutamise tulemus). */
-export function getKeyFromStaffPosition(position) {
-  const pos = Number(position);
-  const entry = Object.entries(TONIC_STAFF_POSITION).find(([, p]) => p === pos);
-  return entry ? entry[0] : 'C';
+/**
+ * Staff-positsioon → helistik (JO-võtme noolenavigatsioon).
+ * Sama staff-kõrgus võib vastata mitmele helistikule (nt E / Eb); valitakse lühima intervallinihega võrreldes praeguse helistikuga.
+ */
+export function getKeyFromStaffPosition(position, currentKeySignature = 'C') {
+  const pos = Math.round(Number(position));
+  const current = typeof currentKeySignature === 'string' && currentKeySignature ? currentKeySignature : 'C';
+  if (!Number.isFinite(pos)) return current;
+
+  const pickClosestEnharmonic = (list) => {
+    const curSemi = getSemitonesFromKey(current);
+    let best = list[0];
+    let bestD = Infinity;
+    for (const k of list) {
+      const d = circularSemitoneDistance(getSemitonesFromKey(k), curSemi);
+      if (d < bestD) {
+        bestD = d;
+        best = k;
+      }
+    }
+    return best;
+  };
+
+  const candidates = MAJOR_KEYS_FOR_JO_NAV.filter((k) => getTonicStaffPositionFromKeyName(k) === pos);
+  if (candidates.length === 1) return candidates[0];
+  if (candidates.length > 1) return pickClosestEnharmonic(candidates);
+
+  let bestKey = 'C';
+  let bestPosDist = Infinity;
+  for (const k of MAJOR_KEYS_FOR_JO_NAV) {
+    const pk = getTonicStaffPositionFromKeyName(k);
+    const d = Math.abs(pk - pos);
+    if (d < bestPosDist) {
+      bestPosDist = d;
+      bestKey = k;
+    }
+  }
+  const tied = MAJOR_KEYS_FOR_JO_NAV.filter((k) => Math.abs(getTonicStaffPositionFromKeyName(k) - pos) === bestPosDist);
+  return tied.length <= 1 ? bestKey : pickClosestEnharmonic(tied);
 }
 
 /**
