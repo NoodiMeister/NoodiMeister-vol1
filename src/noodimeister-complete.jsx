@@ -2069,7 +2069,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   const [customFiguredBassInput, setCustomFiguredBassInput] = useState('');
   const customChordInputRef = useRef(null);
   // Teksti kasti plugin: vabalt paigutatavad laulutekstid, kommentaarid ja tempo märgid
-  const [textBoxes, setTextBoxes] = useState([]); // { id, x, y, text, type?: 'text'|'tempo', tempoBpm?: number, fontSize?: number }
+  const [textBoxes, setTextBoxes] = useState([]); // { id, x, y, text, type?: 'text'|'tempo', tempoBpm?: number, fontSize?: number, columnCount?: number }
   const [selectedTextboxId, setSelectedTextboxId] = useState(null);
   const [textBoxDraftText, setTextBoxDraftText] = useState(''); // vaba tekst enne lisamist
   // Kordusmärgid ja hüpped (Leland SMuFL) – võtmeks takti indeks: repeatStart, repeatEnd, volta1, volta2, segno, coda
@@ -11290,6 +11290,29 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                             })}
                           </div>
                         </div>
+                        <div className="pt-2 mt-2 border-t border-amber-200">
+                          <label className="block text-xs font-semibold text-amber-900 mb-1">{t('textBox.columnCount')}</label>
+                          <div className="flex flex-wrap gap-1">
+                            {[2, 3, 4, 5].map((count) => {
+                              const box = textBoxes.find((b) => b.id === selectedTextboxId);
+                              const isActive = Math.max(1, Math.min(5, Math.floor(Number(box?.columnCount) || 1))) === count;
+                              return (
+                                <button
+                                  key={count}
+                                  type="button"
+                                  onClick={() => {
+                                    dirtyRef.current = true;
+                                    setTextBoxes((prev) => prev.map((b) => b.id === selectedTextboxId ? { ...b, columnCount: count } : b));
+                                  }}
+                                  className={`px-2 py-1 rounded text-xs font-medium ${isActive ? 'bg-amber-600 text-white' : 'bg-amber-100 text-amber-800 hover:bg-amber-200'}`}
+                                >
+                                  {count}
+                                </button>
+                              );
+                            })}
+                          </div>
+                          <p className="text-[10px] text-amber-600 mt-1">{t('textBox.columnCountHint')}</p>
+                        </div>
                         <p className="text-xs text-amber-600 mt-2">{t('textBox.selected')}: Delete / Backspace {t('textBox.delete')}. {t('textBox.dragResizeHint')}</p>
                       </>
                     )}
@@ -13110,6 +13133,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
               const w = box.width ?? 200;
               const h = box.height ?? 60;
               const align = box.textAlign ?? 'center';
+              const columnCount = Math.max(1, Math.min(5, Math.floor(Number(box.columnCount) || 1)));
               const isSelected = selectedTextboxId === box.id;
               return (
                 <div
@@ -13136,7 +13160,17 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                   }}
                 >
                   <div className="flex-1 flex items-start justify-between gap-1 min-h-0" style={{ textAlign: align }}>
-                    <span className="flex-1 min-w-0 block" style={{ textAlign: align }}>{box.text}</span>
+                    <span
+                      className="flex-1 min-w-0 block h-full overflow-hidden whitespace-pre-wrap break-words"
+                      style={{
+                        textAlign: align,
+                        columnCount: columnCount > 1 ? columnCount : undefined,
+                        columnGap: columnCount > 1 ? '16px' : undefined,
+                        columnFill: columnCount > 1 ? 'auto' : undefined,
+                      }}
+                    >
+                      {box.text}
+                    </span>
                     {isSelected && (
                       <>
                         <button
