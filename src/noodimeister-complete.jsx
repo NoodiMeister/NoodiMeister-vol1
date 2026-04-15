@@ -2067,6 +2067,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   const [chords, setChords] = useState([]); // { id, beatPosition, chord, figuredBass?, durationBeats? } – traditsiooniline ja figuurnotatsioon
   const [customChordInput, setCustomChordInput] = useState('');
   const [customFiguredBassInput, setCustomFiguredBassInput] = useState('');
+  const customChordInputRef = useRef(null);
   // Teksti kasti plugin: vabalt paigutatavad laulutekstid, kommentaarid ja tempo märgid
   const [textBoxes, setTextBoxes] = useState([]); // { id, x, y, text, type?: 'text'|'tempo', tempoBpm?: number, fontSize?: number }
   const [selectedTextboxId, setSelectedTextboxId] = useState(null);
@@ -4988,9 +4989,9 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   saveToHistoryRef.current = saveToHistory;
 
   const undo = useCallback(() => {
-    if (historyIndex > 0) {
-      setHistoryIndex(prev => prev - 1);
-      setNotes(JSON.parse(JSON.stringify(history[historyIndex - 1])));
+    if (historyIndex >= 0 && history[historyIndex]) {
+      setNotes(JSON.parse(JSON.stringify(history[historyIndex])));
+      setHistoryIndex((prev) => prev - 1);
     }
   }, [history, historyIndex]);
 
@@ -5961,6 +5962,22 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     });
   }, [normalizeChordHotkey, selectedDuration, getEffectiveDuration]);
 
+  /** Kohandatud akord: väljad + „Lisa akord“ / Enter. Paleti „Sisesta akord…“ ei lisanud kunagi midagi — see juhatas ainult siia. */
+  const submitCustomChordEntry = useCallback(() => {
+    const raw = customChordInput.trim();
+    if (!raw) {
+      setSaveFeedback(t('chords.customEmpty') || 'Sisesta akordi nimetus.');
+      setTimeout(() => setSaveFeedback(''), 2800);
+      return;
+    }
+    const chord = normalizeChordHotkey(raw);
+    addChordAt(getChordInsertBeat(), chord, customFiguredBassInput);
+    setCustomChordInput('');
+    setCustomFiguredBassInput('');
+    setSaveFeedback(t('chords.addedOk') || 'Akord lisatud.');
+    setTimeout(() => setSaveFeedback(''), 2200);
+  }, [customChordInput, customFiguredBassInput, t, normalizeChordHotkey, addChordAt, getChordInsertBeat]);
+
   const NOTE_TO_SEMITONE = useMemo(() => ({
     C: 0, 'B#': 0,
     'C#': 1, Db: 1,
@@ -6244,13 +6261,14 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         break;
       }
       case 'chords':
-        if (!noteInputMode) return; // Akordi sisestus ainult N-režiimis
-        if (option.value !== 'custom') {
-          addChordAt(getChordInsertBeat(), option.value, '');
-          setActiveToolbox(null);
-          setSelectedOptionIndex(0);
+        if (option.value === 'custom') {
+          setSelectedOptionIndex(optionIndex);
+          setTimeout(() => customChordInputRef.current?.focus(), 0);
+          return;
         }
-        // 'custom' jätab paneeli lahti; akord sisestatakse väljade kaudu
+        addChordAt(getChordInsertBeat(), option.value, '');
+        setActiveToolbox(null);
+        setSelectedOptionIndex(0);
         return;
     }
     setActiveToolbox(null);
@@ -11100,20 +11118,25 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                   <div className="mb-3 p-3 bg-white rounded border-2 border-amber-400 space-y-2">
                     <p className="text-xs text-amber-700">{t('chords.hint')} <kbd className="font-mono bg-amber-100 px-1 rounded">Ctrl+A</kbd> / <kbd className="font-mono bg-amber-100 px-1 rounded">Cmd+A</kbd>.</p>
                     <label className="block text-xs font-semibold text-amber-900">{t('chords.customLabel')}</label>
-                    <input type="text" value={customChordInput} onChange={(e) => setCustomChordInput(e.target.value)} placeholder={t('chords.customPlaceholder')} className="w-full px-2 py-1.5 rounded border border-amber-300 text-sm" />
+                    <input
+                      ref={customChordInputRef}
+                      type="text"
+                      value={customChordInput}
+                      onChange={(e) => setCustomChordInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          submitCustomChordEntry();
+                        }
+                      }}
+                      placeholder={t('chords.customPlaceholder')}
+                      className="w-full px-2 py-1.5 rounded border border-amber-300 text-sm"
+                    />
                     <label className="block text-xs font-semibold text-amber-900">{t('chords.figuredBass')}</label>
                     <input type="text" value={customFiguredBassInput} onChange={(e) => setCustomFiguredBassInput(e.target.value)} placeholder={t('chords.figuredBassPlaceholder')} className="w-full px-2 py-1.5 rounded border border-amber-300 text-sm" />
                     <button
                       type="button"
-                      onClick={() => {
-                        if (!noteInputMode) return;
-                        const raw = customChordInput.trim();
-                        if (!raw) return;
-                        const chord = normalizeChordHotkey(raw);
-                        addChordAt(getChordInsertBeat(), chord, customFiguredBassInput);
-                        setCustomChordInput('');
-                        setCustomFiguredBassInput('');
-                      }}
+                      onClick={submitCustomChordEntry}
                       className="w-full py-1.5 px-2 rounded bg-amber-600 text-white text-sm font-medium hover:bg-amber-700"
                     >
                       {t('chords.add')}
@@ -11459,6 +11482,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                     <p className="text-xs text-amber-700 mt-1 mb-2 px-1" title={t('repeat.hint')}>{t('repeat.hint')}</p>
                   )}
                   {activeToolbox && activeToolbox !== 'pianoKeyboard' && activeToolbox !== 'rhythm' && activeToolbox !== 'textBox' && activeToolbox !== 'clefs' && activeToolbox !== 'instruments' && activeToolbox !== 'keySignatures' && toolboxes[activeToolbox]?.options?.map((option, idx) => {
+                    if (activeToolbox === 'chords' && option.value === 'custom') return null;
                     if ((activeToolbox === 'instruments' || activeToolbox === 'repeatsJumps') && option.type === 'category') return <div key={option.id} className="pt-1.5 pb-0.5 px-1.5 text-xs font-bold text-amber-800 uppercase tracking-wide border-b border-amber-200 first:pt-0">{option.label}</div>;
                     const isActive = activeToolbox === 'timeSignature' && option.value === 'mode-toggle' ? false : activeToolbox === 'keySignatures' ? option.value === keySignature : activeToolbox === 'transpose' ? option.value === keySignature : activeToolbox === 'notehead' ? (option.value.startsWith('shape:') ? noteheadShape === option.value.slice(7) : option.value === notationMode) : activeToolbox === 'instruments' ? option.type === 'option' && option.value === instrument : activeToolbox === 'layout' ? (option.value === 'gridOnly' && notationStyle === 'FIGURENOTES') || (option.id === 'staff-5' && notationStyle === 'TRADITIONAL' && staffLines === 5) || (option.id === 'staff-1' && notationStyle === 'TRADITIONAL' && staffLines === 1) || (option.id?.startsWith('spacing-') && pixelsPerBeat === option.value) : selectedOptionIndex === idx;
                     return (
