@@ -1666,6 +1666,8 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
 
   // N-režiim (noodisisestus): ref, et figuurenotatsiooni löögiklikk ei lisaks nooti, kui kasutaja on SEL-režiimis
   const noteInputModeRef = useRef(noteInputMode);
+  // Väldi "kleepuva klahvi" kõrvaltoimet vahetult N -> SEL lülitusel.
+  const suppressSelEditUntilRef = useRef(0);
   // Mouse-insert must also be readable in keyboard handler.
   const mouseInsertDraftRef = useRef(mouseInsertDraft);
   useEffect(() => {
@@ -2482,6 +2484,12 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     setNotationStyle(wizardNotationMethod === 'figurenotes' ? 'FIGURENOTES' : 'TRADITIONAL');
     setTimeSignature({ beats: wizardTimeSignature[0], beatUnit: wizardTimeSignature[1] });
     setKeySignature(wizardKeySignature);
+    if (pedagogical) {
+      const jp = getTonicStaffPosition(wizardKeySignature);
+      if (Number.isFinite(jp)) {
+        setJoClefStaffPosition(Math.max(JO_CLEF_POSITION_MIN, Math.min(JO_CLEF_POSITION_MAX, jp)));
+      }
+    }
     setSongTitle(wizardSongTitle.trim());
     setAuthor(wizardAuthor.trim());
     setInstrument(wizardInstrument);
@@ -6151,9 +6159,16 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
           setClefType(option.value);
         }
         break;
-      case 'keySignatures':
+      case 'keySignatures': {
         setKeySignature(option.value);
+        if (notationMode === 'vabanotatsioon') {
+          const jp = getTonicStaffPosition(option.value);
+          if (Number.isFinite(jp)) {
+            setJoClefStaffPosition(Math.max(JO_CLEF_POSITION_MIN, Math.min(JO_CLEF_POSITION_MAX, jp)));
+          }
+        }
         break;
+      }
       case 'transpose': {
         const targetKey = option.value;
         const fromSemi = KEY_TO_SEMITONE[keySignature] ?? getSemitonesFromKey(keySignature);
@@ -6169,6 +6184,12 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
             chord: transposeChordSymbolSemitones(c.chord, semitones, { preferFlats }),
           })));
           setKeySignature(targetKey);
+          if (notationMode === 'vabanotatsioon') {
+            const jp = getTonicStaffPosition(targetKey);
+            if (Number.isFinite(jp)) {
+              setJoClefStaffPosition(Math.max(JO_CLEF_POSITION_MIN, Math.min(JO_CLEF_POSITION_MAX, jp)));
+            }
+          }
         }
         break;
       }
@@ -6273,10 +6294,11 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     lastCursorOnNoteBeatRef.current = getBeatAtNoteIndex(notes, noteIndexAtCursor);
   }, [noteIndexAtCursor, notes, getBeatAtNoteIndex]);
 
-  // Hoia valitud noot (helesinine kast) ja kursor samal noodil:
-  // kui pole vahemiku valikut ega pedagoogilist taasesitust/eksporti ega tekstirežiimi ega akordireal, seame selectedNoteIndex = noteIndexAtCursor.
+  // SEL-kursor ei tohi sundida noodi helesinist kasti "kursori ette":
+  // valik jääb kasutaja juhituks (klikiga / vahemikuga), mitte automaatselt cursorPosition järgi.
   useEffect(() => {
     if (noteInputMode) return;
+    if (cursorTool === 'select') return;
     // Tekstirežiimis (laulutekst) ja lauluteksti ahelas juhib fookust tekstikursor, mitte luger.
     if (cursorTool === 'type') return;
     if (isPedagogicalAudioPlaying || isExportingAnimation) return;
@@ -6714,7 +6736,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
           e.preventDefault();
           const step = e.code === 'ArrowUp' ? 1 : -1;
           const nextPos = Math.max(JO_CLEF_POSITION_MIN, Math.min(JO_CLEF_POSITION_MAX, joClefStaffPosition + step));
-          const newKey = getKeyFromStaffPosition(nextPos);
+          const newKey = getKeyFromStaffPosition(nextPos, keySignature);
           if (newKey !== keySignature) {
             const semitones = (KEY_TO_SEMITONE[newKey] ?? getSemitonesFromKey(newKey)) - (KEY_TO_SEMITONE[keySignature] ?? getSemitonesFromKey(keySignature));
             if (semitones !== 0) {
@@ -6858,6 +6880,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         e.preventDefault();
         setNoteInputMode(prev => {
           if (prev) {
+            suppressSelEditUntilRef.current = Date.now() + 220;
             restNextRef.current = false;
             setSelectedNoteIndex(-1);
             setSelectionStart(-1);
@@ -7045,7 +7068,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       }
 
       // When a note is selected: Arrow Up/Down and duration/letter keys always edit it (even with toolbox open or note input on)
-      if (selectedNoteIndex >= 0 && selectedNoteIndex < notes.length) {
+      if (selectedNoteIndex >= 0 && selectedNoteIndex < notes.length && !(!noteInputMode && Date.now() < suppressSelEditUntilRef.current)) {
         const durationMapSel = { 'Digit7': '1/1', 'Digit6': '1/2', 'Digit5': '1/4', 'Digit4': '1/8', 'Digit3': '1/16', 'Digit2': '1/32' };
         if (e.code === 'ArrowUp' || e.code === 'ArrowDown') {
           e.preventDefault();
@@ -7572,53 +7595,42 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
               playNoteAtBeatIfEnabled(focusM.startBeat);
               return;
             }
-            if (notationStyle === 'FIGURENOTES') {
-              const EPS = 1e-6;
-              const selectedDurStep = Number(durationLabelToQuarterBeats(selectedDuration)) || 1;
-              const cursorStep = Math.max(0.125, selectedDurStep);
-              const spans = notesWithExplicitBeats(notes)
-                .slice()
-                .map((n) => {
-                  const start = Number(n?.beat) || 0;
-                  const dur = Number(n?.duration) || 1;
-                  return { start, end: start + dur };
-                })
-                .sort((a, b) => a.start - b.start);
-              const getNextWrittenBoundary = (dir) => {
-                let best = null;
-                for (let i = 0; i < spans.length; i += 1) {
-                  const s = spans[i];
-                  const candidates = [s.start, s.end];
-                  for (let c = 0; c < candidates.length; c += 1) {
-                    const b = candidates[c];
-                    if (dir > 0) {
-                      if (b > cursorPosition + EPS) best = best == null ? b : Math.min(best, b);
-                    } else if (b < cursorPosition - EPS) {
-                      best = best == null ? b : Math.max(best, b);
-                    }
+            const EPS = 1e-6;
+            const selectedDurStep = Number(durationLabelToQuarterBeats(selectedDuration)) || 1;
+            const cursorStep = Math.max(0.125, selectedDurStep);
+            const spans = notesWithExplicitBeats(notes)
+              .slice()
+              .map((n) => {
+                const start = Number(n?.beat) || 0;
+                const dur = Number(n?.duration) || 1;
+                return { start, end: start + dur };
+              })
+              .sort((a, b) => a.start - b.start);
+            const getNextWrittenBoundary = (dir) => {
+              let best = null;
+              for (let i = 0; i < spans.length; i += 1) {
+                const s = spans[i];
+                const candidates = [s.start, s.end];
+                for (let c = 0; c < candidates.length; c += 1) {
+                  const b = candidates[c];
+                  if (dir > 0) {
+                    if (b > cursorPosition + EPS) best = best == null ? b : Math.min(best, b);
+                  } else if (b < cursorPosition - EPS) {
+                    best = best == null ? b : Math.max(best, b);
                   }
                 }
-                return best;
-              };
-              const dir = e.code === 'ArrowRight' ? 1 : -1;
-              const boundary = getNextWrittenBoundary(dir);
-              const stepped = cursorPosition + dir * cursorStep;
-              const targetBeat = boundary != null ? boundary : stepped;
-              const newBeat = Math.max(0, Math.min(maxCursor, targetBeat));
-              setMeasureSelection(null);
-              setCursorPosition(newBeat);
-              setSelectedNoteIndex(getNoteIndexForBeat(newBeat));
-              playNoteAtBeatIfEnabled(newBeat);
-              return;
-            }
-            setMeasureSelection(null);
+              }
+              return best;
+            };
             const dir = e.code === 'ArrowRight' ? 1 : -1;
-            const nextIdx = Math.max(0, Math.min(curIdx + dir, ms.length - 1));
-            const m = ms[nextIdx];
-            setCursorPosition(m.startBeat);
-            const ni = findFirstNoteIndexInMeasure(notes, m);
-            setSelectedNoteIndex(ni);
-            playNoteAtBeatIfEnabled(m.startBeat);
+            const boundary = getNextWrittenBoundary(dir);
+            const stepped = cursorPosition + dir * cursorStep;
+            const targetBeat = boundary != null ? boundary : stepped;
+            const newBeat = Math.max(0, Math.min(maxCursor, targetBeat));
+            setMeasureSelection(null);
+            setCursorPosition(newBeat);
+            setSelectedNoteIndex(-1);
+            playNoteAtBeatIfEnabled(newBeat);
             return;
           }
         }

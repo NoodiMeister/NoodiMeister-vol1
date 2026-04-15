@@ -29,6 +29,7 @@ import {
   estimateKeySignatureWidthPx,
   getPedagogicalTimeSignatureX,
   getPedagogicalRelativeKeySignatureWidthPx,
+  getKeySignatureStepPx,
 } from '../notation/TimeSignatureLayout';
 import { ensureGlyphHorizontalGapPx, ensureMinGlyphHorizontalGapPx } from '../notation/glyphSpacing';
 import { measureLengthInQuarterBeats } from '../musical/timeSignature';
@@ -73,6 +74,7 @@ import { HandbellIcon } from '../components/icons/HandbellIcon';
 import {
   KEY_SIGNATURE_COUNT_BY_KEY,
   KEY_SIGNATURE_STAFF_POSITIONS,
+  KEY_SIGNATURE_VERTICAL_DY_PX_AT_10,
 } from '../notation/keySignatureStandard';
 import {
   resolveInstrumentRangeMidi,
@@ -118,6 +120,15 @@ function getKeySignatureStaffPosition(clef, kind, idx) {
   }
   const byClef = KEY_SIGNATURE_STAFF_POSITIONS.flats[safeClef] || KEY_SIGNATURE_STAFF_POSITIONS.flats.treble;
   return byClef[idx] ?? 0;
+}
+
+function getKeySignatureVerticalDyPx(clef, kind, idx, staffSpace) {
+  const safeClef = clef === 'bass' || clef === 'alto' || clef === 'tenor' ? clef : 'treble';
+  const byKind = KEY_SIGNATURE_VERTICAL_DY_PX_AT_10[kind] || KEY_SIGNATURE_VERTICAL_DY_PX_AT_10.sharps;
+  const byClef = byKind[safeClef] || byKind.treble || [];
+  const base = byClef[idx] ?? 0;
+  const scale = (Number(staffSpace) || 10) / 10;
+  return base * scale;
 }
 
 
@@ -499,6 +510,7 @@ export function TraditionalNotationView({
 }) {
   const spacing = staffSpaceProp ?? STAFF_SPACE;
   const isVabanotatsioon = notationMode === 'vabanotatsioon';
+  const keySignatureInfo = getKeySignatureInfo(keySignature);
   const centerY = timelineHeight / 2;
   const timeSigTextColor = themeColors?.textColor ?? '#333';
   const timeSigNoteFill = themeColors?.noteFill ?? '#333';
@@ -526,8 +538,10 @@ export function TraditionalNotationView({
   const staffLeft = (isFirstInBraceGroup && braceGroupSize >= 2) ? STAFF_LEFT_WITH_BRACE : STAFF_LEFT_WITHOUT_BRACE;
   const clefX = staffLeft + GAP_BEFORE_CLEF_PX;
   const timeSigWidthPx = 28;
-  const keySigWidthWorstCase = estimateKeySignatureWidthPx(7);
   const ksFontForLayout = getGlyphFontSize(spacing);
+  const keySigStepPx = getKeySignatureStepPx(ksFontForLayout);
+  const actualTraditionalKeySigCount = isVabanotatsioon ? 0 : keySignatureInfo.count;
+  const keySigWidthWorstCase = estimateKeySignatureWidthPx(actualTraditionalKeySigCount, ksFontForLayout);
   const pedagogicalLeftPrefixWorstCase =
     LAYOUT.CLEF_WIDTH +
     getPedagogicalRelativeKeySignatureWidthPx(7, ksFontForLayout) +
@@ -638,7 +652,6 @@ export function TraditionalNotationView({
   const showTraditionalKeySignature = !isVabanotatsioon && !!keySignature && keySignature !== 'C';
   const showRelativeKeySignature = isVabanotatsioon && relativeNotationShowKeySignature && !!keySignature && keySignature !== 'C';
   const shouldDrawAnyKeySignature = showTraditionalKeySignature || showRelativeKeySignature;
-  const keySignatureInfo = getKeySignatureInfo(keySignature);
 
   const staffList = multiStaff ? instruments : [{ id: '_single', name: '', clef: clefType }];
 
@@ -819,26 +832,32 @@ export function TraditionalNotationView({
                           g.push(<StaffClefSymbol key="trad-clef" x={currentX} y={tradY} height={clefFontSize} clefType={clefType} fill="#000" staffSpace={spacing} />);
                           currentX += LAYOUT.CLEF_WIDTH;
                         }
-                        if (relativeNotationShowKeySignature && keySignature && keySignature !== 'C') {
-                          const sharpCount = { G: 1, D: 2, A: 3, E: 4, B: 5 }[keySignature] || 0;
-                          const flatCount = { F: 1, Bb: 2, Eb: 3 }[keySignature] || 0;
-                          const ksKind = flatCount ? 'flat' : 'sharp';
-                          const ksGlyph = ksKind === 'flat' ? SMUFL_GLYPH.accidentalFlat : SMUFL_GLYPH.accidentalSharp;
-                          const ksCount = Math.max(sharpCount, flatCount);
+                        if (relativeNotationShowKeySignature && keySignatureInfo.count > 0 && keySignatureInfo.kind) {
+                          const ksGlyph =
+                            keySignatureInfo.kind === 'flat' ? SMUFL_GLYPH.accidentalFlat : SMUFL_GLYPH.accidentalSharp;
+                          const ksCount = keySignatureInfo.count;
                           const ksFont = getGlyphFontSize(spacing);
-                          for (let i = 0; i < ksCount; i++) {
+                          for (let i = 0; i < ksCount; i += 1) {
+                            const staffPos = getKeySignatureStaffPosition(clefType, keySignatureInfo.kind, i);
+                            const glyphY =
+                              staffY +
+                              getYFromStaffPosition(staffPos, centerY, staffLines, spacing) +
+                              getKeySignatureVerticalDyPx(clefType, keySignatureInfo.kind, i, spacing);
                             g.push(
                               <SmuflGlyph
                                 key={`ks-${i}`}
-                                x={currentX + TIME_SIG_SPACING.KEY_SIG_FIRST_CENTER_OFFSET_PX + i * TIME_SIG_SPACING.KEY_SIG_STEP_PX}
-                                y={staffY + centerY - 8}
+                                x={currentX + TIME_SIG_SPACING.KEY_SIG_FIRST_CENTER_OFFSET_PX + i * keySigStepPx}
+                                y={glyphY}
                                 glyph={ksGlyph}
                                 fontSize={ksFont}
                                 fill="#1a1a1a"
                               />
                             );
                           }
-                          currentX += TIME_SIG_SPACING.KEY_SIG_FIRST_CENTER_OFFSET_PX + Math.max(0, ksCount - 1) * TIME_SIG_SPACING.KEY_SIG_STEP_PX + Math.round(ksFont * 0.35);
+                          currentX +=
+                            TIME_SIG_SPACING.KEY_SIG_FIRST_CENTER_OFFSET_PX +
+                            Math.max(0, ksCount - 1) * keySigStepPx +
+                            Math.round(ksFont * 0.35);
                         }
                         const joClefEl = (
                           <JoClefSymbol
@@ -890,11 +909,14 @@ export function TraditionalNotationView({
                         const ksFontSize = getGlyphFontSize(spacing);
                         for (let i = 0; i < keySignatureInfo.count; i += 1) {
                           const staffPos = getKeySignatureStaffPosition(clefType, keySignatureInfo.kind, i);
-                          const glyphY = staffY + getYFromStaffPosition(staffPos, centerY, staffLines, spacing);
+                          const glyphY =
+                            staffY +
+                            getYFromStaffPosition(staffPos, centerY, staffLines, spacing) +
+                            getKeySignatureVerticalDyPx(clefType, keySignatureInfo.kind, i, spacing);
                           symbols.push(
                             <SmuflGlyph
                               key={`ks-trad-${sys.systemIndex}-${staffIndex}-${i}`}
-                              x={keySigStartX + i * TIME_SIG_SPACING.KEY_SIG_STEP_PX}
+                              x={keySigStartX + i * keySigStepPx}
                               y={glyphY}
                               glyph={keySigGlyph}
                               fontSize={ksFontSize}
@@ -942,6 +964,7 @@ export function TraditionalNotationView({
                             clefX,
                             clefWidth: LAYOUT.CLEF_WIDTH,
                             keySigCount,
+                            ksFontSize: ksFont,
                             measureStartX: effectiveMarginLeft,
                           });
                       return (
@@ -1085,11 +1108,9 @@ export function TraditionalNotationView({
                   ? finalBarlineGeomForRepeat.thinCx
                   : measureRightX;
                 const repeatRightTextAnchor = finalBarlineGeomForRepeat ? 'middle' : 'start';
-                const rowBarTop = staffY + firstLineY;
-                const rowBarBottom = staffY + lastLineY;
                 const repeatSmufl = getRepeatBarlineSmuflPlacement({
-                  barTopY: rowBarTop,
-                  barBottomY: rowBarBottom,
+                  barTopY: barY1,
+                  barBottomY: barY2,
                 });
 
                 return (

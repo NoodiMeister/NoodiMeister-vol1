@@ -33,3 +33,19 @@ export const KEY_SIGNATURE_STAFF_POSITIONS = {
   },
 };
 
+/**
+ * Fine vertical offsets (px @ staffSpace=10) to match
+ * `public/reference/key-signature-all-staves.svg`.
+ * Values scale linearly by (staffSpace / 10).
+ */
+export const KEY_SIGNATURE_VERTICAL_DY_PX_AT_10 = {
+  sharps: {
+    treble: [-6, -6, -4, -6, -6, -6, -6],
+    bass: [-6, -6, -7, -6, -6, -6, -6],
+  },
+  flats: {
+    treble: [0, 0, 0, 0, 0, 0, 0],
+    bass: [0, 0, 0, 0, 0, 0, 0],
+  },
+};
+

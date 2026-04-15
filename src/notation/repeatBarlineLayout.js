@@ -30,7 +30,7 @@ const MIN_REPEAT_SMUFL_FONT_PX = 10;
  * @param {object} opts
  * @param {number} opts.barTopY – ülemine Y (px, SVG)
  * @param {number} opts.barBottomY – alumine Y (px)
- * @returns {{ y: number, fontSize: number, dominantBaseline: 'central' }}
+ * @returns {{ y: number, fontSize: number, dominantBaseline: 'middle' }}
  */
 export function getRepeatBarlineSmuflPlacement({ barTopY, barBottomY }) {
   const top = Number(barTopY);
@@ -40,6 +40,6 @@ export function getRepeatBarlineSmuflPlacement({ barTopY, barBottomY }) {
   return {
     y: top + span / 2,
     fontSize,
-    dominantBaseline: 'central',
+    dominantBaseline: 'middle',
   };
 }

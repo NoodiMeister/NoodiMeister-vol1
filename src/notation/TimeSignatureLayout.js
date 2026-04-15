@@ -44,10 +44,10 @@ export const TIME_SIG_SPACING = {
   MIN_GLYPH_HORIZONTAL_GAP_PX,
   /** Gap after clef column before first key-signature accidental (visual: tuck time sig after key). */
   AFTER_CLEF_PX: 2,
-  /** First key-sig accidental center X offset from clef’s right edge (negative = closer to clef). Must match TraditionalNotationView. */
-  KEY_SIG_FIRST_CENTER_OFFSET_PX: -4,
-  /** Horizontal distance between consecutive key-signature accidentals (max 5px). */
-  KEY_SIG_STEP_PX: 5,
+  /** First key-sig accidental center X offset from clef’s right edge. */
+  KEY_SIG_FIRST_CENTER_OFFSET_PX: 0,
+  /** Fallback horizontal distance between consecutive key-signature accidentals. */
+  KEY_SIG_STEP_PX: 10,
   /** Rough right extent past last accidental center for SMuFL glyph (Leland ~1 em). */
   KEY_SIG_GLYPH_TAIL_PX: 16,
   /** Clear gap between last key-sig accidental and time signature (no overlap). */
@@ -56,13 +56,25 @@ export const TIME_SIG_SPACING = {
   FIGURE_BEFORE_FIRST_MEASURE_PX: 14,
 };
 
+/**
+ * Key-signature accidental step calibrated to `public/reference/key-signature-all-staves.svg`:
+ * configurable proportion of staff-space.
+ */
+export function getKeySignatureStepPx(ksFontSize) {
+  const font = Number(ksFontSize);
+  if (!Number.isFinite(font) || font <= 0) return TIME_SIG_SPACING.KEY_SIG_STEP_PX;
+  const staffSpace = font / 4;
+  return Math.max(8, Math.round(staffSpace * 1.5));
+}
+
 /** Max horizontal span of key signature from clef’s right edge (for min measure start / layout). */
-export function estimateKeySignatureWidthPx(accidentalCount) {
+export function estimateKeySignatureWidthPx(accidentalCount, ksFontSize) {
   const n = Math.max(0, Math.min(7, Math.floor(Number(accidentalCount) || 0)));
   if (n === 0) return 0;
+  const stepPx = getKeySignatureStepPx(ksFontSize);
   return (
     TIME_SIG_SPACING.KEY_SIG_FIRST_CENTER_OFFSET_PX +
-    (n - 1) * TIME_SIG_SPACING.KEY_SIG_STEP_PX +
+    (n - 1) * stepPx +
     TIME_SIG_SPACING.KEY_SIG_GLYPH_TAIL_PX
   );
 }
@@ -75,9 +87,11 @@ export function getTraditionalTimeSignatureX({
   clefX,
   clefWidth = 45,
   keySigCount = 0,
+  ksFontSize,
   measureStartX,
 }) {
   const n = Math.max(0, Math.min(7, Math.floor(Number(keySigCount) || 0)));
+  const stepPx = getKeySignatureStepPx(ksFontSize);
   const clefRightX = clefX + clefWidth;
   const afterClefGap = ensureMinGlyphHorizontalGapPx(TIME_SIG_SPACING.AFTER_CLEF_PX);
   const afterKeySigGap = ensureMinGlyphHorizontalGapPx(TIME_SIG_SPACING.GAP_AFTER_KEY_SIG_BEFORE_TIME_SIG_PX);
@@ -88,17 +102,13 @@ export function getTraditionalTimeSignatureX({
     const keySigRightX =
       clefRightX +
       TIME_SIG_SPACING.KEY_SIG_FIRST_CENTER_OFFSET_PX +
-      (n - 1) * TIME_SIG_SPACING.KEY_SIG_STEP_PX +
+      (n - 1) * stepPx +
       TIME_SIG_SPACING.KEY_SIG_GLYPH_TAIL_PX;
     baseX = keySigRightX + afterKeySigGap;
   }
-  if (typeof measureStartX === 'number' && Number.isFinite(measureStartX)) {
-    // Invariant: key signature and time signature must never overlap.
-    // If there is not enough room before the first measure start, keep time signature
-    // after key signature; caller/layout must provide enough left prefix width.
-    const rightBound = Math.max(0, measureStartX - TIME_SIG_SPACING.BEFORE_FIRST_MEASURE_PX);
-    return baseX > rightBound ? baseX : rightBound;
-  }
+  // Keep time signature directly after key signature block (reference layout behavior).
+  // Caller/layout guarantees enough left prefix width before first measure.
+  if (typeof measureStartX === 'number' && Number.isFinite(measureStartX)) return baseX;
   return baseX;
 }
 
@@ -114,9 +124,10 @@ export function getPedagogicalRelativeKeySignatureWidthPx(ksCount, ksFontSize) {
   const n = Math.max(0, Math.floor(Number(ksCount) || 0));
   if (n === 0) return 0;
   const fs = Number(ksFontSize) || 16;
+  const stepPx = getKeySignatureStepPx(fs);
   return (
     PEDAGOGICAL_REL_KEY_SIG_FIRST_OFFSET_PX +
-    Math.max(0, n - 1) * TIME_SIG_SPACING.KEY_SIG_STEP_PX +
+    Math.max(0, n - 1) * stepPx +
     ensureMinGlyphHorizontalGapPx(Math.round(fs * 0.35))
   );
 }
