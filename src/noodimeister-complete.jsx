@@ -2495,6 +2495,8 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const isNewWorkFlow = (searchParams && typeof searchParams.get === 'function' && searchParams.get('new')) === '1';
+  const isImportMusicXmlFlow = (searchParams && typeof searchParams.get === 'function' && searchParams.get('importMusicXml')) === '1';
+  const isImportPdfFlow = (searchParams && typeof searchParams.get === 'function' && searchParams.get('importPdf')) === '1';
   const partStaffId = searchParams && typeof searchParams.get === 'function' ? searchParams.get('staffId') : undefined;
   // Kui fail on avatud pilvest (/app?fileId=...), hoiame meeles, millisest teenusest ja millise fileId-ga, et Cmd/Ctrl+S kirjutaks sama faili üle (mitte ei looks koopiat).
   const [openedCloudFile, setOpenedCloudFile] = useState(null); // { provider: 'google' | 'onedrive', fileId: string }
@@ -2509,6 +2511,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   });
   const isPartWindow = !!partStaffId;
   const [newWorkSetupOpen, setNewWorkSetupOpen] = useState(false);
+  const suppressAutoNewWorkSetupRef = useRef(false);
   // Uue töö seadistuse vormi väljad (küsitakse enne töö loomist)
   const [wizardNotationMethod, setWizardNotationMethod] = useState('traditional'); // 'traditional' | 'figurenotes' | 'pedagogical'
   const [wizardTimeSignature, setWizardTimeSignature] = useState([4, 4]);
@@ -2537,8 +2540,11 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   }, [newWorkSetupOpen, saveCloudDialogOpen, googleLoadPickerOpen, settingsOpen, shortcutsOpen, showPdfExportPreview, isInstrumentManagerOpen, saveLoadOpen]);
 
   useEffect(() => {
-    if (isNewWorkFlow) setNewWorkSetupOpen(true);
-  }, [isNewWorkFlow]);
+    if (!isNewWorkFlow) return;
+    if (suppressAutoNewWorkSetupRef.current) return;
+    if (isImportMusicXmlFlow || isImportPdfFlow) return;
+    setNewWorkSetupOpen(true);
+  }, [isNewWorkFlow, isImportMusicXmlFlow, isImportPdfFlow]);
 
   const partWindowStaffIndices = useMemo(() => {
     if (!partStaffId) return null;
@@ -4552,6 +4558,18 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
 
   // Salvesta pilve: kui on salvestuskaust seadistatud, salvesta otse sinna; vastasel juhul ava dialoog.
   const saveToCloud = useCallback(async () => {
+    const ensureGoogleDefaultFolderId = async (token) => {
+      const fromSession = (sessionSaveFolderId?.cloud === 'google' ? sessionSaveFolderId.folderId : null);
+      if (fromSession) return fromSession;
+      const fromAccount = authStorage.getGoogleSaveFolderId();
+      if (fromAccount) return fromAccount;
+      const folderName = 'NoodiMeister';
+      const folderId = await googleDrive.createFolder(token, 'root', folderName);
+      authStorage.addGoogleSaveFolder(folderId, folderName);
+      try { await googleDrive.setSaveFoldersConfig(token, authStorage.getGoogleSaveFolders()); } catch (_) {}
+      return folderId;
+    };
+
     const run = async (allowTokenRefresh = true) => {
       let token = googleDrive.getStoredToken();
       if (!token && allowTokenRefresh) {
@@ -4585,7 +4603,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         if (knownModified && remoteModified && knownModified !== remoteModified) {
           const fileNameBase = ((data.songTitle || t('common.untitled')).replace(/\s+/g, '-').replace(/[^\w\-.]/g, '') || t('common.untitled'));
           const conflictName = `${fileNameBase} (conflict-${new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)}).nm`;
-          const targetFolderId = (Array.isArray(remoteMeta?.parents) && remoteMeta.parents[0]) || (sessionSaveFolderId?.cloud === 'google' ? sessionSaveFolderId.folderId : null) || authStorage.getGoogleSaveFolderId() || 'root';
+          const targetFolderId = (Array.isArray(remoteMeta?.parents) && remoteMeta.parents[0]) || await ensureGoogleDefaultFolderId(token);
           const copyId = await googleDrive.createFileInFolder(token, targetFolderId, conflictName, json);
           if (copyId) {
             const copyMeta = await googleDrive.getFileMetadata(token, copyId).catch(() => null);
@@ -4613,7 +4631,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       return;
     }
     // Muidu: salvesta kausta, nagu varem (või küsi kausta).
-    const savedFolderId = (sessionSaveFolderId?.cloud === 'google' ? sessionSaveFolderId.folderId : null) || authStorage.getGoogleSaveFolderId();
+    const savedFolderId = await ensureGoogleDefaultFolderId(token);
     if (savedFolderId) {
       try {
         setSaveFeedback('Salvestan…');
@@ -4709,6 +4727,19 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
 
   // Salvesta OneDrive'i (Microsoft): kui fail on avatud pilvest, kirjuta sama fileId üle; muidu uus fail kausta/juurkausta.
   const saveToOneDrive = useCallback(async () => {
+    const ensureOneDriveDefaultFolderId = async (token) => {
+      const fromSession = (sessionSaveFolderId?.cloud === 'onedrive' ? sessionSaveFolderId.folderId : null);
+      if (fromSession) return fromSession;
+      const fromAccount = authStorage.getOneDriveSaveFolderId();
+      if (fromAccount) return fromAccount;
+      const folderName = 'NoodiMeister';
+      const created = await oneDrive.createFolder(token, 'root', folderName);
+      if (!created?.ok || !created?.id) throw new Error(created?.error || 'OneDrive vaikekausta loomine ebaõnnestus');
+      authStorage.addOneDriveSaveFolder(created.id, created.name || folderName);
+      try { await oneDrive.setSaveFoldersConfig(token, authStorage.getOneDriveSaveFolders()); } catch (_) {}
+      return created.id;
+    };
+
     const run = async (allowTokenRefresh = true) => {
       let token = authStorage.getStoredMicrosoftTokenFromAuth();
       if (!token && allowTokenRefresh) {
@@ -4741,7 +4772,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         } catch (e) {
           if (String(e?.message || '').includes('teises seadmes muutunud')) {
             const meta = await oneDrive.getFileMetadata(token, openedCloudFile.fileId).catch(() => null);
-            const folderId = meta?.parentId || (sessionSaveFolderId?.cloud === 'onedrive' ? sessionSaveFolderId.folderId : null) || authStorage.getOneDriveSaveFolderId() || 'root';
+            const folderId = meta?.parentId || await ensureOneDriveDefaultFolderId(token);
             const fileNameBase = ((data.songTitle || t('common.untitled')).replace(/\s+/g, '-').replace(/[^\w\-.]/g, '') || t('common.untitled'));
             const conflictName = `${fileNameBase} (conflict-${new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)}).nm`;
             const savedItem = await oneDrive.uploadFileToFolder(token, folderId, conflictName, json, 'application/json');
@@ -4772,13 +4803,8 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     try {
       setSaveFeedback('Salvestan…');
       const fileName = ((data.songTitle || t('common.untitled')).replace(/\s+/g, '-').replace(/[^\w\-.]/g, '') || t('common.untitled')) + '.nm';
-      const folderId = (sessionSaveFolderId?.cloud === 'onedrive' ? sessionSaveFolderId.folderId : null) || authStorage.getOneDriveSaveFolderId();
-      let savedItem = null;
-      if (folderId) {
-        savedItem = await oneDrive.uploadFileToFolder(token, folderId, fileName, json, 'application/json');
-      } else {
-        savedItem = await oneDrive.uploadFileToRoot(token, fileName, json, 'application/json');
-      }
+      const folderId = await ensureOneDriveDefaultFolderId(token);
+      const savedItem = await oneDrive.uploadFileToFolder(token, folderId, fileName, json, 'application/json');
       if (savedItem?.id) {
         const meta = await oneDrive.getFileMetadata(token, savedItem.id).catch(() => null);
         setOpenedCloudFile({ provider: 'onedrive', fileId: savedItem.id, eTag: meta?.eTag || '' });
@@ -4827,13 +4853,27 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       if (openedCloudFile.provider === 'google') {
         const token = googleDrive.getStoredToken?.();
         if (!token) throw new Error('Google token puudub');
-        const folderId = (sessionSaveFolderId?.cloud === 'google' ? sessionSaveFolderId.folderId : null) || authStorage.getGoogleSaveFolderId() || 'root';
+        let folderId = (sessionSaveFolderId?.cloud === 'google' ? sessionSaveFolderId.folderId : null) || authStorage.getGoogleSaveFolderId();
+        if (!folderId) {
+          const folderName = 'NoodiMeister';
+          folderId = await googleDrive.createFolder(token, 'root', folderName);
+          authStorage.addGoogleSaveFolder(folderId, folderName);
+          try { await googleDrive.setSaveFoldersConfig(token, authStorage.getGoogleSaveFolders()); } catch (_) {}
+        }
         const created = await googleDrive.copyProjectFile(token, openedCloudFile.fileId, folderId, baseName);
         if (created?.id) setOpenedCloudFile({ provider: 'google', fileId: created.id });
       } else if (openedCloudFile.provider === 'onedrive') {
         const token = authStorage.getStoredMicrosoftTokenFromAuth?.();
         if (!token) throw new Error('OneDrive token puudub');
-        const folderId = (sessionSaveFolderId?.cloud === 'onedrive' ? sessionSaveFolderId.folderId : null) || authStorage.getOneDriveSaveFolderId() || 'root';
+        let folderId = (sessionSaveFolderId?.cloud === 'onedrive' ? sessionSaveFolderId.folderId : null) || authStorage.getOneDriveSaveFolderId();
+        if (!folderId) {
+          const folderName = 'NoodiMeister';
+          const createdFolder = await oneDrive.createFolder(token, 'root', folderName);
+          if (!createdFolder?.ok || !createdFolder?.id) throw new Error(createdFolder?.error || 'OneDrive vaikekausta loomine ebaõnnestus');
+          folderId = createdFolder.id;
+          authStorage.addOneDriveSaveFolder(folderId, createdFolder.name || folderName);
+          try { await oneDrive.setSaveFoldersConfig(token, authStorage.getOneDriveSaveFolders()); } catch (_) {}
+        }
         const result = await oneDrive.copyProjectFile(token, openedCloudFile.fileId, folderId, baseName);
         if (!result?.ok || !result?.id) throw new Error(result?.error || 'Koopia tegemine ebaõnnestus');
         setOpenedCloudFile({ provider: 'onedrive', fileId: result.id });
@@ -5063,6 +5103,8 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   useEffect(() => {
     if (searchParams?.get?.('importMusicXml') !== '1') return;
     let cancelled = false;
+    suppressAutoNewWorkSetupRef.current = true;
+    setNewWorkSetupOpen(false);
     beginImportTimeline('xml', ['Fail valitud', 'XML loetakse', 'Struktuur parsitakse', 'Noodid kaardistatakse', 'Valmis'], 0.62);
     setSaveFeedback('MusicXML import algas...');
 
@@ -5111,6 +5153,8 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   useEffect(() => {
     if (searchParams?.get?.('importPdf') !== '1') return;
     try {
+      suppressAutoNewWorkSetupRef.current = true;
+      setNewWorkSetupOpen(false);
       beginImportTimeline('pdf', ['PDF vastu voetud', 'Tekstikiht loetud', 'Sisu analuuesitud', 'Editable mustand loodud', 'Valmis'], 0.55);
       const raw = sessionStorage.getItem('nm:pending-pdf-import');
       const payload = raw ? JSON.parse(raw) : null;
