@@ -2170,6 +2170,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   }, [notationMode, activeStaff?.clefType, setClefType]);
 
   const [saveFeedback, setSaveFeedback] = useState('');
+  const [importTimeline, setImportTimeline] = useState(null);
   const [cloudLoadComplete, setCloudLoadComplete] = useState(() => !(typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('fileId')));
   const [addedMeasures, setAddedMeasures] = useState(0);
   /** Jooksiv min taktide arv nootide järgi; addMeasure on defineeritud varem kui useMemo */
@@ -3076,6 +3077,88 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     setPedagogicalAudioCurrentTime(0);
   }, []);
 
+  const applyParsedMusicXml = useCallback((parsed) => {
+    stopPedagogicalPlayback();
+    setTimeSignature(parsed.timeSignature);
+    if (parsed.songTitle) setSongTitle(parsed.songTitle);
+    if (parsed.author) setAuthor(parsed.author);
+
+    const braceIds = {};
+    const newStaves = [];
+    parsed.parts.forEach((p) => {
+      const safeName = (p.instrumentName || '').toLowerCase();
+      const instrumentId =
+        safeName.includes('violin') || safeName.includes('viiul') ? 'violin' :
+        safeName.includes('voice') || safeName.includes('laul') ? 'voice' :
+        safeName.includes('cello') ? 'bass' :
+        safeName.includes('piano') || safeName.includes('klaver') ? 'piano' :
+        'piano';
+
+      if (p.usesStaff2) {
+        const braceGroupId = braceIds[p.partId] || makeId('brace');
+        braceIds[p.partId] = braceGroupId;
+        newStaves.push({ id: makeId('staff'), instrumentId, clefType: 'treble', notes: p.notesStaff1, braceGroupId, notationMode: notationMode === 'vabanotatsioon' ? 'pedagogical' : 'traditional', name: p.instrumentName });
+        newStaves.push({ id: makeId('staff'), instrumentId, clefType: 'bass', notes: p.notesStaff2, braceGroupId, notationMode: notationMode === 'vabanotatsioon' ? 'pedagogical' : 'traditional', name: p.instrumentName });
+      } else {
+        newStaves.push({ id: makeId('staff'), instrumentId, clefType: 'treble', notes: p.notesStaff1, notationMode: notationMode === 'vabanotatsioon' ? 'pedagogical' : 'traditional', name: p.instrumentName });
+      }
+    });
+    if (newStaves.length > 0) {
+      const staffDur = (s) => (s?.notes || []).reduce((acc, n) => acc + (Number(n.duration) || 0), 0);
+      const maxBeats = Math.max(0, ...newStaves.map(staffDur));
+      const padded = newStaves.map((s) => {
+        const cur = staffDur(s);
+        if (maxBeats <= cur + 1e-6) return s;
+        const tailRests = fillGapWithRests(cur, maxBeats).map(({ beat, ...rest }) => rest);
+        return { ...s, notes: [...(s.notes || []), ...tailRests] };
+      });
+      setStaves(padded);
+      setActiveStaffIndex(0);
+    }
+    setCursorPosition(0);
+    setSetupCompleted(true);
+    dirtyRef.current = true;
+    setSaveFeedback('MusicXML imporditud');
+    setTimeout(() => setSaveFeedback(''), 1800);
+  }, [notationMode, stopPedagogicalPlayback]);
+
+  const beginImportTimeline = useCallback((type, steps, initialAccuracy = null) => {
+    setImportTimeline({
+      type,
+      steps: Array.isArray(steps) ? steps : [],
+      current: 0,
+      accuracy: initialAccuracy,
+      status: 'running',
+      startedAt: Date.now(),
+    });
+  }, []);
+
+  const advanceImportTimeline = useCallback((stepIndex, nextAccuracy = null) => {
+    setImportTimeline((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        current: Math.max(0, Math.min(stepIndex, Math.max(0, prev.steps.length - 1))),
+        accuracy: nextAccuracy ?? prev.accuracy,
+      };
+    });
+  }, []);
+
+  const finishImportTimeline = useCallback((ok, nextAccuracy = null) => {
+    setImportTimeline((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        status: ok ? 'done' : 'error',
+        current: Math.max(0, prev.steps.length - 1),
+        accuracy: nextAccuracy ?? prev.accuracy,
+      };
+    });
+    setTimeout(() => {
+      setImportTimeline((prev) => (prev?.status === 'running' ? prev : null));
+    }, ok ? 5500 : 7000);
+  }, []);
+
   const handleImportMusicXmlFile = useCallback((e) => {
     const file = e.target?.files?.[0];
     if (!file) return;
@@ -3086,62 +3169,35 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       e.target.value = '';
       return;
     }
+    beginImportTimeline('xml', ['Fail valitud', 'XML loetakse', 'Struktuur parsitakse', 'Noodid kaardistatakse', 'Valmis'], 0.6);
     const reader = new FileReader();
+    reader.onloadstart = () => {
+      advanceImportTimeline(1, 0.7);
+      setSaveFeedback('XML faili lugemine...');
+    };
     reader.onload = () => {
       try {
+        advanceImportTimeline(2, 0.82);
         const txt = typeof reader.result === 'string' ? reader.result : '';
         const parsed = parseMusicXmlToOrchestration(txt, file?.name || '');
-        stopPedagogicalPlayback();
-        setTimeSignature(parsed.timeSignature);
-        if (parsed.songTitle) setSongTitle(parsed.songTitle);
-        if (parsed.author) setAuthor(parsed.author);
-
-        const braceIds = {};
-        const newStaves = [];
-        parsed.parts.forEach((p) => {
-          const safeName = (p.instrumentName || '').toLowerCase();
-          const instrumentId =
-            safeName.includes('violin') || safeName.includes('viiul') ? 'violin' :
-            safeName.includes('voice') || safeName.includes('laul') ? 'voice' :
-            safeName.includes('cello') ? 'bass' :
-            safeName.includes('piano') || safeName.includes('klaver') ? 'piano' :
-            'piano';
-
-          if (p.usesStaff2) {
-            const braceGroupId = braceIds[p.partId] || makeId('brace');
-            braceIds[p.partId] = braceGroupId;
-            newStaves.push({ id: makeId('staff'), instrumentId, clefType: 'treble', notes: p.notesStaff1, braceGroupId, notationMode: notationMode === 'vabanotatsioon' ? 'pedagogical' : 'traditional', name: p.instrumentName });
-            newStaves.push({ id: makeId('staff'), instrumentId, clefType: 'bass', notes: p.notesStaff2, braceGroupId, notationMode: notationMode === 'vabanotatsioon' ? 'pedagogical' : 'traditional', name: p.instrumentName });
-          } else {
-            newStaves.push({ id: makeId('staff'), instrumentId, clefType: 'treble', notes: p.notesStaff1, notationMode: notationMode === 'vabanotatsioon' ? 'pedagogical' : 'traditional', name: p.instrumentName });
-          }
-        });
-        if (newStaves.length > 0) {
-          const staffDur = (s) => (s?.notes || []).reduce((acc, n) => acc + (Number(n.duration) || 0), 0);
-          const maxBeats = Math.max(0, ...newStaves.map(staffDur));
-          const padded = newStaves.map((s) => {
-            const cur = staffDur(s);
-            if (maxBeats <= cur + 1e-6) return s;
-            const tailRests = fillGapWithRests(cur, maxBeats).map(({ beat, ...rest }) => rest);
-            return { ...s, notes: [...(s.notes || []), ...tailRests] };
-          });
-          setStaves(padded);
-          setActiveStaffIndex(0);
-        }
-        setCursorPosition(0);
-        setSetupCompleted(true);
-        dirtyRef.current = true;
-        setSaveFeedback('MusicXML imporditud');
-        setTimeout(() => setSaveFeedback(''), 1800);
+        advanceImportTimeline(3, 0.92);
+        applyParsedMusicXml(parsed);
+        finishImportTimeline(true, 0.95);
       } catch (err) {
         console.error(err);
         setSaveFeedback('MusicXML import ebaõnnestus');
         setTimeout(() => setSaveFeedback(''), 2200);
+        finishImportTimeline(false);
       }
+    };
+    reader.onerror = () => {
+      setSaveFeedback('MusicXML faili lugemine ebaõnnestus');
+      setTimeout(() => setSaveFeedback(''), 2200);
+      finishImportTimeline(false);
     };
     reader.readAsText(file);
     e.target.value = '';
-  }, [notationMode, stopPedagogicalPlayback]);
+  }, [applyParsedMusicXml, beginImportTimeline, advanceImportTimeline, finishImportTimeline]);
 
   // Animatsiooni eksport video failina (MP4 või WebM) – alla laadimine või Google Drive
   const exportAnimationAsVideo = useCallback(async ({ download = false, saveToDrive = false } = {}) => {
@@ -4906,6 +4962,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   // Use importProject so both staves and legacy notes format load in full (taktid, lehekülje disain jms).
   useEffect(() => {
     if (demoVisibility) return;
+    if (searchParams?.get?.('importMusicXml') === '1') return;
     if (searchParams?.get?.('new') === '1') return;
     if (searchParams?.get?.('fileId')) return; // laaditakse Drive'ist eraldi effect'iga
     try {
@@ -4922,6 +4979,72 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       }
     } catch (_) { /* ignore */ }
   }, [importProject, demoVisibility, searchParams]);
+
+  useEffect(() => {
+    if (searchParams?.get?.('importMusicXml') !== '1') return;
+    try {
+      const raw = sessionStorage.getItem('nm:pending-musicxml-import');
+      if (!raw) throw new Error('Import payload puudub');
+      const payload = JSON.parse(raw);
+      const xmlText = typeof payload?.xmlText === 'string' ? payload.xmlText : '';
+      const fileName = typeof payload?.fileName === 'string' ? payload.fileName : '';
+      if (!xmlText.trim()) throw new Error('Import payload on tühi');
+      const parsed = parseMusicXmlToOrchestration(xmlText, fileName);
+      setOpenedCloudFile(null);
+      applyParsedMusicXml(parsed);
+      sessionStorage.removeItem('nm:pending-musicxml-import');
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete('importMusicXml');
+        return next;
+      });
+    } catch (err) {
+      console.error(err);
+      setSaveFeedback('MusicXML import ebaõnnestus');
+      setTimeout(() => setSaveFeedback(''), 3000);
+    }
+  }, [searchParams, setSearchParams, applyParsedMusicXml]);
+
+  useEffect(() => {
+    if (searchParams?.get?.('importPdf') !== '1') return;
+    try {
+      beginImportTimeline('pdf', ['PDF vastu voetud', 'Tekstikiht loetud', 'Sisu analuuesitud', 'Editable mustand loodud', 'Valmis'], 0.55);
+      const raw = sessionStorage.getItem('nm:pending-pdf-import');
+      const payload = raw ? JSON.parse(raw) : null;
+      const report = payload?.report || null;
+      const pendingMeta = payload?.pendingImport || null;
+      const fileName = String(pendingMeta?.fileName || '').trim();
+      if (!report?.ok) throw new Error('PDF import report puudub');
+      advanceImportTimeline(1, 0.62);
+      advanceImportTimeline(2, report?.confidence?.score || 0.7);
+
+      advanceImportTimeline(3, report?.confidence?.score || 0.74);
+      const applied = report?.draftProject ? importProject(report.draftProject) : false;
+      const notesCount = report?.draftProject?.staves?.[0]?.notes?.length || 0;
+      if (applied) {
+        const prefix = fileName ? `PDF "${fileName}"` : 'PDF';
+        setSaveFeedback(`${prefix} imporditud muudetava mustandina (${notesCount} nooti). Kontrolli rütmid/hääled.`);
+        setTimeout(() => setSaveFeedback(''), 5500);
+        finishImportTimeline(true, report?.confidence?.score || 0.78);
+      } else {
+        setSaveFeedback('PDF import ebaõnnestus: mustandi rakendamine ei õnnestunud');
+        setTimeout(() => setSaveFeedback(''), 3500);
+        finishImportTimeline(false, report?.confidence?.score || 0.6);
+      }
+
+      sessionStorage.removeItem('nm:pending-pdf-import');
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete('importPdf');
+        return next;
+      });
+    } catch (err) {
+      console.error(err);
+      setSaveFeedback('PDF importi ei saanud alustada');
+      setTimeout(() => setSaveFeedback(''), 3000);
+      finishImportTimeline(false);
+    }
+  }, [searchParams, setSearchParams, importProject, beginImportTimeline, advanceImportTimeline, finishImportTimeline]);
 
   const demoSeedKeyRef = useRef('');
   useEffect(() => {
@@ -10894,6 +11017,29 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
             </div>
             {saveFeedback && (
               <span className="text-sm font-medium text-amber-200 animate-pulse">{saveFeedback}</span>
+            )}
+            {importTimeline && (
+              <div className="flex items-center gap-2 px-2 py-1 rounded bg-amber-900/60 border border-amber-600/40 text-amber-100">
+                <span className="text-[10px] uppercase tracking-wider">
+                  {importTimeline.type === 'pdf' ? 'PDF import' : 'XML import'}
+                </span>
+                <div className="w-32 h-1.5 rounded bg-amber-950 overflow-hidden">
+                  <div
+                    className={`h-full ${importTimeline.status === 'error' ? 'bg-red-400' : importTimeline.status === 'done' ? 'bg-emerald-400' : 'bg-amber-300'}`}
+                    style={{
+                      width: `${Math.max(8, Math.round(((Math.max(0, importTimeline.current) + 1) / Math.max(1, importTimeline.steps?.length || 1)) * 100))}%`,
+                    }}
+                  />
+                </div>
+                <span className="text-[10px] whitespace-nowrap">
+                  {importTimeline.steps?.[importTimeline.current] || 'Tookorras'}
+                </span>
+                {typeof importTimeline.accuracy === 'number' && (
+                  <span className="text-[10px] whitespace-nowrap">
+                    {`~${Math.round(importTimeline.accuracy * 100)}%`}
+                  </span>
+                )}
+              </div>
             )}
             {!saveFeedback && repeatMarkIssues.length > 0 && (
               <span className="text-xs font-medium text-red-200" title="Kordusmärkide konflikt">

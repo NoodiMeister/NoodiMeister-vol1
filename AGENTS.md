@@ -97,6 +97,14 @@ Kõik muudatused peavad hoidma kasutaja teekonnad tervena:
   - **Taastamisvoog:** `POST /api/auth/request-password-reset` ei tohi paljastada, kas e-post on süsteemis; vastus peab olema kasutajale **sama sõnastus** olenemata olemasolust. Taastamistoken on **ühekordne**, lühiaegne (≈1 h), hoitakse KV-s räsi võtmena; kiri läheb **Resend** (või asendaja) kaudu; lingi baas tuleb `NM_PUBLIC_SITE_URL` (tootmise kanooniline URL).
   - **Keskkond:** tootmises peavad olema `KV_*`, `RESEND_API_KEY`, `RESEND_FROM`, `NM_PUBLIC_SITE_URL`. Kohalikus dev-is kasuta `NM_DEV_API_PROXY` (vite proxy) või `vercel dev`, muidu `/api/auth/*` ei tööta.
 
+- **Standard: Import noot / nuoti / sheet music (teistest programmidest Noodimeistrisse)**
+  - **Definitsioon:** “Import noot/nuoti/sheet music” tähendab, et teises programmis (nt MuseScore, Sibelius, Finale) loodud/salvestatud partituur tuuakse Noodimeister.ee keskkonda nii, et kasutaja saab seda edasi muuta.
+  - **Asukoht UX-is:** `Minu tööd` lehel peab olema eraldi `Impordi töö` tegevus; import **ei tohi eeldada**, et kasutaja loob enne käsitsi “uue töö”. Import loob uue projekti (või kontrollitud koopia), mitte ei kirjuta olemasolevat vaikimisi üle.
+  - **A) PDF import:** PDF import tähendab arvuti/AI-lugerit, mis suudab PDF-ist tuvastada vähemalt noodid, rütmid, instrumendid/stavid, hääled ning nähtava teksti. Kuna PDF on visuaalne formaat, peab süsteem andma kasutajale import-raporti + parandatavad hoiatused (ebakindlad kohad) enne lõplikku kinnitamist.
+  - **B) XML import:** MusicXML/XML import peab lugema vähemalt helistiku, taktimõõdu, rütmid, noodid ja pealkirja; võimalusel ka tekstielemendid (sh tekstikastide sisu/positsioon). Impordi tulemus peab jääma kasutajale täiendatavalt/muudetavalt Noodimeistri noodigraafika töövoos.
+  - **No-overwrite + jälgitavus:** impordi käigus peab säilima failiohutus: “create new” vaikimisi, selge konfliktikäitumine (duplicate/rename/version) ja kasutajale arusaadav teade, mida imporditi, mida ei suudetud lugeda ja mida soovitatakse käsitsi kontrollida.
+  - **Kvaliteedinõue:** import ei tohi “pakendada” kogu partituuri ühte instrumenti ilma nähtava hoiatuseta; part-id, staffid ja hääled peavad säilima nii täpselt kui sisend lubab. Kui täpne taastamine pole võimalik, tuleb see kasutajale selgelt välja tuua ning pakkuda parandatavat tulemust, mitte vaikset andmekadu.
+
 ### Filosoofia vs regressioonid (AI jaoks kohustuslik eristus)
 
 - **Filosoofia** (eesmärk, prioriteedid) ütleb *kuhu* liigume ja *mida* ei tohi ohverdada.

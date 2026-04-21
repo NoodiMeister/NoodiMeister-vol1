@@ -8,6 +8,7 @@ import { LOCALE_STORAGE_KEY, DEFAULT_LOCALE, LOCALES, getTranslations } from '..
 import { AppLogo } from '../components/AppLogo';
 import { useNoodimeisterOptional } from '../store/NoodimeisterContext';
 import { openCloudFileInNewBrowserTab } from '../utils/appUrls';
+import { runPdfImportPipeline } from '../import/pdf/pdfImportPipeline';
 
 /** Error Boundary: sisselogimise järgne vaade – punane kast veateatega */
 class MinuToodErrorBoundary extends React.Component {
@@ -139,7 +140,11 @@ export default function MinuTöödPage() {
   const [sharedGoogleLoading, setSharedGoogleLoading] = useState(false);
   const [sharedOneDriveLoading, setSharedOneDriveLoading] = useState(false);
   const [projectSummaries, setProjectSummaries] = useState({});
+  const [importingMusicXml, setImportingMusicXml] = useState(false);
+  const [importingPdf, setImportingPdf] = useState(false);
   const settingsRef = useRef(null);
+  const importMusicXmlInputRef = useRef(null);
+  const importPdfInputRef = useRef(null);
   const projectSummaryCacheRef = useRef(new Map());
   const store = useNoodimeisterOptional();
   const themeMode = store?.theme?.mode ?? 'light';
@@ -506,6 +511,71 @@ export default function MinuTöödPage() {
       setLocaleState(code);
     } catch (_) {}
   };
+
+  const handleImportMusicXmlFromMyWorks = useCallback(async (e) => {
+    const file = e.target?.files?.[0];
+    if (!file) return;
+    const lowerName = String(file.name || '').toLowerCase();
+    if (!(file.type.includes('xml') || lowerName.endsWith('.xml') || lowerName.endsWith('.musicxml'))) {
+      setError('Toetatud: MusicXML (.xml / .musicxml)');
+      e.target.value = '';
+      return;
+    }
+    setImportingMusicXml(true);
+    setError(null);
+    try {
+      const text = await file.text();
+      sessionStorage.setItem('nm:pending-musicxml-import', JSON.stringify({
+        xmlText: text,
+        fileName: file.name || '',
+        importedAt: Date.now(),
+      }));
+      navigate(`${basePath}/app?new=1&importMusicXml=1`);
+    } catch (err) {
+      setError(err?.message || 'MusicXML faili lugemine ebaõnnestus');
+    } finally {
+      setImportingMusicXml(false);
+      e.target.value = '';
+    }
+  }, [navigate, basePath]);
+
+  const handleImportPdfFromMyWorks = useCallback(async (e) => {
+    const file = e.target?.files?.[0];
+    if (!file) return;
+    const lowerName = String(file.name || '').toLowerCase();
+    if (!(file.type === 'application/pdf' || lowerName.endsWith('.pdf'))) {
+      setError('Toetatud: PDF (.pdf)');
+      e.target.value = '';
+      return;
+    }
+    setImportingPdf(true);
+    setError(null);
+    try {
+      const pendingImport = {
+        file,
+        fileName: file.name || '',
+        fileSize: Number(file.size || 0),
+        fileType: file.type || 'application/pdf',
+        importedAt: Date.now(),
+      };
+      const report = await runPdfImportPipeline({ pendingImport });
+      sessionStorage.setItem('nm:pending-pdf-import', JSON.stringify({
+        pendingImport: {
+          fileName: pendingImport.fileName,
+          fileSize: pendingImport.fileSize,
+          fileType: pendingImport.fileType,
+          importedAt: pendingImport.importedAt,
+        },
+        report,
+      }));
+      navigate(`${basePath}/app?new=1&importPdf=1`);
+    } catch (err) {
+      setError(err?.message || 'PDF faili ettevalmistus ebaõnnestus');
+    } finally {
+      setImportingPdf(false);
+      e.target.value = '';
+    }
+  }, [navigate, basePath]);
 
   const handleDeleteGoogleFile = useCallback(async (fileId, fileName) => {
     const msg = (t['file.deleteConfirm'] || 'Kas kustutame faili "{name}"? Seda ei saa tagasi võtta.').replace('{name}', fileName || '');
@@ -877,6 +947,20 @@ export default function MinuTöödPage() {
             {t['mywork.lastModifiedHint']}
           </p>
           <div className="flex flex-wrap gap-4">
+            <input
+              ref={importMusicXmlInputRef}
+              type="file"
+              accept=".xml,.musicxml,application/xml,text/xml"
+              className="hidden"
+              onChange={handleImportMusicXmlFromMyWorks}
+            />
+            <input
+              ref={importPdfInputRef}
+              type="file"
+              accept=".pdf,application/pdf"
+              className="hidden"
+              onChange={handleImportPdfFromMyWorks}
+            />
             <a
               href={hrefNew}
               className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 text-white font-bold shadow-lg hover:shadow-xl hover:from-amber-500 hover:to-orange-500 transition-all no-underline"
@@ -889,6 +973,26 @@ export default function MinuTöödPage() {
             >
               <FolderOpen className="w-5 h-5" /> {t['mywork.openLastModified']}
             </a>
+            <button
+              type="button"
+              onClick={() => importMusicXmlInputRef.current?.click()}
+              disabled={importingMusicXml}
+              className="inline-flex items-center gap-2 px-6 py-3 rounded-xl border-2 border-amber-400 bg-white dark:bg-zinc-900 text-amber-800 dark:text-white font-semibold hover:bg-amber-50 dark:hover:bg-white/10 transition-colors disabled:opacity-60"
+              title="Impordi MusicXML fail uuena"
+            >
+              {importingMusicXml ? <Loader2 className="w-5 h-5 animate-spin" /> : <FolderOpen className="w-5 h-5" />}
+              {importingMusicXml ? 'Loen MusicXML faili…' : 'Impordi töö (MusicXML)'}
+            </button>
+            <button
+              type="button"
+              onClick={() => importPdfInputRef.current?.click()}
+              disabled={importingPdf}
+              className="inline-flex items-center gap-2 px-6 py-3 rounded-xl border-2 border-amber-400 bg-white dark:bg-zinc-900 text-amber-800 dark:text-white font-semibold hover:bg-amber-50 dark:hover:bg-white/10 transition-colors disabled:opacity-60"
+              title="Impordi PDF fail"
+            >
+              {importingPdf ? <Loader2 className="w-5 h-5 animate-spin" /> : <FolderOpen className="w-5 h-5" />}
+              {importingPdf ? 'Valmistan PDF importi…' : 'Impordi töö (PDF)'}
+            </button>
             {(hasGoogle || hasMicrosoft) && (
               <button
                 type="button"
