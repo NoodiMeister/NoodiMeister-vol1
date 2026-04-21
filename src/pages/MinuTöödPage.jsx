@@ -530,7 +530,9 @@ export default function MinuTöödPage() {
         fileName: file.name || '',
         importedAt: Date.now(),
       }));
-      navigate(`${basePath}/app?new=1&importMusicXml=1`);
+      const targetUrl = `${basePath}/app?new=1&importMusicXml=1`;
+      if (typeof window !== 'undefined') window.location.assign(targetUrl);
+      else navigate(targetUrl);
     } catch (err) {
       setError(err?.message || 'MusicXML faili lugemine ebaõnnestus');
     } finally {
@@ -568,7 +570,9 @@ export default function MinuTöödPage() {
         },
         report,
       }));
-      navigate(`${basePath}/app?new=1&importPdf=1`);
+      const targetUrl = `${basePath}/app?new=1&importPdf=1`;
+      if (typeof window !== 'undefined') window.location.assign(targetUrl);
+      else navigate(targetUrl);
     } catch (err) {
       setError(err?.message || 'PDF faili ettevalmistus ebaõnnestus');
     } finally {

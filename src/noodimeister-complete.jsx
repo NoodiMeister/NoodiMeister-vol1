@@ -2939,13 +2939,16 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     const author = String(composerRaw || '').trim() || pickCreditWords('composer');
 
     const importedTextBoxes = [];
-    const pushImportedTextBox = (text, x = 40, y = 120, fontSize = 14, textAlign = 'left') => {
+    const IMPORT_PAGE_VERTICAL_OFFSET_PX = 1120;
+    const pushImportedTextBox = (text, x = 40, y = 120, fontSize = 14, textAlign = 'left', pageIndex = 1) => {
       const normalized = String(text || '').trim();
       if (!normalized) return;
+      const safePage = Math.max(1, Number(pageIndex) || 1);
+      const yWithPageOffset = y + (safePage - 1) * IMPORT_PAGE_VERTICAL_OFFSET_PX;
       importedTextBoxes.push({
         id: makeId('mx-text'),
         x,
-        y,
+        y: yWithPageOffset,
         text: normalized,
         type: 'text',
         fontSize: Math.max(10, Math.min(28, Number(fontSize) || 14)),
@@ -2969,8 +2972,46 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       const fontSize = Number(wordsEl.getAttribute('font-size') || (type === 'title' ? 24 : 14));
       const justify = String(wordsEl.getAttribute('justify') || 'left').toLowerCase();
       const textAlign = justify === 'center' ? 'center' : justify === 'right' ? 'right' : 'left';
-      pushImportedTextBox(rawText, Number.isFinite(x) ? x : 40, Number.isFinite(y) ? Math.max(24, y) : 140 + idx * 24, fontSize, textAlign);
+      const page = Number(creditEl.getAttribute('page') || '1');
+      pushImportedTextBox(
+        rawText,
+        Number.isFinite(x) ? x : 40,
+        Number.isFinite(y) ? Math.max(24, y) : 140 + idx * 24,
+        fontSize,
+        textAlign,
+        Number.isFinite(page) ? page : 1
+      );
     });
+
+    // Key signature from MusicXML <fifths> (circle of fifths).
+    // We import by accidentals count, because visual key signature depends on that
+    // regardless of major/minor mode.
+    const fifthsToKey = {
+      '-7': 'Cb',
+      '-6': 'Gb',
+      '-5': 'Db',
+      '-4': 'Ab',
+      '-3': 'Eb',
+      '-2': 'Bb',
+      '-1': 'F',
+      '0': 'C',
+      '1': 'G',
+      '2': 'D',
+      '3': 'A',
+      '4': 'E',
+      '5': 'B',
+      '6': 'F#',
+      '7': 'C#',
+    };
+    let importedKeySignature = 'C';
+    const keyEl = doc.querySelector('attributes key');
+    if (keyEl) {
+      const fifths = parseInt(String(keyEl.querySelector('fifths')?.textContent || '0').trim(), 10);
+      if (!Number.isNaN(fifths)) {
+        const normalizedFifths = Math.max(-7, Math.min(7, fifths));
+        importedKeySignature = fifthsToKey[String(normalizedFifths)] || 'C';
+      }
+    }
 
     // Global time signature (fallback 4/4). We’ll take the first one found.
     let beats = 4;
@@ -2996,6 +3037,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     const parts = Array.from(doc.querySelectorAll('part'));
     if (!parts.length) throw new Error('MusicXML: part puudub');
 
+    let detectedPageCount = 1;
     const parsedParts = parts.map((partEl, partIndex) => {
       const partId = partEl.getAttribute('id') || `P${partIndex + 1}`;
       const instrumentName = partNameById[partId] || partId;
@@ -3019,7 +3061,14 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       let measureIndex = 0;
 
       const measures = Array.from(partEl.querySelectorAll('measure'));
+      let currentPageInPart = 1;
       measures.forEach((measureEl) => {
+        const printEl = measureEl.querySelector('print');
+        if (printEl?.getAttribute('new-page') === 'yes') {
+          currentPageInPart += 1;
+        }
+        detectedPageCount = Math.max(detectedPageCount, currentPageInPart);
+
         // update divisions if specified in this measure
         const divEl = measureEl.querySelector('attributes divisions');
         if (divEl) {
@@ -3081,11 +3130,14 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
               const step = node.querySelector('pitch step')?.textContent || 'C';
               const octave = parseInt(node.querySelector('pitch octave')?.textContent || '4', 10);
               const alter = parseInt(node.querySelector('pitch alter')?.textContent || '0', 10);
+              const explicitAccidental = Number.isNaN(alter) ? 0 : clampNumber(alter, -2, 2);
+              const keyAccidental = getAccidentalForPitchInKey(String(step || 'C').toUpperCase(), importedKeySignature);
+              const normalizedAccidental = explicitAccidental === keyAccidental ? undefined : explicitAccidental;
               staffNotesByStaffNo[staffNo].push({
                 id,
                 pitch: String(step || 'C').toUpperCase(),
                 octave: Number.isNaN(octave) ? 4 : octave,
-                accidental: Number.isNaN(alter) ? 0 : clampNumber(alter, -2, 2),
+                ...(normalizedAccidental !== undefined ? { accidental: normalizedAccidental } : {}),
                 duration: durationBeats,
                 durationLabel,
                 isDotted: isDottedLocal,
@@ -3119,8 +3171,15 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
           const fontSize = Number(w.getAttribute('font-size') || 14);
           const align = String(w.getAttribute('justify') || 'left').toLowerCase();
           const textAlign = align === 'center' ? 'center' : align === 'right' ? 'right' : 'left';
-          const y = Number.isFinite(defaultY) ? Math.max(32, 220 + (measureIndex * 18) + (idx * 20)) : 220 + (measureIndex * 18) + (idx * 20);
-          pushImportedTextBox(text, Number.isFinite(defaultX) ? defaultX : 40, y, fontSize, textAlign);
+          const y = Number.isFinite(defaultY) ? Math.max(32, defaultY) : 220 + (measureIndex * 18) + (idx * 20);
+          pushImportedTextBox(
+            text,
+            Number.isFinite(defaultX) ? defaultX : 40,
+            y,
+            fontSize,
+            textAlign,
+            currentPageInPart
+          );
         });
       });
 
@@ -3140,8 +3199,47 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       };
     });
 
+    // Merge nearby text boxes into multiline blocks to avoid "line-per-box" overlaps.
+    const mergeKeyForTextBox = (tb) => {
+      const xBucket = Math.round(Number(tb.x || 0) / 12);
+      const align = String(tb.textAlign || 'left');
+      const sizeBucket = Math.round(Number(tb.fontSize || 14) / 2);
+      return `${xBucket}|${align}|${sizeBucket}`;
+    };
+    const mergedTextBoxes = [];
+    const groups = new Map();
+    importedTextBoxes
+      .slice()
+      .sort((a, b) => Number(a.y || 0) - Number(b.y || 0))
+      .forEach((tb) => {
+        const key = mergeKeyForTextBox(tb);
+        const group = groups.get(key);
+        if (!group) {
+          groups.set(key, { ...tb, _lastY: Number(tb.y || 0) });
+          return;
+        }
+        const yDiff = Math.abs(Number(tb.y || 0) - Number(group._lastY || 0));
+        if (yDiff <= Math.max(18, (Number(group.fontSize || 14) * 1.6))) {
+          group.text = `${String(group.text || '').trim()}\n${String(tb.text || '').trim()}`.trim();
+          group._lastY = Number(tb.y || 0);
+          return;
+        }
+        mergedTextBoxes.push({ ...group, id: makeId('mx-text') });
+        groups.set(key, { ...tb, _lastY: Number(tb.y || 0) });
+      });
+    groups.forEach((g) => mergedTextBoxes.push({ ...g, id: makeId('mx-text') }));
+    const cleanedTextBoxes = mergedTextBoxes.map(({ _lastY, ...rest }) => rest);
+
     const timeSigOut = { beats, beatUnit };
-    return { songTitle, author, timeSignature: timeSigOut, parts: parsedParts, textBoxes: importedTextBoxes };
+    return {
+      songTitle,
+      author,
+      keySignature: importedKeySignature,
+      timeSignature: timeSigOut,
+      layoutExtraPages: Math.max(0, detectedPageCount - 1),
+      parts: parsedParts,
+      textBoxes: cleanedTextBoxes,
+    };
   };
 
   const stopPedagogicalPlayback = useCallback(() => {
@@ -3161,6 +3259,10 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   const applyParsedMusicXml = useCallback((parsed) => {
     stopPedagogicalPlayback();
     setTimeSignature(parsed.timeSignature);
+    if (parsed.keySignature) setKeySignature(parsed.keySignature);
+    if (parsed.layoutExtraPages != null) {
+      setLayoutExtraPages(Math.max(0, Math.round(Number(parsed.layoutExtraPages) || 0)));
+    }
     if (parsed.songTitle) setSongTitle(parsed.songTitle);
     if (parsed.author) setAuthor(parsed.author);
     if (Array.isArray(parsed.textBoxes)) {
