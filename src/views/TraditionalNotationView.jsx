@@ -477,6 +477,7 @@ export function TraditionalNotationView({
   onNoteMouseEnter,
   onNotePitchChange,
   onNoteBeatChange,
+  noteInputMode = false,
   canHandDragNotes = false,
   onNoteTeacherLabelChange,
   onNoteLabelClick,
@@ -1359,7 +1360,7 @@ export function TraditionalNotationView({
                         : isHandbellsStaff
                           ? true
                           : (pitchY > middleLineY);
-                      const canDragPitch = !note.isRest && typeof onNotePitchChange === 'function' && typeof getPitchFromY === 'function' && !canHandDragNotes;
+                      const canDragPitch = noteInputMode && !note.isRest && typeof onNotePitchChange === 'function' && typeof getPitchFromY === 'function' && !canHandDragNotes;
                       const canDragBeat = canHandDragNotes && typeof onNoteBeatChange === 'function';
                       const noteGroupProps = {
                         onClick: (e) => { e.stopPropagation(); onNoteClick?.(globalNoteIndex); },
@@ -1374,6 +1375,8 @@ export function TraditionalNotationView({
                             return;
                           }
                           if (!canDragPitch) return;
+                          // Keep plain click for selection. Pitch-drag is intentional only with Alt+drag.
+                          if (!e.altKey) return;
                           if (e.button !== 0) return;
                           e.stopPropagation();
                           lastPitchRef.current = { pitch: note.pitch, octave: note.octave };

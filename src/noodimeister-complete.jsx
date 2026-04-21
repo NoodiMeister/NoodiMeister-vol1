@@ -6629,6 +6629,20 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     setSelectedOptionIndex(0);
   };
 
+  const normalizeAccidentalsForKey = (noteList, targetKey) => {
+    if (!Array.isArray(noteList) || noteList.length === 0) return noteList;
+    return noteList.map((note) => {
+      if (!note || note.isRest) return note;
+      const keyAcc = getAccidentalForPitchInKey(note.pitch, targetKey);
+      const effectiveAcc = (note.accidental !== undefined && note.accidental !== null) ? note.accidental : keyAcc;
+      if (effectiveAcc === keyAcc) {
+        const { accidental: _drop, ...rest } = note;
+        return rest;
+      }
+      return { ...note, accidental: effectiveAcc };
+    });
+  };
+
   const handleToolboxSelection = (clickedIndex) => {
     if (!activeToolbox) return;
     if (noteInputMode && !N_MODE_PRIMARY_TOOL_IDS.includes(activeToolbox)) {
@@ -6755,6 +6769,11 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         break;
       case 'keySignatures': {
         setKeySignature(option.value);
+        setNotes((prev) => normalizeAccidentalsForKey(prev, option.value));
+        if ((notes?.length || 0) > 0) {
+          setSaveFeedback('Võtmemärk uuendatud. Noodikõrgused jäid samaks; transponeerimiseks kasuta "Transpose".');
+          setTimeout(() => setSaveFeedback(''), 2600);
+        }
         if (notationMode === 'vabanotatsioon') {
           const jp = getTonicStaffPosition(option.value);
           if (Number.isFinite(jp)) {
@@ -6771,7 +6790,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         if (semitones < 0) semitones += 12;
         if (semitones !== 0) {
           saveToHistory(notes);
-          setNotes(transposeNotes(notes, semitones));
+          setNotes(normalizeAccidentalsForKey(transposeNotes(notes, semitones), targetKey));
           const preferFlats = FLAT_KEYS.has(targetKey);
           setChords((prev) => prev.map((c) => ({
             ...c,
@@ -9012,10 +9031,8 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   }, []);
 
   const beginSelectionDrag = useCallback((noteIndex, e) => {
-    // Allow Shift+drag selection even when N-mode is ON in Figurenotes view,
-    // because note input there happens via beat-box clicks rather than arrow keys.
-    // With the pointer (select) tool, allow Shift+drag in traditional view too — teachers need range select without turning N off.
-    if (noteInputModeRef.current && notationStyle !== 'FIGURENOTES' && cursorToolRef.current !== 'select') return;
+    // Range selection is explicit: only Select tool + Shift + drag.
+    if (cursorToolRef.current !== 'select') return;
     if (!e?.shiftKey) return;
     if (e.button !== 0) return;
     e.preventDefault();
@@ -13609,7 +13626,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                       const noteList = staves[activeStaffIndex]?.notes ?? [];
                       const beat = getBeatAtNoteIndex(noteList, index);
                       lastBeatClickForLyricRef.current = { beat, at: Date.now() };
-                      if (noteInputMode) {
+                      if (noteInputMode && cursorTool !== 'select') {
                         applySelectionModel(CURSOR_SELECTION_NONE);
                         setCursorSubRow(0);
                         setCursorPosition(beat);
@@ -13646,7 +13663,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                     : (staffIdx === activeStaffIndex ? (index) => {
                       const beat = getBeatAtNoteIndex(notes, index);
                       lastBeatClickForLyricRef.current = { beat, at: Date.now() }; // Cmd+L kasutab seda enne Reacti cursorPosition uuendust
-                      if (noteInputMode) {
+                      if (noteInputMode && cursorTool !== 'select') {
                         applySelectionModel(CURSOR_SELECTION_NONE);
                         setCursorSubRow(0);
                         setCursorPosition(beat);
@@ -14957,6 +14974,7 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
           onNoteMouseEnter={onNoteMouseEnter}
           onNotePitchChange={onNotePitchChange}
           onNoteBeatChange={onNoteBeatChange}
+          noteInputMode={noteInputMode}
           canHandDragNotes={canHandDragNotes}
           getPitchY={getPitchY}
           getPitchFromY={getPitchFromY}
