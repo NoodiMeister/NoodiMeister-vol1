@@ -4982,28 +4982,51 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
 
   useEffect(() => {
     if (searchParams?.get?.('importMusicXml') !== '1') return;
-    try {
-      const raw = sessionStorage.getItem('nm:pending-musicxml-import');
-      if (!raw) throw new Error('Import payload puudub');
-      const payload = JSON.parse(raw);
-      const xmlText = typeof payload?.xmlText === 'string' ? payload.xmlText : '';
-      const fileName = typeof payload?.fileName === 'string' ? payload.fileName : '';
-      if (!xmlText.trim()) throw new Error('Import payload on tühi');
-      const parsed = parseMusicXmlToOrchestration(xmlText, fileName);
-      setOpenedCloudFile(null);
-      applyParsedMusicXml(parsed);
-      sessionStorage.removeItem('nm:pending-musicxml-import');
-      setSearchParams((prev) => {
-        const next = new URLSearchParams(prev);
-        next.delete('importMusicXml');
-        return next;
-      });
-    } catch (err) {
-      console.error(err);
-      setSaveFeedback('MusicXML import ebaõnnestus');
-      setTimeout(() => setSaveFeedback(''), 3000);
-    }
-  }, [searchParams, setSearchParams, applyParsedMusicXml]);
+    let cancelled = false;
+    beginImportTimeline('xml', ['Fail valitud', 'XML loetakse', 'Struktuur parsitakse', 'Noodid kaardistatakse', 'Valmis'], 0.62);
+    setSaveFeedback('MusicXML import algas...');
+
+    const run = () => {
+      try {
+        const raw = sessionStorage.getItem('nm:pending-musicxml-import');
+        if (!raw) throw new Error('Import payload puudub');
+        const payload = JSON.parse(raw);
+        const xmlText = typeof payload?.xmlText === 'string' ? payload.xmlText : '';
+        const fileName = typeof payload?.fileName === 'string' ? payload.fileName : '';
+        if (!xmlText.trim()) throw new Error('Import payload on tühi');
+        if (cancelled) return;
+        advanceImportTimeline(1, 0.74);
+        setSaveFeedback('MusicXML faili lugemine...');
+        if (cancelled) return;
+        advanceImportTimeline(2, 0.86);
+        const parsed = parseMusicXmlToOrchestration(xmlText, fileName);
+        if (cancelled) return;
+        advanceImportTimeline(3, 0.93);
+        setOpenedCloudFile(null);
+        applyParsedMusicXml(parsed);
+        finishImportTimeline(true, 0.96);
+        sessionStorage.removeItem('nm:pending-musicxml-import');
+        setSearchParams((prev) => {
+          const next = new URLSearchParams(prev);
+          next.delete('importMusicXml');
+          return next;
+        });
+      } catch (err) {
+        console.error(err);
+        if (!cancelled) {
+          setSaveFeedback('MusicXML import ebaõnnestus');
+          setTimeout(() => setSaveFeedback(''), 3000);
+          finishImportTimeline(false);
+        }
+      }
+    };
+
+    const id = setTimeout(run, 0);
+    return () => {
+      cancelled = true;
+      clearTimeout(id);
+    };
+  }, [searchParams, setSearchParams, applyParsedMusicXml, beginImportTimeline, advanceImportTimeline, finishImportTimeline]);
 
   useEffect(() => {
     if (searchParams?.get?.('importPdf') !== '1') return;

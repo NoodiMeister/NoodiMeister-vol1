@@ -11,3 +11,4 @@ logs/
 *.dmg
 *.pdf
 .vercel
+scripts/tmp-wm-keysig/
