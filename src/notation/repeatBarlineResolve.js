@@ -35,7 +35,7 @@ export function getLeftBarlineRepeatRender({
     return {
       variant: 'start',
       glyph: SMUFL_GLYPH.repeatLeft,
-      textAnchor: 'end',
+      textAnchor: 'middle',
     };
   }
   if (internal) return { variant: 'barline' };

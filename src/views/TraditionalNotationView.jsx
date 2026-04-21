@@ -1096,17 +1096,7 @@ export function TraditionalNotationView({
                 const barY2 =
                   connectedBarlines && staffIndexInScore === 0 ? connectedY2 : staffY + lastLineY;
                 const measureRightX = measureX + measureWidth;
-                const repeatEndAnchoredToFinalBarline = !!(
-                  measure.repeatEnd
-                  && drawRepeatEndGlyphRight
-                  && measure.barlineFinal
-                );
-                const finalBarlineGeomForRepeat = repeatEndAnchoredToFinalBarline
-                  ? getFinalDoubleBarlineCentersX(measureRightX, spacing)
-                  : null;
-                const repeatRightGlyphX = finalBarlineGeomForRepeat
-                  ? finalBarlineGeomForRepeat.thinCx
-                  : measureRightX;
+                const repeatRightGlyphX = measureRightX;
                 const repeatRightTextAnchor = 'middle';
                 const rowBarTop = staffY + firstLineY;
                 const rowBarBottom = staffY + lastLineY;
@@ -1201,16 +1191,6 @@ export function TraditionalNotationView({
                               dominantBaseline={repeatSmufl.dominantBaseline}
                               fontFamily={SMUFL_MUSIC_FONT_FAMILY}
                             />
-                            {repeatEndAnchoredToFinalBarline && drawConnectedBarlinesHere && (
-                              <line
-                                x1={finalBarlineGeomForRepeat.thickCx}
-                                y1={barY1}
-                                x2={finalBarlineGeomForRepeat.thickCx}
-                                y2={barY2}
-                                stroke="#1a1a1a"
-                                strokeWidth={finalBarlineGeomForRepeat.thickW}
-                              />
-                            )}
                             {onRemoveRepeatMark && (
                               <rect
                                 x={Math.min(repeatRightGlyphX, measureRightX) - spacing * 2}

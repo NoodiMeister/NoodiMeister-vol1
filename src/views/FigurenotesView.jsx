@@ -1207,8 +1207,6 @@ export function FigurenotesView({
                               (isLastMeasureOfScore || mBar.barlineFinal) &&
                               !mBar.repeatEnd;
                             const xRight = measureX + measureWidth;
-                            const repeatEndAnchoredToFinalBarline =
-                              !!(mBar.repeatEnd && drawEnd && mBar.barlineFinal);
                             const finalGeom = showFinalBar
                               ? getFinalDoubleBarlineGeometry({
                                   measureRightX: xRight,
@@ -1221,21 +1219,7 @@ export function FigurenotesView({
                                   chordLineGap,
                                 })
                               : null;
-                            const repeatEndFinalGeom =
-                              repeatEndAnchoredToFinalBarline
-                                ? getFinalDoubleBarlineGeometry({
-                                    measureRightX: xRight,
-                                    notationScale,
-                                    figurenotesSize,
-                                    yOffset: sys.yOffset,
-                                    melodyRowHeight,
-                                    padVertical,
-                                    chordLineHeight,
-                                    chordLineGap,
-                                  })
-                                : null;
-                            const repeatRightX =
-                              repeatEndFinalGeom?.thinX ?? xRight;
+                            const repeatRightX = xRight;
                             const repeatRightAnchor = "middle";
                             return (
                               <>
@@ -1257,7 +1241,7 @@ export function FigurenotesView({
                                     y={repeatSmufl.y}
                                     fontSize={repeatSmufl.fontSize}
                                     fill="#1a1a1a"
-                                    textAnchor="end"
+                                    textAnchor="middle"
                                     dominantBaseline={repeatSmufl.dominantBaseline}
                                     fontFamily={SMUFL_MUSIC_FONT_FAMILY}
                                   />
@@ -1283,16 +1267,6 @@ export function FigurenotesView({
                                       dominantBaseline={repeatSmufl.dominantBaseline}
                                       fontFamily={SMUFL_MUSIC_FONT_FAMILY}
                                     />
-                                    {repeatEndFinalGeom && (
-                                      <line
-                                        x1={repeatEndFinalGeom.thickX}
-                                        y1={repeatEndFinalGeom.topY}
-                                        x2={repeatEndFinalGeom.thickX}
-                                        y2={repeatEndFinalGeom.bottomY}
-                                        stroke="#1a1a1a"
-                                        strokeWidth={repeatEndFinalGeom.thickW}
-                                      />
-                                    )}
                                   </>
                                 ) : (
                                   isRightBarlineOfSystem &&
@@ -2256,12 +2230,6 @@ export function FigurenotesView({
                         (isLastMeasureOfScore || measureBar.barlineFinal) &&
                         !measureBar.repeatEnd;
                       const xRight = measureX + measureWidth;
-                      const repeatEndAnchoredToFinalBarline =
-                        !!(
-                          measureBar.repeatEnd &&
-                          drawEnd &&
-                          measureBar.barlineFinal
-                        );
                       const finalGeom = showFinalBar
                         ? getFinalDoubleBarlineGeometry({
                             measureRightX: xRight,
@@ -2276,21 +2244,7 @@ export function FigurenotesView({
                             combinedRowStepPx: rowStepPx,
                           })
                         : null;
-                      const repeatEndFinalGeom = repeatEndAnchoredToFinalBarline
-                        ? getFinalDoubleBarlineGeometry({
-                            measureRightX: xRight,
-                            notationScale,
-                            figurenotesSize,
-                            yOffset: sys.yOffset,
-                            melodyRowHeight,
-                            padVertical,
-                            chordLineHeight,
-                            chordLineGap,
-                            combinedStaffRowCount: nStaffRows,
-                            combinedRowStepPx: rowStepPx,
-                          })
-                        : null;
-                      const repeatRightX = repeatEndFinalGeom?.thinX ?? xRight;
+                      const repeatRightX = xRight;
                       const repeatRightAnchor = "middle";
                       return (
                         <>
@@ -2317,7 +2271,7 @@ export function FigurenotesView({
                                 y={rp.y}
                                 fontSize={rp.fontSize}
                                 fill="#1a1a1a"
-                                textAnchor="end"
+                                textAnchor="middle"
                                 dominantBaseline={rp.dominantBaseline}
                                 fontFamily={SMUFL_MUSIC_FONT_FAMILY}
                               />
@@ -2358,16 +2312,6 @@ export function FigurenotesView({
                                 strokeWidth={barLineWidth}
                               />
                             )
-                          )}
-                          {repeatEndFinalGeom && (
-                            <line
-                              x1={repeatEndFinalGeom.thickX}
-                              y1={repeatEndFinalGeom.topY}
-                              x2={repeatEndFinalGeom.thickX}
-                              y2={repeatEndFinalGeom.bottomY}
-                              stroke="#1a1a1a"
-                              strokeWidth={repeatEndFinalGeom.thickW}
-                            />
                           )}
                           {showFinalBar && finalGeom && (
                             <g>
