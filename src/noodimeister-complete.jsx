@@ -2894,16 +2894,77 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     const score = doc.querySelector('score-partwise, score-timewise');
     if (!score) throw new Error('Pole MusicXML (score-partwise)');
 
-    const songTitleRaw =
+    const pickCreditWords = (creditType) => {
+      const typed = Array.from(doc.querySelectorAll(`credit[page="1"] credit-type`))
+        .find((ct) => String(ct.textContent || '').trim().toLowerCase() === creditType);
+      if (!typed?.parentElement) return '';
+      const words = typed.parentElement.querySelector('credit-words')?.textContent || '';
+      return String(words || '').trim();
+    };
+    const firstTopCreditWords = (() => {
+      const candidates = Array.from(doc.querySelectorAll('credit credit-words'))
+        .map((el) => {
+          const y = Number(el.getAttribute('default-y') || '0');
+          return { text: String(el.textContent || '').trim(), y };
+        })
+        .filter((x) => x.text.length > 0)
+        .sort((a, b) => b.y - a.y);
+      return candidates[0]?.text || '';
+    })();
+
+    const workTitleRaw =
       doc.querySelector('work work-title')?.textContent ||
       doc.querySelector('movement-title')?.textContent ||
       '';
+    const songTitleRaw = (() => {
+      const w = String(workTitleRaw || '').trim();
+      if (w && !/^untitled score$/i.test(w)) return w;
+      return (
+        pickCreditWords('title') ||
+        firstTopCreditWords ||
+        w
+      );
+    })();
     const composerRaw =
       doc.querySelector('identification creator[type="composer"]')?.textContent ||
       doc.querySelector('identification creator')?.textContent ||
       '';
     const songTitle = String(songTitleRaw || '').trim() || String(fallbackFileName || '').replace(/\.(musicxml|xml)$/i, '');
-    const author = String(composerRaw || '').trim();
+    const author = String(composerRaw || '').trim() || pickCreditWords('composer');
+
+    const importedTextBoxes = [];
+    const pushImportedTextBox = (text, x = 40, y = 120, fontSize = 14, textAlign = 'left') => {
+      const normalized = String(text || '').trim();
+      if (!normalized) return;
+      importedTextBoxes.push({
+        id: makeId('mx-text'),
+        x,
+        y,
+        text: normalized,
+        type: 'text',
+        fontSize: Math.max(10, Math.min(28, Number(fontSize) || 14)),
+        textAlign,
+        width: 460,
+        height: 120,
+      });
+    };
+
+    // Import score-level credits (title/composer/other visible text blocks).
+    Array.from(doc.querySelectorAll('credit')).forEach((creditEl, idx) => {
+      const type = String(creditEl.querySelector('credit-type')?.textContent || '').trim().toLowerCase();
+      const wordsEl = creditEl.querySelector('credit-words');
+      if (!wordsEl) return;
+      const rawText = String(wordsEl.textContent || '').trim();
+      if (!rawText) return;
+      if (type === 'title' && songTitle) return;
+      if (type === 'composer' && author) return;
+      const x = Number(wordsEl.getAttribute('default-x') || 40);
+      const y = Number(wordsEl.getAttribute('default-y') || 140 + idx * 24);
+      const fontSize = Number(wordsEl.getAttribute('font-size') || (type === 'title' ? 24 : 14));
+      const justify = String(wordsEl.getAttribute('justify') || 'left').toLowerCase();
+      const textAlign = justify === 'center' ? 'center' : justify === 'right' ? 'right' : 'left';
+      pushImportedTextBox(rawText, Number.isFinite(x) ? x : 40, Number.isFinite(y) ? Math.max(24, y) : 140 + idx * 24, fontSize, textAlign);
+    });
 
     // Global time signature (fallback 4/4). We’ll take the first one found.
     let beats = 4;
@@ -2997,6 +3058,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
 
             const beatPos = baseBeat + (cursorDivByStaff[staffNo] / divisionsPerQuarter);
             const isRestNode = !!node.querySelector('rest');
+            const lyricText = String(node.querySelector('lyric text')?.textContent || '').trim();
             const id = makeId('mx');
             if (isRestNode) {
               staffNotesByStaffNo[staffNo].push({
@@ -3022,6 +3084,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                 durationLabel,
                 isDotted: isDottedLocal,
                 isRest: false,
+                ...(lyricText ? { lyric: lyricText } : {}),
                 beat: beatPos,
               });
             }
@@ -3041,6 +3104,18 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         });
 
         measureIndex += 1;
+        // Import direction words as editable text boxes (lyrics/instructions blocks).
+        Array.from(measureEl.querySelectorAll('direction direction-type words')).forEach((w, idx) => {
+          const text = String(w.textContent || '').trim();
+          if (!text) return;
+          const defaultX = Number(w.getAttribute('default-x') || 40);
+          const defaultY = Number(w.getAttribute('default-y') || 180);
+          const fontSize = Number(w.getAttribute('font-size') || 14);
+          const align = String(w.getAttribute('justify') || 'left').toLowerCase();
+          const textAlign = align === 'center' ? 'center' : align === 'right' ? 'right' : 'left';
+          const y = Number.isFinite(defaultY) ? Math.max(32, 220 + (measureIndex * 18) + (idx * 20)) : 220 + (measureIndex * 18) + (idx * 20);
+          pushImportedTextBox(text, Number.isFinite(defaultX) ? defaultX : 40, y, fontSize, textAlign);
+        });
       });
 
       const totalBeatsStaff1 = globalDivPosByStaff[1] / divisionsPerQuarter;
@@ -3060,7 +3135,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     });
 
     const timeSigOut = { beats, beatUnit };
-    return { songTitle, author, timeSignature: timeSigOut, parts: parsedParts };
+    return { songTitle, author, timeSignature: timeSigOut, parts: parsedParts, textBoxes: importedTextBoxes };
   };
 
   const stopPedagogicalPlayback = useCallback(() => {
@@ -3082,6 +3157,10 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     setTimeSignature(parsed.timeSignature);
     if (parsed.songTitle) setSongTitle(parsed.songTitle);
     if (parsed.author) setAuthor(parsed.author);
+    if (Array.isArray(parsed.textBoxes)) {
+      setTextBoxes(parsed.textBoxes);
+      setSelectedTextboxId(null);
+    }
 
     const braceIds = {};
     const newStaves = [];
@@ -3118,7 +3197,8 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     setCursorPosition(0);
     setSetupCompleted(true);
     dirtyRef.current = true;
-    setSaveFeedback('MusicXML imporditud');
+    const importedTextCount = Array.isArray(parsed.textBoxes) ? parsed.textBoxes.length : 0;
+    setSaveFeedback(importedTextCount > 0 ? `MusicXML imporditud (${importedTextCount} teksti)` : 'MusicXML imporditud');
     setTimeout(() => setSaveFeedback(''), 1800);
   }, [notationMode, stopPedagogicalPlayback]);
 
