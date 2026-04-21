@@ -98,12 +98,69 @@ const CONTENT = {
       },
     ],
   },
+  fi: {
+    pageTitle: 'Tietoa',
+    backToApp: 'Takaisin sovellukseen',
+    tocTitle: 'Sisällysluettelo',
+    sections: [
+      {
+        id: 'etusivu',
+        title: 'Etusivu',
+        body: [
+          'Noodimeister on verkkopohjainen nuotinnusohjelma, jonka tärkein tehtävä on toimia hyödyllisenä työkaluna motivoivien oppimateriaalien luomisessa. Ohjelmaa voi käyttää ilmaisena demo-versiona enintään 8 tahtiin asti sekä tavallisena käyttäjänä henkilökohtaisella sähköpostiosoitteella tai julkisen ja yksityisen sektorin sähköpostiosoitteilla.',
+          'Sovellus voidaan liittää pilvitallennusympäristöihin, joihin sovellukseen liittyvät tiedostot tallennetaan. Sovellus on kehitetty Virossa.',
+          'Sovellusta ylläpitää La Stravaganza OÜ.',
+          'Y-tunnus: 17007727',
+          'Sovelluksen ylläpidon sähköposti: info@la-stravaganza.com',
+          'Kehittäjä: Raido Lill',
+        ],
+      },
+      {
+        id: 'menetelmat',
+        title: 'Käytettävät menetelmät',
+        body: [
+          'Noodimeister tukee useita työskentelymenetelmiä: traditional, figurenotes ja pedagogical. Tilat on erotettu toisistaan, jotta sama syöte tuottaa ennakoitavan tuloksen jokaisessa tilassa.',
+          'Kehityksessä lähdetään käyttäjäpoluista (opettaja syöttää -> muokkaa -> tallentaa -> vie) ja nuotinnuskäyttäytymistä verrataan tarvittaessa MuseScoren, Finalen ja Sibeliuksen kaltaisiin standardeihin.',
+        ],
+      },
+      {
+        id: 'tietosuoja-tietoturva',
+        title: 'Tietosuoja ja tietoturva',
+        body: [
+          '1. Mitä Noodimeister käsittelee',
+          'Noodimeister käsittelee käyttäjätiliin liittyviä perustietoja (esim. sähköposti, nimi, kirjautumisen tarjoaja), jotta kirjautuminen ja käyttäjäkokemuksen personointi on mahdollista.',
+          'Sovelluksessa luodut nuottitiedostot tallennetaan käyttäjän valinnan mukaan joko käyttäjän pilvitilille (Google Drive tai Microsoft OneDrive) tai käyttäjän omalle laitteelle / vientitiedostona.',
+          '2. Kirjautuminen ja identiteetti',
+          'Tuetut kirjautumistavat: Google OAuth, Microsoft OAuth (Microsoft Entra / Microsoft-tili), paikallinen tili (sovelluksen sisällä).',
+          'Tilin identiteetti käsitellään palveluntarjoajan ja sähköpostin yhdistelmänä (provider + email), jotta eri palveluntarjoajien tilejä ei yhdistetä oletuksena.',
+          '3. Pilvi-integraatio (Google Drive / OneDrive)',
+          'Kun käyttäjä yhdistää pilvitilin, sovellus pyytää OAuth-oikeuksia tiedostojen lukemiseen ja/tai tallentamiseen. Oikeudet riippuvat valitusta palvelusta ja käyttötilanteesta (esim. lukeminen vs kirjoittaminen).',
+          'OneDriven kohdalla Noodimeister käyttää Microsoft Graph API:a ja tekee kyselyitä käyttäjän omassa tiedostotilakontekstissa (/me/...), esimerkiksi: profiilin luku (/me), tiedostojen/kansioiden listaus, tiedoston sisällön luku/tallennus, kansioiden luonti sekä tiedostojen uudelleennimeäminen/siirtäminen käyttäjän pyynnöstä.',
+          '4. Paikallinen tallennus selaimessa',
+          'Sovellus tallentaa selaimen localStorageen teknisiä istuntotietoja, esimerkiksi: kirjautuneen käyttäjän profiilin perustiedot, OAuth access tokenin ja voimassaoloajan, annettujen oikeuksien (scope) tiedot sekä käyttäjän asetuksia (esim. tallennuskansiovalinnat).',
+          'Nämä tiedot sijaitsevat käyttäjän selaimessa. Uloskirjautumisen yhteydessä todennus- ja token-tiedot poistetaan sovelluksen tallennuksesta.',
+          '5. Tietoturvakäytännöt',
+          'Tiedonsiirto pilvipalveluihin tapahtuu HTTPS-yhteydellä. OAuth-virrat käyttävät palveluntarjoajien virallisia todennusratkaisuja. Tokenien voimassaolo tarkistetaan, ja vanhentuneet tokenit vaativat uudelleentodennuksen. Pilvitiedostojen päivityksessä käytetään ristiriitatarkistusta, jotta oletusarvoinen ylikirjoitus vältetään tilanteessa, jossa tiedostoa on muutettu muualla.',
+          '6. Ylläpitotoiminnot',
+          'Sovelluksessa on rajattuja ylläpitäjän API-toimintoja (esim. tuen hallinta), jotka on suojattu ylläpitäjän todennuksella. Nämä toiminnot eivät ole tarkoitettu tavallisen käyttäjän töiden selaamiseen tai opettajan/oppilaan tiedostosisällön käsittelyyn.',
+          '7. Mitä emme väitä',
+          'Noodimeister ei tällä hetkellä väitä, että palvelu olisi sertifioitu Microsoftin virallisessa sovellusgalleriassa tai että kaikki julkisen sektorin vaatimukset täyttyisivät automaattisesti. Organisaation tenant-käyttöönotto tapahtuu aina organisaation oman riskiarvion perusteella.',
+          '8. Yhteystiedot',
+          'Tietosuoja- ja tietoturvakysymyksissä ota yhteyttä: Sovellusta ylläpitää La Stravaganza OÜ, Y-tunnus: 17007727, ylläpidon sähköposti: info@la-stravaganza.com, kehittäjä: Raido Lill.',
+        ],
+      },
+    ],
+  },
 };
 
 export default function AboutPage() {
   const [locale] = useState(getLocale);
-  const isEt = String(locale || '').toLowerCase().startsWith('et');
-  const content = useMemo(() => (isEt ? CONTENT.et : CONTENT.en), [isEt]);
+  const normalizedLocale = String(locale || '').toLowerCase();
+  const content = useMemo(() => {
+    if (normalizedLocale.startsWith('et')) return CONTENT.et;
+    if (normalizedLocale.startsWith('fi')) return CONTENT.fi;
+    return CONTENT.en;
+  }, [normalizedLocale]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-amber-50 via-orange-50 to-amber-100 dark:bg-black">

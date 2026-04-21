@@ -1,13 +1,12 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { FileMusic, Cloud, UserPlus, LogIn, PenTool, Save, Share2 } from 'lucide-react';
+import { FileMusic, Cloud, UserPlus, LogIn, PenTool, Save, Share2, Settings, ChevronDown, Info } from 'lucide-react';
 import { AppLogo } from '../components/AppLogo';
-import { LOCALE_STORAGE_KEY, DEFAULT_LOCALE, getTranslations } from '../i18n';
-import { useForceLightTheme } from '../hooks/useForceLightTheme';
+import { LOCALE_STORAGE_KEY, DEFAULT_LOCALE, LOCALES, getTranslations } from '../i18n';
+import { useNoodimeisterOptional } from '../store/NoodimeisterContext';
 import { SHOW_SUPPORT_AND_PRICING_UI } from '../config/productFlags';
 
 export default function LandingPage() {
-  useForceLightTheme();
   const [locale] = useState(() => {
     try {
       return localStorage.getItem(LOCALE_STORAGE_KEY) || DEFAULT_LOCALE;
@@ -15,7 +14,30 @@ export default function LandingPage() {
       return DEFAULT_LOCALE;
     }
   });
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const settingsRef = useRef(null);
+  const store = useNoodimeisterOptional();
+  const themeMode = store?.theme?.mode ?? 'light';
+  const setThemeMode = (mode) => { if (store?.setTheme) store.setTheme(mode); };
   const t = useMemo(() => getTranslations(locale), [locale]);
+  const aboutLabel = locale === 'en' ? 'About' : locale === 'fi' ? 'Tietoa' : 'Teave';
+
+  useEffect(() => {
+    const close = (e) => {
+      if (settingsRef.current && !settingsRef.current.contains(e.target)) setSettingsOpen(false);
+    };
+    if (settingsOpen) {
+      document.addEventListener('click', close);
+      return () => document.removeEventListener('click', close);
+    }
+  }, [settingsOpen]);
+
+  const setLocale = (code) => {
+    try {
+      localStorage.setItem(LOCALE_STORAGE_KEY, code);
+      window.location.reload();
+    } catch (_) {}
+  };
 
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-amber-50 via-orange-50 to-amber-100 dark:bg-black">
@@ -25,16 +47,72 @@ export default function LandingPage() {
           <Link to="/" className="flex items-center">
             <AppLogo variant="header" alt="NoodiMeister" />
           </Link>
-          {SHOW_SUPPORT_AND_PRICING_UI ? (
-            <nav className="flex items-center gap-3">
-              <Link
-                to="/hinnakiri"
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-amber-800 dark:text-white font-medium hover:bg-amber-100 dark:hover:bg-white/10 transition-colors"
-              >
-                {t['landing.pricing']}
-              </Link>
+          <nav className="flex items-center gap-3" ref={settingsRef}>
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setSettingsOpen((v) => !v)}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg font-medium text-sm bg-amber-100/80 dark:bg-white/10 text-amber-900 dark:text-white border border-amber-200 dark:border-white/20 hover:bg-amber-200/80 dark:hover:bg-white/20 transition-colors"
+                  title={t['settings.title'] || 'Seaded'}
+                  aria-expanded={settingsOpen}
+                >
+                  <Settings className="w-4 h-4" />
+                  <ChevronDown className={`w-4 h-4 transition-transform ${settingsOpen ? 'rotate-180' : ''}`} />
+                </button>
+                {settingsOpen && (
+                  <div className="absolute right-0 top-full mt-1 min-w-[220px] py-2 rounded-xl bg-white dark:bg-zinc-900 border-2 border-amber-200 dark:border-white/20 shadow-xl z-50">
+                    <div className="px-3 py-1.5 text-xs font-semibold text-amber-700 dark:text-white/80 uppercase tracking-wider">{t['app.language'] || 'Keel'}</div>
+                    <div className="flex gap-0.5 px-2 pb-2">
+                      {LOCALES.map(({ code, name }) => (
+                        <button
+                          key={code}
+                          type="button"
+                          onClick={() => { setLocale(code); setSettingsOpen(false); }}
+                          className={`flex-1 px-2.5 py-1.5 text-xs font-medium rounded-lg transition-colors ${locale === code ? 'bg-amber-500 text-white' : 'text-amber-800 dark:text-white hover:bg-amber-100 dark:hover:bg-white/10'}`}
+                          title={name}
+                        >
+                          {name}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="border-t border-amber-200 dark:border-white/20 my-1" />
+                    <div className="px-3 py-1.5 text-xs font-semibold text-amber-700 dark:text-white/80 uppercase tracking-wider">{t['app.theme'] || 'Värvirežiim'}</div>
+                    <div className="flex gap-1 px-2 pb-1">
+                      <button
+                        type="button"
+                        onClick={() => { setThemeMode('light'); setSettingsOpen(false); }}
+                        className={`flex-1 px-2.5 py-1.5 text-xs font-medium rounded-lg transition-colors ${themeMode === 'light' ? 'bg-amber-500 text-white' : 'text-amber-800 dark:text-white hover:bg-amber-100 dark:hover:bg-white/10'}`}
+                      >
+                        {t['theme.light'] || 'Hele'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setThemeMode('dark'); setSettingsOpen(false); }}
+                        className={`flex-1 px-2.5 py-1.5 text-xs font-medium rounded-lg transition-colors ${themeMode === 'dark' ? 'bg-amber-500 text-white' : 'text-amber-800 dark:text-white hover:bg-amber-100 dark:hover:bg-white/10'}`}
+                      >
+                        {t['theme.dark'] || 'Tume'}
+                      </button>
+                    </div>
+                    <div className="border-t border-amber-200 dark:border-white/20 my-1" />
+                    <Link
+                      to="/about"
+                      onClick={() => setSettingsOpen(false)}
+                      className="w-full inline-flex items-center gap-2 px-3 py-2.5 text-left text-sm font-medium text-amber-800 dark:text-white hover:bg-amber-50 dark:hover:bg-white/10 transition-colors"
+                    >
+                      <Info className="w-4 h-4" /> {aboutLabel}
+                    </Link>
+                  </div>
+                )}
+              </div>
+              {SHOW_SUPPORT_AND_PRICING_UI ? (
+                <Link
+                  to="/hinnakiri"
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-amber-800 dark:text-white font-medium hover:bg-amber-100 dark:hover:bg-white/10 transition-colors"
+                >
+                  {t['landing.pricing']}
+                </Link>
+              ) : null}
             </nav>
-          ) : null}
         </div>
       </header>
 

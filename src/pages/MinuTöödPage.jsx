@@ -41,7 +41,8 @@ function formatDate(iso, locale) {
   if (!iso) return '—';
   try {
     const d = new Date(iso);
-    return d.toLocaleDateString(locale === 'en' ? 'en-GB' : 'et-EE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    const dateLocaleTag = locale === 'en' ? 'en-GB' : locale === 'fi' ? 'fi-FI' : 'et-EE';
+    return d.toLocaleDateString(dateLocaleTag, { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
   } catch {
     return iso;
   }
@@ -296,22 +297,25 @@ export default function MinuTöödPage() {
     const fileBaseName = stripProjectExtension(file?.name).trim().toLowerCase();
     const title = String(summary.title || '').trim();
     if (title && title.toLowerCase() !== fileBaseName) parts.push(title);
-    if (summary.notationStyle === 'FIGURENOTES') parts.push(locale === 'en' ? 'Figurenotes' : 'Figuurnoodid');
-    else if (summary.notationMode === 'figurenotes') parts.push(locale === 'en' ? 'Figurenotes' : 'Figuurnoodid');
-    else if (summary.notationMode === 'pedagogical' || summary.notationMode === 'vabanotatsioon') parts.push(locale === 'en' ? 'Pedagogical' : 'Vabanotatsioon');
-    else parts.push(locale === 'en' ? 'Traditional' : 'Tavanoodistus');
+    if (summary.notationStyle === 'FIGURENOTES') parts.push(t['toolbar.figurenotes']);
+    else if (summary.notationMode === 'figurenotes') parts.push(t['toolbar.figurenotes']);
+    else if (summary.notationMode === 'pedagogical' || summary.notationMode === 'vabanotatsioon') parts.push(t['toolbar.vabanotatsioon']);
+    else parts.push(t['toolbar.traditional']);
     if (summary.paperSize || summary.pageOrientation) {
       const orientationLabel = summary.pageOrientation === 'landscape'
-        ? (locale === 'en' ? 'landscape' : 'rohtne')
+        ? t['mywork.summaryLandscape']
         : summary.pageOrientation === 'portrait'
-          ? (locale === 'en' ? 'portrait' : 'pustine')
+          ? t['mywork.summaryPortrait']
           : '';
       parts.push([summary.paperSize, orientationLabel].filter(Boolean).join(' '));
     }
     if (summary.timeSignatureLabel) parts.push(summary.timeSignatureLabel);
-    if (summary.staffCount > 0) parts.push(locale === 'en' ? `${summary.staffCount} staves` : `${summary.staffCount} noodirida`);
+    if (summary.staffCount > 0) {
+      const st = t['mywork.summaryStaffCount'] || '';
+      parts.push(st.includes('{{count}}') ? st.replace(/\{\{count\}\}/g, String(summary.staffCount)) : `${summary.staffCount} ${st}`.trim());
+    }
     return parts.filter(Boolean).join(' · ');
-  }, [locale, projectSummaries]);
+  }, [locale, projectSummaries, t]);
 
   const loadFiles = useCallback(async () => {
     if (!token) {
@@ -345,7 +349,8 @@ export default function MinuTöödPage() {
       setFilesByGoogleFolderId(byId);
       loadProjectSummaries('google', Object.values(byId).flat(), (fileId) => googleDrive.getFileContent(token, fileId));
       if (failedFolders.length > 0) {
-        setGoogleNotice(`Mõne Google Drive kausta sisu ei laaditud: ${failedFolders.join(', ')}. Kontrolli õigusi või logi uuesti sisse.`);
+        const tpl = t['mywork.partialFolderLoadGoogle'] || '';
+        setGoogleNotice(tpl.replace('{{names}}', failedFolders.join(', ')));
       }
     } catch (e) {
       setError(e?.message || (t['mywork.worksLoadError'] || 'Tööde laadimine ebaõnnestus'));
@@ -388,7 +393,8 @@ export default function MinuTöödPage() {
       setFilesByOneDriveFolderId(byId);
       loadProjectSummaries('onedrive', Object.values(byId).flat(), (fileId) => oneDrive.getFileContent(microsoftToken, fileId));
       if (failedFolders.length > 0) {
-        setOneDriveNotice(`Mõne OneDrive kausta sisu ei laaditud: ${failedFolders.join(', ')}. Kontrolli õigusi või logi uuesti sisse.`);
+        const tpl = t['mywork.partialFolderLoadOneDrive'] || '';
+        setOneDriveNotice(tpl.replace('{{names}}', failedFolders.join(', ')));
       }
     } catch (e) {
       setOneDriveError(e?.message || (t['mywork.oneDriveLoadError'] || 'OneDrive laadimine ebaõnnestus'));
@@ -582,7 +588,7 @@ export default function MinuTöödPage() {
   }, [renameOpen, renameName, token, microsoftToken, t, refreshFolders, syncFoldersToCloud]);
 
   const handleRemoveFolderFromList = useCallback((folderId, provider) => {
-    const msg = t['mywork.removeFolderFromList'] || 'Eemalda kaust nimekirjast? Failid jäävad pilve.';
+    const msg = t['mywork.removeFolderConfirm'] || t['mywork.removeFolderFromList'] || '';
     if (!window.confirm(msg)) return;
     if (provider === 'google') {
       authStorage.removeGoogleSaveFolder(folderId);

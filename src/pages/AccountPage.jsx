@@ -383,7 +383,8 @@ export default function AccountPage() {
     if (!iso) return '—';
     try {
       const d = new Date(iso);
-      return d.toLocaleDateString(locale === 'en' ? 'en-GB' : 'et-EE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+      const dateLocaleTag = locale === 'en' ? 'en-GB' : locale === 'fi' ? 'fi-FI' : 'et-EE';
+      return d.toLocaleDateString(dateLocaleTag, { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
     } catch {
       return iso;
     }
