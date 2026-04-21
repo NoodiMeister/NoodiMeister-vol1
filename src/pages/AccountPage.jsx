@@ -671,26 +671,30 @@ export default function AccountPage() {
                 {t['account.cloudPermissionsHint'] || 'Luba on vajalik ainult failide avamiseks otse pilvest. Ilma loata ava fail Noodimeister.ee rakenduse seest.'}
               </p>
               <div className="space-y-2 rounded-xl border border-amber-200 dark:border-white/20 bg-amber-50/70 dark:bg-white/10 p-4">
-                <label className="flex items-center justify-between gap-3 text-sm text-amber-900 dark:text-white">
-                  <span>Google Drive: {t['account.cloudReadOpenLabel'] || 'Ava ja loe'}</span>
-                  <input
-                    type="checkbox"
-                    checked={googleReadEnabled}
-                    onChange={(e) => handleGooglePermissionToggle(e.target.checked)}
-                    disabled={permissionBusy.google}
-                    className="w-4 h-4 rounded border-amber-300 dark:border-white/30 text-amber-600"
-                  />
-                </label>
-                <label className="flex items-center justify-between gap-3 text-sm text-amber-900 dark:text-white">
-                  <span>OneDrive: {t['account.cloudReadOpenLabel'] || 'Ava ja loe'}</span>
-                  <input
-                    type="checkbox"
-                    checked={oneDriveReadEnabled}
-                    onChange={(e) => handleOneDrivePermissionToggle(e.target.checked)}
-                    disabled={permissionBusy.onedrive}
-                    className="w-4 h-4 rounded border-amber-300 dark:border-white/30 text-amber-600"
-                  />
-                </label>
+                {user?.provider === 'google' && (
+                  <label className="flex items-center justify-between gap-3 text-sm text-amber-900 dark:text-white">
+                    <span>Google Drive: {t['account.cloudReadOpenLabel'] || 'Ava ja loe'}</span>
+                    <input
+                      type="checkbox"
+                      checked={googleReadEnabled}
+                      onChange={(e) => handleGooglePermissionToggle(e.target.checked)}
+                      disabled={permissionBusy.google}
+                      className="w-4 h-4 rounded border-amber-300 dark:border-white/30 text-amber-600"
+                    />
+                  </label>
+                )}
+                {user?.provider === 'microsoft' && (
+                  <label className="flex items-center justify-between gap-3 text-sm text-amber-900 dark:text-white">
+                    <span>OneDrive: {t['account.cloudReadOpenLabel'] || 'Ava ja loe'}</span>
+                    <input
+                      type="checkbox"
+                      checked={oneDriveReadEnabled}
+                      onChange={(e) => handleOneDrivePermissionToggle(e.target.checked)}
+                      disabled={permissionBusy.onedrive}
+                      className="w-4 h-4 rounded border-amber-300 dark:border-white/30 text-amber-600"
+                    />
+                  </label>
+                )}
                 {permissionError && (
                   <p className="text-sm text-red-700 dark:text-red-400">{permissionError}</p>
                 )}

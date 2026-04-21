@@ -580,7 +580,11 @@ export default function MinuTöödPage() {
   const handleDeleteGoogleFile = useCallback(async (fileId, fileName) => {
     const msg = (t['file.deleteConfirm'] || 'Kas kustutame faili "{name}"? Seda ei saa tagasi võtta.').replace('{name}', fileName || '');
     if (!window.confirm(msg)) return;
-    if (!token) return;
+    const access = authStorage.assertCloudAccess('google', 'Google faili kustutamine');
+    if (!access.ok) {
+      setError(access.error);
+      return;
+    }
     try {
       await googleDrive.deleteFile(token, fileId);
       loadFiles();
@@ -590,7 +594,11 @@ export default function MinuTöödPage() {
   }, [token, loadFiles, t]);
 
   const handleCopyGoogleFile = useCallback(async (fileId, fileName, targetFolderId) => {
-    if (!token) return;
+    const access = authStorage.assertCloudAccess('google', 'Google faili kopeerimine');
+    if (!access.ok) {
+      setError(access.error);
+      return;
+    }
     try {
       const created = await googleDrive.copyProjectFile(token, fileId, targetFolderId || 'root', fileName || '');
       loadFiles();
@@ -605,7 +613,11 @@ export default function MinuTöödPage() {
   const handleDeleteOneDriveFile = useCallback(async (fileId, fileName) => {
     const msg = (t['file.deleteConfirm'] || 'Kas kustutame faili "{name}"? Seda ei saa tagasi võtta.').replace('{name}', fileName || '');
     if (!window.confirm(msg)) return;
-    if (!microsoftToken) return;
+    const access = authStorage.assertCloudAccess('microsoft', 'OneDrive faili kustutamine');
+    if (!access.ok) {
+      setOneDriveError(access.error);
+      return;
+    }
     try {
       await oneDrive.deleteFile(microsoftToken, fileId);
       loadOneDriveFiles();
@@ -615,7 +627,11 @@ export default function MinuTöödPage() {
   }, [microsoftToken, loadOneDriveFiles, t]);
 
   const handleCopyOneDriveFile = useCallback(async (fileId, fileName, targetFolderId) => {
-    if (!microsoftToken) return;
+    const access = authStorage.assertCloudAccess('microsoft', 'OneDrive faili kopeerimine');
+    if (!access.ok) {
+      setOneDriveError(access.error);
+      return;
+    }
     const result = await oneDrive.copyProjectFile(microsoftToken, fileId, targetFolderId || 'root', fileName || '');
     if (result.ok && result.id) {
       loadOneDriveFiles();

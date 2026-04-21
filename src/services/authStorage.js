@@ -352,6 +352,40 @@ export function hasMicrosoftReadPermission() {
     || scopes.includes('Files.ReadWrite.AppFolder');
 }
 
+/**
+ * Ühtne pilve ligipääsu kontroll.
+ * Kontrollib korraga:
+ * - aktiivset providerit
+ * - vastava provideri tokenit
+ * - read-scope olemasolu
+ *
+ * @param {'google'|'microsoft'} provider
+ * @param {string} [actionLabel]
+ * @returns {{ ok: boolean, error?: string }}
+ */
+export function assertCloudAccess(provider, actionLabel = 'Pilvetoiming') {
+  const activeProvider = normalizeProvider(getLoggedInUser()?.provider);
+  if (activeProvider !== provider) {
+    return {
+      ok: false,
+      error: `${actionLabel}: vale konto pakkuja. Logi sisse ${provider === 'google' ? 'Google' : 'Microsoft'} kontoga.`,
+    };
+  }
+  if (provider === 'google') {
+    const token = getStoredTokenFromAuth();
+    if (!token) return { ok: false, error: `${actionLabel}: Google token puudub või on aegunud.` };
+    if (!hasGoogleReadPermission()) return { ok: false, error: `${actionLabel}: Google Drive luba puudub.` };
+    return { ok: true };
+  }
+  if (provider === 'microsoft') {
+    const token = getStoredMicrosoftTokenFromAuth();
+    if (!token) return { ok: false, error: `${actionLabel}: Microsoft token puudub või on aegunud.` };
+    if (!hasMicrosoftReadPermission()) return { ok: false, error: `${actionLabel}: OneDrive luba puudub.` };
+    return { ok: true };
+  }
+  return { ok: false, error: `${actionLabel}: tundmatu pilveprovider.` };
+}
+
 /** Loeb legacy kausta ID kas localStorage või sessionStorage'ist (kumbki, kus väärtus on). */
 function getLegacyGoogleFolderIdFromAnyStorage() {
   if (typeof window === 'undefined') return null;

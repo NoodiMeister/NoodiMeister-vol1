@@ -4558,6 +4558,12 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
 
   // Salvesta pilve: kui on salvestuskaust seadistatud, salvesta otse sinna; vastasel juhul ava dialoog.
   const saveToCloud = useCallback(async () => {
+    const access = authStorage.assertCloudAccess('google', 'Google Drive salvestamine');
+    if (!access.ok) {
+      setSaveFeedback(access.error || 'Google Drive ligipääs puudub');
+      setTimeout(() => setSaveFeedback(''), 3200);
+      return;
+    }
     const ensureGoogleDefaultFolderId = async (token) => {
       const fromSession = (sessionSaveFolderId?.cloud === 'google' ? sessionSaveFolderId.folderId : null);
       if (fromSession) return fromSession;
@@ -4727,6 +4733,12 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
 
   // Salvesta OneDrive'i (Microsoft): kui fail on avatud pilvest, kirjuta sama fileId üle; muidu uus fail kausta/juurkausta.
   const saveToOneDrive = useCallback(async () => {
+    const access = authStorage.assertCloudAccess('microsoft', 'OneDrive salvestamine');
+    if (!access.ok) {
+      setSaveFeedback(access.error || 'OneDrive ligipääs puudub');
+      setTimeout(() => setSaveFeedback(''), 3200);
+      return;
+    }
     const ensureOneDriveDefaultFolderId = async (token) => {
       const fromSession = (sessionSaveFolderId?.cloud === 'onedrive' ? sessionSaveFolderId.folderId : null);
       if (fromSession) return fromSession;
@@ -4930,6 +4942,12 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   }, [projectSaveTarget, isLoggedIn, saveToStorageSync, saveToCloud, saveToOneDrive, t]);
 
   const loadGoogleDriveProjectById = useCallback(async (fileId) => {
+    const access = authStorage.assertCloudAccess('google', 'Google Drive laadimine');
+    if (!access.ok) {
+      setSaveFeedback(access.error || 'Google Drive ligipääs puudub');
+      setTimeout(() => setSaveFeedback(''), 3200);
+      return;
+    }
     const token = googleDrive.getStoredToken?.();
     if (!token || !fileId) return;
     setGoogleLoadPickerOpen(false);
@@ -4965,6 +4983,12 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
 
     // OneDrive (Microsoft)
     if (provider === 'microsoft') {
+      const access = authStorage.assertCloudAccess('microsoft', 'OneDrive laadimine');
+      if (!access.ok) {
+        setSaveFeedback(access.error || 'OneDrive ligipääs puudub');
+        setTimeout(() => setSaveFeedback(''), 3500);
+        return;
+      }
       const token = authStorage.getStoredMicrosoftTokenFromAuth?.();
       if (!token) {
         setSaveFeedback('Logi sisse Microsoftiga, et laadida OneDrive\'ist.');
@@ -5035,6 +5059,14 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     }
 
     // Default: Google Drive — rakendusesisene klikitav nimekiri (Drive API).
+    {
+      const access = authStorage.assertCloudAccess('google', 'Google Drive laadimine');
+      if (!access.ok) {
+        setSaveFeedback(access.error || 'Google Drive ligipääs puudub');
+        setTimeout(() => setSaveFeedback(''), 3000);
+        return;
+      }
+    }
     const token = googleDrive.getStoredToken?.();
     if (!token) {
       setSaveFeedback(t('feedback.loadFromCloudHint') || 'Logi sisse Google\'iga, et laadida Google Drive\'ist.');
