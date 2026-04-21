@@ -1,0 +1,22 @@
+---
+description: Cursor time model invariant for notation editing
+alwaysApply: true
+---
+
+# Noodimeister: kursori ajamudel
+
+- Cursori primaarne ankur on `cursorBeat` (ajapositsioon), mitte "cursor rhythm".
+- Sisestusrütm (`inputDuration`) on eraldi sisestusparameeter.
+- Kõik sisestus/kustutus/transform käsud peavad töötama mudeliga:
+  - sisend: `cursorBeat + inputDuration + mode`
+  - väljund: deterministlik noodi-/pausipaigutus
+- Kustutamine ei tohi jätta ajatelge tühjaks; eemaldatud kestus asendatakse pausidega.
+- Selection (click, Shift+Arrow, Shift+drag) peab muutma ühtset selection state'i.
+- Väldi paralleelseid state-allikaid (`selectedNoteIndex` + eraldi peidetud refs), kui võimalik.
+
+## Praktikaline kontroll enne merge
+
+- Backspace/Delete valikuga -> pausid, mitte ajatelje auk
+- N-mode ja SEL-mode käituvad samade ajareeglite järgi
+- Arrow/Home/End liigutavad cursorBeat'i ennustatavalt
+- Build ja olemasolevad smoke-kontrollid läbivad

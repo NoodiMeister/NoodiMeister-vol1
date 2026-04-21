@@ -83,6 +83,13 @@ Kõik muudatused peavad hoidma kasutaja teekonnad tervena:
   - sisestusvoogudes ei tohi olla märgatavat lag'i, topeltsisestust, vahelejätmisi ega cursor-jitter'it
   - enne sisestusloogika muutmist võrdle käitumist MuseScore/Finale/Sibelius tüüpi töövoogudega
 
+- **Standard: kursori ajamudel (cursor time model)**
+  - **Kursori põhitõde on ajapositsioon** (`cursorBeat` / takt + löök + alamjaotus), mitte eraldiseisev “cursor rhythm”.
+  - **Sisestusrütm** (`inputDuration`) on eraldi sisestusparameeter: see määrab lisatava/asendatava sündmuse kestuse, mitte kursori asukoha.
+  - Sama sisend peab olema deterministlik: `cursorBeat + inputDuration + mode` -> sama notatsiooni tulemus.
+  - Kustutamine ei tohi ajatelge “auku” jätta: kustutatud aeg täidetakse pausidega vastavalt kestustele.
+  - Selection, click, Shift+Arrow, Shift+drag peavad muutma ühtset kursori/valiku mudelit; UI ei tohi pidada paralleelset “salatõde”.
+
 - **Standard: parooli taastamine (kohalik e-post + parool)**
   - **Ulatus:** kehtib **ainult** `provider: local` kontodele (e-post + parool brauseris). **Google/Microsoft** parooli ja identiteedi taastamine jääb vastavalt Google’ile ja Microsoftile; Noodimeister ei saada neile läbi oma e-kirja SSO parooli resetti.
   - **Server on tõde parooli räsi jaoks:** Vercel KV-s hoitakse `nm:auth:local:{email}` kirjet (scrypt räsi + sool). **Ülekirjutamine:** uus serverikirje luuakse `POST /api/auth/sync-local-account` kaudu **ainult kui** kirjet pole; olemasolevat ei tohi üle kirjutada ilma kehtiva parooli või kehtiva ühekordse taastamistokenita.

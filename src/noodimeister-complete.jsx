@@ -1,5 +1,5 @@
 // Version 1.0.5 - Final Graphics Fix
-import React, { useState, useEffect, useLayoutEffect, useCallback, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useCallback, useRef, useMemo, useReducer } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { InteractivePiano } from './piano';
@@ -1427,6 +1427,81 @@ function readTinWhistleFingeringUiPercentFromPersisted(data) {
   return null;
 }
 
+const CURSOR_SELECTION_NONE = Object.freeze({ kind: 'none' });
+
+function normalizeSelectionModel(model) {
+  if (!model || typeof model !== 'object') return CURSOR_SELECTION_NONE;
+  if (model.kind === 'note' && Number.isInteger(model.index) && model.index >= 0) return model;
+  if (model.kind === 'range' && Number.isInteger(model.anchorIndex) && Number.isInteger(model.focusIndex)) return model;
+  if (model.kind === 'measureRange' && Number.isInteger(model.anchorMeasure) && Number.isInteger(model.focusMeasure)) return model;
+  return CURSOR_SELECTION_NONE;
+}
+
+function selectionToLegacy(selection) {
+  const model = normalizeSelectionModel(selection);
+  if (model.kind === 'note') {
+    return { selectedNoteIndex: model.index, selectionStart: -1, selectionEnd: -1, measureSelection: null };
+  }
+  if (model.kind === 'range') {
+    return {
+      selectedNoteIndex: model.focusIndex,
+      selectionStart: Math.min(model.anchorIndex, model.focusIndex),
+      selectionEnd: Math.max(model.anchorIndex, model.focusIndex),
+      measureSelection: null,
+    };
+  }
+  if (model.kind === 'measureRange') {
+    return {
+      selectedNoteIndex: -1,
+      selectionStart: -1,
+      selectionEnd: -1,
+      measureSelection: {
+        start: Math.min(model.anchorMeasure, model.focusMeasure),
+        end: Math.max(model.anchorMeasure, model.focusMeasure),
+      },
+    };
+  }
+  return { selectedNoteIndex: -1, selectionStart: -1, selectionEnd: -1, measureSelection: null };
+}
+
+function legacyToSelection({ selectedNoteIndex, selectionStart, selectionEnd, measureSelection }) {
+  if (measureSelection && Number.isInteger(measureSelection.start) && Number.isInteger(measureSelection.end)) {
+    return { kind: 'measureRange', anchorMeasure: measureSelection.start, focusMeasure: measureSelection.end };
+  }
+  if (Number.isInteger(selectionStart) && Number.isInteger(selectionEnd) && selectionStart >= 0 && selectionEnd >= 0) {
+    return { kind: 'range', anchorIndex: selectionStart, focusIndex: selectionEnd };
+  }
+  if (Number.isInteger(selectedNoteIndex) && selectedNoteIndex >= 0) {
+    return { kind: 'note', index: selectedNoteIndex };
+  }
+  return CURSOR_SELECTION_NONE;
+}
+
+function cursorSelectionReducer(state, action) {
+  switch (action?.type) {
+    case 'syncFromLegacy':
+      return normalizeSelectionModel(action.selection);
+    case 'clear':
+      return CURSOR_SELECTION_NONE;
+    case 'clickNote':
+      return Number.isInteger(action.index) && action.index >= 0 ? { kind: 'note', index: action.index } : CURSOR_SELECTION_NONE;
+    case 'startRangeDrag':
+      return Number.isInteger(action.index) && action.index >= 0 ? { kind: 'range', anchorIndex: action.index, focusIndex: action.index } : state;
+    case 'extendRangeDrag':
+      if (state.kind !== 'range') return state;
+      if (!Number.isInteger(action.index) || action.index < 0) return state;
+      return { ...state, focusIndex: action.index };
+    case 'setNoteRange':
+      if (!Number.isInteger(action.anchorIndex) || !Number.isInteger(action.focusIndex)) return state;
+      return { kind: 'range', anchorIndex: action.anchorIndex, focusIndex: action.focusIndex };
+    case 'setMeasureRange':
+      if (!Number.isInteger(action.anchorMeasure) || !Number.isInteger(action.focusMeasure)) return state;
+      return { kind: 'measureRange', anchorMeasure: action.anchorMeasure, focusMeasure: action.focusMeasure };
+    default:
+      return state;
+  }
+}
+
 function NoodiMeisterCore({ icons, demoVisibility = false }) {
   // Ära nõua EMOJIS välja olemasolu — vanad embed'id / tühi window.NOODIMEISTER_CONFIG ei tohi kogu rakendust nullida.
   if (typeof GLOBAL_NOTATION_CONFIG === 'undefined' || !GLOBAL_NOTATION_CONFIG) return null;
@@ -1532,6 +1607,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   const [tupletMode, setTupletMode] = useState(null);
   const [timeSignature, setTimeSignature] = useState({ beats: 4, beatUnit: 4 });
   const [pixelsPerBeat, setPixelsPerBeat] = useState(85); // laius löögi kohta (px), vaikimisi 85 (vastab noodigraafika vaikimisi suurusele)
+  // Cursor time model: cursorPosition is absolute beat/time anchor; selectedDuration is separate input rhythm.
   const [cursorPosition, setCursorPosition] = useState(3);
   /** Cursor row: 0 = melody/top (noodirida), 1 = chord/bottom (akordirida või lugeri rida). Cmd/Ctrl+↑/↓ vahetab; partituuris sama loogika partii vahetamiseks. */
   const [cursorSubRow, setCursorSubRow] = useState(0);
@@ -1630,6 +1706,12 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   const [selectionEnd, setSelectionEnd] = useState(-1);
   /** SEL: Shift+nool laiendab taktivalikut; Cmd+Backspace kustutab valitud taktid. */
   const [measureSelection, setMeasureSelection] = useState(null); // { start: number, end: number } | null
+  const [cursorSelection, dispatchCursorSelection] = useReducer(
+    cursorSelectionReducer,
+    CURSOR_SELECTION_NONE
+  );
+  const cursorSelectionRef = useRef(cursorSelection);
+  cursorSelectionRef.current = cursorSelection;
   const measureSelectionRef = useRef(null);
   measureSelectionRef.current = measureSelection;
   const deleteMeasuresRangeRef = useRef(() => false);
@@ -1681,6 +1763,23 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   useEffect(() => {
     setLyricChainIndex(null);
   }, [selectedNoteIndex, selectionStart, selectionEnd, measureSelection]);
+
+  // Domain selection model is synchronized from legacy state so old branches stay compatible during migration.
+  useEffect(() => {
+    dispatchCursorSelection({
+      type: 'syncFromLegacy',
+      selection: legacyToSelection({ selectedNoteIndex, selectionStart, selectionEnd, measureSelection }),
+    });
+  }, [selectedNoteIndex, selectionStart, selectionEnd, measureSelection]);
+  const applySelectionModel = useCallback((nextSelection) => {
+    const normalized = normalizeSelectionModel(nextSelection);
+    dispatchCursorSelection({ type: 'syncFromLegacy', selection: normalized });
+    const legacy = selectionToLegacy(normalized);
+    setSelectedNoteIndex(legacy.selectedNoteIndex);
+    setSelectionStart(legacy.selectionStart);
+    setSelectionEnd(legacy.selectionEnd);
+    setMeasureSelection(legacy.measureSelection);
+  }, []);
 
   // Paigutus: lehekülje suund, taktide arv rea kohta (0 = automaatne), käsitsi rea- ja lehevahetused
   const [pageOrientation, setPageOrientation] = useState('portrait'); // 'portrait' | 'landscape'
@@ -1837,15 +1936,15 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   // Viimane "turvaline" kursorinoot (beat), mida kasutame tekstirežiimis, kui kursor üritab sattuda suvalisse kohta.
   const lastCursorOnNoteBeatRef = useRef(0);
 
-  // SEL-režiimis vahemiku valikul: näita kleepimiskohta (kursor valiku lõppu). Üksiku noodi klõpsul kursor seatakse juba onNoteClick-is.
-  // Tekstirežiimis (cursorTool === 'type') ja lauluteksti ahelas ei liiguta kursorit siin – fookust juhib teksti sisestamine.
+  // Selection -> cursor projection (single deterministic rule):
+  // in SEL mode, note-range focus drives cursor beat; text mode keeps its own focus.
   useEffect(() => {
     if (noteInputMode) return;
     if (cursorTool === 'type') return;
     if (lyricChainIndex !== null) return;
-    if (selectionStart < 0 || selectionEnd < 0) return; // ainult vahemiku valikul liiguta kursor
-    const lastSelectedIndex = Math.max(selectionStart, selectionEnd);
-    if (lastSelectedIndex < 0 || lastSelectedIndex >= notes.length) return;
+    if (cursorSelection.kind !== 'range') return;
+    const lastSelectedIndex = Math.max(cursorSelection.anchorIndex, cursorSelection.focusIndex);
+    if (!Number.isInteger(lastSelectedIndex) || lastSelectedIndex < 0 || lastSelectedIndex >= notes.length) return;
     let beat = 0;
     for (let i = 0; i <= lastSelectedIndex; i++) {
       const n = notes[i];
@@ -1854,7 +1953,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       beat = noteBeat + dur;
     }
     setCursorPosition(beat);
-  }, [noteInputMode, cursorTool, lyricChainIndex, selectionStart, selectionEnd, notes]);
+  }, [noteInputMode, cursorTool, lyricChainIndex, cursorSelection, notes]);
 
   const setNotes = useCallback((updater) => {
     setStaves((prev) => {
@@ -1882,6 +1981,50 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     const denom = parseInt(String(durationLabel || '1/4').split('/')[1], 10) || 4;
     return 4 / denom;
   }, []);
+  const throwCursorModelError = useCallback((code, description, meta = {}) => {
+    const payload = { source: 'cursor-time-model', code, description, ...meta };
+    console.error('[CursorTimeModelError]', payload);
+    throw new Error(`${code}: ${description}`);
+  }, []);
+  const assertCursorTimeModelInputs = useCallback((source, beat, durationLabel, durationBeats) => {
+    if (!Number.isFinite(beat) || beat < 0) {
+      throwCursorModelError('CURSOR_BEAT_INVALID', 'Cursor beat must be finite and non-negative.', { source, beat });
+    }
+    if (typeof durationLabel !== 'string' || !durationLabel.trim()) {
+      throwCursorModelError('INPUT_DURATION_LABEL_INVALID', 'Input duration label must be a non-empty string.', { source, durationLabel });
+    }
+    if (!Number.isFinite(durationBeats) || durationBeats <= 0) {
+      throwCursorModelError('INPUT_DURATION_INVALID', 'Input duration must be positive and finite.', {
+        source,
+        durationLabel,
+        durationBeats,
+      });
+    }
+  }, [throwCursorModelError]);
+  const assertDeleteReplacementInvariant = useCallback((source, beforeNotes, afterNotes, replacedIndices) => {
+    if ((beforeNotes?.length ?? 0) !== (afterNotes?.length ?? 0)) {
+      throwCursorModelError('DELETE_REST_SHAPE_MISMATCH', 'Delete-to-rest must preserve note-array length.', {
+        source,
+        beforeLength: beforeNotes?.length ?? 0,
+        afterLength: afterNotes?.length ?? 0,
+      });
+    }
+    (replacedIndices || []).forEach((idx) => {
+      const prev = beforeNotes?.[idx];
+      const next = afterNotes?.[idx];
+      const prevDur = Number(prev?.duration) || 0;
+      const nextDur = Number(next?.duration) || 0;
+      if (!next || !next.isRest || Math.abs(prevDur - nextDur) > 1e-6) {
+        throwCursorModelError('DELETE_REST_DURATION_MISMATCH', 'Delete-to-rest must preserve durations and set rest=true.', {
+          source,
+          idx,
+          prevDuration: prevDur,
+          nextDuration: nextDur,
+          nextIsRest: !!next?.isRest,
+        });
+      }
+    });
+  }, [throwCursorModelError]);
 
   const noteDurationInQuarterBeats = useCallback((note) => {
     const direct = Number(note?.duration);
@@ -5169,10 +5312,17 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   const maxCursor = hasFullAccess ? maxCursorAllowed : Math.min(maxCursorAllowed, demoMaxCursor);
   restPaddingGridEndBeatRef.current = maxCursorAllowed;
 
-  /** N-režiim: kui kursor jõuab partituuri lõppu (viimase takti lõpp), lisa tühi takt — nagu MuseScore/Sibelius/Finale.
+  /** N-režiim: autopikendus on lubatud ainult reaalse sisestuse ajal (noot/pattern),
+   *  mitte kursori nooleliikumisel.
    *  provisionalMinMeasuresFromNotes = sama renderi noodijärgselt (ref võib olla ühe kaadri võrra vana). */
-  const expandScoreForNoteInputAdvance = useCallback((nextBeat, provisionalMinMeasuresFromNotes) => {
+  const expandScoreForNoteInputAdvance = useCallback((nextBeat, provisionalMinMeasuresFromNotes, trigger = 'note-insert') => {
     if (!noteInputMode) return;
+    if (trigger !== 'note-insert' && trigger !== 'pattern-insert') {
+      throwCursorModelError('AUTO_EXPAND_TRIGGER_INVALID', 'Auto-expand is only allowed on concrete note/pattern insert actions.', {
+        trigger,
+        nextBeat,
+      });
+    }
     const EPS = 1e-6;
     if (nextBeat < maxCursorAllowed - EPS) return;
     if (!hasFullAccess && nextBeat > demoMaxCursor + EPS) return;
@@ -5615,6 +5765,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         tupletPayload = { type: tupletMode.type, inSpaceOf: tupletMode.inSpaceOf };
       }
     }
+    assertCursorTimeModelInputs('addNoteAtCursor', insertBeat, durationLabel, effectiveDuration);
     const accidentalPayload = notationStyle === 'FIGURENOTES'
       ? (accResolved !== 0 ? { accidental: accResolved } : {})
       : (accResolved === keyAccForPitch ? {} : { accidental: accResolved });
@@ -5712,6 +5863,13 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       : notes;
     const mergedNotes = insertIntoStaffNotes(sourceNotesForInsert);
     if (mergedNotes == null) return;
+    if (!mergedNotes.some((n) => Math.abs((Number(n?.beat) || 0) - insertBeat) < 1e-6)) {
+      throwCursorModelError('INSERT_RESULT_INVALID', 'Insert result must contain event at cursor beat.', {
+        source: 'addNoteAtCursor',
+        insertBeat,
+        durationLabel,
+      });
+    }
     if (isGrandStaff && targetStaffIndex !== activeStaffIndex) {
       setStaves((prev) => {
         const next = prev.slice();
@@ -5732,7 +5890,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       pickupDuration
     );
     const nextBeat = insertBeat + effectiveDuration;
-    expandScoreForNoteInputAdvance(nextBeat, provisionalMin);
+    expandScoreForNoteInputAdvance(nextBeat, provisionalMin, 'note-insert');
     setCursorPosition(nextBeat);
     setGhostPitch(pitch);
     setGhostOctave(oct);
@@ -5740,7 +5898,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       const semitones = accResolved === 1 ? 1 : accResolved === -1 ? -1 : 0;
       playPianoNote(pitch, oct, semitones);
     }
-  }, [cursorPosition, selectedDuration, getEffectiveDuration, isDotted, isRest, notes, saveToHistory, ghostOctave, ghostAccidental, ghostAccidentalIsExplicit, playPianoNote, playNoteOnInsert, tupletMode, durations, staves, activeStaffIndex, notesWithExplicitBeats, noteDurationInQuarterBeats, notationStyle, keySignature, instrument, t, noteInputMode, expandScoreForNoteInputAdvance, timeSignature, pickupEnabled, pickupQuantity, pickupDuration]);
+  }, [cursorPosition, selectedDuration, getEffectiveDuration, isDotted, isRest, notes, saveToHistory, ghostOctave, ghostAccidental, ghostAccidentalIsExplicit, playPianoNote, playNoteOnInsert, tupletMode, durations, staves, activeStaffIndex, notesWithExplicitBeats, noteDurationInQuarterBeats, notationStyle, keySignature, instrument, t, noteInputMode, expandScoreForNoteInputAdvance, timeSignature, pickupEnabled, pickupQuantity, pickupDuration, assertCursorTimeModelInputs, throwCursorModelError]);
 
   // Add a note on top of the note at cursor (chord input). Traditional or Pedagogical only. Shift+Letter.
   const addNoteOnTopOfCursor = useCallback((pitch, octave, accidental, options = {}) => {
@@ -5837,7 +5995,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       pickupQuantity,
       pickupDuration
     );
-    expandScoreForNoteInputAdvance(patternEndBeat, provisionalMinPat);
+    expandScoreForNoteInputAdvance(patternEndBeat, provisionalMinPat, 'pattern-insert');
     setCursorPosition(patternEndBeat);
     if (!isRest && playNoteOnInsert) playPianoNote(ghostPitch, ghostOctave);
   }, [ghostPitch, ghostOctave, isRest, notes, saveToHistory, playPianoNote, playNoteOnInsert, cursorPosition, notesWithExplicitBeats, expandScoreForNoteInputAdvance, noteInputMode, staves, activeStaffIndex, timeSignature, pickupEnabled, pickupQuantity, pickupDuration]);
@@ -6410,6 +6568,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   useEffect(() => {
     const handleKeyDown = (e) => {
       const modKey = e.metaKey || e.ctrlKey;
+      const isDeleteKey = e.key === 'Backspace' || e.key === 'Delete' || e.code === 'Backspace' || e.code === 'Delete';
 
       // If user is typing in an input/textarea/contenteditable, do NOT globally swallow keystrokes.
       // Otherwise title/author/text fields can appear "disabled", especially if noteInputMode is on.
@@ -6420,6 +6579,8 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         || active?.closest?.('[contenteditable]:not([contenteditable="false"])')
       );
       const isTypingInInput = tag === 'input' || tag === 'textarea' || isContentEditableNode;
+
+      // Stage 1: preflight guards (modal, playback, mode swallowing)
       if (isInstrumentManagerOpen) {
         if (e.code === 'Escape') {
           e.preventDefault();
@@ -6447,6 +6608,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         }
       }
 
+      // Stage 2: shared edit command helpers (selection/cursor delete/replace)
       // Ära püüa klahve, kui kasutaja kirjutab input/textarea väljale (nt pealkiri, autor) – v.a. Ctrl+L laulusõna väljal
       // Abistaja: noodi indeks antud löögil (vajalik, kui kasutaja klõpsas just löögil ja React ei ole veel cursorPosition uuendanud)
       const getNoteIndexForBeat = (beat) => {
@@ -6613,8 +6775,48 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         return best.index;
       };
 
+      const replaceSelectedNotesWithRests = ({ cursorBeat = null, clearSelection = true } = {}) => {
+        if (!(selectedNoteIndex >= 0 || (selectionStart >= 0 && selectionEnd >= 0))) return false;
+        if (cursorBeat != null && (!Number.isFinite(cursorBeat) || cursorBeat < 0)) {
+          throwCursorModelError('DELETE_CURSOR_BEAT_INVALID', 'Selection delete cursorBeat must be finite and non-negative.', {
+            source: 'replaceSelectedNotesWithRests',
+            cursorBeat,
+          });
+        }
+        const replacedIndices = [];
+        const nextNotes = notes.map((note, i) => {
+          const inRange = selectionStart >= 0 && selectionEnd >= 0
+            ? (i >= Math.min(selectionStart, selectionEnd) && i <= Math.max(selectionStart, selectionEnd))
+            : (i === selectedNoteIndex);
+          if (!inRange) return note;
+          replacedIndices.push(i);
+          return {
+            id: Date.now() + i,
+            pitch: 'C',
+            octave: 4,
+            duration: note.duration,
+            durationLabel: note.durationLabel,
+            isDotted: note.isDotted,
+            isRest: true,
+            beat: typeof note.beat === 'number' ? note.beat : undefined,
+            lyric: '',
+          };
+        });
+        assertDeleteReplacementInvariant('replaceSelectedNotesWithRests', notes, nextNotes, replacedIndices);
+        saveToHistory(notes);
+        setNotes(nextNotes);
+        if (typeof cursorBeat === 'number' && Number.isFinite(cursorBeat)) {
+          setCursorPosition(Math.max(0, cursorBeat));
+        }
+        if (clearSelection) {
+          applySelectionModel(CURSOR_SELECTION_NONE);
+        }
+        return true;
+      };
+
       // Teksti kast valitud: Delete/Backspace kustutab kasti
-      if (selectedTextboxId && (e.key === 'Delete' || e.key === 'Backspace')) {
+      // Stage 3: global shortcut/domain commands that preempt notation commands.
+      if (selectedTextboxId && isDeleteKey) {
         e.preventDefault();
         setTextBoxes(prev => prev.filter(b => b.id !== selectedTextboxId));
         setSelectedTextboxId(null);
@@ -6937,26 +7139,12 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
             if (notationStyle === 'TRADITIONAL' || notationMode === 'vabanotatsioon') {
               setPianoStripVisible(true);
             }
-            if (selectedNoteIndex >= 0 && notes[selectedNoteIndex]) {
-              const n = notes[selectedNoteIndex];
-              setGhostPitch(n.pitch);
-              setGhostOctave(n.octave);
-              setCursorPosition(typeof n.beat === 'number' ? n.beat : 0);
-            } else if (notes.length > 0) {
-              let beat = 0;
-              for (let i = 0; i < notes.length; i++) {
-                const n = notes[i];
-                const noteBeat = typeof n.beat === 'number' ? n.beat : beat;
-                beat = noteBeat + (n.duration ?? 1);
-              }
-              const last = notes[notes.length - 1];
-              setGhostPitch(last.pitch);
-              setGhostOctave(last.octave);
-              setCursorPosition(Math.max(0, beat - (last.duration ?? 1)));
-            } else {
-              // Kui ühtegi nooti pole, alusta alati esimesest löögist esimeses taktis.
-              setCursorPosition(0);
-            }
+            // Noodisisestuse alguspunkt on alati 1. takt, 1. löök.
+            // Hoidke ghost kõrgus vaikimisi C4, et käivitumine oleks deterministlik
+            // ega sõltuks varasemast valikust/noodiajaloost.
+            setGhostPitch('C');
+            setGhostOctave(4);
+            setCursorPosition(0);
           }
           return !prev;
         });
@@ -6974,6 +7162,24 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
           }
           return;
         }
+        const hasSelectedNotes = selectedNoteIndex >= 0 || (selectionStart >= 0 && selectionEnd >= 0);
+        if (hasSelectedNotes) {
+          const selStart = selectionStart >= 0 && selectionEnd >= 0 ? Math.min(selectionStart, selectionEnd) : selectedNoteIndex;
+          let beatAtSelectionStart = 0;
+          if (selStart >= 0 && notes[selStart]) {
+            let beatProbe = 0;
+            for (let i = 0; i <= selStart && i < notes.length; i++) {
+              const n = notes[i];
+              const noteBeat = typeof n.beat === 'number' ? n.beat : beatProbe;
+              if (i === selStart) {
+                beatAtSelectionStart = noteBeat;
+                break;
+              }
+              beatProbe = noteBeat + n.duration;
+            }
+          }
+          if (replaceSelectedNotesWithRests({ cursorBeat: beatAtSelectionStart, clearSelection: true })) return;
+        }
         const indexAtCursor = getNoteIndexAtCursor();
         if (indexAtCursor >= 0 && notes.length > 0) {
           let beat = 0;
@@ -6988,32 +7194,33 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
             beat = noteBeat + n.duration;
           }
           const newCursor = deletedNoteBeat;
+          const deleted = notes[indexAtCursor];
+          assertCursorTimeModelInputs(
+            'deleteAtCursorToRest',
+            deletedNoteBeat,
+            deleted?.durationLabel || '1/4',
+            Number(deleted?.duration) || 0
+          );
           saveToHistory(notes);
-          if (notationMode === 'traditional') {
-            setNotes((prev) => prev.map((n, i) => {
-              if (i !== indexAtCursor) return n;
-              return {
-                id: Date.now() + i,
-                pitch: 'C',
-                octave: 4,
-                duration: n.duration,
-                durationLabel: n.durationLabel,
-                isDotted: n.isDotted,
-                isRest: true,
-                beat: typeof n.beat === 'number' ? n.beat : deletedNoteBeat,
-                lyric: ''
-              };
-            }));
-          } else {
-            setNotes(prev => prev.filter((_, i) => i !== indexAtCursor));
-          }
+          setNotes((prev) => prev.map((n, i) => {
+            if (i !== indexAtCursor) return n;
+            return {
+              id: Date.now() + i,
+              pitch: 'C',
+              octave: 4,
+              duration: n.duration,
+              durationLabel: n.durationLabel,
+              isDotted: n.isDotted,
+              isRest: true,
+              beat: typeof n.beat === 'number' ? n.beat : deletedNoteBeat,
+              lyric: ''
+            };
+          }));
           setCursorPosition(newCursor);
           setSelectionStart(-1);
           setSelectionEnd(-1);
           setSelectedNoteIndex(-1);
-          const remaining = notationMode === 'traditional'
-            ? notes.map((n, i) => (i === indexAtCursor ? { ...n, isRest: true } : n))
-            : notes.filter((_, i) => i !== indexAtCursor);
+          const remaining = notes.map((n, i) => (i === indexAtCursor ? { ...n, isRest: true } : n));
           if (remaining.length > 0) {
             beat = 0;
             const atCursor = [];
@@ -7080,29 +7287,10 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         return;
       }
 
-      // Backspace/Delete kustutab valitud nooti(d) alati, kui midagi on valitud (sõltumata tööriistakastist või režiimist) – mitte N-režiimis
+      // SEL-režiimis Backspace/Delete: valitud noot/noodid asendatakse sama kestusega pausidega.
       if (!noteInputMode && (e.code === 'Backspace' || e.key === 'Backspace' || e.code === 'Delete') && selectedNoteIndex >= 0) {
         e.preventDefault();
-        const newNotes = notes.map((note, i) => {
-          const inRange = selectionStart >= 0 && selectionEnd >= 0
-            ? (i >= Math.min(selectionStart, selectionEnd) && i <= Math.max(selectionStart, selectionEnd))
-            : (i === selectedNoteIndex);
-          if (!inRange) return note;
-          return {
-            id: Date.now() + i,
-            pitch: 'C',
-            octave: 4,
-            duration: note.duration,
-            durationLabel: note.durationLabel,
-            isDotted: note.isDotted,
-            isRest: true
-          };
-        });
-        saveToHistory(notes);
-        setNotes(newNotes);
-        setSelectionStart(-1);
-        setSelectionEnd(-1);
-        setSelectedNoteIndex(-1);
+        replaceSelectedNotesWithRests({ clearSelection: true });
         setActiveToolbox(null);
         return;
       }
@@ -7580,10 +7768,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                 const posOf = (idx) => order.indexOf(idx);
                 const dir = e.code === 'ArrowRight' ? 1 : -1;
                 const applyNoteRange = (a, b, focusIdx) => {
-                  setMeasureSelection(null);
-                  setSelectionStart(Math.min(a, b));
-                  setSelectionEnd(Math.max(a, b));
-                  setSelectedNoteIndex(focusIdx);
+                  applySelectionModel({ kind: 'range', anchorIndex: a, focusIndex: b });
                   setCursorSubRow(0);
                   const beat = getBeatAtNoteIndex(notes, focusIdx);
                   setCursorPosition(beat);
@@ -7617,8 +7802,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
               }
               if (noteRangeHandled) return;
             }
-            setSelectionStart(-1);
-            setSelectionEnd(-1);
+            applySelectionModel(CURSOR_SELECTION_NONE);
             if (e.shiftKey) {
               const prev = measureSelectionRef.current;
               let nextSel;
@@ -7627,7 +7811,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                 else nextSel = { start: prev.start, end: Math.min(prev.end + 1, ms.length - 1) };
               } else if (!prev) nextSel = { start: Math.max(curIdx - 1, 0), end: curIdx };
               else nextSel = { start: Math.max(prev.start - 1, 0), end: prev.end };
-              setMeasureSelection(nextSel);
+              applySelectionModel({ kind: 'measureRange', anchorMeasure: nextSel.start, focusMeasure: nextSel.end });
               const focusIdx = Math.max(nextSel.start, nextSel.end);
               const focusM = ms[focusIdx] || ms[curIdx];
               setCursorPosition(focusM.startBeat);
@@ -7780,25 +7964,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         // Stage V: Delete selected note(s) – replace with rest(s) of same duration (no shifting)
         if ((e.code === 'Backspace' || e.code === 'Delete') && selectedNoteIndex >= 0) {
           e.preventDefault();
-          const newNotes = notes.map((note, i) => {
-            const inRange = selectionStart >= 0 && selectionEnd >= 0
-              ? (i >= Math.min(selectionStart, selectionEnd) && i <= Math.max(selectionStart, selectionEnd))
-              : (i === selectedNoteIndex);
-            if (!inRange) return note;
-            return {
-              id: Date.now() + i,
-              pitch: 'C',
-              octave: 4,
-              duration: note.duration,
-              durationLabel: note.durationLabel,
-              isDotted: note.isDotted,
-              isRest: true
-            };
-          });
-          saveToHistory(notes);
-          setNotes(newNotes);
-          setSelectionStart(-1);
-          setSelectionEnd(-1);
+          replaceSelectedNotesWithRests({ clearSelection: true });
           return;
         }
       }
@@ -8454,14 +8620,11 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     if (notationStyle !== 'FIGURENOTES') {
       setNoteInputMode(false);
     }
-    setSelectedNoteIndex(noteIndex);
-    setSelectionStart(noteIndex);
-    setSelectionEnd(noteIndex);
-    setMeasureSelection(null);
+    applySelectionModel({ kind: 'range', anchorIndex: noteIndex, focusIndex: noteIndex });
     // Keep a single truth: selection anchor also sets cursor/playhead.
     setCursorSubRow(0);
     setCursorPosition(getBeatAtNoteIndex(notes, noteIndex));
-  }, [notationStyle, getBeatAtNoteIndex, notes]);
+  }, [notationStyle, getBeatAtNoteIndex, notes, applySelectionModel]);
 
   const updateSelectionDragHover = useCallback((noteIndex, e) => {
     const drag = selectionDragRef.current;
@@ -8473,12 +8636,14 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       return;
     }
     e?.stopPropagation?.();
-    setSelectedNoteIndex(noteIndex);
-    setSelectionEnd(noteIndex);
+    const current = cursorSelectionRef.current;
+    if (current.kind === 'range') {
+      applySelectionModel({ kind: 'range', anchorIndex: current.anchorIndex, focusIndex: noteIndex });
+    }
     // Keep cursor/playhead synced to the currently hovered end of the selection.
     setCursorSubRow(0);
     setCursorPosition(getBeatAtNoteIndex(notes, noteIndex));
-  }, [getBeatAtNoteIndex, notes]);
+  }, [getBeatAtNoteIndex, notes, applySelectionModel]);
 
   const handleScoreContentClick = useCallback((e) => {
     if (activeToolbox !== 'textBox') return;
@@ -13018,10 +13183,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                       const beat = getBeatAtNoteIndex(noteList, index);
                       lastBeatClickForLyricRef.current = { beat, at: Date.now() };
                       if (noteInputMode) {
-                        setSelectedNoteIndex(-1);
-                        setSelectionStart(-1);
-                        setSelectionEnd(-1);
-                        setMeasureSelection(null);
+                        applySelectionModel(CURSOR_SELECTION_NONE);
                         setCursorSubRow(0);
                         setCursorPosition(beat);
                         const clicked = noteList[index];
@@ -13044,10 +13206,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                         }
                         return;
                       }
-                      setSelectedNoteIndex(index);
-                      setSelectionStart(-1);
-                      setSelectionEnd(-1);
-                      setMeasureSelection(null);
+                      applySelectionModel({ kind: 'note', index });
                       setCursorSubRow(0);
                       setCursorPosition(beat);
                       if (cursorTool === 'type') {
@@ -13061,10 +13220,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                       const beat = getBeatAtNoteIndex(notes, index);
                       lastBeatClickForLyricRef.current = { beat, at: Date.now() }; // Cmd+L kasutab seda enne Reacti cursorPosition uuendust
                       if (noteInputMode) {
-                        setSelectedNoteIndex(-1);
-                        setSelectionStart(-1);
-                        setSelectionEnd(-1);
-                        setMeasureSelection(null);
+                        applySelectionModel(CURSOR_SELECTION_NONE);
                         setCursorSubRow(0);
                         setCursorPosition(beat);
                         const clicked = notes[index];
@@ -13087,10 +13243,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                         }
                         return;
                       }
-                      setSelectedNoteIndex(index);
-                      setSelectionStart(-1);
-                      setSelectionEnd(-1);
-                      setMeasureSelection(null);
+                      applySelectionModel({ kind: 'note', index });
                       setCursorSubRow(0); // Laulusõnade režiim: kursor alati meloodiareal
                       setCursorPosition(beat); // Üks kursor: kursor joondatud klõpsatud noodi algusega
                       if (cursorTool === 'type') {
