@@ -15,6 +15,7 @@ import {
   SMUFL_GLYPH,
   SMUFL_MUSIC_FONT_FAMILY,
 } from "../notation/smufl/glyphs";
+import { SmuflStemFlags } from "../notation/smufl/SmuflStemFlags";
 import {
   getShapePathsByOctave,
   getFigureStyle,
@@ -31,6 +32,7 @@ import {
   shouldDrawRepeatEndGlyphOnRight,
 } from "../notation/repeatBarlineResolve";
 import { getRepeatBarlineSmuflPlacement } from "../notation/repeatBarlineLayout";
+import { computeBeamGroups } from "../notation/BeamCalculation";
 
 const LAYOUT = { MARGIN_LEFT: 60, MEASURE_MIN_WIDTH: 28 };
 const FIGURE_START_PADDING = 8;
@@ -84,6 +86,13 @@ function getFinalDoubleBarlineGeometry({
 function getFigurenoteTextColor(pitch) {
   const p = String(pitch || "").toUpperCase();
   return p === "A" || p === "E" || p === "B" ? "#000000" : "#ffffff";
+}
+
+function getFlagCountForDuration(durationLabel) {
+  if (durationLabel === "1/8") return 1;
+  if (durationLabel === "1/16") return 2;
+  if (durationLabel === "1/32") return 3;
+  return 0;
 }
 
 /** Akordi taustavärv = noodinime värv (üks allikas: getFigureColor). C=punane, D=pruun, E=hall, F=sinine, G=must, A=kollane, B=roheline. */
@@ -705,6 +714,7 @@ export function FigurenotesView({
                       noteWidth,
                       figureSize,
                       longRectEndX = null,
+                      beamInfo = null,
                     ) => {
                       const pitch = String(note.pitch || "")
                         .toUpperCase()
@@ -853,49 +863,37 @@ export function FigurenotesView({
                             </text>
                           )}
                           {figurenotesStems && dur !== "1/1" && (
-                            <g
-                              stroke="#1a1a1a"
-                              fill="#1a1a1a"
-                              strokeWidth="1.8"
-                            >
+                            <g stroke="#1a1a1a" fill="#1a1a1a" strokeWidth="1.8">
                               <line
                                 x1={stemX}
                                 y1={stemY1}
                                 x2={stemX}
                                 y2={stemY2}
                               />
-                              {dur === "1/8" && (
-                                <path
-                                  d={`M ${stemX} ${stemY2} Q ${stemX + 8} ${stemY2 + 4} ${stemX} ${stemY2 + 8}`}
+                              {!beamInfo?.group && getFlagCountForDuration(dur) > 0 && (
+                                <SmuflStemFlags
+                                  stemX={stemX}
+                                  stemEndY={stemY2}
+                                  staffSpace={10}
+                                  stemUp
+                                  count={getFlagCountForDuration(dur)}
                                   fill="#1a1a1a"
                                 />
                               )}
-                              {dur === "1/16" && (
+                              {beamInfo?.isStart && Array.isArray(beamInfo.segments) && (
                                 <>
-                                  <path
-                                    d={`M ${stemX} ${stemY2} Q ${stemX + 8} ${stemY2 + 4} ${stemX} ${stemY2 + 8}`}
-                                    fill="#1a1a1a"
-                                  />
-                                  <path
-                                    d={`M ${stemX} ${stemY2 + 6} Q ${stemX + 8} ${stemY2 + 10} ${stemX} ${stemY2 + 14}`}
-                                    fill="#1a1a1a"
-                                  />
-                                </>
-                              )}
-                              {dur === "1/32" && (
-                                <>
-                                  <path
-                                    d={`M ${stemX} ${stemY2} Q ${stemX + 8} ${stemY2 + 4} ${stemX} ${stemY2 + 8}`}
-                                    fill="#1a1a1a"
-                                  />
-                                  <path
-                                    d={`M ${stemX} ${stemY2 + 6} Q ${stemX + 8} ${stemY2 + 10} ${stemX} ${stemY2 + 14}`}
-                                    fill="#1a1a1a"
-                                  />
-                                  <path
-                                    d={`M ${stemX} ${stemY2 + 12} Q ${stemX + 8} ${stemY2 + 16} ${stemX} ${stemY2 + 20}`}
-                                    fill="#1a1a1a"
-                                  />
+                                  {beamInfo.segments.map((seg, i) => (
+                                    <line
+                                      key={`beam-${i}`}
+                                      x1={seg.x1}
+                                      y1={seg.y}
+                                      x2={seg.x2}
+                                      y2={seg.y}
+                                      stroke="#1a1a1a"
+                                      strokeWidth={2.2}
+                                      strokeLinecap="butt"
+                                    />
+                                  ))}
                                 </>
                               )}
                             </g>
@@ -1238,8 +1236,7 @@ export function FigurenotesView({
                                 : null;
                             const repeatRightX =
                               repeatEndFinalGeom?.thinX ?? xRight;
-                            const repeatRightAnchor =
-                              repeatEndFinalGeom ? "middle" : "start";
+                            const repeatRightAnchor = "middle";
                             return (
                               <>
                                 {leftR.variant === "both" ? (
@@ -1805,6 +1802,7 @@ export function FigurenotesView({
                           // Shorter-than-quarter notes in the same beat: place so that
                           // right edge of one shape + 1px gap + left edge of next shape (repeated for every short note).
                           const compactCenters = new Map();
+                          const figureSizeByNoteIndex = new Map();
                           const notesByBeat = new Map();
                           measure.notes.forEach((note, idx) => {
                             if (note.isRest) return;
@@ -1820,6 +1818,7 @@ export function FigurenotesView({
                               notesByBeat.set(beatIndex, []);
                             const scale = getFigureScaleForDuration(durLabel);
                             const figureSize = figureSizeBaseForMeasure * scale;
+                            figureSizeByNoteIndex.set(idx, figureSize);
                             notesByBeat
                               .get(beatIndex)
                               .push({ note, idx, figureSize });
@@ -1840,15 +1839,79 @@ export function FigurenotesView({
                               leftEdge = rightEdge + 1; // 1px gap, then left edge of next shape
                             });
                           });
+                          const getFigureCenterXForNote = (note, idx) => {
+                            const defaultCenterX = getNoteSlotCenterX(note);
+                            return compactCenters.has(idx)
+                              ? compactCenters.get(idx)
+                              : defaultCenterX;
+                          };
+                          const beamGroups = figurenotesStems
+                            ? computeBeamGroups(
+                                measure.notes,
+                                measure.startBeat,
+                                timeSignature,
+                              )
+                            : [];
+                          const beamInfoByNoteIndex = new Map();
+                          const beamGapPx = 6;
+                          beamGroups.forEach((group) => {
+                            const levelByIdx = new Map();
+                            const stemXByIdx = new Map();
+                            for (let idx = group.start; idx <= group.end; idx += 1) {
+                              const n = measure.notes[idx];
+                              const level = getFlagCountForDuration(
+                                n?.durationLabel || "1/4",
+                              );
+                              levelByIdx.set(idx, level);
+                              const fs =
+                                figureSizeByNoteIndex.get(idx) ??
+                                figureSizeBaseForMeasure;
+                              const cx = getFigureCenterXForNote(n, idx);
+                              stemXByIdx.set(idx, cx + fs / 2 + 1);
+                            }
+                            const segments = [];
+                            for (let beamLevel = 1; beamLevel <= 3; beamLevel += 1) {
+                              for (
+                                let idx = group.start;
+                                idx < group.end;
+                                idx += 1
+                              ) {
+                                const leftLevel = levelByIdx.get(idx) ?? 0;
+                                const rightLevel = levelByIdx.get(idx + 1) ?? 0;
+                                if (
+                                  leftLevel >= beamLevel &&
+                                  rightLevel >= beamLevel
+                                ) {
+                                  segments.push({
+                                    x1: stemXByIdx.get(idx),
+                                    x2: stemXByIdx.get(idx + 1),
+                                    y:
+                                      sys.yOffset +
+                                      centerY -
+                                      26 -
+                                      (beamLevel - 1) * beamGapPx,
+                                  });
+                                }
+                              }
+                            }
+                            for (let idx = group.start; idx <= group.end; idx += 1) {
+                              beamInfoByNoteIndex.set(idx, {
+                                group,
+                                isStart: idx === group.start,
+                                segments:
+                                  idx === group.start ? segments : undefined,
+                              });
+                            }
+                          });
 
                           return measure.notes.map((note, noteIdx) => {
                             const dur = note.durationLabel || "1/4";
                             const scale = getFigureScaleForDuration(dur);
                             const figureSize = figureSizeBaseForMeasure * scale;
-                            const defaultCenterX = getNoteSlotCenterX(note);
-                            const figureCenterX = compactCenters.has(noteIdx)
-                              ? compactCenters.get(noteIdx)
-                              : defaultCenterX;
+                            const figureCenterX = getFigureCenterXForNote(
+                              note,
+                              noteIdx,
+                            );
                             const noteWidth = getRestBoxWidth(note);
 
                             let globalNoteIndex = 0;
@@ -2091,6 +2154,7 @@ export function FigurenotesView({
                                   noteWidth,
                                   figureSize,
                                   longRectEndX,
+                                  beamInfoByNoteIndex.get(noteIdx) ?? null,
                                 )}
                                 {note.lyric != null &&
                                   String(note.lyric).trim() !== "" && (
@@ -2227,9 +2291,7 @@ export function FigurenotesView({
                           })
                         : null;
                       const repeatRightX = repeatEndFinalGeom?.thinX ?? xRight;
-                      const repeatRightAnchor = repeatEndFinalGeom
-                        ? "middle"
-                        : "start";
+                      const repeatRightAnchor = "middle";
                       return (
                         <>
                           {leftR.variant === "both" ? (
