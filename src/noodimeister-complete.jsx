@@ -919,10 +919,19 @@ function RhythmToolboxButtonIcon() {
 
 /** D-major key signature: two sharps (F#, C#) in Leland, typical vertical positions. */
 function KeySignatureDmajorIcon() {
+  // Treble staff (top -> bottom): F line is top line, C is the space below it.
+  const fSharpY = 8.0;
+  const cSharpY = 11.0;
   return (
     <svg viewBox="0 0 24 24" className="w-5 h-5" aria-hidden="true">
-      <SmuflGlyph x={8} y={10} glyph={SMUFL_GLYPH.accidentalSharp} fontSize={10} fill="currentColor" />
-      <SmuflGlyph x={8} y={16} glyph={SMUFL_GLYPH.accidentalSharp} fontSize={10} fill="currentColor" />
+      <line x1="2.5" y1="7" x2="23" y2="7" stroke="currentColor" strokeWidth="0.6" />
+      <line x1="2.5" y1="9.5" x2="23" y2="9.5" stroke="currentColor" strokeWidth="0.6" />
+      <line x1="2.5" y1="12" x2="23" y2="12" stroke="currentColor" strokeWidth="0.6" />
+      <line x1="2.5" y1="14.5" x2="23" y2="14.5" stroke="currentColor" strokeWidth="0.6" />
+      <line x1="2.5" y1="17" x2="23" y2="17" stroke="currentColor" strokeWidth="0.6" />
+      <TrebleClefSymbol x={6.1} y={11.9} height={11.5} fill="currentColor" />
+      <SmuflGlyph x={12.6} y={fSharpY} glyph={SMUFL_GLYPH.accidentalSharp} fontSize={8.8} fill="currentColor" />
+      <SmuflGlyph x={16.3} y={cSharpY} glyph={SMUFL_GLYPH.accidentalSharp} fontSize={8.8} fill="currentColor" />
     </svg>
   );
 }
@@ -2530,6 +2539,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     return false;
   });
   const autoSaveTimeoutRef = useRef(null);
+  const didInitialStorageRestoreRef = useRef(false);
   const projectFileInputRef = useRef(null);
   const dirtyRef = useRef(false);
   const lastPersistedRef = useRef(null);
@@ -5309,6 +5319,8 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   // Load from localStorage on mount (skip when opening as new work /app?new=1 or /app?fileId=...)
   // Use importProject so both staves and legacy notes format load in full (taktid, lehekülje disain jms).
   useEffect(() => {
+    if (didInitialStorageRestoreRef.current) return;
+    didInitialStorageRestoreRef.current = true;
     if (demoVisibility) return;
     if (searchParams?.get?.('importMusicXml') === '1') return;
     if (searchParams?.get?.('new') === '1') return;
@@ -10998,28 +11010,28 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                       type="button"
                       onClick={() => { setPianoStripVisible(false); setSettingsOpen(true); setHeaderMenuOpen(null); setFileSubmenuOpen(null); }}
                       className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-amber-50 hover:bg-slate-600"
-                      title="Muuda teose andmeid (pealkiri, autor, helistik, taktimoot, eellook)"
+                      title={t('file.projectMetadataTitle')}
                     >
                       <Type className="w-4 h-4" />
-                      Teose andmed
+                      {t('file.projectMetadata')}
                     </button>
                     <button
                       type="button"
                       onClick={() => { setPianoStripVisible(false); setSettingsOpen(true); setHeaderMenuOpen(null); setFileSubmenuOpen(null); }}
                       className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-amber-50 hover:bg-slate-600"
-                      title="Muuda noodigraafika seadeid"
+                      title={t('file.notationSettingsTitle')}
                     >
                       <Layout className="w-4 h-4" />
-                      Noodigraafika seaded
+                      {t('file.notationSettings')}
                     </button>
                     <button
                       type="button"
                       onClick={() => { setPianoStripVisible(false); setSaveLoadOpen(true); setHeaderMenuOpen(null); setFileSubmenuOpen(null); }}
                       className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-amber-50 hover:bg-slate-600"
-                      title="Salvestus ja laadimine"
+                      title={t('file.saveLoadTitle')}
                     >
                       <Save className="w-4 h-4" />
-                      Salvestus / laadimine
+                      {t('file.saveLoad')}
                     </button>
                     <div className="my-1 border-t border-slate-600" />
                     <button
@@ -11050,9 +11062,9 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                       onClick={() => { makeCloudCopy(); setHeaderMenuOpen(null); }}
                       disabled={!openedCloudFile?.fileId}
                       className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-amber-50 hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed"
-                      title={openedCloudFile?.fileId ? (t('file.copy') || 'Tee koopia') : 'Ava pilvefail, et teha koopia'}
+                      title={openedCloudFile?.fileId ? t('file.copy') : t('file.copyRequiresOpenedCloudFile')}
                     >
-                      <Save className="w-4 h-4" /> {t('file.copy') || 'Tee koopia'}
+                      <Save className="w-4 h-4" /> {t('file.copy')}
                     </button>
                     <button
                       type="button"
@@ -11069,36 +11081,36 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                       <CloudDownload className="w-4 h-4" /> {t('file.loadCloud')}
                     </button>
                     <div className="my-1 border-t border-slate-600" />
-                    <div className="px-3 py-1.5 text-xs font-semibold text-amber-200 uppercase tracking-wider">Dokumendi reziim</div>
+                    <div className="px-3 py-1.5 text-xs font-semibold text-amber-200 uppercase tracking-wider">{t('file.documentMode')}</div>
                     <button
                       type="button"
                       onClick={() => { dirtyRef.current = true; setDocumentNotationMode('traditional'); setHeaderMenuOpen(null); }}
                       className={`w-full flex items-center gap-2 px-3 py-2 text-left text-sm ${notationMode === 'traditional' ? 'bg-amber-600 text-white' : 'text-amber-50 hover:bg-slate-600'}`}
                     >
-                      Traditsiooniline
+                      {t('toolbar.traditional')}
                     </button>
                     <button
                       type="button"
                       onClick={() => { dirtyRef.current = true; setDocumentNotationMode('figurenotes'); setHeaderMenuOpen(null); }}
                       className={`w-full flex items-center gap-2 px-3 py-2 text-left text-sm ${notationMode === 'figurenotes' ? 'bg-amber-600 text-white' : 'text-amber-50 hover:bg-slate-600'}`}
                     >
-                      Figuurnotatsioon
+                      {t('toolbar.figurenotes')}
                     </button>
                     <button
                       type="button"
                       onClick={() => { dirtyRef.current = true; setDocumentNotationMode('vabanotatsioon'); setHeaderMenuOpen(null); }}
                       className={`w-full flex items-center gap-2 px-3 py-2 text-left text-sm ${notationMode === 'vabanotatsioon' ? 'bg-amber-600 text-white' : 'text-amber-50 hover:bg-slate-600'}`}
                     >
-                      Pedagoogiline notatsioon
+                      {t('toolbar.vabanotatsioon')}
                     </button>
                     <div className="my-1 border-t border-slate-600" />
                     <button
                       type="button"
                       onClick={() => { pageDesignInputRef.current?.click(); setHeaderMenuOpen(null); }}
                       className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-amber-50 hover:bg-slate-600"
-                      title="Impordi lehe taust (PNG/SVG)"
+                      title={t('file.importPageDesignTitle')}
                     >
-                      <Layout className="w-4 h-4" /> Import: Lehe disain (PNG/SVG)
+                      <Layout className="w-4 h-4" /> {t('file.importPageDesign')}
                     </button>
                     {pageDesignDataUrl && (
                       <button
@@ -11114,18 +11126,18 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                       type="button"
                       onClick={() => { musicXmlInputRef.current?.click(); setHeaderMenuOpen(null); }}
                       className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-amber-50 hover:bg-slate-600"
-                      title="Impordi MusicXML"
+                      title={t('file.importMusicXmlTitle')}
                     >
-                      <Music2 className="w-4 h-4" /> Import: MusicXML (.xml)
+                      <Music2 className="w-4 h-4" /> {t('file.importMusicXml')}
                     </button>
                     <button
                       type="button"
                       onClick={() => { pedagogicalAudioImportInputRef.current?.click(); setHeaderMenuOpen(null); }}
                       className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-amber-50 hover:bg-slate-600"
-                      title="Impordi heli pedagoogikale"
+                      title={t('file.importPedagogicalAudioTitle')}
                     >
                       {icons?.Play && <icons.Play className="w-4 h-4" />}
-                      Import: Heli pedagoogikale (MP3/WAV)
+                      {t('file.importPedagogicalAudio')}
                     </button>
                     <div className="my-1 border-t border-slate-600" />
                     <button
@@ -13034,9 +13046,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                 switch (id) {
                   case 'rhythm': return notationStyle === 'FIGURENOTES' ? <FigurenotesBlockIcon duration={selectedDuration} className="w-5 h-5" /> : <RhythmToolboxButtonIcon />;
                   case 'timeSignature':
-                    return timeSignatureMode === 'pedagogical'
-                      ? <PedagogicalMeterIcon beats={timeSignature.beats} beatUnit={timeSignature.beatUnit} />
-                      : <MeterIcon beats={timeSignature.beats} beatUnit={timeSignature.beatUnit} />;
+                    return <MeterIcon beats={4} beatUnit={4} />;
                   case 'clefs': return <ClefIcon clefType={notationMode === 'vabanotatsioon' ? 'jo' : clefType} />;
                   case 'keySignatures': return <KeySignatureDmajorIcon />;
                   case 'transpose': {
@@ -13323,7 +13333,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
             >
           <div
             ref={scoreContainerRef}
-            className={`noodimeister-print-area A4-page-container sheet-music-page print-page-${paperSize}-${pageFlowDirection === 'horizontal' ? 'landscape' : pageOrientation} relative flex-1 transition-colors ${viewFitPage && !viewSmartPage ? 'ml-0' : 'mx-auto'} ${isHorizontalFlow ? '' : 'rounded-lg border-2 border-amber-200 dark:border-white/20'}`}
+            className={`noodimeister-print-area A4-page-container sheet-music-page print-page-${paperSize}-${pageFlowDirection === 'horizontal' ? 'landscape' : pageOrientation} relative flex-1 transition-colors ${viewFitPage && !viewSmartPage ? 'ml-0' : 'mx-auto'} ${isHorizontalFlow ? '' : 'border border-slate-300 dark:border-slate-600'}`}
             style={{
               backgroundColor: scorePagePaperBackground,
               minWidth: LAYOUT.PAGE_WIDTH_MIN,
@@ -14916,7 +14926,7 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
         {shapeElement}
         {/* Noodi nimi kujundi sees: JO, LE, MI (Kodály solfeeg) */}
         <text x={x} y={y} textAnchor="middle" dominantBaseline="central" fill={textColor} fontSize={Math.max(8, size * 0.5)} fontWeight="bold">
-          {getJoName(note.pitch, note.octave, keySignature)}
+          {getJoName(note.pitch, note.octave, keySignature, joClefStaffPosition)}
         </text>
         {/* Pikkade nootide (1/2, 1/1) alumine saba – visuaalselt näitab noodi pikkust */}
         {tailLength > 0 && (

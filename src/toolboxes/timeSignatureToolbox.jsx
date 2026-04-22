@@ -4,6 +4,7 @@
  */
 import React from 'react';
 import { TIME_SIG_LAYOUT as L } from '../notation/TimeSignatureLayout';
+import { smuflTimeSigDigitsForNumber } from '../notation/smufl/glyphs';
 
 /** Ikooni viewBox 24×24, tsenter y=12; positsioonid 12 + L.Y_* */
 const C = 12;
@@ -20,12 +21,36 @@ const lineRight = C + L.LINE_HALF;
 const rx = 2.5;
 const ry = 1.6;
 
+function TimeSigGlyphNumber({ value, x, y, size = 12 }) {
+  const digits = smuflTimeSigDigitsForNumber(value);
+  const gap = size * 0.64;
+  const startX = x - ((digits.length - 1) * gap) / 2;
+  return (
+    <>
+      {digits.map((glyph, i) => (
+        <text
+          key={`${value}-${i}`}
+          x={startX + i * gap}
+          y={y}
+          textAnchor="middle"
+          dominantBaseline="middle"
+          fontFamily="Leland"
+          fontSize={size}
+          fill="currentColor"
+        >
+          {glyph}
+        </text>
+      ))}
+    </>
+  );
+}
+
 export function MeterIcon({ beats, beatUnit }) {
   return (
     <svg viewBox="0 0 24 24" className="w-5 h-5">
-      <text x={C} y={yNum} textAnchor="middle" fontSize="10" fontWeight="bold" fill="currentColor">{beats}</text>
+      <TimeSigGlyphNumber value={beats} x={C} y={yNum} size={12} />
       <line x1={lineLeft} y1={yLine} x2={lineRight} y2={yLine} stroke="currentColor" strokeWidth="1.5"/>
-      <text x={C} y={yDen} textAnchor="middle" fontSize="10" fontWeight="bold" fill="currentColor">{beatUnit}</text>
+      <TimeSigGlyphNumber value={beatUnit} x={C} y={yDen} size={12} />
     </svg>
   );
 }
