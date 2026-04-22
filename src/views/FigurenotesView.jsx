@@ -48,7 +48,8 @@ const PAGE_BREAK_GAP = 80;
 const FIGURE_REPEAT_RIGHT_EXTRA_INSET_STAFF_SPACES = 0;
 const FIGURE_TIME_SIG_REPEAT_START_CLEARANCE_PX = 44;
 const FIGURE_TIME_SIGNATURE_LEFT_SHIFT_PX = 10;
-const FIGURE_REPEAT_DOT_NOTE_CLEARANCE_PX = 3;
+const FIGURE_REPEAT_DOT_NOTE_CLEARANCE_PX = 10;
+const FIGURE_REPEAT_NOTE_MIN_GAP_PX = 3;
 /** Reference size (px) for which bar line and padding design values were chosen. */
 const NOTATION_SIZE_REF = 75;
 
@@ -531,6 +532,15 @@ export function FigurenotesView({
       const gap = Math.max(1.2, sp * BARLINE_SEPARATION);
       const dotR = Math.max(1.2, sp * 0.16) + 1;
       const dotDy = Math.max(dotR * 2.4, sp * 0.95);
+      // Keep dots away from noteheads, but never so inward that lines visually cover them.
+      const maxSafeInwardShift = Math.max(
+        0,
+        gap + dotR * 1.4 - (thinW / 2 + dotR + 1.5),
+      );
+      const inwardShift = Math.min(
+        FIGURE_REPEAT_DOT_NOTE_CLEARANCE_PX,
+        maxSafeInwardShift,
+      );
       const stroke = "#1a1a1a";
 
       const drawEnd = (anchorX) => {
@@ -539,7 +549,7 @@ export function FigurenotesView({
         const dotsX =
           thinCx -
           (gap + dotR * 1.4) +
-          FIGURE_REPEAT_DOT_NOTE_CLEARANCE_PX;
+          inwardShift;
         return (
           <>
             <line
@@ -570,7 +580,7 @@ export function FigurenotesView({
         const dotsX =
           thinCx +
           (gap + dotR * 1.4) -
-          FIGURE_REPEAT_DOT_NOTE_CLEARANCE_PX;
+          inwardShift;
         return (
           <>
             <line
@@ -751,6 +761,70 @@ export function FigurenotesView({
                     if (!measure) return null;
                     const beatsInMeasure = measure.beatCount ?? beatsPerMeasure;
                     const beatWidth = measureWidth / beatsInMeasure;
+                    const measureIndexInSystem = sys.measureIndices.indexOf(measureIdx);
+                    const prevMeasureInSystem =
+                      measureIndexInSystem > 0
+                        ? instMeasures[sys.measureIndices[measureIndexInSystem - 1]]
+                        : null;
+                    const nextMeasureInSystem =
+                      measureIndexInSystem >= 0 &&
+                      measureIndexInSystem < sys.measureIndices.length - 1
+                        ? instMeasures[sys.measureIndices[measureIndexInSystem + 1]]
+                        : null;
+                    const leftRepeatRender = getLeftBarlineRepeatRender({
+                      measureIndexInSystem,
+                      measure,
+                      prevMeasureInSystem,
+                    });
+                    const drawRightRepeat = shouldDrawRepeatEndGlyphOnRight(
+                      measure,
+                      nextMeasureInSystem,
+                    );
+                    const hasLeftRepeat =
+                      leftRepeatRender.variant === "start" ||
+                      leftRepeatRender.variant === "both";
+                    const hasRightRepeat = !!drawRightRepeat;
+                    const repeatStaffSpace = 10 * notationScale;
+                    const repeatThinW = Math.max(
+                      1,
+                      repeatStaffSpace * THIN_BARLINE_THICKNESS,
+                    );
+                    const repeatThickW = Math.max(
+                      2,
+                      repeatStaffSpace * THICK_BARLINE_THICKNESS,
+                    );
+                    const repeatGap = Math.max(
+                      1.2,
+                      repeatStaffSpace * BARLINE_SEPARATION,
+                    );
+                    const repeatDotR =
+                      Math.max(1.2, repeatStaffSpace * 0.16) + 1;
+                    const repeatBlockWidth =
+                      repeatThickW / 2 +
+                      repeatGap +
+                      repeatThinW +
+                      repeatGap +
+                      repeatDotR * 2;
+                    const repeatBothSplit = Math.max(
+                      1.2,
+                      repeatStaffSpace * 0.18,
+                    );
+                    const leftRepeatInnerExtent =
+                      repeatBlockWidth +
+                      (leftRepeatRender.variant === "both" ? repeatBothSplit : 0);
+                    const leftRepeatSymbolBoxWidth = hasLeftRepeat
+                      ? Math.min(
+                          measureWidth * 0.45,
+                          leftRepeatInnerExtent +
+                            FIGURE_REPEAT_NOTE_MIN_GAP_PX * 2,
+                        )
+                      : 0;
+                    const rightRepeatSymbolBoxWidth = hasRightRepeat
+                      ? Math.min(
+                          measureWidth * 0.45,
+                          repeatBlockWidth + FIGURE_REPEAT_NOTE_MIN_GAP_PX * 2,
+                        )
+                      : 0;
 
                     /** Interpret duration as beats (1=quarter, 0.5=eighth) or measure fraction (0.125=eighth in 4/4). */
                     const durationInBeats = (d) =>
@@ -1155,6 +1229,8 @@ export function FigurenotesView({
                                 stroke={edge}
                                 strokeWidth={sw}
                               />
+                              {/* Repeat symbol lanes are intentionally transparent.
+                                  Space is enforced via note-center clamping logic below. */}
                               {!hideBeatBoxLeftStroke && (
                                 <line
                                   x1={measureX}
@@ -1977,9 +2053,37 @@ export function FigurenotesView({
                           });
                           const getFigureCenterXForNote = (note, idx) => {
                             const defaultCenterX = getNoteSlotCenterX(note);
-                            return compactCenters.has(idx)
+                            const baseCenter = compactCenters.has(idx)
                               ? compactCenters.get(idx)
                               : defaultCenterX;
+                            const figureSize =
+                              figureSizeByNoteIndex.get(idx) ??
+                              figureSizeBaseForMeasure;
+                            const halfFigure = figureSize / 2;
+                            const minCenter = hasLeftRepeat
+                              ? measureX +
+                                leftRepeatSymbolBoxWidth +
+                                halfFigure
+                              : measureX + halfFigure;
+                            const maxCenter = hasRightRepeat
+                              ? measureX +
+                                measureWidth -
+                                rightRepeatSymbolBoxWidth -
+                                halfFigure
+                              : measureX + measureWidth - halfFigure;
+                            if (minCenter > maxCenter) {
+                              return Math.max(
+                                measureX + halfFigure,
+                                Math.min(
+                                  baseCenter,
+                                  measureX + measureWidth - halfFigure,
+                                ),
+                              );
+                            }
+                            return Math.max(
+                              minCenter,
+                              Math.min(baseCenter, maxCenter),
+                            );
                           };
                           const beamGroups = figurenotesStems
                             ? computeBeamGroups(
