@@ -51,6 +51,8 @@ import {
 import {
   getGlyphFontSize,
   getRestFontSize,
+  getThickBarlineThickness,
+  BARLINE_SEPARATION,
   TEXT_FONT_FAMILY,
 } from '../notation/musescoreStyle';
 import {
@@ -89,7 +91,6 @@ import {
 import {
   getFinalDoubleBarlineCentersX,
   getBarlineFrame,
-  getRepeatBarlineSmuflPlacement,
   getRepeatRightGlyphX,
 } from '../notation/repeatBarlineLayout';
 
@@ -635,6 +636,66 @@ export function TraditionalNotationView({
       window.removeEventListener('mouseup', onUp);
     };
   }, [noteDrag, onNotePitchChange, getPitchFromY, timelineSvgRef]);
+
+  const renderAnchoredRepeatBarline = React.useCallback(
+    ({ x, topY, bottomY, staffSpace, type }) => {
+      const sp = Math.max(1, Number(staffSpace) || 10);
+      const top = Number(topY);
+      const bottom = Number(bottomY);
+      const span = Math.max(1, bottom - top);
+      const staffStep = span / 4;
+      const thinW = Math.max(1, getThinBarlineThickness(sp));
+      const thickW = Math.max(2, getThickBarlineThickness(sp));
+      const gap = Math.max(1.2, BARLINE_SEPARATION * sp);
+      const dotR = Math.max(1.2, sp * 0.16) + 1;
+      // Traditional invariant: dots centered in 2nd and 3rd staff spaces (from bottom).
+      const lowerDotY = bottom - 1.5 * staffStep;
+      const upperDotY = bottom - 2.5 * staffStep;
+      const stroke = '#1a1a1a';
+
+      const drawEnd = (anchorX) => {
+        const thickCx = anchorX;
+        const thinCx = thickCx - (thickW / 2 + gap + thinW / 2);
+        const dotsX = thinCx - (gap + dotR * 1.4);
+        return (
+          <>
+            <line x1={thinCx} y1={top} x2={thinCx} y2={bottom} stroke={stroke} strokeWidth={thinW} />
+            <line x1={thickCx} y1={top} x2={thickCx} y2={bottom} stroke={stroke} strokeWidth={thickW} />
+            <circle cx={dotsX} cy={upperDotY} r={dotR} fill={stroke} />
+            <circle cx={dotsX} cy={lowerDotY} r={dotR} fill={stroke} />
+          </>
+        );
+      };
+
+      const drawStart = (anchorX) => {
+        const thickCx = anchorX;
+        const thinCx = thickCx + (thickW / 2 + gap + thinW / 2);
+        const dotsX = thinCx + (gap + dotR * 1.4);
+        return (
+          <>
+            <line x1={thinCx} y1={top} x2={thinCx} y2={bottom} stroke={stroke} strokeWidth={thinW} />
+            <line x1={thickCx} y1={top} x2={thickCx} y2={bottom} stroke={stroke} strokeWidth={thickW} />
+            <circle cx={dotsX} cy={upperDotY} r={dotR} fill={stroke} />
+            <circle cx={dotsX} cy={lowerDotY} r={dotR} fill={stroke} />
+          </>
+        );
+      };
+
+      if (type === 'end') return <g>{drawEnd(x)}</g>;
+      if (type === 'start') return <g>{drawStart(x)}</g>;
+      if (type === 'both') {
+        const split = Math.max(1.2, sp * 0.18);
+        return (
+          <g>
+            {drawEnd(x - split)}
+            {drawStart(x + split)}
+          </g>
+        );
+      }
+      return null;
+    },
+    [],
+  );
   const staffLinePositions = getStaffLinePositions(centerY, staffLines, spacing);
   // Leland: Treble on B line (traditional-method placement). Bass: F line (index 1).
   const trebleGLine = staffLinePositions[TREBLE_CLEF_LINE_INDEX];
@@ -1118,10 +1179,9 @@ export function TraditionalNotationView({
                   barlineX: rightBarFrame.x,
                   staffSpace: rightBarFrame.staffSpace,
                 });
-                const repeatRightTextAnchor = 'middle';
-                const repeatSmufl = getRepeatBarlineSmuflPlacement({
-                  frame: rowBarFrame,
-                });
+                const repeatRightAnchorX = drawRepeatEndGlyphRight
+                  ? rightBarFrame.x
+                  : repeatRightGlyphX;
 
                 return (
                   <g key={measureIdx}>
@@ -1146,16 +1206,13 @@ export function TraditionalNotationView({
                             style={{ cursor: onSelectRepeatMark ? 'pointer' : undefined }}
                             pointerEvents={onSelectRepeatMark ? 'auto' : 'none'}
                           >
-                            <SmuflGlyph
-                              glyph={leftBarlineRepeat.glyph}
-                              x={measureX}
-                              y={repeatSmufl.y}
-                              fontSize={repeatSmufl.fontSize}
-                              fill="#1a1a1a"
-                              textAnchor="middle"
-                              dominantBaseline={repeatSmufl.dominantBaseline}
-                              fontFamily={SMUFL_MUSIC_FONT_FAMILY}
-                            />
+                            {renderAnchoredRepeatBarline({
+                              x: measureX,
+                              topY: rowBarFrame.topY,
+                              bottomY: rowBarFrame.bottomY,
+                              staffSpace: rowBarFrame.staffSpace,
+                              type: 'both',
+                            })}
                             {isRepeatMarkSelected(measureIdx, 'repeatStart') && (
                               <rect x={measureX - spacing * 2.4} y={staffY + firstLineY - spacing * 1.1} width={spacing * 4.8} height={lastLineY - firstLineY + spacing * 2.2} fill="#93c5fd" opacity="0.32" rx={3} />
                             )}
@@ -1169,16 +1226,13 @@ export function TraditionalNotationView({
                             style={{ cursor: onSelectRepeatMark ? 'pointer' : undefined }}
                             pointerEvents={onSelectRepeatMark ? 'auto' : 'none'}
                           >
-                            <SmuflGlyph
-                              glyph={leftBarlineRepeat.glyph}
-                              x={measureX}
-                              y={repeatSmufl.y}
-                              fontSize={repeatSmufl.fontSize}
-                              fill="#1a1a1a"
-                              textAnchor="middle"
-                              dominantBaseline={repeatSmufl.dominantBaseline}
-                              fontFamily={SMUFL_MUSIC_FONT_FAMILY}
-                            />
+                            {renderAnchoredRepeatBarline({
+                              x: measureX,
+                              topY: rowBarFrame.topY,
+                              bottomY: rowBarFrame.bottomY,
+                              staffSpace: rowBarFrame.staffSpace,
+                              type: 'start',
+                            })}
                             {isRepeatMarkSelected(measureIdx, 'repeatStart') && (
                               <rect x={measureX - spacing * 2.4} y={staffY + firstLineY - spacing * 1.1} width={spacing * 4.8} height={lastLineY - firstLineY + spacing * 2.2} fill="#93c5fd" opacity="0.32" rx={3} />
                             )}
@@ -1203,21 +1257,18 @@ export function TraditionalNotationView({
                             style={{ cursor: onSelectRepeatMark ? 'pointer' : undefined }}
                             pointerEvents={onSelectRepeatMark ? 'auto' : 'none'}
                           >
-                            <SmuflGlyph
-                              glyph={SMUFL_GLYPH.repeatRight}
-                              x={repeatRightGlyphX}
-                              y={repeatSmufl.y}
-                              fontSize={repeatSmufl.fontSize}
-                              fill="#1a1a1a"
-                              textAnchor={repeatRightTextAnchor}
-                              dominantBaseline={repeatSmufl.dominantBaseline}
-                              fontFamily={SMUFL_MUSIC_FONT_FAMILY}
-                            />
+                            {renderAnchoredRepeatBarline({
+                              x: repeatRightAnchorX,
+                              topY: rightBarFrame.topY,
+                              bottomY: rightBarFrame.bottomY,
+                              staffSpace: rightBarFrame.staffSpace,
+                              type: 'end',
+                            })}
                             {isRepeatMarkSelected(measureIdx, 'repeatEnd') && (
                               <rect
-                                x={Math.min(repeatRightGlyphX, measureRightX) - spacing * 2.4}
+                                x={Math.min(repeatRightAnchorX, measureRightX) - spacing * 2.4}
                                 y={staffY + firstLineY - spacing * 1.1}
-                                width={Math.abs(measureRightX - repeatRightGlyphX) + spacing * 4.8}
+                                width={Math.abs(measureRightX - repeatRightAnchorX) + spacing * 4.8}
                                 height={lastLineY - firstLineY + spacing * 2.2}
                                 fill="#93c5fd"
                                 opacity="0.32"
@@ -1226,9 +1277,9 @@ export function TraditionalNotationView({
                             )}
                             {onSelectRepeatMark && (
                               <rect
-                                x={Math.min(repeatRightGlyphX, measureRightX) - spacing * 2}
+                                x={Math.min(repeatRightAnchorX, measureRightX) - spacing * 2}
                                 y={staffY + firstLineY - spacing}
-                                width={Math.abs(measureRightX - repeatRightGlyphX) + spacing * 4}
+                                width={Math.abs(measureRightX - repeatRightAnchorX) + spacing * 4}
                                 height={lastLineY - firstLineY + spacing * 2}
                                 fill="transparent"
                               />

@@ -33,14 +33,21 @@ import {
 } from "../notation/repeatBarlineResolve";
 import {
   getBarlineFrame,
-  getRepeatBarlineSmuflPlacement,
   getRepeatRightGlyphX,
 } from "../notation/repeatBarlineLayout";
 import { computeBeamGroups } from "../notation/BeamCalculation";
+import {
+  THIN_BARLINE_THICKNESS,
+  THICK_BARLINE_THICKNESS,
+  BARLINE_SEPARATION,
+} from "../notation/musescoreStyle";
 
 const LAYOUT = { MARGIN_LEFT: 60, MEASURE_MIN_WIDTH: 28 };
 const FIGURE_START_PADDING = 8;
 const PAGE_BREAK_GAP = 80;
+const FIGURE_REPEAT_RIGHT_EXTRA_INSET_STAFF_SPACES = 0;
+const FIGURE_TIME_SIG_REPEAT_START_CLEARANCE_PX = 44;
+const FIGURE_TIME_SIGNATURE_LEFT_SHIFT_PX = 10;
 /** Reference size (px) for which bar line and padding design values were chosen. */
 const NOTATION_SIZE_REF = 75;
 
@@ -450,6 +457,11 @@ export function FigurenotesView({
   const padVertical = Math.max(2, Math.round(4 * notationScale));
   const barLineInset = Math.max(2, Math.round(5 * notationScale));
   const barLineWidth = Math.max(2, Math.round(5 * notationScale));
+  const debugRepeatOverlay = useMemo(() => {
+    if (typeof window === "undefined") return false;
+    const p = new URLSearchParams(window.location.search);
+    return p.get("debugRepeat") === "1";
+  }, []);
 
   const [noteBeatDrag, setNoteBeatDrag] = useState(null);
   const measureLayout = useMemo(() => {
@@ -504,6 +516,93 @@ export function FigurenotesView({
     window.addEventListener("mouseup", onUp);
     return () => window.removeEventListener("mouseup", onUp);
   }, [noteBeatDrag, onNoteBeatChange, getBeatFromX, timelineSvgRef]);
+
+  const renderAnchoredRepeatBarline = useCallback(
+    ({ x, topY, bottomY, staffSpace, type }) => {
+      const sp = Math.max(1, Number(staffSpace) || 10);
+      const top = Number(topY);
+      const bottom = Number(bottomY);
+      const span = Math.max(1, bottom - top);
+      const cy = top + span / 2;
+      // Use engraving-default ratios so geometric repeat matches SMuFL/Leland feel.
+      const thinW = Math.max(1, sp * THIN_BARLINE_THICKNESS);
+      const thickW = Math.max(2, sp * THICK_BARLINE_THICKNESS);
+      const gap = Math.max(1.2, sp * BARLINE_SEPARATION);
+      const dotR = Math.max(1.2, sp * 0.16);
+      const dotDy = Math.max(dotR * 2.4, sp * 0.95);
+      const stroke = "#1a1a1a";
+
+      const drawEnd = (anchorX) => {
+        const thickCx = anchorX;
+        const thinCx = thickCx - (thickW / 2 + gap + thinW / 2);
+        const dotsX = thinCx - (gap + dotR * 1.4);
+        return (
+          <>
+            <line
+              x1={thinCx}
+              y1={top}
+              x2={thinCx}
+              y2={bottom}
+              stroke={stroke}
+              strokeWidth={thinW}
+            />
+            <line
+              x1={thickCx}
+              y1={top}
+              x2={thickCx}
+              y2={bottom}
+              stroke={stroke}
+              strokeWidth={thickW}
+            />
+            <circle cx={dotsX} cy={cy - dotDy} r={dotR} fill={stroke} />
+            <circle cx={dotsX} cy={cy + dotDy} r={dotR} fill={stroke} />
+          </>
+        );
+      };
+
+      const drawStart = (anchorX) => {
+        const thickCx = anchorX;
+        const thinCx = thickCx + (thickW / 2 + gap + thinW / 2);
+        const dotsX = thinCx + (gap + dotR * 1.4);
+        return (
+          <>
+            <line
+              x1={thinCx}
+              y1={top}
+              x2={thinCx}
+              y2={bottom}
+              stroke={stroke}
+              strokeWidth={thinW}
+            />
+            <line
+              x1={thickCx}
+              y1={top}
+              x2={thickCx}
+              y2={bottom}
+              stroke={stroke}
+              strokeWidth={thickW}
+            />
+            <circle cx={dotsX} cy={cy - dotDy} r={dotR} fill={stroke} />
+            <circle cx={dotsX} cy={cy + dotDy} r={dotR} fill={stroke} />
+          </>
+        );
+      };
+
+      if (type === "end") return <g>{drawEnd(x)}</g>;
+      if (type === "start") return <g>{drawStart(x)}</g>;
+      if (type === "both") {
+        const split = Math.max(1.2, sp * 0.18);
+        return (
+          <g>
+            {drawEnd(x - split)}
+            {drawStart(x + split)}
+          </g>
+        );
+      }
+      return null;
+    },
+    [],
+  );
 
   return (
     <>
@@ -572,15 +671,28 @@ export function FigurenotesView({
 
             {sys.systemIndex === 0 && (
               <g transform={`translate(0, ${sys.yOffset})`}>
-                {renderTimeSignature(
-                  timeSignature,
-                  timeSignatureMode,
-                  centerY,
-                  timeSignatureSize,
-                  timeSigTextColor,
-                  timeSigNoteFill,
-                  getFigureTimeSignatureX(marginLeft),
-                )}
+                {(() => {
+                  const firstMeasureIdx = sys.measureIndices?.[0];
+                  const firstMeasure =
+                    typeof firstMeasureIdx === "number"
+                      ? layoutSourceMeasures[firstMeasureIdx]
+                      : null;
+                  const hasRepeatStartAtRowStart = !!firstMeasure?.repeatStart;
+                  const timeSigX = hasRepeatStartAtRowStart
+                    ? getFigureTimeSignatureX(marginLeft) -
+                      FIGURE_TIME_SIG_REPEAT_START_CLEARANCE_PX -
+                      FIGURE_TIME_SIGNATURE_LEFT_SHIFT_PX
+                    : getFigureTimeSignatureX(marginLeft);
+                  return renderTimeSignature(
+                    timeSignature,
+                    timeSignatureMode,
+                    centerY,
+                    timeSignatureSize,
+                    timeSigTextColor,
+                    timeSigNoteFill,
+                    timeSigX,
+                  );
+                })()}
               </g>
             )}
 
@@ -1188,23 +1300,14 @@ export function FigurenotesView({
                               mBar,
                               nextM,
                             );
+                            const barLineTopY = sys.yOffset + padVertical;
                             const barLineBottomY =
-                              chordLineHeight > 0
-                                ? sys.yOffset +
-                                  melodyRowHeight +
-                                  chordLineGap +
-                                  chordLineHeight -
-                                  barLineInset
-                                : sys.yOffset + melodyRowHeight - barLineInset;
-                            const barLineTopY = sys.yOffset + barLineInset;
+                              sys.yOffset + melodyRowHeight - padVertical;
                             const rowBarFrame = getBarlineFrame({
                               barlineX: measureX,
                               barTopY: barLineTopY,
                               barBottomY: barLineBottomY,
                               staffSpace: 10 * notationScale,
-                            });
-                            const repeatSmufl = getRepeatBarlineSmuflPlacement({
-                              frame: rowBarFrame,
                             });
                             const isRightBarlineOfSystem =
                               measureIdx ===
@@ -1236,32 +1339,28 @@ export function FigurenotesView({
                             const repeatRightX = getRepeatRightGlyphX({
                               barlineX: rightBarFrame.x,
                               staffSpace: rightBarFrame.staffSpace,
-                            });
-                            const repeatRightAnchor = "middle";
+                            }) - rightBarFrame.staffSpace * FIGURE_REPEAT_RIGHT_EXTRA_INSET_STAFF_SPACES;
+                            const anchoredRepeatRightX = drawEnd
+                              ? rightBarFrame.x
+                              : repeatRightX;
                             return (
                               <>
                                 {leftR.variant === "both" ? (
-                                  <SmuflGlyph
-                                    glyph={leftR.glyph}
-                                    x={measureX}
-                                    y={repeatSmufl.y}
-                                    fontSize={repeatSmufl.fontSize}
-                                    fill="#1a1a1a"
-                                    textAnchor="middle"
-                                    dominantBaseline={repeatSmufl.dominantBaseline}
-                                    fontFamily={SMUFL_MUSIC_FONT_FAMILY}
-                                  />
+                                  renderAnchoredRepeatBarline({
+                                    x: measureX,
+                                    topY: barLineTopY,
+                                    bottomY: barLineBottomY,
+                                    staffSpace: rowBarFrame.staffSpace,
+                                    type: "both",
+                                  })
                                 ) : leftR.variant === "start" ? (
-                                  <SmuflGlyph
-                                    glyph={leftR.glyph}
-                                    x={measureX}
-                                    y={repeatSmufl.y}
-                                    fontSize={repeatSmufl.fontSize}
-                                    fill="#1a1a1a"
-                                    textAnchor="middle"
-                                    dominantBaseline={repeatSmufl.dominantBaseline}
-                                    fontFamily={SMUFL_MUSIC_FONT_FAMILY}
-                                  />
+                                  renderAnchoredRepeatBarline({
+                                    x: measureX,
+                                    topY: barLineTopY,
+                                    bottomY: barLineBottomY,
+                                    staffSpace: rowBarFrame.staffSpace,
+                                    type: "start",
+                                  })
                                 ) : leftR.variant === "barline" ? (
                                   <line
                                     x1={measureX}
@@ -1274,16 +1373,55 @@ export function FigurenotesView({
                                 ) : null}
                                 {drawEnd ? (
                                   <>
-                                    <SmuflGlyph
-                                      glyph={SMUFL_GLYPH.repeatRight}
-                                      x={repeatRightX}
-                                      y={repeatSmufl.y}
-                                      fontSize={repeatSmufl.fontSize}
-                                      fill="#1a1a1a"
-                                      textAnchor={repeatRightAnchor}
-                                      dominantBaseline={repeatSmufl.dominantBaseline}
-                                      fontFamily={SMUFL_MUSIC_FONT_FAMILY}
-                                    />
+                                    {renderAnchoredRepeatBarline({
+                                      x: anchoredRepeatRightX,
+                                      topY: barLineTopY,
+                                      bottomY: barLineBottomY,
+                                      staffSpace: rightBarFrame.staffSpace,
+                                      type: "end",
+                                    })}
+                                    {debugRepeatOverlay && (
+                                      <>
+                                        <line
+                                          x1={xRight}
+                                          y1={barLineTopY}
+                                          x2={xRight}
+                                          y2={barLineBottomY}
+                                          stroke="#ef4444"
+                                          strokeWidth={1}
+                                          strokeDasharray="3 2"
+                                        />
+                                        <line
+                                          x1={anchoredRepeatRightX}
+                                          y1={barLineTopY}
+                                          x2={anchoredRepeatRightX}
+                                          y2={barLineBottomY}
+                                          stroke="#0ea5e9"
+                                          strokeWidth={1}
+                                          strokeDasharray="3 2"
+                                        />
+                                        <text
+                                          x={xRight - 2}
+                                          y={barLineTopY - 4}
+                                          textAnchor="end"
+                                          fontSize={10}
+                                          fill="#dc2626"
+                                          fontFamily="sans-serif"
+                                        >
+                                          {`bar ${xRight.toFixed(1)}`}
+                                        </text>
+                                        <text
+                                          x={anchoredRepeatRightX + 2}
+                                          y={barLineTopY - 4}
+                                          textAnchor="start"
+                                          fontSize={10}
+                                          fill="#0369a1"
+                                          fontFamily="sans-serif"
+                                        >
+                                          {`rep ${anchoredRepeatRightX.toFixed(1)} Δ ${(anchoredRepeatRightX - xRight).toFixed(1)}`}
+                                        </text>
+                                      </>
+                                    )}
                                   </>
                                 ) : (
                                   isRightBarlineOfSystem &&
@@ -2201,45 +2339,33 @@ export function FigurenotesView({
                         measureBar,
                         nextBar,
                       );
+                      const barLineTopY = sys.yOffset + padVertical;
                       const barLineBottomY =
-                        chordLineHeight > 0
-                          ? sys.yOffset +
-                            (nStaffRows - 1) * rowStepPx +
-                            melodyRowHeight +
-                            chordLineGap +
-                            chordLineHeight -
-                            barLineInset
-                          : sys.yOffset +
-                            (nStaffRows - 1) * rowStepPx +
-                            melodyRowHeight -
-                            barLineInset;
-                      const barLineTopY = sys.yOffset + barLineInset;
+                        sys.yOffset +
+                        (nStaffRows - 1) * rowStepPx +
+                        melodyRowHeight -
+                        padVertical;
                       const repeatSmuflPerRow = Array.from(
                         { length: nStaffRows },
                         (_, rowIdx) => {
                           const rowTopY =
-                            sys.yOffset + rowIdx * rowStepPx + barLineInset;
+                            sys.yOffset + rowIdx * rowStepPx + padVertical;
                           const rowBottomY =
-                            chordLineHeight > 0
-                              ? sys.yOffset +
-                                rowIdx * rowStepPx +
-                                melodyRowHeight +
-                                chordLineGap +
-                                chordLineHeight -
-                                barLineInset
-                              : sys.yOffset +
-                                rowIdx * rowStepPx +
-                                melodyRowHeight -
-                                barLineInset;
+                            sys.yOffset +
+                            rowIdx * rowStepPx +
+                            melodyRowHeight -
+                            padVertical;
                           const rowFrame = getBarlineFrame({
                             barlineX: measureX,
                             barTopY: rowTopY,
                             barBottomY: rowBottomY,
                             staffSpace: 10 * notationScale,
                           });
-                          return getRepeatBarlineSmuflPlacement({
-                            frame: rowFrame,
-                          });
+                          return {
+                            topY: rowTopY,
+                            bottomY: rowBottomY,
+                            staffSpace: rowFrame.staffSpace,
+                          };
                         },
                       );
                       const isRightBarlineOfSystem =
@@ -2274,37 +2400,35 @@ export function FigurenotesView({
                       const repeatRightX = getRepeatRightGlyphX({
                         barlineX: rightBarFrame.x,
                         staffSpace: rightBarFrame.staffSpace,
-                      });
-                      const repeatRightAnchor = "middle";
+                      }) - rightBarFrame.staffSpace * FIGURE_REPEAT_RIGHT_EXTRA_INSET_STAFF_SPACES;
+                      const anchoredRepeatRightX = drawEnd
+                        ? rightBarFrame.x
+                        : repeatRightX;
                       return (
                         <>
                           {leftR.variant === "both" ? (
                             repeatSmuflPerRow.map((rp, rowIdx) => (
-                              <SmuflGlyph
-                                key={`repeat-left-both-${measureIdx}-${rowIdx}`}
-                                glyph={leftR.glyph}
-                                x={measureX}
-                                y={rp.y}
-                                fontSize={rp.fontSize}
-                                fill="#1a1a1a"
-                                textAnchor="middle"
-                                dominantBaseline={rp.dominantBaseline}
-                                fontFamily={SMUFL_MUSIC_FONT_FAMILY}
-                              />
+                              <g key={`repeat-left-both-${measureIdx}-${rowIdx}`}>
+                                {renderAnchoredRepeatBarline({
+                                  x: measureX,
+                                  topY: rp.topY,
+                                  bottomY: rp.bottomY,
+                                  staffSpace: rp.staffSpace,
+                                  type: "both",
+                                })}
+                              </g>
                             ))
                           ) : leftR.variant === "start" ? (
                             repeatSmuflPerRow.map((rp, rowIdx) => (
-                              <SmuflGlyph
-                                key={`repeat-left-start-${measureIdx}-${rowIdx}`}
-                                glyph={leftR.glyph}
-                                x={measureX}
-                                y={rp.y}
-                                fontSize={rp.fontSize}
-                                fill="#1a1a1a"
-                                textAnchor="middle"
-                                dominantBaseline={rp.dominantBaseline}
-                                fontFamily={SMUFL_MUSIC_FONT_FAMILY}
-                              />
+                              <g key={`repeat-left-start-${measureIdx}-${rowIdx}`}>
+                                {renderAnchoredRepeatBarline({
+                                  x: measureX,
+                                  topY: rp.topY,
+                                  bottomY: rp.bottomY,
+                                  staffSpace: rp.staffSpace,
+                                  type: "start",
+                                })}
+                              </g>
                             ))
                           ) : leftR.variant === "barline" ? (
                             <line
@@ -2318,17 +2442,61 @@ export function FigurenotesView({
                           ) : null}
                           {drawEnd ? (
                             repeatSmuflPerRow.map((rp, rowIdx) => (
-                              <SmuflGlyph
-                                key={`repeat-right-${measureIdx}-${rowIdx}`}
-                                glyph={SMUFL_GLYPH.repeatRight}
-                                x={repeatRightX}
-                                y={rp.y}
-                                fontSize={rp.fontSize}
-                                fill="#1a1a1a"
-                                textAnchor={repeatRightAnchor}
-                                dominantBaseline={rp.dominantBaseline}
-                                fontFamily={SMUFL_MUSIC_FONT_FAMILY}
-                              />
+                              <g key={`repeat-right-${measureIdx}-${rowIdx}`}>
+                                {renderAnchoredRepeatBarline({
+                                  x: anchoredRepeatRightX,
+                                  topY: rp.topY,
+                                  bottomY: rp.bottomY,
+                                  staffSpace: rp.staffSpace,
+                                  type: "end",
+                                })}
+                                {debugRepeatOverlay && (
+                                  <>
+                                    <line
+                                      x1={xRight}
+                                      y1={rp.topY}
+                                      x2={xRight}
+                                      y2={rp.bottomY}
+                                      stroke="#ef4444"
+                                      strokeWidth={1}
+                                      strokeDasharray="3 2"
+                                    />
+                                    <line
+                                      x1={anchoredRepeatRightX}
+                                      y1={rp.topY}
+                                      x2={anchoredRepeatRightX}
+                                      y2={rp.bottomY}
+                                      stroke="#0ea5e9"
+                                      strokeWidth={1}
+                                      strokeDasharray="3 2"
+                                    />
+                                    {rowIdx === 0 && (
+                                      <>
+                                        <text
+                                          x={xRight - 2}
+                                          y={rp.topY - 4}
+                                          textAnchor="end"
+                                          fontSize={10}
+                                          fill="#dc2626"
+                                          fontFamily="sans-serif"
+                                        >
+                                          {`bar ${xRight.toFixed(1)}`}
+                                        </text>
+                                        <text
+                                          x={anchoredRepeatRightX + 2}
+                                          y={rp.topY - 4}
+                                          textAnchor="start"
+                                          fontSize={10}
+                                          fill="#0369a1"
+                                          fontFamily="sans-serif"
+                                        >
+                                          {`rep ${anchoredRepeatRightX.toFixed(1)} Δ ${(anchoredRepeatRightX - xRight).toFixed(1)}`}
+                                        </text>
+                                      </>
+                                    )}
+                                  </>
+                                )}
+                              </g>
                             ))
                           ) : (
                             isRightBarlineOfSystem &&
@@ -2374,6 +2542,8 @@ export function FigurenotesView({
               layoutSourceMeasures.length > 0 &&
               (() => {
                 const lastIdx = layoutSourceMeasures.length - 1;
+                const lastMeasure = layoutSourceMeasures[lastIdx];
+                if (lastMeasure?.repeatEnd) return null;
                 const j = sys.measureIndices.indexOf(lastIdx);
                 if (j < 0) return null;
                 const mw =
