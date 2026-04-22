@@ -48,6 +48,7 @@ const PAGE_BREAK_GAP = 80;
 const FIGURE_REPEAT_RIGHT_EXTRA_INSET_STAFF_SPACES = 0;
 const FIGURE_TIME_SIG_REPEAT_START_CLEARANCE_PX = 44;
 const FIGURE_TIME_SIGNATURE_LEFT_SHIFT_PX = 10;
+const FIGURE_REPEAT_DOT_NOTE_CLEARANCE_PX = 3;
 /** Reference size (px) for which bar line and padding design values were chosen. */
 const NOTATION_SIZE_REF = 75;
 
@@ -528,14 +529,17 @@ export function FigurenotesView({
       const thinW = Math.max(1, sp * THIN_BARLINE_THICKNESS);
       const thickW = Math.max(2, sp * THICK_BARLINE_THICKNESS);
       const gap = Math.max(1.2, sp * BARLINE_SEPARATION);
-      const dotR = Math.max(1.2, sp * 0.16);
+      const dotR = Math.max(1.2, sp * 0.16) + 1;
       const dotDy = Math.max(dotR * 2.4, sp * 0.95);
       const stroke = "#1a1a1a";
 
       const drawEnd = (anchorX) => {
         const thickCx = anchorX;
         const thinCx = thickCx - (thickW / 2 + gap + thinW / 2);
-        const dotsX = thinCx - (gap + dotR * 1.4);
+        const dotsX =
+          thinCx -
+          (gap + dotR * 1.4) +
+          FIGURE_REPEAT_DOT_NOTE_CLEARANCE_PX;
         return (
           <>
             <line
@@ -563,7 +567,10 @@ export function FigurenotesView({
       const drawStart = (anchorX) => {
         const thickCx = anchorX;
         const thinCx = thickCx + (thickW / 2 + gap + thinW / 2);
-        const dotsX = thinCx + (gap + dotR * 1.4);
+        const dotsX =
+          thinCx +
+          (gap + dotR * 1.4) -
+          FIGURE_REPEAT_DOT_NOTE_CLEARANCE_PX;
         return (
           <>
             <line
