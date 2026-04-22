@@ -507,6 +507,8 @@ export function TraditionalNotationView({
   systemTotalHeight,
   themeColors,
   onRemoveRepeatMark, // (measureIndex, markType: 'repeatStart'|'repeatEnd'|'segno'|'coda'|'volta1'|'volta2') => void
+  selectedRepeatMark = null, // { measureIndex, markType } | null
+  onSelectRepeatMark, // (measureIndex, markType) => void
 }) {
   const spacing = staffSpaceProp ?? STAFF_SPACE;
   const isVabanotatsioon = notationMode === 'vabanotatsioon';
@@ -683,6 +685,9 @@ export function TraditionalNotationView({
   const systemBracketX = 17;
   const systemBracketCapSize = 14;
   const smuflMusicFontStack = "'Leland', 'Bravura', serif";
+  const isRepeatMarkSelected = (measureIndex, markType) => (
+    selectedRepeatMark?.measureIndex === measureIndex && selectedRepeatMark?.markType === markType
+  );
 
   return (
     <g className="traditional-notation">
@@ -987,7 +992,6 @@ export function TraditionalNotationView({
                   prevMeasureInSystem,
                 });
                 const drawRepeatEndGlyphRight = shouldDrawRepeatEndGlyphOnRight(measure, nextMeasureInSystem);
-                const prevIdxForRepeatPair = j > 0 ? sys.measureIndices[j - 1] : null;
                 const measureWidths = sys.measureWidths ?? sys.measureIndices.map(() => sys.measureWidth ?? beatsPerMeasure * 80);
                 const measureWidth = measureWidths[j] ?? (sys.measureWidth ?? beatsPerMeasure * 80);
                 const measureX = effectiveMarginLeft + measureWidths.slice(0, j).reduce((a, b) => a + b, 0);
@@ -1122,13 +1126,12 @@ export function TraditionalNotationView({
                         {/* Left barline: E040 / E042 (Leland); ühine loogika repeatBarlineResolve */}
                         {leftBarlineRepeat.variant === 'both' ? (
                           <g
-                            onClick={typeof onRemoveRepeatMark === 'function' ? (e) => {
+                            onClick={typeof onSelectRepeatMark === 'function' ? (e) => {
                               e.stopPropagation();
-                              if (prevIdxForRepeatPair != null) onRemoveRepeatMark(prevIdxForRepeatPair, 'repeatEnd');
-                              onRemoveRepeatMark(measureIdx, 'repeatStart');
+                              onSelectRepeatMark(measureIdx, 'repeatStart');
                             } : undefined}
-                            style={{ cursor: onRemoveRepeatMark ? 'pointer' : undefined }}
-                            pointerEvents={onRemoveRepeatMark ? 'auto' : 'none'}
+                            style={{ cursor: onSelectRepeatMark ? 'pointer' : undefined }}
+                            pointerEvents={onSelectRepeatMark ? 'auto' : 'none'}
                           >
                             <SmuflGlyph
                               glyph={leftBarlineRepeat.glyph}
@@ -1140,15 +1143,18 @@ export function TraditionalNotationView({
                               dominantBaseline={repeatSmufl.dominantBaseline}
                               fontFamily={SMUFL_MUSIC_FONT_FAMILY}
                             />
-                            {onRemoveRepeatMark && (
+                            {isRepeatMarkSelected(measureIdx, 'repeatStart') && (
+                              <rect x={measureX - spacing * 2.4} y={staffY + firstLineY - spacing * 1.1} width={spacing * 4.8} height={lastLineY - firstLineY + spacing * 2.2} fill="#93c5fd" opacity="0.32" rx={3} />
+                            )}
+                            {onSelectRepeatMark && (
                               <rect x={measureX - spacing * 2} y={staffY + firstLineY - spacing} width={spacing * 4} height={lastLineY - firstLineY + spacing * 2} fill="transparent" />
                             )}
                           </g>
                         ) : leftBarlineRepeat.variant === 'start' ? (
                           <g
-                            onClick={typeof onRemoveRepeatMark === 'function' ? (e) => { e.stopPropagation(); onRemoveRepeatMark(measureIdx, 'repeatStart'); } : undefined}
-                            style={{ cursor: onRemoveRepeatMark ? 'pointer' : undefined }}
-                            pointerEvents={onRemoveRepeatMark ? 'auto' : 'none'}
+                            onClick={typeof onSelectRepeatMark === 'function' ? (e) => { e.stopPropagation(); onSelectRepeatMark(measureIdx, 'repeatStart'); } : undefined}
+                            style={{ cursor: onSelectRepeatMark ? 'pointer' : undefined }}
+                            pointerEvents={onSelectRepeatMark ? 'auto' : 'none'}
                           >
                             <SmuflGlyph
                               glyph={leftBarlineRepeat.glyph}
@@ -1160,7 +1166,10 @@ export function TraditionalNotationView({
                               dominantBaseline={repeatSmufl.dominantBaseline}
                               fontFamily={SMUFL_MUSIC_FONT_FAMILY}
                             />
-                            {onRemoveRepeatMark && (
+                            {isRepeatMarkSelected(measureIdx, 'repeatStart') && (
+                              <rect x={measureX - spacing * 2.4} y={staffY + firstLineY - spacing * 1.1} width={spacing * 4.8} height={lastLineY - firstLineY + spacing * 2.2} fill="#93c5fd" opacity="0.32" rx={3} />
+                            )}
+                            {onSelectRepeatMark && (
                               <rect x={measureX - spacing * 2} y={staffY + firstLineY - spacing} width={spacing * 2} height={lastLineY - firstLineY + spacing * 2} fill="transparent" />
                             )}
                           </g>
@@ -1177,9 +1186,9 @@ export function TraditionalNotationView({
                         {/* Right barline: E041 kui pole ühendatud E042-ga järgmise takti vasakul */}
                         {measure.repeatEnd && drawRepeatEndGlyphRight ? (
                           <g
-                            onClick={typeof onRemoveRepeatMark === 'function' ? (e) => { e.stopPropagation(); onRemoveRepeatMark(measureIdx, 'repeatEnd'); } : undefined}
-                            style={{ cursor: onRemoveRepeatMark ? 'pointer' : undefined }}
-                            pointerEvents={onRemoveRepeatMark ? 'auto' : 'none'}
+                            onClick={typeof onSelectRepeatMark === 'function' ? (e) => { e.stopPropagation(); onSelectRepeatMark(measureIdx, 'repeatEnd'); } : undefined}
+                            style={{ cursor: onSelectRepeatMark ? 'pointer' : undefined }}
+                            pointerEvents={onSelectRepeatMark ? 'auto' : 'none'}
                           >
                             <SmuflGlyph
                               glyph={SMUFL_GLYPH.repeatRight}
@@ -1191,7 +1200,18 @@ export function TraditionalNotationView({
                               dominantBaseline={repeatSmufl.dominantBaseline}
                               fontFamily={SMUFL_MUSIC_FONT_FAMILY}
                             />
-                            {onRemoveRepeatMark && (
+                            {isRepeatMarkSelected(measureIdx, 'repeatEnd') && (
+                              <rect
+                                x={Math.min(repeatRightGlyphX, measureRightX) - spacing * 2.4}
+                                y={staffY + firstLineY - spacing * 1.1}
+                                width={Math.abs(measureRightX - repeatRightGlyphX) + spacing * 4.8}
+                                height={lastLineY - firstLineY + spacing * 2.2}
+                                fill="#93c5fd"
+                                opacity="0.32"
+                                rx={3}
+                              />
+                            )}
+                            {onSelectRepeatMark && (
                               <rect
                                 x={Math.min(repeatRightGlyphX, measureRightX) - spacing * 2}
                                 y={staffY + firstLineY - spacing}
@@ -1275,12 +1295,15 @@ export function TraditionalNotationView({
                         parts.push(
                           <g
                             key="segno"
-                            onClick={typeof onRemoveRepeatMark === 'function' ? (e) => { e.stopPropagation(); onRemoveRepeatMark(measureIdx, 'segno'); } : undefined}
-                            style={{ cursor: onRemoveRepeatMark ? 'pointer' : undefined }}
-                            pointerEvents={onRemoveRepeatMark ? 'auto' : 'none'}
+                            onClick={typeof onSelectRepeatMark === 'function' ? (e) => { e.stopPropagation(); onSelectRepeatMark(measureIdx, 'segno'); } : undefined}
+                            style={{ cursor: onSelectRepeatMark ? 'pointer' : undefined }}
+                            pointerEvents={onSelectRepeatMark ? 'auto' : 'none'}
                           >
+                            {isRepeatMarkSelected(measureIdx, 'segno') && (
+                              <rect x={measureX - 2} y={placement.segnoCodaY - placement.hitH / 2} width={placement.hitW + 2} height={placement.hitH} fill="#93c5fd" opacity="0.32" rx={3} />
+                            )}
                             <SmuflGlyph glyph={SMUFL_GLYPH.segno} x={measureX + spacing * 0.5} y={placement.segnoCodaY} fontSize={placement.fontSize} fill="#1a1a1a" />
-                            {onRemoveRepeatMark && <rect x={measureX} y={placement.segnoCodaY - placement.hitH / 2} width={placement.hitW} height={placement.hitH} fill="transparent" />}
+                            {onSelectRepeatMark && <rect x={measureX} y={placement.segnoCodaY - placement.hitH / 2} width={placement.hitW} height={placement.hitH} fill="transparent" />}
                           </g>
                         );
                       }
@@ -1288,12 +1311,15 @@ export function TraditionalNotationView({
                         parts.push(
                           <g
                             key="coda"
-                            onClick={typeof onRemoveRepeatMark === 'function' ? (e) => { e.stopPropagation(); onRemoveRepeatMark(measureIdx, 'coda'); } : undefined}
-                            style={{ cursor: onRemoveRepeatMark ? 'pointer' : undefined }}
-                            pointerEvents={onRemoveRepeatMark ? 'auto' : 'none'}
+                            onClick={typeof onSelectRepeatMark === 'function' ? (e) => { e.stopPropagation(); onSelectRepeatMark(measureIdx, 'coda'); } : undefined}
+                            style={{ cursor: onSelectRepeatMark ? 'pointer' : undefined }}
+                            pointerEvents={onSelectRepeatMark ? 'auto' : 'none'}
                           >
+                            {isRepeatMarkSelected(measureIdx, 'coda') && (
+                              <rect x={measureX - 2} y={placement.segnoCodaY - placement.hitH / 2} width={placement.hitW + 2} height={placement.hitH} fill="#93c5fd" opacity="0.32" rx={3} />
+                            )}
                             <SmuflGlyph glyph={SMUFL_GLYPH.coda} x={measureX + spacing * 0.5} y={placement.segnoCodaY} fontSize={placement.fontSize} fill="#1a1a1a" />
-                            {onRemoveRepeatMark && <rect x={measureX} y={placement.segnoCodaY - placement.hitH / 2} width={placement.hitW} height={placement.hitH} fill="transparent" />}
+                            {onSelectRepeatMark && <rect x={measureX} y={placement.segnoCodaY - placement.hitH / 2} width={placement.hitW} height={placement.hitH} fill="transparent" />}
                           </g>
                         );
                       }
@@ -1303,12 +1329,15 @@ export function TraditionalNotationView({
                         parts.push(
                           <g
                             key="volta"
-                            onClick={typeof onRemoveRepeatMark === 'function' ? (e) => { e.stopPropagation(); onRemoveRepeatMark(measureIdx, key); } : undefined}
-                            style={{ cursor: onRemoveRepeatMark ? 'pointer' : undefined }}
-                            pointerEvents={onRemoveRepeatMark ? 'auto' : 'none'}
+                            onClick={typeof onSelectRepeatMark === 'function' ? (e) => { e.stopPropagation(); onSelectRepeatMark(measureIdx, key); } : undefined}
+                            style={{ cursor: onSelectRepeatMark ? 'pointer' : undefined }}
+                            pointerEvents={onSelectRepeatMark ? 'auto' : 'none'}
                           >
+                            {isRepeatMarkSelected(measureIdx, key) && (
+                              <rect x={measureX - 2} y={placement.voltaTextY - spacing * 0.8} width={placement.hitW + 2} height={placement.hitH} fill="#93c5fd" opacity="0.32" rx={3} />
+                            )}
                             <text x={placement.voltaTextX} y={placement.voltaTextY} textAnchor="start" fontSize={Math.round(spacing * 1.1)} fontWeight="bold" fill="#1a1a1a" fontFamily={TEXT_FONT_FAMILY}>{num}.</text>
-                            {onRemoveRepeatMark && <rect x={measureX} y={placement.voltaTextY - spacing * 0.8} width={placement.hitW} height={placement.hitH} fill="transparent" />}
+                            {onSelectRepeatMark && <rect x={measureX} y={placement.voltaTextY - spacing * 0.8} width={placement.hitW} height={placement.hitH} fill="transparent" />}
                           </g>
                         );
                       }

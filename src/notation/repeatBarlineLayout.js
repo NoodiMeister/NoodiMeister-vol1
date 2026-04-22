@@ -22,13 +22,7 @@ export function getFinalDoubleBarlineCentersX(rightEdgeX, staffSpace) {
 }
 
 const MIN_REPEAT_SMUFL_FONT_PX = 10;
-
-/**
- * Leland U+E040–E042: SVG `dominantBaseline="middle"` + em-ruut ei anna sama
- * optilist keskpunkti mis geomeetriline taktijoon (staff ülemine → alumine joon).
- * Nihutame kergelt alla staff-space'i skaalas (empiiriline optiline joondus).
- */
-const REPEAT_SMUFL_OPTICAL_DOWN_STAFF_SPACES = 0.32;
+const REPEAT_SMUFL_HEIGHT_MULTIPLIER = 1.18;
 
 /**
  * SMuFL kordus-taktijoon (E040–E042): fontSize ja Y peavad järgima **sama**
@@ -44,15 +38,18 @@ export function getRepeatBarlineSmuflPlacement({ barTopY, barBottomY, staffSpace
   const top = Number(barTopY);
   const bottom = Number(barBottomY);
   const span = Math.max(1, bottom - top);
-  const inferredSp = span / 4;
-  const sp =
-    Number.isFinite(Number(staffSpace)) && Number(staffSpace) > 0
-      ? Number(staffSpace)
-      : inferredSp;
-  const fontSize = Math.max(MIN_REPEAT_SMUFL_FONT_PX, span);
-  const opticalDown = REPEAT_SMUFL_OPTICAL_DOWN_STAFF_SPACES * sp;
+  void staffSpace;
+  /**
+   * Leland repeat glyphide (E040–E042) em-box sisaldab vertikaalseid
+   * sisemarginaale. Kui võtta fontSize=span, jääb märk visuaalselt "hõljuma".
+   * Tõstame mõõtu mõõdukalt, kuid hoiame keskpunkti geomeetriliselt samas.
+   */
+  const fontSize = Math.max(
+    MIN_REPEAT_SMUFL_FONT_PX,
+    span * REPEAT_SMUFL_HEIGHT_MULTIPLIER,
+  );
   return {
-    y: top + span / 2 + opticalDown,
+    y: top + span / 2,
     fontSize,
     dominantBaseline: 'middle',
   };
