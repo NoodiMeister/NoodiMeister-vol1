@@ -1594,19 +1594,6 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     () => formatShortcutLabel(effectiveShortcutPrefs['app.addSongBlock']) || 'Alt+N',
     [effectiveShortcutPrefs]
   );
-  const totalBeatsForTimeline = useMemo(() => {
-    let maxEnd = 0;
-    for (const s of (staves || [])) {
-      let run = 0;
-      for (const n of (s?.notes || [])) {
-        const b = typeof n?.beat === 'number' ? n.beat : run;
-        run = b + (Number(n?.duration) || 0);
-      }
-      if (run > maxEnd) maxEnd = run;
-    }
-    return Math.max(1, maxEnd);
-  }, [staves]);
-
   // JO-võti ja noodigraafika state (GLOBAL_NOTATION_CONFIG on faili alguses)
   const [joClefFocused, setJoClefFocused] = useState(false);
   const [joClefStaffPosition, setJoClefStaffPosition] = useState(DEFAULT_JO_CLEF_STAFF_POSITION);
@@ -1911,6 +1898,18 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   const [staves, setStaves] = useState(() => [
     { id: '1', instrumentId: 'single-staff-treble', clefType: 'treble', notes: initialStaffNotes, braceGroupId: undefined, notationMode: 'traditional' }
   ]);
+  const totalBeatsForTimeline = useMemo(() => {
+    let maxEnd = 0;
+    for (const s of (staves || [])) {
+      let run = 0;
+      for (const n of (s?.notes || [])) {
+        const b = typeof n?.beat === 'number' ? n.beat : run;
+        run = b + (Number(n?.duration) || 0);
+      }
+      if (run > maxEnd) maxEnd = run;
+    }
+    return Math.max(1, maxEnd);
+  }, [staves]);
   const [activeStaffIndex, setActiveStaffIndex] = useState(0);
   /** Iga noodirida võib olla vertikaalselt nihutatud (px). Klõps real aktiveerib rea; ↑↓ liigutavad aktiivset rida 1px. */
   const [staffYOffsets, setStaffYOffsets] = useState([]);
