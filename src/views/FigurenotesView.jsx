@@ -31,7 +31,11 @@ import {
   getLeftBarlineRepeatRender,
   shouldDrawRepeatEndGlyphOnRight,
 } from "../notation/repeatBarlineResolve";
-import { getRepeatBarlineSmuflPlacement } from "../notation/repeatBarlineLayout";
+import {
+  getBarlineFrame,
+  getRepeatBarlineSmuflPlacement,
+  getRepeatRightGlyphX,
+} from "../notation/repeatBarlineLayout";
 import { computeBeamGroups } from "../notation/BeamCalculation";
 
 const LAYOUT = { MARGIN_LEFT: 60, MEASURE_MIN_WIDTH: 28 };
@@ -1193,10 +1197,14 @@ export function FigurenotesView({
                                   barLineInset
                                 : sys.yOffset + melodyRowHeight - barLineInset;
                             const barLineTopY = sys.yOffset + barLineInset;
-                            const repeatSmufl = getRepeatBarlineSmuflPlacement({
+                            const rowBarFrame = getBarlineFrame({
+                              barlineX: measureX,
                               barTopY: barLineTopY,
                               barBottomY: barLineBottomY,
                               staffSpace: 10 * notationScale,
+                            });
+                            const repeatSmufl = getRepeatBarlineSmuflPlacement({
+                              frame: rowBarFrame,
                             });
                             const isRightBarlineOfSystem =
                               measureIdx ===
@@ -1219,7 +1227,16 @@ export function FigurenotesView({
                                   chordLineGap,
                                 })
                               : null;
-                            const repeatRightX = xRight;
+                            const rightBarFrame = getBarlineFrame({
+                              barlineX: xRight,
+                              barTopY: rowBarFrame.topY,
+                              barBottomY: rowBarFrame.bottomY,
+                              staffSpace: rowBarFrame.staffSpace,
+                            });
+                            const repeatRightX = getRepeatRightGlyphX({
+                              barlineX: rightBarFrame.x,
+                              staffSpace: rightBarFrame.staffSpace,
+                            });
                             const repeatRightAnchor = "middle";
                             return (
                               <>
@@ -2214,10 +2231,14 @@ export function FigurenotesView({
                                 rowIdx * rowStepPx +
                                 melodyRowHeight -
                                 barLineInset;
-                          return getRepeatBarlineSmuflPlacement({
+                          const rowFrame = getBarlineFrame({
+                            barlineX: measureX,
                             barTopY: rowTopY,
                             barBottomY: rowBottomY,
                             staffSpace: 10 * notationScale,
+                          });
+                          return getRepeatBarlineSmuflPlacement({
+                            frame: rowFrame,
                           });
                         },
                       );
@@ -2244,7 +2265,16 @@ export function FigurenotesView({
                             combinedRowStepPx: rowStepPx,
                           })
                         : null;
-                      const repeatRightX = xRight;
+                      const rightBarFrame = getBarlineFrame({
+                        barlineX: xRight,
+                        barTopY: barLineTopY,
+                        barBottomY: barLineBottomY,
+                        staffSpace: 10 * notationScale,
+                      });
+                      const repeatRightX = getRepeatRightGlyphX({
+                        barlineX: rightBarFrame.x,
+                        staffSpace: rightBarFrame.staffSpace,
+                      });
                       const repeatRightAnchor = "middle";
                       return (
                         <>

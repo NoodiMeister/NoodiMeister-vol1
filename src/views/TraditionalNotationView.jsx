@@ -88,7 +88,9 @@ import {
 } from '../notation/repeatBarlineResolve';
 import {
   getFinalDoubleBarlineCentersX,
+  getBarlineFrame,
   getRepeatBarlineSmuflPlacement,
+  getRepeatRightGlyphX,
 } from '../notation/repeatBarlineLayout';
 
 const LAYOUT = { MARGIN_LEFT: 60, CLEF_WIDTH: 45, MEASURE_MIN_WIDTH: 28 };
@@ -1100,14 +1102,25 @@ export function TraditionalNotationView({
                 const barY2 =
                   connectedBarlines && staffIndexInScore === 0 ? connectedY2 : staffY + lastLineY;
                 const measureRightX = measureX + measureWidth;
-                const repeatRightGlyphX = measureRightX;
-                const repeatRightTextAnchor = 'middle';
-                const rowBarTop = staffY + firstLineY;
-                const rowBarBottom = staffY + lastLineY;
-                const repeatSmufl = getRepeatBarlineSmuflPlacement({
-                  barTopY: rowBarTop,
-                  barBottomY: rowBarBottom,
+                const rowBarFrame = getBarlineFrame({
+                  barlineX: measureX,
+                  barTopY: staffY + firstLineY,
+                  barBottomY: staffY + lastLineY,
                   staffSpace: spacing,
+                });
+                const rightBarFrame = getBarlineFrame({
+                  barlineX: measureRightX,
+                  barTopY: rowBarFrame.topY,
+                  barBottomY: rowBarFrame.bottomY,
+                  staffSpace: rowBarFrame.staffSpace,
+                });
+                const repeatRightGlyphX = getRepeatRightGlyphX({
+                  barlineX: rightBarFrame.x,
+                  staffSpace: rightBarFrame.staffSpace,
+                });
+                const repeatRightTextAnchor = 'middle';
+                const repeatSmufl = getRepeatBarlineSmuflPlacement({
+                  frame: rowBarFrame,
                 });
 
                 return (
