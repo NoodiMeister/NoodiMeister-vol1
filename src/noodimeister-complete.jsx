@@ -4827,6 +4827,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
             const copyMeta = await googleDrive.getFileMetadata(token, copyId).catch(() => null);
             setOpenedCloudFile({ provider: 'google', fileId: copyId, modifiedTime: copyMeta?.modifiedTime || '' });
           }
+          clearDirty();
           setSaveFeedback('Pilvefail muutus mujal – salvestasin konfliktikoopia.');
           setTimeout(() => setSaveFeedback(''), 3500);
           return;
@@ -4834,6 +4835,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         await googleDrive.updateProjectFile(token, openedCloudFile.fileId, json);
         const freshMeta = await googleDrive.getFileMetadata(token, openedCloudFile.fileId).catch(() => null);
         setOpenedCloudFile({ provider: 'google', fileId: openedCloudFile.fileId, modifiedTime: freshMeta?.modifiedTime || remoteModified || knownModified || '' });
+        clearDirty();
         setSaveFeedback('Salvestatud pilve (sama fail)!');
         setTimeout(() => setSaveFeedback(''), 2500);
       } catch (e) {
@@ -4860,6 +4862,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
           const meta = await googleDrive.getFileMetadata(token, fileId).catch(() => null);
           setOpenedCloudFile({ provider: 'google', fileId, modifiedTime: meta?.modifiedTime || '' });
         }
+        clearDirty();
         setSaveFeedback('Salvestatud pilve!');
         setTimeout(() => setSaveFeedback(''), 2500);
       } catch (e) {
@@ -4877,7 +4880,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     setSaveCloudDialogOpen(true);
     };
     return run(true);
-  }, [exportScoreToJSON, sessionSaveFolderId, openedCloudFile, t, refreshGoogleTokenSilently, isAuthTokenError]);
+  }, [exportScoreToJSON, sessionSaveFolderId, openedCloudFile, t, refreshGoogleTokenSilently, isAuthTokenError, clearDirty]);
 
   // Vali olemasolev kaust (Picker) ja salvesta sinna. Lisa kaust nimekirja, et järgmine salvestamine kasutaks sama kausta.
   const saveToCloudPickExisting = useCallback(async () => {
@@ -4902,13 +4905,14 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       }
       authStorage.addGoogleSaveFolder(folderId, '');
       try { await googleDrive.setSaveFoldersConfig(token, authStorage.getGoogleSaveFolders()); } catch (_) {}
+      clearDirty();
       setSaveFeedback('Salvestatud pilve!');
       setTimeout(() => setSaveFeedback(''), 2500);
     } catch (e) {
       setSaveFeedback(e?.message || 'Pilve salvestamine ebaõnnestus');
       setTimeout(() => setSaveFeedback(''), 3000);
     }
-  }, [exportScoreToJSON]);
+  }, [exportScoreToJSON, clearDirty, t]);
 
   // Loo uus kaust juurkaustas ja salvesta sinna. Lisa kaust nimekirja, et järgmine salvestamine kasutaks sama kausta (vältib topeltkaustu).
   const saveToCloudCreateFolder = useCallback(async () => {
@@ -4935,6 +4939,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       authStorage.addGoogleSaveFolder(folderId, name);
       try { await googleDrive.setSaveFoldersConfig(token, authStorage.getGoogleSaveFolders()); } catch (_) {}
       setSaveCloudDialogOpen(false);
+      clearDirty();
       setSaveFeedback('Salvestatud pilve!');
       setTimeout(() => setSaveFeedback(''), 2500);
     } catch (e) {
@@ -5004,12 +5009,14 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
               const copyMeta = await oneDrive.getFileMetadata(token, savedItem.id).catch(() => null);
               setOpenedCloudFile({ provider: 'onedrive', fileId: savedItem.id, eTag: copyMeta?.eTag || '' });
             }
+            clearDirty();
             setSaveFeedback('Pilvefail muutus mujal – salvestasin konfliktikoopia.');
             setTimeout(() => setSaveFeedback(''), 3500);
             return;
           }
           throw e;
         }
+        clearDirty();
         setSaveFeedback(t('feedback.savedToCloud') || 'Salvestatud pilve (sama fail)!');
         setTimeout(() => setSaveFeedback(''), 2500);
       } catch (e) {
@@ -5033,6 +5040,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         const meta = await oneDrive.getFileMetadata(token, savedItem.id).catch(() => null);
         setOpenedCloudFile({ provider: 'onedrive', fileId: savedItem.id, eTag: meta?.eTag || '' });
       }
+      clearDirty();
       setSaveFeedback(t('feedback.savedToCloud') || 'Salvestatud pilve!');
       setTimeout(() => setSaveFeedback(''), 2500);
     } catch (e) {
@@ -5047,7 +5055,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     }
     };
     return run(true);
-  }, [exportScoreToJSON, sessionSaveFolderId, openedCloudFile, t, refreshMicrosoftTokenSilently, isAuthTokenError]);
+  }, [exportScoreToJSON, sessionSaveFolderId, openedCloudFile, t, refreshMicrosoftTokenSilently, isAuthTokenError, clearDirty]);
 
   const setDocumentNotationMode = useCallback((nextMode) => {
     if (nextMode === 'figurenotes') {
@@ -11573,6 +11581,23 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                   <div className="flex gap-1">
                     <button type="button" onClick={() => setLyricLineIndex(0)} className={`px-1.5 py-0.5 rounded text-xs font-medium ${lyricLineIndex === 0 ? 'bg-amber-300 text-amber-900' : 'bg-amber-800/50 text-amber-100'}`} title={t('toolbar.lyricLine1')}>{t('toolbar.lyricLine1Short')}</button>
                     <button type="button" onClick={() => setLyricLineIndex(1)} className={`px-1.5 py-0.5 rounded text-xs font-medium ${lyricLineIndex === 1 ? 'bg-amber-300 text-amber-900' : 'bg-amber-800/50 text-amber-100'}`} title={t('toolbar.lyricLine2')}>{t('toolbar.lyricLine2Short')}</button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setLyricLineIndex(1);
+                        const idx = selectedNoteIndex >= 0 ? selectedNoteIndex : noteIndexAtCursor;
+                        if (typeof idx === 'number' && idx >= 0 && idx < notes.length) {
+                          setLyricChainStart(idx);
+                          setLyricChainEnd(Math.max(0, notes.length - 1));
+                          setLyricChainIndex(idx);
+                        }
+                        setTimeout(() => lyricInputRef.current?.focus(), 0);
+                      }}
+                      className="px-2 py-0.5 rounded text-xs font-semibold bg-amber-700 text-amber-100 hover:bg-amber-600 border border-amber-500/60"
+                      title={t('toolbar.lyricLine2')}
+                    >
+                      {t('toolbar.lyricLine2Tool')}
+                    </button>
                   </div>
                   <input
                     ref={lyricInputRef}
