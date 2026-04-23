@@ -1767,8 +1767,23 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   const [lyricChainStart, setLyricChainStart] = useState(-1);
   const [lyricChainEnd, setLyricChainEnd] = useState(-1);
   const [lyricChainIndex, setLyricChainIndex] = useState(null); // null = tavarežiim (näita valitud noodi laulusõna)
-  /** Which lyric line is being edited: 0 = first (lyric), 1 = second (lyric2). Ctrl+L starts from selected note for current line. */
+  /** Which lyric line is being edited: 0..9 => lyric..lyric10. Ctrl+L starts from selected note for current line. */
   const [lyricLineIndex, setLyricLineIndex] = useState(0);
+  const MAX_LYRIC_LINES = 10;
+  const getLyricKeyByIndex = (index) => {
+    const normalized = Math.max(0, Math.min(MAX_LYRIC_LINES - 1, Number(index) || 0));
+    return normalized === 0 ? 'lyric' : `lyric${normalized + 1}`;
+  };
+  const getLyricColorKeyByIndex = (index) => {
+    const normalized = Math.max(0, Math.min(MAX_LYRIC_LINES - 1, Number(index) || 0));
+    return normalized === 0 ? 'lyricColor' : `lyric${normalized + 1}Color`;
+  };
+  const getLyricTextByIndex = (note, index) => {
+    if (!note) return '';
+    const key = getLyricKeyByIndex(index);
+    return note?.[key] ?? '';
+  };
+  const lyricLineItems = Array.from({ length: MAX_LYRIC_LINES }, (_, i) => ({ index: i, label: String(i + 1) }));
   /** Vertical offset (px) for lyrics line – drag or adjust to move lyrics up/down. */
   const [lyricLineYOffset, setLyricLineYOffset] = useState(0);
   const lyricInputRef = useRef(null);
@@ -2277,6 +2292,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   const [textBoxes, setTextBoxes] = useState([]); // { id, x, y, text, type?: 'text'|'tempo', tempoBpm?: number, fontSize?: number, columnCount?: number }
   const [selectedTextboxId, setSelectedTextboxId] = useState(null);
   const [textBoxDraftText, setTextBoxDraftText] = useState(''); // vaba tekst enne lisamist
+  const [textBoxPasteMode, setTextBoxPasteMode] = useState('style'); // 'plain' | 'style' | 'styleFit'
   // Kordusmärgid ja hüpped (Leland SMuFL) – võtmeks takti indeks: repeatStart, repeatEnd, volta1, volta2, segno, coda
   const [measureRepeatMarks, setMeasureRepeatMarks] = useState({});
   const [textBoxTempoBpm, setTextBoxTempoBpm] = useState(''); // BPM tempo kasti jaoks
@@ -2284,6 +2300,10 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   const [documentFontFamily, setDocumentFontFamily] = useState('Georgia, serif');
   const [lyricFontFamily, setLyricFontFamily] = useState('sans-serif');
   const [lyricFontSize, setLyricFontSize] = useState(12); // Lauluteksti fondi suurus (px); määrab ka laulusõnade rea vahe Cmd/Ctrl+L korral
+  const [lyricBold, setLyricBold] = useState(false);
+  const [lyricItalic, setLyricItalic] = useState(false);
+  const [lyricUnderline, setLyricUnderline] = useState(false);
+  const [lyricWeight, setLyricWeight] = useState(400);
   // Active text line for floating text tool: 'title' | 'author' | 'textbox' | null (textbox uses selectedTextboxId)
   const [activeTextLineType, setActiveTextLineType] = useState(null);
   // Per-line font: title and author (only applied to chosen line)
@@ -2291,6 +2311,8 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   const [authorFontSize, setAuthorFontSize] = useState(14);
   const [titleFontFamily, setTitleFontFamily] = useState(''); // '' = use documentFontFamily
   const [authorFontFamily, setAuthorFontFamily] = useState('');
+  const [titleColor, setTitleColor] = useState('#000000');
+  const [authorColor, setAuthorColor] = useState('#000000');
   const [titleBold, setTitleBold] = useState(false);
   const [titleItalic, setTitleItalic] = useState(false);
   const [titleUnderline, setTitleUnderline] = useState(false);
@@ -3651,10 +3673,12 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       authorFontSize,
       titleBold,
       titleItalic,
+      titleColor,
       titleUnderline,
       titleWeight,
       authorBold,
       authorItalic,
+      authorColor,
       authorUnderline,
       authorWeight,
       titleAlignment,
@@ -3682,10 +3706,12 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     authorFontSize,
     titleBold,
     titleItalic,
+    titleColor,
     titleUnderline,
     titleWeight,
     authorBold,
     authorItalic,
+    authorColor,
     authorUnderline,
     authorWeight,
     titleAlignment,
@@ -4102,10 +4128,16 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     textBoxes,
     documentFontFamily,
     lyricFontFamily,
+    lyricBold,
+    lyricItalic,
+    lyricUnderline,
+    lyricWeight,
     titleFontSize,
     authorFontSize,
     titleFontFamily: titleFontFamily || undefined,
     authorFontFamily: authorFontFamily || undefined,
+    titleColor,
+    authorColor,
     titleBold,
     titleItalic,
     titleUnderline,
@@ -4133,7 +4165,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     lyricFontSize,
     noteheadShape,
     noteheadEmoji
-  }), [staves, activeStaffIndex, staffYOffsets, measureStretchFactors, systemYOffsets, systemXOffsets, visibleStaves, instrumentPartGroups, intermissionLabels, timeSignature, timeSignatureMode, keySignature, staffLines, notationStyle, pixelsPerBeat, notationMode, instrumentNotationVariant, linkedNotationByStaffId, tinWhistleLinkedFingeringScalePercent, cursorPosition, addedMeasures, measureRepeatMarks, setupCompleted, songTitle, author, pickupEnabled, pickupQuantity, pickupDuration, pageOrientation, paperSize, layoutMeasuresPerLine, layoutLineBreakBefore, layoutPageBreakBefore, layoutExtraPages, layoutSystemGap, layoutPartsGap, layoutPartsGapMm, layoutSizeUnit, layoutConnectedBarlines, layoutGlobalSpacingMultiplier, notationCtx?.globalSpacingMultiplier, notationCtx?.staffSpacing, notationCtx?.measureWidthMultiplier, viewMode, partLayoutMeasuresPerLine, partLayoutLineBreakBefore, partLayoutPageBreakBefore, partLayoutExtraPages, showPageNavigator, pageFlowDirection, viewFitPage, viewSmartPage, visibleToolIds, tuningReferenceNote, tuningReferenceOctave, tuningReferenceHz, playNoteOnInsert, figurenotesSize, figurenotesStems, figurenotesChordLineGap, figurenotesChordBlocks, figurenotesChordBlocksShowTones, figurenotesMelodyShowNoteNames, timeSignatureSize, pedagogicalTimeSigDenominatorType, pedagogicalTimeSigDenominatorColor, pedagogicalTimeSigDenominatorInstrument, pedagogicalTimeSigDenominatorEmoji, showBarNumbers, barNumberSize, showRhythmSyllables, showAllNoteLabels, enableEmojiOverlays, joClefStaffPosition, relativeNotationShowKeySignature, relativeNotationShowTraditionalClef, isPedagogicalProject, pedagogicalAudioBpm, pedagogicalAudioPlaybackRate, pedagogicalSyncMode, pedagogicalSyncStartBeat, pedagogicalSyncStartTimeSec, pedagogicalSyncEndBeat, pedagogicalSyncEndTimeSec, pedagogicalRhythmStep, pedagogicalPlayheadStyle, pedagogicalPlayheadEmoji, pedagogicalPlayheadEmojiSize, cursorLineStrokeWidth, pedagogicalPlayheadMovement, chords, textBoxes, documentFontFamily, lyricFontFamily, titleFontSize, authorFontSize, titleFontFamily, authorFontFamily, titleBold, titleItalic, titleUnderline, titleWeight, authorBold, authorItalic, authorUnderline, authorWeight, titleAlignment, authorAlignment, staffRowAlignment, pageDesignDataUrl, pageDesignOpacity, pageDesignFit, pageDesignPositionX, pageDesignPositionY, pageDesignCrop, timeSignatureOffset, lyricLineIndex, lyricLineYOffset, lyricFontSize, noteheadShape, noteheadEmoji]);
+  }), [staves, activeStaffIndex, staffYOffsets, measureStretchFactors, systemYOffsets, systemXOffsets, visibleStaves, instrumentPartGroups, intermissionLabels, timeSignature, timeSignatureMode, keySignature, staffLines, notationStyle, pixelsPerBeat, notationMode, instrumentNotationVariant, linkedNotationByStaffId, tinWhistleLinkedFingeringScalePercent, cursorPosition, addedMeasures, measureRepeatMarks, setupCompleted, songTitle, author, pickupEnabled, pickupQuantity, pickupDuration, pageOrientation, paperSize, layoutMeasuresPerLine, layoutLineBreakBefore, layoutPageBreakBefore, layoutExtraPages, layoutSystemGap, layoutPartsGap, layoutPartsGapMm, layoutSizeUnit, layoutConnectedBarlines, layoutGlobalSpacingMultiplier, notationCtx?.globalSpacingMultiplier, notationCtx?.staffSpacing, notationCtx?.measureWidthMultiplier, viewMode, partLayoutMeasuresPerLine, partLayoutLineBreakBefore, partLayoutPageBreakBefore, partLayoutExtraPages, showPageNavigator, pageFlowDirection, viewFitPage, viewSmartPage, visibleToolIds, tuningReferenceNote, tuningReferenceOctave, tuningReferenceHz, playNoteOnInsert, figurenotesSize, figurenotesStems, figurenotesChordLineGap, figurenotesChordBlocks, figurenotesChordBlocksShowTones, figurenotesMelodyShowNoteNames, timeSignatureSize, pedagogicalTimeSigDenominatorType, pedagogicalTimeSigDenominatorColor, pedagogicalTimeSigDenominatorInstrument, pedagogicalTimeSigDenominatorEmoji, showBarNumbers, barNumberSize, showRhythmSyllables, showAllNoteLabels, enableEmojiOverlays, joClefStaffPosition, relativeNotationShowKeySignature, relativeNotationShowTraditionalClef, isPedagogicalProject, pedagogicalAudioBpm, pedagogicalAudioPlaybackRate, pedagogicalSyncMode, pedagogicalSyncStartBeat, pedagogicalSyncStartTimeSec, pedagogicalSyncEndBeat, pedagogicalSyncEndTimeSec, pedagogicalRhythmStep, pedagogicalPlayheadStyle, pedagogicalPlayheadEmoji, pedagogicalPlayheadEmojiSize, cursorLineStrokeWidth, pedagogicalPlayheadMovement, chords, textBoxes, documentFontFamily, lyricFontFamily, lyricBold, lyricItalic, lyricUnderline, lyricWeight, titleFontSize, authorFontSize, titleFontFamily, authorFontFamily, titleColor, authorColor, titleBold, titleItalic, titleUnderline, titleWeight, authorBold, authorItalic, authorUnderline, authorWeight, titleAlignment, authorAlignment, staffRowAlignment, pageDesignDataUrl, pageDesignOpacity, pageDesignFit, pageDesignPositionX, pageDesignPositionY, pageDesignCrop, timeSignatureOffset, lyricLineIndex, lyricLineYOffset, lyricFontSize, noteheadShape, noteheadEmoji]);
 
   const saveToStorageSync = useCallback(() => {
     try {
@@ -4493,22 +4525,28 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       if (data.documentFontFamily) setDocumentFontFamily(data.documentFontFamily);
       if (data.lyricFontFamily) setLyricFontFamily(data.lyricFontFamily);
       if (typeof data.lyricFontSize === 'number' && data.lyricFontSize >= 1) setLyricFontSize(data.lyricFontSize);
+      if (typeof data.lyricBold === 'boolean') setLyricBold(data.lyricBold);
+      if (typeof data.lyricItalic === 'boolean') setLyricItalic(data.lyricItalic);
+      if (typeof data.lyricUnderline === 'boolean') setLyricUnderline(data.lyricUnderline);
+      if (typeof data.lyricWeight === 'number') setLyricWeight(Math.max(100, Math.min(900, Math.round(data.lyricWeight / 100) * 100)));
       if (typeof data.titleFontSize === 'number' && data.titleFontSize >= 10 && data.titleFontSize <= 72) setTitleFontSize(data.titleFontSize);
       if (typeof data.authorFontSize === 'number' && data.authorFontSize >= 8 && data.authorFontSize <= 48) setAuthorFontSize(data.authorFontSize);
       if (data.titleFontFamily != null) setTitleFontFamily(data.titleFontFamily || '');
       if (data.authorFontFamily != null) setAuthorFontFamily(data.authorFontFamily || '');
       if (typeof data.titleBold === 'boolean') setTitleBold(data.titleBold);
+      if (typeof data.titleColor === 'string') setTitleColor(data.titleColor || '#000000');
       if (typeof data.titleItalic === 'boolean') setTitleItalic(data.titleItalic);
       if (typeof data.titleUnderline === 'boolean') setTitleUnderline(data.titleUnderline);
       if (typeof data.titleWeight === 'number') setTitleWeight(Math.max(100, Math.min(900, Math.round(data.titleWeight / 100) * 100)));
       if (typeof data.authorBold === 'boolean') setAuthorBold(data.authorBold);
+      if (typeof data.authorColor === 'string') setAuthorColor(data.authorColor || '#000000');
       if (typeof data.authorItalic === 'boolean') setAuthorItalic(data.authorItalic);
       if (typeof data.authorUnderline === 'boolean') setAuthorUnderline(data.authorUnderline);
       if (typeof data.authorWeight === 'number') setAuthorWeight(Math.max(100, Math.min(900, Math.round(data.authorWeight / 100) * 100)));
       if (data.titleAlignment === 'left' || data.titleAlignment === 'center' || data.titleAlignment === 'right') setTitleAlignment(data.titleAlignment);
       if (data.authorAlignment === 'left' || data.authorAlignment === 'center' || data.authorAlignment === 'right') setAuthorAlignment(data.authorAlignment);
       if (data.staffRowAlignment === 'left' || data.staffRowAlignment === 'center' || data.staffRowAlignment === 'right') setStaffRowAlignment(data.staffRowAlignment);
-      if (data.lyricLineIndex === 0 || data.lyricLineIndex === 1) setLyricLineIndex(data.lyricLineIndex);
+      if (typeof data.lyricLineIndex === 'number') setLyricLineIndex(Math.max(0, Math.min(MAX_LYRIC_LINES - 1, Math.floor(data.lyricLineIndex))));
       if (typeof data.lyricLineYOffset === 'number') setLyricLineYOffset(Math.max(-40, Math.min(40, data.lyricLineYOffset)));
       clearDirty();
       setSaveFeedback(t('feedback.projectLoaded'));
@@ -4799,22 +4837,28 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         if (data.documentFontFamily) setDocumentFontFamily(data.documentFontFamily);
         if (data.lyricFontFamily) setLyricFontFamily(data.lyricFontFamily);
         if (typeof data.lyricFontSize === 'number' && data.lyricFontSize >= 1) setLyricFontSize(data.lyricFontSize);
+        if (typeof data.lyricBold === 'boolean') setLyricBold(data.lyricBold);
+        if (typeof data.lyricItalic === 'boolean') setLyricItalic(data.lyricItalic);
+        if (typeof data.lyricUnderline === 'boolean') setLyricUnderline(data.lyricUnderline);
+        if (typeof data.lyricWeight === 'number') setLyricWeight(Math.max(100, Math.min(900, Math.round(data.lyricWeight / 100) * 100)));
         if (typeof data.titleFontSize === 'number' && data.titleFontSize >= 10 && data.titleFontSize <= 72) setTitleFontSize(data.titleFontSize);
         if (typeof data.authorFontSize === 'number' && data.authorFontSize >= 8 && data.authorFontSize <= 48) setAuthorFontSize(data.authorFontSize);
         if (data.titleFontFamily != null) setTitleFontFamily(data.titleFontFamily || '');
         if (data.authorFontFamily != null) setAuthorFontFamily(data.authorFontFamily || '');
         if (typeof data.titleBold === 'boolean') setTitleBold(data.titleBold);
+        if (typeof data.titleColor === 'string') setTitleColor(data.titleColor || '#000000');
         if (typeof data.titleItalic === 'boolean') setTitleItalic(data.titleItalic);
         if (typeof data.titleUnderline === 'boolean') setTitleUnderline(data.titleUnderline);
         if (typeof data.titleWeight === 'number') setTitleWeight(Math.max(100, Math.min(900, Math.round(data.titleWeight / 100) * 100)));
         if (typeof data.authorBold === 'boolean') setAuthorBold(data.authorBold);
+        if (typeof data.authorColor === 'string') setAuthorColor(data.authorColor || '#000000');
         if (typeof data.authorItalic === 'boolean') setAuthorItalic(data.authorItalic);
         if (typeof data.authorUnderline === 'boolean') setAuthorUnderline(data.authorUnderline);
         if (typeof data.authorWeight === 'number') setAuthorWeight(Math.max(100, Math.min(900, Math.round(data.authorWeight / 100) * 100)));
         if (data.titleAlignment === 'left' || data.titleAlignment === 'center' || data.titleAlignment === 'right') setTitleAlignment(data.titleAlignment);
         if (data.authorAlignment === 'left' || data.authorAlignment === 'center' || data.authorAlignment === 'right') setAuthorAlignment(data.authorAlignment);
         if (data.staffRowAlignment === 'left' || data.staffRowAlignment === 'center' || data.staffRowAlignment === 'right') setStaffRowAlignment(data.staffRowAlignment);
-        if (data.lyricLineIndex === 0 || data.lyricLineIndex === 1) setLyricLineIndex(data.lyricLineIndex);
+        if (typeof data.lyricLineIndex === 'number') setLyricLineIndex(Math.max(0, Math.min(MAX_LYRIC_LINES - 1, Math.floor(data.lyricLineIndex))));
         if (typeof data.lyricLineYOffset === 'number') setLyricLineYOffset(Math.max(-40, Math.min(40, data.lyricLineYOffset)));
         clearDirty();
         setSaveFeedback('Laaditud!');
@@ -7251,13 +7295,21 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       const isLyricLineShortcutArmed =
         lyricLineShortcutArmRef.current > 0 &&
         (Date.now() - lyricLineShortcutArmRef.current) < 2500;
-      const isLyricLineDigitShortcut =
-        modKey &&
-        (e.code === 'Digit1' || e.code === 'Digit2' || e.key === '1' || e.key === '2');
+      const getLyricLineIndexFromDigitShortcut = () => {
+        if (!modKey) return null;
+        const keyFromCode = /^Digit([0-9])$/.exec(e.code)?.[1] ?? null;
+        const keyFromKey = /^[0-9]$/.test(String(e.key || '')) ? String(e.key) : null;
+        const digit = keyFromCode ?? keyFromKey;
+        if (!digit) return null;
+        const parsed = Number(digit);
+        if (!Number.isInteger(parsed) || parsed < 1 || parsed > 9) return null;
+        return parsed - 1;
+      };
+      const nextLyricLineIndex = getLyricLineIndexFromDigitShortcut();
+      const isLyricLineDigitShortcut = nextLyricLineIndex != null;
       if (isLyricLineDigitShortcut && isLyricLineShortcutArmed) {
         e.preventDefault();
-        const nextLine = (e.code === 'Digit2' || e.key === '2') ? 1 : 0;
-        setLyricLineIndex(nextLine);
+        setLyricLineIndex(nextLyricLineIndex);
         const idx = selectedNoteIndex >= 0 ? selectedNoteIndex : noteIndexAtCursor;
         if (typeof idx === 'number' && idx >= 0 && idx < notes.length) {
           setLyricChainStart(idx);
@@ -7313,8 +7365,8 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         undo();
         return;
       }
-      // Text tool inline style shortcuts when title/author/textbox editor is active.
-      const textToolActive = !!(activeTextLineType === 'title' || activeTextLineType === 'author' || selectedTextboxId);
+      // Text tool inline style shortcuts when title/author/lyrics/textbox editor is active.
+      const textToolActive = !!(activeTextLineType === 'title' || activeTextLineType === 'author' || activeTextLineType === 'lyrics' || selectedTextboxId);
       if (modKey && textToolActive && (e.code === 'KeyB' || e.code === 'KeyI' || e.code === 'KeyU')) {
         e.preventDefault();
         dirtyRef.current = true;
@@ -7328,6 +7380,12 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
           if (e.code === 'KeyB') setAuthorBold((prev) => !prev);
           if (e.code === 'KeyI') setAuthorItalic((prev) => !prev);
           if (e.code === 'KeyU') setAuthorUnderline((prev) => !prev);
+          return;
+        }
+        if (activeTextLineType === 'lyrics') {
+          if (e.code === 'KeyB') setLyricBold((prev) => !prev);
+          if (e.code === 'KeyI') setLyricItalic((prev) => !prev);
+          if (e.code === 'KeyU') setLyricUnderline((prev) => !prev);
           return;
         }
         if (selectedTextboxId) {
@@ -8951,9 +9009,10 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     () =>
       (staves || []).some((staff) =>
         (staff?.notes || []).some((note) => {
-          const lyric1 = String(note?.lyric ?? "").trim();
-          const lyric2 = String(note?.lyric2 ?? "").trim();
-          return lyric1.length > 0 || lyric2.length > 0;
+          for (let lineIdx = 0; lineIdx < MAX_LYRIC_LINES; lineIdx += 1) {
+            if (String(getLyricTextByIndex(note, lineIdx) ?? '').trim().length > 0) return true;
+          }
+          return false;
         }),
       ),
     [staves],
@@ -9561,7 +9620,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     };
   }, []);
 
-  // Position the floating text tool popup near the active text (title, author, or selected text box)
+  // Position the floating text tool popup near the active text (title, author, lyrics input, or selected text box)
   const updateTextToolPosition = useCallback(() => {
     const box = selectedTextboxId ? textBoxes.find((b) => b.id === selectedTextboxId) : null;
     if (activeTextLineType === 'title' && titleInputRef.current) {
@@ -9569,6 +9628,9 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       setTextToolPosition({ top: r.bottom + 8, left: r.left + (r.width / 2) - 140 });
     } else if (activeTextLineType === 'author' && authorInputRef.current) {
       const r = authorInputRef.current.getBoundingClientRect();
+      setTextToolPosition({ top: r.bottom + 8, left: r.left + (r.width / 2) - 140 });
+    } else if (activeTextLineType === 'lyrics' && lyricInputRef.current) {
+      const r = lyricInputRef.current.getBoundingClientRect();
       setTextToolPosition({ top: r.bottom + 8, left: r.left + (r.width / 2) - 140 });
     } else if (box && scoreContainerRef.current) {
       const cr = scoreContainerRef.current.getBoundingClientRect();
@@ -9611,6 +9673,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       if (e.target.closest('[data-text-tool-popup]')) return;
       if (titleInputRef.current && titleInputRef.current.contains(e.target)) return;
       if (authorInputRef.current && authorInputRef.current.contains(e.target)) return;
+      if (lyricInputRef.current && lyricInputRef.current.contains(e.target)) return;
       if (e.target.closest('[data-textbox-id]')) return;
       setActiveTextLineType(null);
       setSelectedTextboxId(null);
@@ -9654,8 +9717,178 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   }
   const { Music2, Clock, Hash, Type, Piano, Palette, Layout, Check, Save, FolderOpen, Plus, Settings, Key, Repeat, Cloud, LogOut, LogIn, UserPlus, User, CloudUpload, CloudDownload, FolderPlus, ChevronDown, Eye, ArrowDown, ArrowRight, Hand, MousePointer, Keyboard, ExternalLink } = icons || {};
 
-  const showFloatingTextTool = (activeTextLineType === 'title' || activeTextLineType === 'author') || selectedTextboxId;
+  const getActiveLyricIndices = useCallback(() => {
+    if (lyricChainIndex !== null) return [lyricChainIndex];
+    const start = selectionStart >= 0 && selectionEnd >= 0
+      ? Math.min(selectionStart, selectionEnd)
+      : (selectedNoteIndex >= 0 ? selectedNoteIndex : noteIndexAtCursor);
+    const end = selectionStart >= 0 && selectionEnd >= 0
+      ? Math.max(selectionStart, selectionEnd)
+      : start;
+    if (start == null || end == null || start < 0 || end < 0) return [];
+    const out = [];
+    for (let i = start; i <= end; i += 1) out.push(i);
+    return out;
+  }, [lyricChainIndex, selectionStart, selectionEnd, selectedNoteIndex, noteIndexAtCursor]);
+
+  const applyLyricPatch = useCallback((patcher) => {
+    const indices = getActiveLyricIndices();
+    if (!indices.length) return;
+    const idxSet = new Set(indices);
+    dirtyRef.current = true;
+    setNotes((prev) => prev.map((n, i) => (idxSet.has(i) ? patcher(n) : n)));
+  }, [getActiveLyricIndices]);
+
+  const lyricColorKey = getLyricColorKeyByIndex(lyricLineIndex);
+  const activeLyricIndices = getActiveLyricIndices();
+  const currentLyricColor = (() => {
+    const idx = activeLyricIndices[0];
+    if (idx == null || idx < 0 || idx >= notes.length) return '#000000';
+    return notes[idx]?.[lyricColorKey] || '#000000';
+  })();
+
+  const showFloatingTextTool = (activeTextLineType === 'title' || activeTextLineType === 'author' || activeTextLineType === 'lyrics') || selectedTextboxId;
   const activeBox = selectedTextboxId ? textBoxes.find((b) => b.id === selectedTextboxId) : null;
+  const extractTextStyleFromClipboardHtml = useCallback((html) => {
+    if (!html || typeof DOMParser === 'undefined') return null;
+    try {
+      const doc = new DOMParser().parseFromString(html, 'text/html');
+      const body = doc?.body;
+      if (!body) return null;
+      const firstStyledNode = body.querySelector('[style],strong,b,em,i,u,span,font,p,div') || body.firstElementChild || body;
+      if (!firstStyledNode) return null;
+
+      const styleAttr = String(firstStyledNode.getAttribute?.('style') || '');
+      const styleMap = {};
+      styleAttr.split(';').forEach((decl) => {
+        const [rawKey, rawValue] = decl.split(':');
+        const key = String(rawKey || '').trim().toLowerCase();
+        const value = String(rawValue || '').trim();
+        if (key && value) styleMap[key] = value;
+      });
+
+      const hasTag = (selector) => !!firstStyledNode.closest?.(selector) || !!firstStyledNode.querySelector?.(selector);
+      const parsedWeight = parseInt(styleMap['font-weight'], 10);
+      const isBold = hasTag('b,strong') || styleMap['font-weight'] === 'bold' || (!Number.isNaN(parsedWeight) && parsedWeight >= 600);
+      const isItalic = hasTag('i,em') || String(styleMap['font-style'] || '').toLowerCase() === 'italic';
+      const decoration = String(styleMap['text-decoration'] || styleMap['text-decoration-line'] || '').toLowerCase();
+      const isUnderline = hasTag('u') || decoration.includes('underline');
+      const color = styleMap.color || null;
+      const fontFamily = styleMap['font-family'] ? String(styleMap['font-family']).replace(/["']/g, '').trim() : null;
+      const fontSizeRaw = styleMap['font-size'] || '';
+      const parsedFontSize = parseFloat(String(fontSizeRaw).replace('px', '').trim());
+      const fontSize = Number.isFinite(parsedFontSize) && parsedFontSize > 0 ? Math.round(parsedFontSize) : null;
+
+      const patch = {};
+      if (isBold) patch.fontWeight = 'bold';
+      if (isItalic) patch.fontStyle = 'italic';
+      if (isUnderline) patch.textDecoration = 'underline';
+      if (color) patch.color = color;
+      if (fontFamily) patch.fontFamily = fontFamily;
+      if (fontSize) patch.fontSize = fontSize;
+      return Object.keys(patch).length ? patch : null;
+    } catch (_) {
+      return null;
+    }
+  }, []);
+  const measureTextboxHeightForWidth = useCallback((text, width, style = {}, columnCount = 1) => {
+    if (typeof document === 'undefined') return null;
+    const probe = document.createElement('div');
+    probe.style.position = 'absolute';
+    probe.style.left = '-99999px';
+    probe.style.top = '-99999px';
+    probe.style.visibility = 'hidden';
+    probe.style.pointerEvents = 'none';
+    probe.style.whiteSpace = 'pre-wrap';
+    probe.style.wordBreak = 'break-word';
+    probe.style.boxSizing = 'border-box';
+    probe.style.padding = '4px 8px';
+    probe.style.width = `${Math.max(60, Number(width) || 60)}px`;
+    probe.style.fontFamily = style.fontFamily || documentFontFamily || 'serif';
+    probe.style.fontSize = `${Math.max(8, Number(style.fontSize) || 14)}px`;
+    if (style.fontWeight) probe.style.fontWeight = style.fontWeight;
+    if (style.fontStyle) probe.style.fontStyle = style.fontStyle;
+    if (style.textDecoration) probe.style.textDecoration = style.textDecoration;
+    if (style.textAlign) probe.style.textAlign = style.textAlign;
+    if (columnCount > 1) {
+      probe.style.columnCount = String(columnCount);
+      probe.style.columnGap = '16px';
+      probe.style.columnFill = 'auto';
+    }
+    probe.textContent = String(text || '');
+    document.body.appendChild(probe);
+    const h = Math.ceil(probe.scrollHeight);
+    probe.remove();
+    return h;
+  }, [documentFontFamily]);
+  const computeTextboxAutoFitPatch = useCallback((box, pastedText, stylePatch = null) => {
+    const baseStyle = {
+      fontFamily: stylePatch?.fontFamily || box.fontFamily || documentFontFamily,
+      fontSize: stylePatch?.fontSize || box.fontSize || 14,
+      fontWeight: stylePatch?.fontWeight || box.fontWeight || (box.fontWeightNumeric || undefined),
+      fontStyle: stylePatch?.fontStyle || box.fontStyle || undefined,
+      textDecoration: stylePatch?.textDecoration || box.textDecoration || undefined,
+      textAlign: box.textAlign || 'center',
+    };
+    const columnCount = Math.max(1, Math.min(5, Math.floor(Number(box.columnCount) || 1)));
+    const minW = 120;
+    const minH = 40;
+    const defaultW = Math.max(minW, Number(box.width) || 200);
+    const pageWidth = Math.max(200, Number(effectiveLayoutPageWidth) || 794);
+    const maxW = Math.max(minW, pageWidth - Math.max(0, Number(box.x) || 0) - 12);
+
+    let preferredW = defaultW;
+    if (typeof document !== 'undefined') {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        const size = Math.max(8, Number(baseStyle.fontSize) || 14);
+        const fontWeight = baseStyle.fontWeight || 'normal';
+        const fontStyle = baseStyle.fontStyle || 'normal';
+        const fontFamily = baseStyle.fontFamily || 'serif';
+        ctx.font = `${fontStyle} ${fontWeight} ${size}px ${fontFamily}`;
+        const lines = String(pastedText || '').split(/\r?\n/);
+        const longest = lines.reduce((acc, line) => Math.max(acc, ctx.measureText(line || '').width), 0);
+        // Horizontal responsiveness: avoid squeezing long lines into very narrow box.
+        preferredW = Math.ceil(longest + 24);
+      }
+    }
+    let nextW = Math.max(minW, Math.min(maxW, Math.max(defaultW, preferredW)));
+    let measuredH = measureTextboxHeightForWidth(pastedText, nextW, baseStyle, columnCount) || minH;
+    const pageHeight = Math.max(200, Number(a4PageHeightVal) || 1123);
+    const y = Math.max(0, Number(box.y) || 0);
+    const pageTop = Math.floor(y / pageHeight) * pageHeight;
+    const maxHOnPage = Math.max(minH, (pageTop + pageHeight) - y - 12);
+
+    if (measuredH > maxHOnPage && nextW < maxW) {
+      const steps = [24, 32, 40, 56, 72];
+      for (let i = 0; i < steps.length; i += 1) {
+        const candidateW = Math.min(maxW, nextW + steps[i]);
+        if (candidateW <= nextW) continue;
+        const candidateH = measureTextboxHeightForWidth(pastedText, candidateW, baseStyle, columnCount) || measuredH;
+        nextW = candidateW;
+        measuredH = candidateH;
+        if (measuredH <= maxHOnPage) break;
+      }
+    }
+
+    return {
+      width: Math.max(minW, Math.round(nextW)),
+      height: Math.max(minH, Math.round(Math.min(measuredH, maxHOnPage))),
+    };
+  }, [a4PageHeightVal, documentFontFamily, effectiveLayoutPageWidth, measureTextboxHeightForWidth]);
+  const activeTextAlign = activeTextLineType === 'title'
+    ? (titleAlignment || 'center')
+    : activeTextLineType === 'author'
+      ? (authorAlignment || 'right')
+      : (activeBox?.textAlign || 'center');
+  const applyActiveTextAlign = (value) => {
+    dirtyRef.current = true;
+    if (activeTextLineType === 'title') setTitleAlignment(value);
+    else if (activeTextLineType === 'author') setAuthorAlignment(value);
+    else if (activeBox) setTextBoxes((prev) => prev.map((b) => b.id === activeBox.id ? { ...b, textAlign: value } : b));
+  };
+  const activeColumnCount = Math.max(1, Math.min(5, Math.floor(Number(activeBox?.columnCount) || 1)));
   const floatingTextToolPopup = showFloatingTextTool && createPortal(
     <div
       data-text-tool-popup
@@ -9665,86 +9898,26 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       aria-label={t('textTool.title')}
     >
       <div className="text-xs font-bold text-amber-800 dark:text-amber-200 uppercase tracking-wide">
-        {activeTextLineType === 'title' ? t('textTool.forTitle') : activeTextLineType === 'author' ? t('textTool.forAuthor') : t('textTool.forTextBox')}
+        {activeTextLineType === 'title'
+          ? t('textTool.forTitle')
+          : activeTextLineType === 'author'
+            ? t('textTool.forAuthor')
+            : activeTextLineType === 'lyrics'
+              ? (t('toolbar.lyricLabel') || 'Lyrics')
+              : t('textTool.forTextBox')}
       </div>
-      <div>
-        <label className="block text-[10px] font-semibold text-amber-700 dark:text-amber-300 mb-0.5">{t('textTool.font')}</label>
-        <select
-          value={activeTextLineType === 'title' ? (titleFontFamily || documentFontFamily) : activeTextLineType === 'author' ? (authorFontFamily || documentFontFamily) : (activeBox?.fontFamily || documentFontFamily)}
-          onChange={(e) => {
-            const v = e.target.value;
-            dirtyRef.current = true;
-            if (activeTextLineType === 'title') setTitleFontFamily(v);
-            else if (activeTextLineType === 'author') setAuthorFontFamily(v);
-            else if (activeBox) setTextBoxes((prev) => prev.map((b) => b.id === activeBox.id ? { ...b, fontFamily: v } : b));
-          }}
-          className="w-full px-2 py-1.5 rounded border border-amber-300 dark:border-amber-600 bg-white dark:bg-zinc-800 text-amber-900 dark:text-white text-sm"
-          style={{ fontFamily: activeTextLineType === 'title' ? (titleFontFamily || documentFontFamily) : activeTextLineType === 'author' ? (authorFontFamily || documentFontFamily) : (activeBox?.fontFamily || documentFontFamily) }}
-        >
-          {getFontOptionElements(t)}
-        </select>
-      </div>
-      <div>
-        <label className="block text-[10px] font-semibold text-amber-700 dark:text-amber-300 mb-0.5">{t('textTool.fontSize')}</label>
-        <div className="flex items-center gap-2">
-          <input
-            type="range"
-            min={activeTextLineType === 'author' ? 8 : 10}
-            max={200}
-            step={1}
-            value={activeTextLineType === 'title' ? titleFontSize : activeTextLineType === 'author' ? authorFontSize : (activeBox?.fontSize ?? 14)}
-            onChange={(e) => {
-              const minVal = activeTextLineType === 'author' ? 8 : 10;
-              const v = Math.max(minVal, Math.min(200, Number(e.target.value)));
-              dirtyRef.current = true;
-              if (activeTextLineType === 'title') setTitleFontSize(v);
-              else if (activeTextLineType === 'author') setAuthorFontSize(v);
-              else if (activeBox) setTextBoxes((prev) => prev.map((b) => b.id === activeBox.id ? { ...b, fontSize: v } : b));
-            }}
-            className="flex-1 h-2 rounded-lg appearance-none bg-amber-200 dark:bg-amber-800 accent-amber-600"
-          />
-          <span className="text-xs font-medium text-amber-800 dark:text-amber-200 w-8 tabular-nums text-right">
-            {activeTextLineType === 'title' ? titleFontSize : activeTextLineType === 'author' ? authorFontSize : (activeBox?.fontSize ?? 14)}
-          </span>
-        </div>
-        {/* Ruler: tick marks for font size */}
-        <div className="flex justify-between mt-0.5 px-0.5 text-[9px] text-amber-600 dark:text-amber-400 select-none pointer-events-none">
-          {[10, 20, 30, 40, 50, 60, 72, 100, 150, 200]
-            .filter((n) => n >= (activeTextLineType === 'author' ? 8 : 10) && n <= 200)
-            .map((n) => (
-              <span key={n}>{n}</span>
-            ))}
-        </div>
-      </div>
-      <div>
-        <label className="block text-[10px] font-semibold text-amber-700 dark:text-amber-300 mb-0.5">{t('textTool.weight')}</label>
-        <input
-          type="number"
-          min={100}
-          max={900}
-          step={100}
-          value={activeTextLineType === 'title' ? titleWeight : activeTextLineType === 'author' ? authorWeight : (Math.max(100, Math.min(900, Number(activeBox?.fontWeightNumeric) || 400)))}
-          onChange={(e) => {
-            const v = Math.max(100, Math.min(900, Math.round((Number(e.target.value) || 400) / 100) * 100));
-            dirtyRef.current = true;
-            if (activeTextLineType === 'title') setTitleWeight(v);
-            else if (activeTextLineType === 'author') setAuthorWeight(v);
-            else if (activeBox) setTextBoxes((prev) => prev.map((b) => b.id === activeBox.id ? { ...b, fontWeightNumeric: v } : b));
-          }}
-          className="w-full px-2 py-1.5 rounded border border-amber-300 dark:border-amber-600 bg-white dark:bg-zinc-800 text-amber-900 dark:text-white text-sm"
-        />
-      </div>
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-1 flex-wrap">
         <span className="text-[10px] font-semibold text-amber-700 dark:text-amber-300 mr-1">{t('textTool.style')}</span>
         {['bold', 'italic', 'underline'].map((style) => {
           const isBold = style === 'bold';
           const isItalic = style === 'italic';
-          const isUnderline = style === 'underline';
           const active = activeTextLineType === 'title'
             ? (isBold ? titleBold : isItalic ? titleItalic : titleUnderline)
             : activeTextLineType === 'author'
               ? (isBold ? authorBold : isItalic ? authorItalic : authorUnderline)
-              : (activeBox && (isBold ? (activeBox.fontWeight === 'bold') : isItalic ? (activeBox.fontStyle === 'italic') : (activeBox.textDecoration === 'underline')));
+              : activeTextLineType === 'lyrics'
+                ? (isBold ? lyricBold : isItalic ? lyricItalic : lyricUnderline)
+                : (activeBox && (isBold ? (activeBox.fontWeight === 'bold') : isItalic ? (activeBox.fontStyle === 'italic') : (activeBox.textDecoration === 'underline')));
           return (
             <button
               key={style}
@@ -9759,6 +9932,10 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                   if (isBold) setAuthorBold(!authorBold);
                   else if (isItalic) setAuthorItalic(!authorItalic);
                   else setAuthorUnderline(!authorUnderline);
+                } else if (activeTextLineType === 'lyrics') {
+                  if (isBold) setLyricBold(!lyricBold);
+                  else if (isItalic) setLyricItalic(!lyricItalic);
+                  else setLyricUnderline(!lyricUnderline);
                 } else if (activeBox) {
                   setTextBoxes((prev) => prev.map((b) => b.id === activeBox.id
                     ? {
@@ -9777,6 +9954,175 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
             </button>
           );
         })}
+      </div>
+      {activeTextLineType !== 'lyrics' && (
+        <div className="flex items-center gap-1 flex-wrap">
+          <span className="text-[10px] font-semibold text-amber-700 dark:text-amber-300 mr-1">{t('textBox.textAlignment')}</span>
+          {[
+            { value: 'left', label: t('textBox.alignLeft') || 'L', short: 'L' },
+            { value: 'center', label: t('textBox.alignCenter') || 'C', short: 'C' },
+            { value: 'right', label: t('textBox.alignRight') || 'R', short: 'R' },
+            ...(activeBox ? [{ value: 'justify', label: t('textBox.alignJustify') || 'J', short: 'J' }] : []),
+          ].map((opt) => (
+            <button
+              key={`align-${opt.value}`}
+              type="button"
+              onClick={() => applyActiveTextAlign(opt.value)}
+              className={`px-2 py-1 rounded text-xs font-medium ${activeTextAlign === opt.value ? 'bg-amber-600 text-white' : 'bg-amber-100 dark:bg-zinc-700 text-amber-800 dark:text-amber-200 hover:bg-amber-200 dark:hover:bg-zinc-600'}`}
+              title={opt.label}
+            >
+              {opt.short}
+            </button>
+          ))}
+        </div>
+      )}
+      {activeBox && (
+        <div className="flex items-center gap-1 flex-wrap">
+          <span className="text-[10px] font-semibold text-amber-700 dark:text-amber-300 mr-1">{t('textBox.columnCount')}</span>
+          {[1, 2, 3, 4, 5].map((count) => (
+            <button
+              key={`col-${count}`}
+              type="button"
+              onClick={() => {
+                dirtyRef.current = true;
+                setTextBoxes((prev) => prev.map((b) => b.id === activeBox.id ? { ...b, columnCount: count } : b));
+              }}
+              className={`px-2 py-1 rounded text-xs font-medium ${activeColumnCount === count ? 'bg-amber-600 text-white' : 'bg-amber-100 dark:bg-zinc-700 text-amber-800 dark:text-amber-200 hover:bg-amber-200 dark:hover:bg-zinc-600'}`}
+              title={`${t('textBox.columnCount')}: ${count}`}
+            >
+              {count}
+            </button>
+          ))}
+        </div>
+      )}
+      {activeBox && (
+        <div className="flex items-center gap-1 flex-wrap">
+          <span className="text-[10px] font-semibold text-amber-700 dark:text-amber-300 mr-1">Paste</span>
+          {[
+            { value: 'plain', label: 'Plain text' },
+            { value: 'style', label: 'Text + style' },
+            { value: 'styleFit', label: 'Text + style + auto-fit' },
+          ].map((opt) => (
+            <button
+              key={`paste-mode-${opt.value}`}
+              type="button"
+              onClick={() => setTextBoxPasteMode(opt.value)}
+              className={`px-2 py-1 rounded text-xs font-medium ${textBoxPasteMode === opt.value ? 'bg-amber-600 text-white' : 'bg-amber-100 dark:bg-zinc-700 text-amber-800 dark:text-amber-200 hover:bg-amber-200 dark:hover:bg-zinc-600'}`}
+              title={opt.label}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      )}
+      {activeTextLineType === 'lyrics' && (
+        <div>
+          <label className="block text-[10px] font-semibold text-amber-700 dark:text-amber-300 mb-0.5">{t('toolbar.lyricLabel') || 'Lyrics'}</label>
+          <select
+            value={lyricLineIndex}
+            onChange={(e) => setLyricLineIndex(Math.max(0, Math.min(MAX_LYRIC_LINES - 1, Number(e.target.value) || 0)))}
+            className="w-full px-2 py-1.5 rounded border border-amber-300 dark:border-amber-600 bg-white dark:bg-zinc-800 text-amber-900 dark:text-white text-sm"
+            title="Cmd/Ctrl+L, then 1..9"
+          >
+            {lyricLineItems.map(({ index, label }) => (
+              <option key={`floating-lyric-line-${index}`} value={index}>
+                {`Line ${label}`}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+      <div>
+        <label className="block text-[10px] font-semibold text-amber-700 dark:text-amber-300 mb-0.5">{t('textTool.font')}</label>
+        <select
+          value={activeTextLineType === 'title'
+            ? (titleFontFamily || documentFontFamily)
+            : activeTextLineType === 'author'
+              ? (authorFontFamily || documentFontFamily)
+              : activeTextLineType === 'lyrics'
+                ? lyricFontFamily
+                : (activeBox?.fontFamily || documentFontFamily)}
+          onChange={(e) => {
+            const v = e.target.value;
+            dirtyRef.current = true;
+            if (activeTextLineType === 'title') setTitleFontFamily(v);
+            else if (activeTextLineType === 'author') setAuthorFontFamily(v);
+            else if (activeTextLineType === 'lyrics') setLyricFontFamily(v);
+            else if (activeBox) setTextBoxes((prev) => prev.map((b) => b.id === activeBox.id ? { ...b, fontFamily: v } : b));
+          }}
+          className="w-full px-2 py-1.5 rounded border border-amber-300 dark:border-amber-600 bg-white dark:bg-zinc-800 text-amber-900 dark:text-white text-sm"
+          style={{ fontFamily: activeTextLineType === 'title' ? (titleFontFamily || documentFontFamily) : activeTextLineType === 'author' ? (authorFontFamily || documentFontFamily) : activeTextLineType === 'lyrics' ? lyricFontFamily : (activeBox?.fontFamily || documentFontFamily) }}
+        >
+          {getFontOptionElements(t)}
+        </select>
+      </div>
+      <div>
+        <label className="block text-[10px] font-semibold text-amber-700 dark:text-amber-300 mb-0.5">{t('textTool.fontSize')}</label>
+        <div className="flex items-center gap-2">
+          <input
+            type="range"
+            min={activeTextLineType === 'author' || activeTextLineType === 'lyrics' ? 8 : 10}
+            max={200}
+            step={1}
+            value={activeTextLineType === 'title' ? titleFontSize : activeTextLineType === 'author' ? authorFontSize : activeTextLineType === 'lyrics' ? lyricFontSize : (activeBox?.fontSize ?? 14)}
+            onChange={(e) => {
+              const minVal = activeTextLineType === 'author' || activeTextLineType === 'lyrics' ? 8 : 10;
+              const v = Math.max(minVal, Math.min(200, Number(e.target.value)));
+              dirtyRef.current = true;
+              if (activeTextLineType === 'title') setTitleFontSize(v);
+              else if (activeTextLineType === 'author') setAuthorFontSize(v);
+              else if (activeTextLineType === 'lyrics') setLyricFontSize(v);
+              else if (activeBox) setTextBoxes((prev) => prev.map((b) => b.id === activeBox.id ? { ...b, fontSize: v } : b));
+            }}
+            className="flex-1 h-2 rounded-lg appearance-none bg-amber-200 dark:bg-amber-800 accent-amber-600"
+          />
+          <span className="text-xs font-medium text-amber-800 dark:text-amber-200 w-8 tabular-nums text-right">
+            {activeTextLineType === 'title' ? titleFontSize : activeTextLineType === 'author' ? authorFontSize : activeTextLineType === 'lyrics' ? lyricFontSize : (activeBox?.fontSize ?? 14)}
+          </span>
+        </div>
+        {/* Ruler: tick marks for font size */}
+        <div className="flex justify-between mt-0.5 px-0.5 text-[9px] text-amber-600 dark:text-amber-400 select-none pointer-events-none">
+          {[10, 20, 30, 40, 50, 60, 72, 100, 150, 200]
+            .filter((n) => n >= ((activeTextLineType === 'author' || activeTextLineType === 'lyrics') ? 8 : 10) && n <= 200)
+            .map((n) => (
+              <span key={n}>{n}</span>
+            ))}
+        </div>
+      </div>
+      <div>
+        <label className="block text-[10px] font-semibold text-amber-700 dark:text-amber-300 mb-0.5">{t('textTool.weight')}</label>
+        <input
+          type="number"
+          min={100}
+          max={900}
+          step={100}
+          value={activeTextLineType === 'title' ? titleWeight : activeTextLineType === 'author' ? authorWeight : activeTextLineType === 'lyrics' ? lyricWeight : (Math.max(100, Math.min(900, Number(activeBox?.fontWeightNumeric) || 400)))}
+          onChange={(e) => {
+            const v = Math.max(100, Math.min(900, Math.round((Number(e.target.value) || 400) / 100) * 100));
+            dirtyRef.current = true;
+            if (activeTextLineType === 'title') setTitleWeight(v);
+            else if (activeTextLineType === 'author') setAuthorWeight(v);
+            else if (activeTextLineType === 'lyrics') setLyricWeight(v);
+            else if (activeBox) setTextBoxes((prev) => prev.map((b) => b.id === activeBox.id ? { ...b, fontWeightNumeric: v } : b));
+          }}
+          className="w-full px-2 py-1.5 rounded border border-amber-300 dark:border-amber-600 bg-white dark:bg-zinc-800 text-amber-900 dark:text-white text-sm"
+        />
+      </div>
+      <div>
+        <label className="block text-[10px] font-semibold text-amber-700 dark:text-amber-300 mb-0.5">{t('textTool.color') || 'Color'}</label>
+        <input
+          type="color"
+          value={activeTextLineType === 'title' ? titleColor : activeTextLineType === 'author' ? authorColor : activeTextLineType === 'lyrics' ? currentLyricColor : (activeBox?.color || '#000000')}
+          onChange={(e) => {
+            const v = String(e.target.value || '#000000');
+            dirtyRef.current = true;
+            if (activeTextLineType === 'title') setTitleColor(v);
+            else if (activeTextLineType === 'author') setAuthorColor(v);
+            else if (activeTextLineType === 'lyrics') applyLyricPatch((n) => ({ ...n, [lyricColorKey]: v }));
+            else if (activeBox) setTextBoxes((prev) => prev.map((b) => b.id === activeBox.id ? { ...b, color: v } : b));
+          }}
+          className="w-full h-8 rounded border border-amber-300 dark:border-amber-600 bg-white dark:bg-zinc-800"
+        />
       </div>
     </div>,
     document.body
@@ -11727,13 +12073,36 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                 {cursorOnMelodyRow && (noteIndexAtCursor >= 0 || selectedNoteIndex >= 0) && (
                 <div className="flex items-center gap-2 flex-wrap">
                   <label className="text-xs font-medium text-amber-100 whitespace-nowrap">{t('toolbar.lyricLabel')}:</label>
-                  <div className="flex gap-1">
-                    <button type="button" onClick={() => setLyricLineIndex(0)} className={`px-1.5 py-0.5 rounded text-xs font-medium ${lyricLineIndex === 0 ? 'bg-amber-300 text-amber-900' : 'bg-amber-800/50 text-amber-100'}`} title={t('toolbar.lyricLine1')}>{t('toolbar.lyricLine1Short')}</button>
-                    <button type="button" onClick={() => setLyricLineIndex(1)} className={`px-1.5 py-0.5 rounded text-xs font-medium ${lyricLineIndex === 1 ? 'bg-amber-300 text-amber-900' : 'bg-amber-800/50 text-amber-100'}`} title={t('toolbar.lyricLine2')}>{t('toolbar.lyricLine2Short')}</button>
+                  <div className="flex gap-1 items-center flex-wrap">
+                    <select
+                      value={lyricLineIndex}
+                      onChange={(e) => {
+                        setLyricLineIndex(Math.max(0, Math.min(MAX_LYRIC_LINES - 1, Number(e.target.value) || 0)));
+                        setActiveTextLineType('lyrics');
+                        setSelectedTextboxId(null);
+                        const idx = selectedNoteIndex >= 0 ? selectedNoteIndex : noteIndexAtCursor;
+                        if (typeof idx === 'number' && idx >= 0 && idx < notes.length) {
+                          setLyricChainStart(idx);
+                          setLyricChainEnd(Math.max(0, notes.length - 1));
+                          setLyricChainIndex(idx);
+                        }
+                        setTimeout(() => lyricInputRef.current?.focus(), 0);
+                      }}
+                      className="px-2 py-1 rounded text-xs bg-amber-100 text-amber-900 border border-amber-300 focus:ring-1 focus:ring-amber-500"
+                      title="Cmd/Ctrl+L, then 1..9"
+                    >
+                      {lyricLineItems.map(({ index, label }) => (
+                        <option key={`toolbar-lyric-line-${index}`} value={index}>
+                          {`Line ${label}`}
+                        </option>
+                      ))}
+                    </select>
                     <button
                       type="button"
                       onClick={() => {
                         setLyricLineIndex(1);
+                        setActiveTextLineType('lyrics');
+                        setSelectedTextboxId(null);
                         const idx = selectedNoteIndex >= 0 ? selectedNoteIndex : noteIndexAtCursor;
                         if (typeof idx === 'number' && idx >= 0 && idx < notes.length) {
                           setLyricChainStart(idx);
@@ -11752,6 +12121,8 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                     ref={lyricInputRef}
                     type="text"
                     onFocus={() => {
+                      setActiveTextLineType('lyrics');
+                      setSelectedTextboxId(null);
                       // Laulusõnade sisestus: lukusta aktiivne noot ahelrežiimi, et '-' / tühik ei saaks minna "suvalisele" noodile
                       // (vältib sõltuvust cursorPosition/noteIndexAtCursor asünkroonsest uuendusest).
                       const idx = selectedNoteIndex >= 0 ? selectedNoteIndex : noteIndexAtCursor;
@@ -11774,7 +12145,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                         : (selectedNoteIndex >= 0 ? selectedNoteIndex : noteIndexAtCursor);
                       if (startIdx == null || startIdx < 0 || startIdx >= notes.length) return;
                       e.preventDefault();
-                      const key = lyricLineIndex === 0 ? 'lyric' : 'lyric2';
+                      const key = getLyricKeyByIndex(lyricLineIndex);
                       // Normalize whitespace, keep hyphens as part of token (e.g. "Tii-").
                       const normalized = String(raw)
                         .replace(/\r\n/g, '\n')
@@ -11808,16 +12179,16 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                       }, 0);
                     }}
                     value={lyricChainIndex !== null
-                      ? (lyricLineIndex === 0 ? (notes[lyricChainIndex]?.lyric ?? '') : (notes[lyricChainIndex]?.lyric2 ?? ''))
+                      ? getLyricTextByIndex(notes[lyricChainIndex], lyricLineIndex)
                       : (() => {
                           const idx = selectedNoteIndex >= 0 ? selectedNoteIndex : noteIndexAtCursor;
                           const n = notes[idx];
                           if (!n) return '';
-                          return lyricLineIndex === 0 ? (n.lyric ?? '') : (n.lyric2 ?? '');
+                          return getLyricTextByIndex(n, lyricLineIndex);
                         })()}
                     onChange={(e) => {
                       const val = e.target.value;
-                      const key = lyricLineIndex === 0 ? 'lyric' : 'lyric2';
+                      const key = getLyricKeyByIndex(lyricLineIndex);
                       if (lyricChainIndex !== null) {
                         setNotes(prev => prev.map((n, i) => i === lyricChainIndex ? { ...n, [key]: val } : n));
                       } else {
@@ -11833,8 +12204,8 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                       if (baseIdx == null || baseIdx < 0 || baseIdx >= notes.length) return;
                       const idx = baseIdx;
                       const lastIdx = notes.length > 0 ? notes.length - 1 : 0;
-                      const key = lyricLineIndex === 0 ? 'lyric' : 'lyric2';
-                      const getVal = (n) => (key === 'lyric' ? (n?.lyric ?? '') : (n?.lyric2 ?? ''));
+                      const key = getLyricKeyByIndex(lyricLineIndex);
+                      const getVal = (n) => getLyricTextByIndex(n, lyricLineIndex);
                       const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
                       const mod = isMac ? e.metaKey : e.ctrlKey;
                       if (mod && e.shiftKey && e.key === '-') {
@@ -11915,9 +12286,9 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                   />
                   <span className="text-amber-600 text-xs">+</span>
                   <div className="flex gap-0.5" role="group" aria-label={t('toolbar.lyricExprMelisma')}>
-                    <button type="button" onClick={() => { const idx = lyricChainIndex !== null ? lyricChainIndex : (selectionStart >= 0 && selectionEnd >= 0 ? Math.min(selectionStart, selectionEnd) : (selectedNoteIndex >= 0 ? selectedNoteIndex : noteIndexAtCursor)); const key = lyricLineIndex === 0 ? 'lyric' : 'lyric2'; const cur = key === 'lyric' ? (notes[idx]?.lyric ?? '') : (notes[idx]?.lyric2 ?? ''); setNotes(prev => prev.map((n, i) => i === idx ? { ...n, [key]: cur + '_' } : n)); lyricInputRef.current?.focus(); }} className="px-1.5 py-0.5 rounded text-sm bg-amber-800/50 text-amber-100 hover:bg-amber-700/60 border border-amber-600/50" title={t('toolbar.lyricExprMelisma')}>_</button>
-                    <button type="button" onClick={() => { const idx = lyricChainIndex !== null ? lyricChainIndex : (selectionStart >= 0 && selectionEnd >= 0 ? Math.min(selectionStart, selectionEnd) : (selectedNoteIndex >= 0 ? selectedNoteIndex : noteIndexAtCursor)); const key = lyricLineIndex === 0 ? 'lyric' : 'lyric2'; const cur = key === 'lyric' ? (notes[idx]?.lyric ?? '') : (notes[idx]?.lyric2 ?? ''); setNotes(prev => prev.map((n, i) => i === idx ? { ...n, [key]: cur + '\u2014' } : n)); lyricInputRef.current?.focus(); }} className="px-1.5 py-0.5 rounded text-sm bg-amber-800/50 text-amber-100 hover:bg-amber-700/60 border border-amber-600/50" title={t('toolbar.lyricExprDash')}>—</button>
-                    <button type="button" onClick={() => { const idx = lyricChainIndex !== null ? lyricChainIndex : (selectionStart >= 0 && selectionEnd >= 0 ? Math.min(selectionStart, selectionEnd) : (selectedNoteIndex >= 0 ? selectedNoteIndex : noteIndexAtCursor)); const key = lyricLineIndex === 0 ? 'lyric' : 'lyric2'; const cur = key === 'lyric' ? (notes[idx]?.lyric ?? '') : (notes[idx]?.lyric2 ?? ''); setNotes(prev => prev.map((n, i) => i === idx ? { ...n, [key]: cur + '\u00B7' } : n)); lyricInputRef.current?.focus(); }} className="px-1.5 py-0.5 rounded text-sm bg-amber-800/50 text-amber-100 hover:bg-amber-700/60 border border-amber-600/50" title={t('toolbar.lyricExprDot')}>·</button>
+                    <button type="button" onClick={() => { const idx = lyricChainIndex !== null ? lyricChainIndex : (selectionStart >= 0 && selectionEnd >= 0 ? Math.min(selectionStart, selectionEnd) : (selectedNoteIndex >= 0 ? selectedNoteIndex : noteIndexAtCursor)); const key = getLyricKeyByIndex(lyricLineIndex); const cur = getLyricTextByIndex(notes[idx], lyricLineIndex); setNotes(prev => prev.map((n, i) => i === idx ? { ...n, [key]: cur + '_' } : n)); lyricInputRef.current?.focus(); }} className="px-1.5 py-0.5 rounded text-sm bg-amber-800/50 text-amber-100 hover:bg-amber-700/60 border border-amber-600/50" title={t('toolbar.lyricExprMelisma')}>_</button>
+                    <button type="button" onClick={() => { const idx = lyricChainIndex !== null ? lyricChainIndex : (selectionStart >= 0 && selectionEnd >= 0 ? Math.min(selectionStart, selectionEnd) : (selectedNoteIndex >= 0 ? selectedNoteIndex : noteIndexAtCursor)); const key = getLyricKeyByIndex(lyricLineIndex); const cur = getLyricTextByIndex(notes[idx], lyricLineIndex); setNotes(prev => prev.map((n, i) => i === idx ? { ...n, [key]: cur + '\u2014' } : n)); lyricInputRef.current?.focus(); }} className="px-1.5 py-0.5 rounded text-sm bg-amber-800/50 text-amber-100 hover:bg-amber-700/60 border border-amber-600/50" title={t('toolbar.lyricExprDash')}>—</button>
+                    <button type="button" onClick={() => { const idx = lyricChainIndex !== null ? lyricChainIndex : (selectionStart >= 0 && selectionEnd >= 0 ? Math.min(selectionStart, selectionEnd) : (selectedNoteIndex >= 0 ? selectedNoteIndex : noteIndexAtCursor)); const key = getLyricKeyByIndex(lyricLineIndex); const cur = getLyricTextByIndex(notes[idx], lyricLineIndex); setNotes(prev => prev.map((n, i) => i === idx ? { ...n, [key]: cur + '\u00B7' } : n)); lyricInputRef.current?.focus(); }} className="px-1.5 py-0.5 rounded text-sm bg-amber-800/50 text-amber-100 hover:bg-amber-700/60 border border-amber-600/50" title={t('toolbar.lyricExprDot')}>·</button>
                   </div>
                   <label className="text-xs font-medium text-amber-100 whitespace-nowrap">{t('toolbar.lyricLineOffset')}:</label>
                   <input type="number" min={-40} max={40} step={2} value={lyricLineYOffset} onChange={(e) => { const v = parseInt(e.target.value, 10); if (!Number.isNaN(v)) setLyricLineYOffset(Math.max(-40, Math.min(40, v))); dirtyRef.current = true; }} className="w-14 px-1.5 py-0.5 rounded text-sm bg-amber-100 text-amber-900 border border-amber-300 focus:ring-1 focus:ring-amber-500" title={t('toolbar.lyricLineOffset')} />
@@ -13740,6 +14111,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                     fontWeight: titleBold ? 'bold' : titleWeight,
                     fontStyle: titleItalic ? 'italic' : undefined,
                     textDecoration: titleUnderline ? 'underline' : undefined,
+                    color: titleColor || '#000000',
                   }}
                   title={t('score.titleTitle')}
                 />
@@ -13757,6 +14129,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                     fontWeight: authorBold ? 'bold' : authorWeight,
                     fontStyle: authorItalic ? 'italic' : undefined,
                     textDecoration: authorUnderline ? 'underline' : undefined,
+                    color: authorColor || '#000000',
                   }}
                   title={t('textBox.documentFontHint')}
                 />
@@ -14347,6 +14720,10 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                   pageFlowDirection={pageFlowDirection}
                   lyricFontFamily={lyricFontFamily}
                   lyricFontSize={lyricFontSize}
+                  lyricBold={lyricBold}
+                  lyricItalic={lyricItalic}
+                  lyricUnderline={lyricUnderline}
+                  lyricWeight={lyricWeight}
                   lyricLineYOffset={lyricLineYOffset}
                 />
               );
@@ -14374,7 +14751,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                 <div
                   key={box.id}
                   data-textbox-id={box.id}
-                  className={`absolute px-2 py-1 rounded border-2 bg-white/95 shadow text-amber-900 text-sm select-none whitespace-pre-wrap break-words overflow-hidden flex flex-col ${textBoxEditingDisabled ? 'pointer-events-none' : 'pointer-events-auto'}`}
+                  className={`absolute px-2 py-1 rounded border-2 bg-white/95 shadow text-sm select-none whitespace-pre-wrap break-words overflow-hidden flex flex-col ${textBoxEditingDisabled ? 'pointer-events-none' : 'pointer-events-auto'}`}
                   style={{
                     left: box.x,
                     top: box.y,
@@ -14387,27 +14764,79 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                     textDecoration: box.textDecoration || undefined,
                     borderColor: isSelected ? 'rgb(217 119 6)' : 'rgb(253 230 138)',
                     textAlign: align,
+                    color: box.color || '#000000',
                   }}
                   onClick={(e) => e.stopPropagation()}
                   onMouseDown={(e) => {
                     if (textBoxEditingDisabled) return;
-                    if (e.target.closest('button') || e.target.closest('[data-resize-handle]')) return;
+                    if (e.target.closest('button') || e.target.closest('[data-resize-handle]') || e.target.closest('textarea')) return;
                     e.stopPropagation();
                     textboxDragStartRef.current = { id: box.id, startX: e.clientX, startY: e.clientY, boxStartX: box.x, boxStartY: box.y };
                   }}
                 >
                   <div className="flex-1 flex items-start justify-between gap-1 min-h-0" style={{ textAlign: align }}>
-                    <span
-                      className="flex-1 min-w-0 block h-full overflow-hidden whitespace-pre-wrap break-words"
-                      style={{
-                        textAlign: align,
-                        columnCount: columnCount > 1 ? columnCount : undefined,
-                        columnGap: columnCount > 1 ? '16px' : undefined,
-                        columnFill: columnCount > 1 ? 'auto' : undefined,
-                      }}
-                    >
-                      {box.text}
-                    </span>
+                    {isSelected ? (
+                      <textarea
+                        value={box.text || ''}
+                        onFocus={() => {
+                          setSelectedTextboxId(box.id);
+                          setActiveTextLineType(null);
+                        }}
+                        onChange={(e) => {
+                          dirtyRef.current = true;
+                          const nextText = e.target.value;
+                          setTextBoxes((prev) => prev.map((b) => (b.id === box.id ? { ...b, text: nextText } : b)));
+                        }}
+                        onPaste={(e) => {
+                          const rawText = e.clipboardData?.getData?.('text/plain') || '';
+                          if (!rawText) return;
+                          e.preventDefault();
+                          dirtyRef.current = true;
+                          const html = e.clipboardData?.getData?.('text/html') || '';
+                          const stylePatch = (textBoxPasteMode === 'style' || textBoxPasteMode === 'styleFit')
+                            ? extractTextStyleFromClipboardHtml(html)
+                            : null;
+                          const target = e.currentTarget;
+                          const start = Number.isFinite(target.selectionStart) ? target.selectionStart : (box.text || '').length;
+                          const end = Number.isFinite(target.selectionEnd) ? target.selectionEnd : start;
+                          const caretAfterPaste = start + rawText.length;
+                          setTextBoxes((prev) =>
+                            prev.map((b) => {
+                              if (b.id !== box.id) return b;
+                              const previousText = String(b.text || '');
+                              const insertedText = `${previousText.slice(0, start)}${rawText}${previousText.slice(end)}`;
+                              const autoFitPatch = textBoxPasteMode === 'styleFit'
+                                ? computeTextboxAutoFitPatch(b, insertedText, stylePatch)
+                                : null;
+                              return { ...b, text: insertedText, ...(stylePatch || {}), ...(autoFitPatch || {}) };
+                            }),
+                          );
+                          setTimeout(() => {
+                            target.focus();
+                            target.setSelectionRange(caretAfterPaste, caretAfterPaste);
+                          }, 0);
+                        }}
+                        className="flex-1 min-w-0 block h-full overflow-auto whitespace-pre-wrap break-words resize-none bg-transparent outline-none"
+                        style={{
+                          textAlign: align,
+                          columnCount: columnCount > 1 ? columnCount : undefined,
+                          columnGap: columnCount > 1 ? '16px' : undefined,
+                          columnFill: columnCount > 1 ? 'auto' : undefined,
+                        }}
+                      />
+                    ) : (
+                      <span
+                        className="flex-1 min-w-0 block h-full overflow-hidden whitespace-pre-wrap break-words"
+                        style={{
+                          textAlign: align,
+                          columnCount: columnCount > 1 ? columnCount : undefined,
+                          columnGap: columnCount > 1 ? '16px' : undefined,
+                          columnFill: columnCount > 1 ? 'auto' : undefined,
+                        }}
+                      >
+                        {box.text}
+                      </span>
+                    )}
                     {isSelected && (
                       <>
                         <button
@@ -14750,7 +15179,7 @@ function getFingeringForNote(pitch, octave, instrumentId) {
 }
 
 // Timeline Component – multi-system layout (VexFlow loogika). (PAGE_BREAK_GAP on defineeritud üleval.)
-function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, pageWidth, cursorPosition, notationMode, staffLines, clefType, keySignature = 'C', relativeNotationShowKeySignature = false, relativeNotationShowTraditionalClef = false, onJoClefPositionChange, joClefFocused = false, onJoClefFocus, instrument = 'single-staff-treble', instrumentNotationVariant = 'standard', instrumentConfig = {}, showBarNumbers = true, barNumberSize = 11, showRhythmSyllables = false, joClefStaffPosition: joClefStaffPositionProp, showAllNoteLabels = false, enableEmojiOverlays = true, noteheadShape = 'oval', noteheadEmoji = '♪', onNoteTeacherLabelChange, onNoteLabelClick, chords = [], isDotted, isRest, selectedDuration, noteInputMode, selectedNoteIndex, isNoteSelected, notes: allNotes, onStaffAddNote, onNoteClick, onNoteMouseDown, onNoteMouseEnter, onNotePitchChange, onNoteBeatChange, canHandDragNotes = false, timeSignatureOffset = { x: 0, y: 0 }, onTimeSignatureOffsetChange, ghostPitch, ghostOctave, ghostAccidental = 0, ghostAccidentalIsExplicit = false, onFigureBeatClick, onChordLineMouseMove, onChordLineClick, notationStyle, layoutMeasuresPerLine = 4, layoutLineBreakBefore = [], layoutPageBreakBefore = [], layoutSystemGap = 120, layoutPartsGap, layoutConnectedBarlines = false, staffRowAlignment = 'center', staffIndexInScore = 0, systemTotalHeight, layoutGlobalSpacingMultiplier = 1, systems: systemsProp, baseYOffset = 0, isActiveStaff = true, staffCount = 1, staffHeight: staffHeightProp, figurenotesSize = 16, figurenotesStems = false, figurenotesChordLineGap = 6, figurenotesChordBlocks = false, figurenotesChordBlocksShowTones = true, figurenotesMelodyShowNoteNames = true, figurenotesRowHeight: figurenotesRowHeightProp, figurenotesChordLineHeight: figurenotesChordLineHeightProp, figurenotesLyricReserveHeight = 0, timeSignatureSize = 16, pedagogicalTimeSigDenominatorType = 'rhythm', pedagogicalTimeSigDenominatorColor = '#1a1a1a', pedagogicalTimeSigDenominatorInstrument = 'handbell', pedagogicalTimeSigDenominatorEmoji = '🥁', themeColors: themeColorsProp, pedagogicalPlayheadStyle = 'line', pedagogicalPlayheadEmoji = '🎵', pedagogicalPlayheadEmojiSize = 32, cursorSizePx, cursorLineStrokeWidth = 4, cursorSubRow = 0, pedagogicalPlayheadMovement = 'arch', isPedagogicalAudioPlaying = false, isExportingAnimation = false, exportCursorRef, scoreContainerRef, pageFlowDirection = 'vertical', pageOrientation = 'portrait', isFirstInBraceGroup = false, braceGroupSize = 0, lyricFontFamily = 'sans-serif', lyricFontSize = 12, lyricLineYOffset = 0, translateLabel, showLayoutBreakIcons = false, showStaffSpacerHandles = false, showLyricSpacerHandles = false, onSystemYOffsetChange, onSystemXOffsetChange, systemXOffsets = [], onLyricLineYOffsetChange, onToggleLineBreakAfter, onRemoveRepeatMark, selectedRepeatMark = null, onSelectRepeatMark, activeLyricNoteIndex = null, physicalPageGapPx = 3, disablePhysicalPageGaps = false, hideCursorOverlay = false, exportNotationSvgRef = null, multiStaffInstruments = null, multiStaffMeasuresByInstrument = null, combinedCursorRowOffsetPx = 0, combinedActiveStaffRowIndex = 0, cursorStaffClefType = null, tinWhistleLinkedFingeringScale = 1, linkedNotationByStaffId = null }) {
+function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, pageWidth, cursorPosition, notationMode, staffLines, clefType, keySignature = 'C', relativeNotationShowKeySignature = false, relativeNotationShowTraditionalClef = false, onJoClefPositionChange, joClefFocused = false, onJoClefFocus, instrument = 'single-staff-treble', instrumentNotationVariant = 'standard', instrumentConfig = {}, showBarNumbers = true, barNumberSize = 11, showRhythmSyllables = false, joClefStaffPosition: joClefStaffPositionProp, showAllNoteLabels = false, enableEmojiOverlays = true, noteheadShape = 'oval', noteheadEmoji = '♪', onNoteTeacherLabelChange, onNoteLabelClick, chords = [], isDotted, isRest, selectedDuration, noteInputMode, selectedNoteIndex, isNoteSelected, notes: allNotes, onStaffAddNote, onNoteClick, onNoteMouseDown, onNoteMouseEnter, onNotePitchChange, onNoteBeatChange, canHandDragNotes = false, timeSignatureOffset = { x: 0, y: 0 }, onTimeSignatureOffsetChange, ghostPitch, ghostOctave, ghostAccidental = 0, ghostAccidentalIsExplicit = false, onFigureBeatClick, onChordLineMouseMove, onChordLineClick, notationStyle, layoutMeasuresPerLine = 4, layoutLineBreakBefore = [], layoutPageBreakBefore = [], layoutSystemGap = 120, layoutPartsGap, layoutConnectedBarlines = false, staffRowAlignment = 'center', staffIndexInScore = 0, systemTotalHeight, layoutGlobalSpacingMultiplier = 1, systems: systemsProp, baseYOffset = 0, isActiveStaff = true, staffCount = 1, staffHeight: staffHeightProp, figurenotesSize = 16, figurenotesStems = false, figurenotesChordLineGap = 6, figurenotesChordBlocks = false, figurenotesChordBlocksShowTones = true, figurenotesMelodyShowNoteNames = true, figurenotesRowHeight: figurenotesRowHeightProp, figurenotesChordLineHeight: figurenotesChordLineHeightProp, figurenotesLyricReserveHeight = 0, timeSignatureSize = 16, pedagogicalTimeSigDenominatorType = 'rhythm', pedagogicalTimeSigDenominatorColor = '#1a1a1a', pedagogicalTimeSigDenominatorInstrument = 'handbell', pedagogicalTimeSigDenominatorEmoji = '🥁', themeColors: themeColorsProp, pedagogicalPlayheadStyle = 'line', pedagogicalPlayheadEmoji = '🎵', pedagogicalPlayheadEmojiSize = 32, cursorSizePx, cursorLineStrokeWidth = 4, cursorSubRow = 0, pedagogicalPlayheadMovement = 'arch', isPedagogicalAudioPlaying = false, isExportingAnimation = false, exportCursorRef, scoreContainerRef, pageFlowDirection = 'vertical', pageOrientation = 'portrait', isFirstInBraceGroup = false, braceGroupSize = 0, lyricFontFamily = 'sans-serif', lyricFontSize = 12, lyricBold = false, lyricItalic = false, lyricUnderline = false, lyricWeight = 400, lyricLineYOffset = 0, translateLabel, showLayoutBreakIcons = false, showStaffSpacerHandles = false, showLyricSpacerHandles = false, onSystemYOffsetChange, onSystemXOffsetChange, systemXOffsets = [], onLyricLineYOffsetChange, onToggleLineBreakAfter, onRemoveRepeatMark, selectedRepeatMark = null, onSelectRepeatMark, activeLyricNoteIndex = null, physicalPageGapPx = 3, disablePhysicalPageGaps = false, hideCursorOverlay = false, exportNotationSvgRef = null, multiStaffInstruments = null, multiStaffMeasuresByInstrument = null, combinedCursorRowOffsetPx = 0, combinedActiveStaffRowIndex = 0, cursorStaffClefType = null, tinWhistleLinkedFingeringScale = 1, linkedNotationByStaffId = null }) {
   const themeColors = themeColorsProp || { staffLineColor: '#000', noteFill: '#1a1a1a', textColor: '#1a1a1a', isDark: false };
   const safeKey = keySignature ?? 'C';
   // Alati lõplik number (mitte NaN) — varajane `return null` enne hookide kasutamist rikkus Reacti hookide reeglid ja võis jätta noodiala tühjaks.
@@ -15466,6 +15895,10 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
           showRhythmSyllables={showRhythmSyllables}
           lyricFontFamily={lyricFontFamily}
           lyricFontSize={lyricFontSize}
+          lyricBold={lyricBold}
+          lyricItalic={lyricItalic}
+          lyricUnderline={lyricUnderline}
+          lyricWeight={lyricWeight}
           lyricLineYOffset={lyricLineYOffset}
           lyricReserveHeight={figurenotesLyricReserveHeight}
           isHorizontal={isHorizontal}
@@ -15541,6 +15974,10 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
           braceGroupSize={braceGroupSize}
           lyricFontFamily={lyricFontFamily}
           lyricFontSize={lyricFontSize}
+          lyricBold={lyricBold}
+          lyricItalic={lyricItalic}
+          lyricUnderline={lyricUnderline}
+          lyricWeight={lyricWeight}
           lyricLineYOffset={lyricLineYOffset}
           isHorizontal={isHorizontal}
           a4PageHeight={a4PageHeight}

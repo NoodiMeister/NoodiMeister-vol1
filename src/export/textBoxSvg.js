@@ -78,13 +78,14 @@ function getBoxTextLayout(box) {
 
 export function buildTextBoxesSvgMarkup(textBoxes = [], options = {}) {
   const fallbackFamily = resolveExportTextFamily(options.defaultFontFamily, 'ExportBody');
-  const fillColor = escapeXml(options.defaultFill || '#78350f');
+  const defaultFill = escapeXml(options.defaultFill || '#000000');
   return textBoxes.map((box) => {
     if (!box || box.x == null || box.y == null) return '';
     const { width, height, fontSize, lineHeight, columns, anchor, startY } = getBoxTextLayout(box);
     const fontFamily = resolveExportTextFamily(box.fontFamily, fallbackFamily);
     const fontWeight = box.fontWeight ? ` font-weight="${escapeXml(box.fontWeight)}"` : '';
     const fontStyle = box.fontStyle ? ` font-style="${escapeXml(box.fontStyle)}"` : '';
+    const fillColor = escapeXml(box.color || defaultFill);
     const text = columns.map((column) => (
       column.lines.map((line, idx) => (
         `<tspan x="${column.x}" y="${startY + idx * lineHeight}">${escapeXml(line)}</tspan>`

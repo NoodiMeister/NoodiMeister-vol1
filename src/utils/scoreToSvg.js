@@ -274,6 +274,7 @@ function getSvgIntrinsicDimensions (svg, pageWidthFallback = 794) {
 const EXPORT_STRIP_SELECTORS = [
   '.nm-cursor',
   '.staff-spacer-handle',
+  '.lyric-spacer-handle',
   '.nm-selection-highlight',
   '.nm-note-selection-glow',
 ];
@@ -411,8 +412,10 @@ function buildScoreTextMarkup (pageWidth, options = {}) {
     authorFontSize = 14,
     titleBold = false,
     titleItalic = false,
+    titleColor = '#000000',
     authorBold = false,
     authorItalic = false,
+    authorColor = '#000000',
     titleAlignment = 'center',
     authorAlignment = 'center',
   } = options;
@@ -422,8 +425,8 @@ function buildScoreTextMarkup (pageWidth, options = {}) {
   const authorX = authorAlignment === 'left' ? 40 : authorAlignment === 'right' ? pageWidth - 40 : pageWidth / 2;
   const titleFamily = resolveExportTextFamily(titleFontFamily || documentFontFamily, 'ExportTitle');
   const authorFamily = resolveExportTextFamily(authorFontFamily || documentFontFamily, 'ExportBody');
-  const titleStyle = `font-family: ${titleFamily}; font-size: ${titleFontSize}px; font-weight: ${titleBold ? '700' : '400'}; font-style: ${titleItalic ? 'italic' : 'normal'}; fill: #1c1917;`;
-  const authorStyle = `font-family: ${authorFamily}; font-size: ${authorFontSize}px; font-weight: ${authorBold ? '700' : '400'}; font-style: ${authorItalic ? 'italic' : 'normal'}; fill: #78716c;`;
+  const titleStyle = `font-family: ${titleFamily}; font-size: ${titleFontSize}px; font-weight: ${titleBold ? '700' : '400'}; font-style: ${titleItalic ? 'italic' : 'normal'}; fill: ${titleColor || '#000000'};`;
+  const authorStyle = `font-family: ${authorFamily}; font-size: ${authorFontSize}px; font-weight: ${authorBold ? '700' : '400'}; font-style: ${authorItalic ? 'italic' : 'normal'}; fill: ${authorColor || '#000000'};`;
   // Avoid dominant-baseline clipping differences across SVG/PDF engines.
   const titleY = Math.max(56, 24 + Number(titleFontSize || 55));
   const authorY = titleY + Math.max(26, Number(authorFontSize || 14) + 16);

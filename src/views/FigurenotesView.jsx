@@ -493,6 +493,10 @@ export function FigurenotesView({
   showRhythmSyllables = false,
   lyricFontFamily = "sans-serif",
   lyricFontSize = 12,
+  lyricBold = false,
+  lyricItalic = false,
+  lyricUnderline = false,
+  lyricWeight = 400,
   lyricLineYOffset = 0,
   lyricReserveHeight = 0,
   isHorizontal = false,
@@ -2572,16 +2576,10 @@ export function FigurenotesView({
                               sys.yOffset +
                               melodyRowHeight +
                               Math.max(0, lyricReserveHeight * 0.08);
-                            const lyric1Y = hasChordRow
+                            const lyricBaseY = hasChordRow
                               ? lyricGapTop + fs * 0.5 + (lyricLineYOffset || 0)
-                              : fallbackLyricBandTop +
-                                fs * 0.9 +
-                                (lyricLineYOffset || 0);
-                            const lyric2Y = hasChordRow
-                              ? lyricGapTop + fs * 1.5 + (lyricLineYOffset || 0)
-                              : fallbackLyricBandTop +
-                                fs * 2.0 +
-                                (lyricLineYOffset || 0);
+                              : fallbackLyricBandTop + fs * 0.9 + (lyricLineYOffset || 0);
+                            const lyricStepY = hasChordRow ? fs : fs * 1.1;
                             const isLyricActive =
                               typeof activeLyricNoteIndex === "number" &&
                               activeLyricNoteIndex === globalNoteIndex;
@@ -2620,32 +2618,28 @@ export function FigurenotesView({
                                   longRectEndX,
                                   beamInfoByNoteIndex.get(noteIdx) ?? null,
                                 )}
-                                {note.lyric != null &&
-                                  String(note.lyric).trim() !== "" && (
+                                {Array.from({ length: 10 }, (_, lyricIdx) => {
+                                  const lyricKey = lyricIdx === 0 ? "lyric" : `lyric${lyricIdx + 1}`;
+                                  const lyricColorKey = lyricIdx === 0 ? "lyricColor" : `lyric${lyricIdx + 1}Color`;
+                                  const lyricText = note?.[lyricKey];
+                                  if (lyricText == null || String(lyricText).trim() === "") return null;
+                                  return (
                                     <text
+                                      key={lyricKey}
                                       x={figureCenterX}
-                                      y={lyric1Y}
+                                      y={lyricBaseY + lyricStepY * lyricIdx}
                                       textAnchor="middle"
                                       fontSize={fs}
-                                      fill="#333"
+                                      fill={note?.[lyricColorKey] || "#000000"}
                                       fontFamily={lyricFontFamily}
+                                      fontStyle={lyricItalic ? "italic" : undefined}
+                                      textDecoration={lyricUnderline ? "underline" : undefined}
+                                      fontWeight={lyricBold ? "700" : Math.max(100, Math.min(900, Number(lyricWeight) || 400))}
                                     >
-                                      {note.lyric}
+                                      {lyricText}
                                     </text>
-                                  )}
-                                {note.lyric2 != null &&
-                                  String(note.lyric2).trim() !== "" && (
-                                    <text
-                                      x={figureCenterX}
-                                      y={lyric2Y}
-                                      textAnchor="middle"
-                                      fontSize={fs}
-                                      fill="#555"
-                                      fontFamily={lyricFontFamily}
-                                    >
-                                      {note.lyric2}
-                                    </text>
-                                  )}
+                                  );
+                                })}
                               </g>
                             );
                           });

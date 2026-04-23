@@ -493,6 +493,10 @@ export function TraditionalNotationView({
   braceGroupSize = 0,
   lyricFontFamily = TEXT_FONT_FAMILY,
   lyricFontSize = 12,
+  lyricBold = false,
+  lyricItalic = false,
+  lyricUnderline = false,
+  lyricWeight = 400,
   lyricLineYOffset = 0,
   isHorizontal = false,
   a4PageHeight = 400,
@@ -1761,12 +1765,17 @@ export function TraditionalNotationView({
                               />
                             );
                           })()}
-                          {(note.lyric != null && String(note.lyric).trim() !== '') && (
-                            <text x={noteX} y={staffY + lastLineY + (Math.max(1, Number(lyricFontSize)) || 12) * 1.5 + (lyricLineYOffset || 0)} textAnchor="middle" fontSize={Math.max(1, Number(lyricFontSize)) || 12} fill="#333" fontFamily={lyricFontFamily}>{note.lyric}</text>
-                          )}
-                          {(note.lyric2 != null && String(note.lyric2).trim() !== '') && (
-                            <text x={noteX} y={staffY + lastLineY + (Math.max(1, Number(lyricFontSize)) || 12) * 2.8 + (lyricLineYOffset || 0)} textAnchor="middle" fontSize={Math.max(1, Number(lyricFontSize)) || 12} fill="#555" fontFamily={lyricFontFamily}>{note.lyric2}</text>
-                          )}
+                          {Array.from({ length: 10 }, (_, lyricIdx) => {
+                            const lyricKey = lyricIdx === 0 ? 'lyric' : `lyric${lyricIdx + 1}`;
+                            const lyricColorKey = lyricIdx === 0 ? 'lyricColor' : `lyric${lyricIdx + 1}Color`;
+                            const lyricText = note?.[lyricKey];
+                            if (lyricText == null || String(lyricText).trim() === '') return null;
+                            const fs = Math.max(1, Number(lyricFontSize)) || 12;
+                            const lyricLineY = staffY + lastLineY + fs * (1.5 + lyricIdx * 1.3) + (lyricLineYOffset || 0);
+                            return (
+                              <text key={lyricKey} x={noteX} y={lyricLineY} textAnchor="middle" fontSize={fs} fill={note?.[lyricColorKey] || '#000000'} fontFamily={lyricFontFamily} fontStyle={lyricItalic ? 'italic' : undefined} textDecoration={lyricUnderline ? 'underline' : undefined} fontWeight={lyricBold ? '700' : Math.max(100, Math.min(900, Number(lyricWeight) || 400))}>{lyricText}</text>
+                            );
+                          })}
                           {showRhythmSyllables && (() => {
                             const labelY = staffY + lastLineY + spacing * 1.8;
                             if (beamGroup && noteIdx === beamGroup.start) {
