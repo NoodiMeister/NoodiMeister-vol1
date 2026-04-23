@@ -4362,6 +4362,12 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
           setAddedMeasures(inferredAdded);
         }
       }
+      if (data.measureRepeatMarks != null && typeof data.measureRepeatMarks === 'object') {
+        setMeasureRepeatMarks(data.measureRepeatMarks);
+      } else {
+        // Ensure imported files without repeat metadata do not keep stale in-memory marks.
+        setMeasureRepeatMarks({});
+      }
       if (data.setupCompleted != null) setSetupCompleted(data.setupCompleted);
       if (data.songTitle != null) setSongTitle(data.songTitle);
       if (data.author != null) setAuthor(data.author);

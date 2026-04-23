@@ -719,11 +719,77 @@ export function FigurenotesView({
                 sys.measureIndices.map(
                   () => sys.measureWidth ?? beatsPerMeasure * 80,
                 );
-              const measureWidth =
+              const repeatStaffSpaceForLane = 10 * notationScale;
+              const repeatThinWForLane = Math.max(
+                1,
+                repeatStaffSpaceForLane * THIN_BARLINE_THICKNESS,
+              );
+              const repeatThickWForLane = Math.max(
+                2,
+                repeatStaffSpaceForLane * THICK_BARLINE_THICKNESS,
+              );
+              const repeatGapForLane = Math.max(
+                1.2,
+                repeatStaffSpaceForLane * BARLINE_SEPARATION,
+              );
+              const repeatDotRForLane =
+                Math.max(1.2, repeatStaffSpaceForLane * 0.16) + 1;
+              const repeatBlockWidthForLane =
+                repeatThickWForLane / 2 +
+                repeatGapForLane +
+                repeatThinWForLane +
+                repeatGapForLane +
+                repeatDotRForLane * 2;
+              const repeatBothSplitForLane = Math.max(
+                1.2,
+                repeatStaffSpaceForLane * 0.18,
+              );
+              const getRepeatLaneExtraWidth = (measureIndexInSystem) => {
+                const idx = sys.measureIndices[measureIndexInSystem];
+                const m = layoutSourceMeasures[idx];
+                if (!m) return 0;
+                const prev =
+                  measureIndexInSystem > 0
+                    ? layoutSourceMeasures[sys.measureIndices[measureIndexInSystem - 1]]
+                    : null;
+                const next =
+                  measureIndexInSystem < sys.measureIndices.length - 1
+                    ? layoutSourceMeasures[sys.measureIndices[measureIndexInSystem + 1]]
+                    : null;
+                const leftRepeat = getLeftBarlineRepeatRender({
+                  measureIndexInSystem,
+                  measure: m,
+                  prevMeasureInSystem: prev,
+                });
+                const hasLeftRepeat =
+                  leftRepeat.variant === "start" ||
+                  leftRepeat.variant === "both";
+                const hasRightRepeat = shouldDrawRepeatEndGlyphOnRight(m, next);
+                const leftLaneInner =
+                  repeatBlockWidthForLane +
+                  (leftRepeat.variant === "both"
+                    ? repeatBothSplitForLane
+                    : 0);
+                const leftLaneWidth = hasLeftRepeat
+                  ? leftLaneInner + FIGURE_REPEAT_NOTE_MIN_GAP_PX * 2
+                  : 0;
+                const rightLaneWidth = hasRightRepeat
+                  ? repeatBlockWidthForLane + FIGURE_REPEAT_NOTE_MIN_GAP_PX * 2
+                  : 0;
+                return leftLaneWidth + rightLaneWidth;
+              };
+              const baseMeasureWidth =
                 measureWidths[j] ?? sys.measureWidth ?? beatsPerMeasure * 80;
+              const measureWidth = baseMeasureWidth + getRepeatLaneExtraWidth(j);
               const measureX =
                 marginLeft +
-                measureWidths.slice(0, j).reduce((a, b) => a + b, 0);
+                measureWidths
+                  .slice(0, j)
+                  .reduce(
+                    (a, b, idxInSlice) =>
+                      a + b + getRepeatLaneExtraWidth(idxInSlice),
+                    0,
+                  );
               const mBarForBeatBox = layoutSourceMeasures[measureIdx];
               const prevBarForBeatBox =
                 j > 0 ? layoutSourceMeasures[sys.measureIndices[j - 1]] : null;
