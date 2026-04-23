@@ -492,12 +492,16 @@ export function FigurenotesView({
   lyricFontFamily = "sans-serif",
   lyricFontSize = 12,
   lyricLineYOffset = 0,
+  lyricReserveHeight = 0,
   isHorizontal = false,
   a4PageHeight = 400,
   pageFlowDirection = "vertical",
   figureBaseWidth = FIGURE_BASE_WIDTH,
   showStaffSpacerHandles = false,
   onStaffSpacerMouseDown,
+  showLyricSpacerHandles = false,
+  onLyricSpacerMouseDown,
+  onLyricSpacerNudge,
   themeColors,
   activeLyricNoteIndex = null,
   /** Mitme rea ühendatud figuurisüsteem (orchestration): instrumentide read + taktid iga rea jaoks. */
@@ -515,7 +519,7 @@ export function FigurenotesView({
   const rowStepPx =
     combinedRows && figurenotesCombinedRowStepPx > 0
       ? figurenotesCombinedRowStepPx
-      : melodyRowHeight + chordLineGap + chordLineHeight;
+      : melodyRowHeight + chordLineGap + chordLineHeight + lyricReserveHeight;
   const layoutSourceMeasures =
     combinedRows && instruments[0]?.id
       ? (effectiveMeasuresPerInstrument[instruments[0].id] ?? effectiveMeasures)
@@ -738,8 +742,12 @@ export function FigurenotesView({
                       ? (instruments.length - 1) * rowStepPx +
                         melodyRowHeight +
                         chordLineGap +
-                        chordLineHeight
-                      : melodyRowHeight + chordLineGap + chordLineHeight
+                        chordLineHeight +
+                        lyricReserveHeight
+                      : melodyRowHeight +
+                        chordLineGap +
+                        chordLineHeight +
+                        lyricReserveHeight
                   }
                   fill="#e5e7eb"
                   stroke="#9ca3af"
@@ -749,6 +757,42 @@ export function FigurenotesView({
                   onMouseDown={(e) =>
                     onStaffSpacerMouseDown(sys.systemIndex)(e)
                   }
+                />
+              )}
+            {showLyricSpacerHandles &&
+              typeof onLyricSpacerMouseDown === "function" && (
+                <rect
+                  className="lyric-spacer-handle"
+                  x={16}
+                  y={
+                    sys.yOffset +
+                    melodyRowHeight +
+                    chordLineGap +
+                    chordLineHeight +
+                    Math.max(2, lyricReserveHeight * 0.12) +
+                    (lyricLineYOffset || 0)
+                  }
+                  width={14}
+                  height={14}
+                  fill="#dbeafe"
+                  stroke="#60a5fa"
+                  strokeWidth={1}
+                  rx={2}
+                  tabIndex={0}
+                  role="slider"
+                  aria-label="Lyrics row vertical offset"
+                  style={{ cursor: "ns-resize" }}
+                  onMouseDown={onLyricSpacerMouseDown}
+                  onKeyDown={(e) => {
+                    if (typeof onLyricSpacerNudge !== "function") return;
+                    if (e.key === "ArrowUp") {
+                      e.preventDefault();
+                      onLyricSpacerNudge(-1);
+                    } else if (e.key === "ArrowDown") {
+                      e.preventDefault();
+                      onLyricSpacerNudge(1);
+                    }
+                  }}
                 />
               )}
             {sys.pageBreakBefore && (
@@ -2423,17 +2467,20 @@ export function FigurenotesView({
                             /* Laulusõnad: vahe (gap) = lauluteksti fondi suurus (lyricFontSize); Cmd/Ctrl+L režiim loeb seda seadest. */
                             const lyricGapTop = sys.yOffset + melodyRowHeight;
                             const hasChordRow = chordLineHeight > 0;
-                            const hasLyricGap = hasChordRow && chordLineGap > 0;
                             const fs = Math.max(1, Number(lyricFontSize)) || 12;
+                            const fallbackLyricBandTop =
+                              sys.yOffset +
+                              melodyRowHeight +
+                              Math.max(0, lyricReserveHeight * 0.08);
                             const lyric1Y = hasChordRow
                               ? lyricGapTop + fs * 0.5 + (lyricLineYOffset || 0)
-                              : labelY +
-                                Math.round(14 * (figurenotesSize / 16)) +
+                              : fallbackLyricBandTop +
+                                fs * 0.9 +
                                 (lyricLineYOffset || 0);
                             const lyric2Y = hasChordRow
                               ? lyricGapTop + fs * 1.5 + (lyricLineYOffset || 0)
-                              : labelY +
-                                Math.round(28 * (figurenotesSize / 16)) +
+                              : fallbackLyricBandTop +
+                                fs * 2.0 +
                                 (lyricLineYOffset || 0);
                             const isLyricActive =
                               typeof activeLyricNoteIndex === "number" &&

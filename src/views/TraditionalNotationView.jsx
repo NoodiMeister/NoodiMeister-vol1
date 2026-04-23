@@ -497,6 +497,9 @@ export function TraditionalNotationView({
   getStaffHeight = () => 140,
   showStaffSpacerHandles = false,
   onStaffSpacerMouseDown, // (systemIndex) => (e) => { ... } – ridade vertikaalne liigutamine (Layout)
+  showLyricSpacerHandles = false,
+  onLyricSpacerMouseDown,
+  onLyricSpacerNudge,
   instrument = 'piano',
   instrumentRange = null,
   instrumentNotationVariant = 'standard',
@@ -779,6 +782,38 @@ export function TraditionalNotationView({
                 rx={2}
                 style={{ cursor: 'ns-resize' }}
                 onMouseDown={onStaffSpacerMouseDown(sys.systemIndex)}
+              />
+            )}
+            {showLyricSpacerHandles && typeof onLyricSpacerMouseDown === 'function' && (
+              <rect
+                className="lyric-spacer-handle"
+                x={16}
+                y={
+                  systemBottomStaffLineY +
+                  Math.max(4, (Math.max(1, Number(lyricFontSize)) || 12) * 0.8) +
+                  (lyricLineYOffset || 0)
+                }
+                width={14}
+                height={14}
+                fill="#dbeafe"
+                stroke="#60a5fa"
+                strokeWidth={1}
+                rx={2}
+                tabIndex={0}
+                role="slider"
+                aria-label="Lyrics row vertical offset"
+                style={{ cursor: 'ns-resize' }}
+                onMouseDown={onLyricSpacerMouseDown}
+                onKeyDown={(e) => {
+                  if (typeof onLyricSpacerNudge !== 'function') return;
+                  if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    onLyricSpacerNudge(-1);
+                  } else if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    onLyricSpacerNudge(1);
+                  }
+                }}
               />
             )}
             {showSystemBracket && (
