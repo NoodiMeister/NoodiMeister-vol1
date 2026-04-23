@@ -24,13 +24,79 @@ function extractSummary(project) {
   return { notationMode, timeSig, staves, paperSize, orientation };
 }
 
-function buildSummarySvg({ title, notationMode, timeSig, staves, sourceName, paperSize, orientation }) {
+function letterIndex(letter) {
+  const map = { C: 0, D: 1, E: 2, F: 3, G: 4, A: 5, B: 6 };
+  return map[String(letter || '').toUpperCase()] ?? 0;
+}
+
+function pitchToStaffY(pitch, octave, staffCenterY, staffStepPx) {
+  const idx = letterIndex(pitch) + (Number(octave) || 4) * 7;
+  const e4 = letterIndex('E') + 4 * 7;
+  return staffCenterY - ((idx - e4) * staffStepPx);
+}
+
+function extractRenderableNotes(project) {
+  const out = [];
+  if (Array.isArray(project?.notes)) {
+    project.notes.forEach((n, idx) => {
+      if (n?.isRest) return;
+      out.push({
+        id: n.id || `n_${idx}`,
+        pitch: n.pitch || 'C',
+        octave: Number.isFinite(Number(n.octave)) ? Number(n.octave) : 4,
+        beat: Number.isFinite(Number(n.beat)) ? Number(n.beat) : idx,
+        duration: Number.isFinite(Number(n.duration)) ? Number(n.duration) : 1,
+      });
+    });
+    return out;
+  }
+  if (Array.isArray(project?.staves)) {
+    project.staves.forEach((staff) => {
+      (staff?.measures || []).forEach((m) => {
+        (m?.notes || []).forEach((n, idx) => {
+          if (n?.isRest) return;
+          out.push({
+            id: n.id || `${staff.id || 'staff'}_${m.startBeat || 0}_${idx}`,
+            pitch: n.pitch || 'C',
+            octave: Number.isFinite(Number(n.octave)) ? Number(n.octave) : 4,
+            beat: Number.isFinite(Number(n.beat)) ? Number(n.beat) : (Number(m.startBeat) || 0) + idx,
+            duration: Number.isFinite(Number(n.duration)) ? Number(n.duration) : 1,
+          });
+        });
+      });
+    });
+  }
+  return out;
+}
+
+function buildSummarySvg({ title, notationMode, timeSig, staves, sourceName, paperSize, orientation, project }) {
   const modeLabel = String(notationMode || 'traditional').toUpperCase();
   const pageW = orientation === 'landscape' ? 1123 : 794;
   const pageH = orientation === 'landscape' ? 794 : 1123;
   const innerW = pageW - 64;
-  const staffStartY = 260;
+  const staffStartY = 240;
   const staffLineGap = 20;
+  const notes = extractRenderableNotes(project);
+  const maxBeat = Math.max(8, ...notes.map((n) => n.beat + n.duration));
+  const beatWidth = innerW / maxBeat;
+
+  const noteMarkup = notes.map((n) => {
+    const x = 32 + Math.max(0, n.beat) * beatWidth + 8;
+    const y = pitchToStaffY(n.pitch, n.octave, staffStartY + staffLineGap * 2, staffLineGap / 2);
+    const isFilled = Number(n.duration) <= 1;
+    return `
+    <g>
+      <ellipse cx="${x}" cy="${y}" rx="8.5" ry="6.3" fill="${isFilled ? '#111827' : '#ffffff'}" stroke="#111827" stroke-width="1.6"/>
+      <line x1="${x + 7}" y1="${y}" x2="${x + 7}" y2="${y - 34}" stroke="#111827" stroke-width="1.5"/>
+    </g>`;
+  }).join('');
+
+  const barlineMarkup = Array.from({ length: Math.max(2, Math.floor(maxBeat / 4)) }, (_, i) => {
+    const beat = i * 4;
+    const x = 32 + beat * beatWidth;
+    return `<line x1="${x}" y1="${staffStartY - 8}" x2="${x}" y2="${staffStartY + staffLineGap * 11 + 8}" stroke="#7c2d12" stroke-width="1"/>`;
+  }).join('');
+
   return `
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${pageW} ${pageH}" width="${pageW}" height="${pageH}">
   <defs>
@@ -48,6 +114,7 @@ function buildSummarySvg({ title, notationMode, timeSig, staves, sourceName, pap
   <text x="32" y="182" font-family="Inter, Arial, sans-serif" font-size="19" fill="#78350f">Time signature: ${safe(timeSig)}</text>
   <text x="32" y="212" font-family="Inter, Arial, sans-serif" font-size="19" fill="#78350f">Layout: ${safe(paperSize)} ${safe(orientation)}</text>
   <text x="32" y="242" font-family="Inter, Arial, sans-serif" font-size="19" fill="#78350f">Staves: ${safe(String(staves))}</text>
+  ${barlineMarkup}
   <g transform="translate(32,${staffStartY})">
     <line x1="0" y1="0" x2="${innerW}" y2="0" stroke="#9a3412" stroke-width="1"/>
     <line x1="0" y1="${staffLineGap}" x2="${innerW}" y2="${staffLineGap}" stroke="#9a3412" stroke-width="1"/>
@@ -60,6 +127,7 @@ function buildSummarySvg({ title, notationMode, timeSig, staves, sourceName, pap
     <line x1="0" y1="${staffLineGap * 10}" x2="${innerW}" y2="${staffLineGap * 10}" stroke="#9a3412" stroke-width="1"/>
     <line x1="0" y1="${staffLineGap * 11}" x2="${innerW}" y2="${staffLineGap * 11}" stroke="#9a3412" stroke-width="1"/>
   </g>
+  ${noteMarkup}
 </svg>`.trim();
 }
 
@@ -82,6 +150,7 @@ export function createComposerSvgBlockFromProjectJson(rawContent, sourceName = '
       ...summary,
       title,
       sourceName,
+      project: parsed,
     }),
   };
 }
