@@ -848,9 +848,6 @@ export function TraditionalNotationView({
                 />
               </g>
             )}
-            {sys.pageBreakBefore && (
-              <line x1={0} y1={sys.yOffset - PAGE_BREAK_GAP / 2} x2={pageWidth || 800} y2={sys.yOffset - PAGE_BREAK_GAP / 2} stroke="#c4b896" strokeWidth={1} strokeDasharray="4 4" />
-            )}
             {/* Piano Grand Staff brace (Leland SMuFL brace) – connects treble and bass staves */}
             {isFirstInBraceGroup && braceGroupSize >= 2 && !multiStaff && (() => {
               const staffH = getStaffHeight();

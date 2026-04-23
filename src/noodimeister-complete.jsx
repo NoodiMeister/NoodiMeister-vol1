@@ -1770,6 +1770,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   /** Vertical offset (px) for lyrics line – drag or adjust to move lyrics up/down. */
   const [lyricLineYOffset, setLyricLineYOffset] = useState(0);
   const lyricInputRef = useRef(null);
+  const lyricLineShortcutArmRef = useRef(0);
   /** Viimase figuurnotatsiooni löögikliku beat + aeg, et Cmd+L kasutaks õiget nooti enne Reacti state uuendust. */
   const lastBeatClickForLyricRef = useRef({ beat: null, at: 0 });
   const [history, setHistory] = useState([]);
@@ -2287,8 +2288,12 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   const [authorFontFamily, setAuthorFontFamily] = useState('');
   const [titleBold, setTitleBold] = useState(false);
   const [titleItalic, setTitleItalic] = useState(false);
+  const [titleUnderline, setTitleUnderline] = useState(false);
+  const [titleWeight, setTitleWeight] = useState(400);
   const [authorBold, setAuthorBold] = useState(false);
   const [authorItalic, setAuthorItalic] = useState(false);
+  const [authorUnderline, setAuthorUnderline] = useState(false);
+  const [authorWeight, setAuthorWeight] = useState(400);
   const [titleAlignment, setTitleAlignment] = useState('center'); // 'left' | 'center' | 'right'
   const [authorAlignment, setAuthorAlignment] = useState('right'); // 'left' | 'center' | 'right'
   const [staffRowAlignment, setStaffRowAlignment] = useState('center'); // 'left' | 'center' | 'right' – figuurnotatsiooni rea joondus
@@ -3641,8 +3646,12 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       authorFontSize,
       titleBold,
       titleItalic,
+      titleUnderline,
+      titleWeight,
       authorBold,
       authorItalic,
+      authorUnderline,
+      authorWeight,
       titleAlignment,
       authorAlignment,
       textBoxes,
@@ -3668,8 +3677,12 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     authorFontSize,
     titleBold,
     titleItalic,
+    titleUnderline,
+    titleWeight,
     authorBold,
     authorItalic,
+    authorUnderline,
+    authorWeight,
     titleAlignment,
     authorAlignment,
     textBoxes,
@@ -4089,8 +4102,12 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     authorFontFamily: authorFontFamily || undefined,
     titleBold,
     titleItalic,
+    titleUnderline,
+    titleWeight,
     authorBold,
     authorItalic,
+    authorUnderline,
+    authorWeight,
     titleAlignment,
     authorAlignment,
     staffRowAlignment,
@@ -4109,7 +4126,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     lyricFontSize,
     noteheadShape,
     noteheadEmoji
-  }), [staves, activeStaffIndex, staffYOffsets, measureStretchFactors, systemYOffsets, visibleStaves, instrumentPartGroups, intermissionLabels, timeSignature, timeSignatureMode, keySignature, staffLines, notationStyle, pixelsPerBeat, notationMode, instrumentNotationVariant, linkedNotationByStaffId, tinWhistleLinkedFingeringScalePercent, cursorPosition, addedMeasures, measureRepeatMarks, setupCompleted, songTitle, author, pickupEnabled, pickupQuantity, pickupDuration, pageOrientation, paperSize, layoutMeasuresPerLine, layoutLineBreakBefore, layoutPageBreakBefore, layoutExtraPages, layoutSystemGap, layoutPartsGap, layoutPartsGapMm, layoutSizeUnit, layoutConnectedBarlines, layoutGlobalSpacingMultiplier, notationCtx?.globalSpacingMultiplier, notationCtx?.staffSpacing, notationCtx?.measureWidthMultiplier, viewMode, partLayoutMeasuresPerLine, partLayoutLineBreakBefore, partLayoutPageBreakBefore, partLayoutExtraPages, showPageNavigator, pageFlowDirection, viewFitPage, viewSmartPage, visibleToolIds, tuningReferenceNote, tuningReferenceOctave, tuningReferenceHz, playNoteOnInsert, figurenotesSize, figurenotesStems, figurenotesChordLineGap, figurenotesChordBlocks, figurenotesChordBlocksShowTones, figurenotesMelodyShowNoteNames, timeSignatureSize, pedagogicalTimeSigDenominatorType, pedagogicalTimeSigDenominatorColor, pedagogicalTimeSigDenominatorInstrument, pedagogicalTimeSigDenominatorEmoji, showBarNumbers, barNumberSize, showRhythmSyllables, showAllNoteLabels, enableEmojiOverlays, joClefStaffPosition, relativeNotationShowKeySignature, relativeNotationShowTraditionalClef, isPedagogicalProject, pedagogicalAudioBpm, pedagogicalAudioPlaybackRate, pedagogicalSyncMode, pedagogicalSyncStartBeat, pedagogicalSyncStartTimeSec, pedagogicalSyncEndBeat, pedagogicalSyncEndTimeSec, pedagogicalRhythmStep, pedagogicalPlayheadStyle, pedagogicalPlayheadEmoji, pedagogicalPlayheadEmojiSize, cursorLineStrokeWidth, pedagogicalPlayheadMovement, chords, textBoxes, documentFontFamily, lyricFontFamily, titleFontSize, authorFontSize, titleFontFamily, authorFontFamily, titleBold, titleItalic, authorBold, authorItalic, titleAlignment, authorAlignment, staffRowAlignment, pageDesignDataUrl, pageDesignOpacity, pageDesignFit, pageDesignPositionX, pageDesignPositionY, pageDesignCrop, lyricLineIndex, lyricLineYOffset, lyricFontSize, noteheadShape, noteheadEmoji]);
+  }), [staves, activeStaffIndex, staffYOffsets, measureStretchFactors, systemYOffsets, visibleStaves, instrumentPartGroups, intermissionLabels, timeSignature, timeSignatureMode, keySignature, staffLines, notationStyle, pixelsPerBeat, notationMode, instrumentNotationVariant, linkedNotationByStaffId, tinWhistleLinkedFingeringScalePercent, cursorPosition, addedMeasures, measureRepeatMarks, setupCompleted, songTitle, author, pickupEnabled, pickupQuantity, pickupDuration, pageOrientation, paperSize, layoutMeasuresPerLine, layoutLineBreakBefore, layoutPageBreakBefore, layoutExtraPages, layoutSystemGap, layoutPartsGap, layoutPartsGapMm, layoutSizeUnit, layoutConnectedBarlines, layoutGlobalSpacingMultiplier, notationCtx?.globalSpacingMultiplier, notationCtx?.staffSpacing, notationCtx?.measureWidthMultiplier, viewMode, partLayoutMeasuresPerLine, partLayoutLineBreakBefore, partLayoutPageBreakBefore, partLayoutExtraPages, showPageNavigator, pageFlowDirection, viewFitPage, viewSmartPage, visibleToolIds, tuningReferenceNote, tuningReferenceOctave, tuningReferenceHz, playNoteOnInsert, figurenotesSize, figurenotesStems, figurenotesChordLineGap, figurenotesChordBlocks, figurenotesChordBlocksShowTones, figurenotesMelodyShowNoteNames, timeSignatureSize, pedagogicalTimeSigDenominatorType, pedagogicalTimeSigDenominatorColor, pedagogicalTimeSigDenominatorInstrument, pedagogicalTimeSigDenominatorEmoji, showBarNumbers, barNumberSize, showRhythmSyllables, showAllNoteLabels, enableEmojiOverlays, joClefStaffPosition, relativeNotationShowKeySignature, relativeNotationShowTraditionalClef, isPedagogicalProject, pedagogicalAudioBpm, pedagogicalAudioPlaybackRate, pedagogicalSyncMode, pedagogicalSyncStartBeat, pedagogicalSyncStartTimeSec, pedagogicalSyncEndBeat, pedagogicalSyncEndTimeSec, pedagogicalRhythmStep, pedagogicalPlayheadStyle, pedagogicalPlayheadEmoji, pedagogicalPlayheadEmojiSize, cursorLineStrokeWidth, pedagogicalPlayheadMovement, chords, textBoxes, documentFontFamily, lyricFontFamily, titleFontSize, authorFontSize, titleFontFamily, authorFontFamily, titleBold, titleItalic, titleUnderline, titleWeight, authorBold, authorItalic, authorUnderline, authorWeight, titleAlignment, authorAlignment, staffRowAlignment, pageDesignDataUrl, pageDesignOpacity, pageDesignFit, pageDesignPositionX, pageDesignPositionY, pageDesignCrop, lyricLineIndex, lyricLineYOffset, lyricFontSize, noteheadShape, noteheadEmoji]);
 
   const saveToStorageSync = useCallback(() => {
     try {
@@ -4468,8 +4485,12 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       if (data.authorFontFamily != null) setAuthorFontFamily(data.authorFontFamily || '');
       if (typeof data.titleBold === 'boolean') setTitleBold(data.titleBold);
       if (typeof data.titleItalic === 'boolean') setTitleItalic(data.titleItalic);
+      if (typeof data.titleUnderline === 'boolean') setTitleUnderline(data.titleUnderline);
+      if (typeof data.titleWeight === 'number') setTitleWeight(Math.max(100, Math.min(900, Math.round(data.titleWeight / 100) * 100)));
       if (typeof data.authorBold === 'boolean') setAuthorBold(data.authorBold);
       if (typeof data.authorItalic === 'boolean') setAuthorItalic(data.authorItalic);
+      if (typeof data.authorUnderline === 'boolean') setAuthorUnderline(data.authorUnderline);
+      if (typeof data.authorWeight === 'number') setAuthorWeight(Math.max(100, Math.min(900, Math.round(data.authorWeight / 100) * 100)));
       if (data.titleAlignment === 'left' || data.titleAlignment === 'center' || data.titleAlignment === 'right') setTitleAlignment(data.titleAlignment);
       if (data.authorAlignment === 'left' || data.authorAlignment === 'center' || data.authorAlignment === 'right') setAuthorAlignment(data.authorAlignment);
       if (data.staffRowAlignment === 'left' || data.staffRowAlignment === 'center' || data.staffRowAlignment === 'right') setStaffRowAlignment(data.staffRowAlignment);
@@ -4763,8 +4784,12 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         if (data.authorFontFamily != null) setAuthorFontFamily(data.authorFontFamily || '');
         if (typeof data.titleBold === 'boolean') setTitleBold(data.titleBold);
         if (typeof data.titleItalic === 'boolean') setTitleItalic(data.titleItalic);
+        if (typeof data.titleUnderline === 'boolean') setTitleUnderline(data.titleUnderline);
+        if (typeof data.titleWeight === 'number') setTitleWeight(Math.max(100, Math.min(900, Math.round(data.titleWeight / 100) * 100)));
         if (typeof data.authorBold === 'boolean') setAuthorBold(data.authorBold);
         if (typeof data.authorItalic === 'boolean') setAuthorItalic(data.authorItalic);
+        if (typeof data.authorUnderline === 'boolean') setAuthorUnderline(data.authorUnderline);
+        if (typeof data.authorWeight === 'number') setAuthorWeight(Math.max(100, Math.min(900, Math.round(data.authorWeight / 100) * 100)));
         if (data.titleAlignment === 'left' || data.titleAlignment === 'center' || data.titleAlignment === 'right') setTitleAlignment(data.titleAlignment);
         if (data.authorAlignment === 'left' || data.authorAlignment === 'center' || data.authorAlignment === 'right') setAuthorAlignment(data.authorAlignment);
         if (data.staffRowAlignment === 'left' || data.staffRowAlignment === 'center' || data.staffRowAlignment === 'right') setStaffRowAlignment(data.staffRowAlignment);
@@ -7199,8 +7224,29 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         setLyricChainIndex(index);
         setTimeout(() => lyricInputRef.current?.focus(), 0);
       };
+      const isLyricLineShortcutArmed =
+        lyricLineShortcutArmRef.current > 0 &&
+        (Date.now() - lyricLineShortcutArmRef.current) < 2500;
+      const isLyricLineDigitShortcut =
+        modKey &&
+        (e.code === 'Digit1' || e.code === 'Digit2' || e.key === '1' || e.key === '2');
+      if (isLyricLineDigitShortcut && isLyricLineShortcutArmed) {
+        e.preventDefault();
+        const nextLine = (e.code === 'Digit2' || e.key === '2') ? 1 : 0;
+        setLyricLineIndex(nextLine);
+        const idx = selectedNoteIndex >= 0 ? selectedNoteIndex : noteIndexAtCursor;
+        if (typeof idx === 'number' && idx >= 0 && idx < notes.length) {
+          setLyricChainStart(idx);
+          setLyricChainEnd(Math.max(0, notes.length - 1));
+          setLyricChainIndex(idx);
+        }
+        setTimeout(() => lyricInputRef.current?.focus(), 0);
+        lyricLineShortcutArmRef.current = Date.now();
+        return;
+      }
       // Ctrl+L (Cmd+L): SEL-režiimis püüa ainult siis, kui käivitame laulusõna (meloodiareal, noot kursori all); muul juhul lastakse brauserile (aadressiriba jms)
       if (matchesShortcutPref(e, effectiveShortcutPrefs['app.lyricModeMod'])) {
+        lyricLineShortcutArmRef.current = Date.now();
         const recent = lastBeatClickForLyricRef.current;
         const useClickBeat = recent.beat != null && (Date.now() - recent.at) < 600;
         if (useClickBeat) {
@@ -7242,6 +7288,36 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         e.preventDefault();
         undo();
         return;
+      }
+      // Text tool inline style shortcuts when title/author/textbox editor is active.
+      const textToolActive = !!(activeTextLineType === 'title' || activeTextLineType === 'author' || selectedTextboxId);
+      if (modKey && textToolActive && (e.code === 'KeyB' || e.code === 'KeyI' || e.code === 'KeyU')) {
+        e.preventDefault();
+        dirtyRef.current = true;
+        if (activeTextLineType === 'title') {
+          if (e.code === 'KeyB') setTitleBold((prev) => !prev);
+          if (e.code === 'KeyI') setTitleItalic((prev) => !prev);
+          if (e.code === 'KeyU') setTitleUnderline((prev) => !prev);
+          return;
+        }
+        if (activeTextLineType === 'author') {
+          if (e.code === 'KeyB') setAuthorBold((prev) => !prev);
+          if (e.code === 'KeyI') setAuthorItalic((prev) => !prev);
+          if (e.code === 'KeyU') setAuthorUnderline((prev) => !prev);
+          return;
+        }
+        if (selectedTextboxId) {
+          setTextBoxes((prev) =>
+            prev.map((b) => {
+              if (b.id !== selectedTextboxId) return b;
+              if (e.code === 'KeyB') return { ...b, fontWeight: b.fontWeight === 'bold' ? '' : 'bold' };
+              if (e.code === 'KeyI') return { ...b, fontStyle: b.fontStyle === 'italic' ? '' : 'italic' };
+              if (e.code === 'KeyU') return { ...b, textDecoration: b.textDecoration === 'underline' ? '' : 'underline' };
+              return b;
+            }),
+          );
+          return;
+        }
       }
       // Cmd/Ctrl+B – lisa takt (luba ka siis, kui fookus on pealkirja/autoriväljal)
       // Muidu jääb mulje, et funktsioon on "välja lülitatud", kui input on kogemata fookuses.
@@ -9616,15 +9692,35 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
             ))}
         </div>
       </div>
+      <div>
+        <label className="block text-[10px] font-semibold text-amber-700 dark:text-amber-300 mb-0.5">{t('textTool.weight')}</label>
+        <input
+          type="number"
+          min={100}
+          max={900}
+          step={100}
+          value={activeTextLineType === 'title' ? titleWeight : activeTextLineType === 'author' ? authorWeight : (Math.max(100, Math.min(900, Number(activeBox?.fontWeightNumeric) || 400)))}
+          onChange={(e) => {
+            const v = Math.max(100, Math.min(900, Math.round((Number(e.target.value) || 400) / 100) * 100));
+            dirtyRef.current = true;
+            if (activeTextLineType === 'title') setTitleWeight(v);
+            else if (activeTextLineType === 'author') setAuthorWeight(v);
+            else if (activeBox) setTextBoxes((prev) => prev.map((b) => b.id === activeBox.id ? { ...b, fontWeightNumeric: v } : b));
+          }}
+          className="w-full px-2 py-1.5 rounded border border-amber-300 dark:border-amber-600 bg-white dark:bg-zinc-800 text-amber-900 dark:text-white text-sm"
+        />
+      </div>
       <div className="flex items-center gap-1">
         <span className="text-[10px] font-semibold text-amber-700 dark:text-amber-300 mr-1">{t('textTool.style')}</span>
-        {['bold', 'italic'].map((style) => {
+        {['bold', 'italic', 'underline'].map((style) => {
           const isBold = style === 'bold';
+          const isItalic = style === 'italic';
+          const isUnderline = style === 'underline';
           const active = activeTextLineType === 'title'
-            ? (isBold ? titleBold : titleItalic)
+            ? (isBold ? titleBold : isItalic ? titleItalic : titleUnderline)
             : activeTextLineType === 'author'
-              ? (isBold ? authorBold : authorItalic)
-              : (activeBox && (isBold ? (activeBox.fontWeight === 'bold') : (activeBox.fontStyle === 'italic')));
+              ? (isBold ? authorBold : isItalic ? authorItalic : authorUnderline)
+              : (activeBox && (isBold ? (activeBox.fontWeight === 'bold') : isItalic ? (activeBox.fontStyle === 'italic') : (activeBox.textDecoration === 'underline')));
           return (
             <button
               key={style}
@@ -9632,20 +9728,28 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
               onClick={() => {
                 dirtyRef.current = true;
                 if (activeTextLineType === 'title') {
-                  if (isBold) setTitleBold(!titleBold); else setTitleItalic(!titleItalic);
+                  if (isBold) setTitleBold(!titleBold);
+                  else if (isItalic) setTitleItalic(!titleItalic);
+                  else setTitleUnderline(!titleUnderline);
                 } else if (activeTextLineType === 'author') {
-                  if (isBold) setAuthorBold(!authorBold); else setAuthorItalic(!authorItalic);
+                  if (isBold) setAuthorBold(!authorBold);
+                  else if (isItalic) setAuthorItalic(!authorItalic);
+                  else setAuthorUnderline(!authorUnderline);
                 } else if (activeBox) {
                   setTextBoxes((prev) => prev.map((b) => b.id === activeBox.id
-                    ? { ...b, [isBold ? 'fontWeight' : 'fontStyle']: active ? '' : (isBold ? 'bold' : 'italic') }
+                    ? {
+                        ...b,
+                        [isBold ? 'fontWeight' : isItalic ? 'fontStyle' : 'textDecoration']:
+                          active ? '' : (isBold ? 'bold' : isItalic ? 'italic' : 'underline'),
+                      }
                     : b));
                 }
               }}
               className={`px-2 py-1 rounded text-xs font-medium ${active ? 'bg-amber-600 text-white' : 'bg-amber-100 dark:bg-zinc-700 text-amber-800 dark:text-amber-200 hover:bg-amber-200 dark:hover:bg-zinc-600'}`}
-              style={isBold ? { fontWeight: 'bold' } : { fontStyle: 'italic' }}
-              title={isBold ? t('textTool.bold') : t('textTool.italic')}
+              style={isBold ? { fontWeight: 'bold' } : isItalic ? { fontStyle: 'italic' } : { textDecoration: 'underline' }}
+              title={isBold ? t('textTool.bold') : isItalic ? t('textTool.italic') : t('textTool.underline')}
             >
-              {isBold ? 'B' : 'I'}
+              {isBold ? 'B' : isItalic ? 'I' : 'U'}
             </button>
           );
         })}
@@ -13605,8 +13709,9 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                   style={{
                     fontFamily: titleFontFamily || documentFontFamily,
                     fontSize: titleFontSize,
-                    fontWeight: titleBold ? 'bold' : undefined,
+                    fontWeight: titleBold ? 'bold' : titleWeight,
                     fontStyle: titleItalic ? 'italic' : undefined,
+                    textDecoration: titleUnderline ? 'underline' : undefined,
                   }}
                   title={t('score.titleTitle')}
                 />
@@ -13621,8 +13726,9 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                   style={{
                     fontFamily: authorFontFamily || documentFontFamily,
                     fontSize: authorFontSize,
-                    fontWeight: authorBold ? 'bold' : undefined,
+                    fontWeight: authorBold ? 'bold' : authorWeight,
                     fontStyle: authorItalic ? 'italic' : undefined,
+                    textDecoration: authorUnderline ? 'underline' : undefined,
                   }}
                   title={t('textBox.documentFontHint')}
                 />
@@ -14218,12 +14324,13 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
               const h = box.height ?? 60;
               const align = box.textAlign ?? 'center';
               const columnCount = Math.max(1, Math.min(5, Math.floor(Number(box.columnCount) || 1)));
-              const isSelected = selectedTextboxId === box.id;
+              const textBoxEditingDisabled = showPdfExportPreview || isExportingPdf;
+              const isSelected = !textBoxEditingDisabled && selectedTextboxId === box.id;
               return (
                 <div
                   key={box.id}
                   data-textbox-id={box.id}
-                  className="pointer-events-auto absolute px-2 py-1 rounded border-2 bg-white/95 shadow text-amber-900 text-sm select-none whitespace-pre-wrap break-words overflow-hidden flex flex-col"
+                  className={`absolute px-2 py-1 rounded border-2 bg-white/95 shadow text-amber-900 text-sm select-none whitespace-pre-wrap break-words overflow-hidden flex flex-col ${textBoxEditingDisabled ? 'pointer-events-none' : 'pointer-events-auto'}`}
                   style={{
                     left: box.x,
                     top: box.y,
@@ -14231,13 +14338,15 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                     height: h,
                     fontSize: box.fontSize || 14,
                     fontFamily: box.fontFamily || documentFontFamily,
-                    fontWeight: box.fontWeight || undefined,
+                    fontWeight: box.fontWeight || (box.fontWeightNumeric || undefined),
                     fontStyle: box.fontStyle || undefined,
+                    textDecoration: box.textDecoration || undefined,
                     borderColor: isSelected ? 'rgb(217 119 6)' : 'rgb(253 230 138)',
                     textAlign: align,
                   }}
                   onClick={(e) => e.stopPropagation()}
                   onMouseDown={(e) => {
+                    if (textBoxEditingDisabled) return;
                     if (e.target.closest('button') || e.target.closest('[data-resize-handle]')) return;
                     e.stopPropagation();
                     textboxDragStartRef.current = { id: box.id, startX: e.clientX, startY: e.clientY, boxStartX: box.x, boxStartY: box.y };

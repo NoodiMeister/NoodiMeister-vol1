@@ -795,18 +795,6 @@ export function FigurenotesView({
                   }}
                 />
               )}
-            {sys.pageBreakBefore && (
-              <line
-                x1={0}
-                y1={sys.yOffset - PAGE_BREAK_GAP / 2}
-                x2={pageWidth || 800}
-                y2={sys.yOffset - PAGE_BREAK_GAP / 2}
-                stroke="#c4b896"
-                strokeWidth={1}
-                strokeDasharray="4 4"
-              />
-            )}
-
             {/* Taktinumber iga rea esimese takti vasak ja ülemine nurk (esimese taktikasti nurk) */}
             {showBarNumbers && sys.measureIndices.length > 0 && (
               <text
@@ -1109,21 +1097,12 @@ export function FigurenotesView({
                       const effectiveStroke = style.stroke ?? "none";
                       const effectiveStrokeWidth = style.strokeWidth ?? 0;
 
-                      /* Long-duration rectangle: left at middle of figure, width to end of last beat (e.g. half note → end of 2nd beat), at bottom of beat box, under figure layer. */
-                      // Keep the left join under the figure so the long-bar corner
-                      // cannot leak outside and visually "float" near the shape.
-                      const longRectJoinInset = hasTail
-                        ? Math.min(size * 0.16, tailSize * 0.6)
-                        : 0;
-                      const longRectRenderX = figureCenterX + longRectJoinInset;
-                      const longRectRenderWidth = Math.max(
-                        0,
-                        longRectWidth - longRectJoinInset,
-                      );
-                      const longRectRadius = Math.max(
-                        0,
-                        Math.min(tailSize / 2, size * 0.14),
-                      );
+                      /* Long-duration rectangle: start exactly at figure center and extend to beat end.
+                         To avoid the old "floating corner" artifact near the join, keep the join square
+                         (no rounding at the left edge). */
+                      const longRectRenderX = figureCenterX;
+                      const longRectRenderWidth = Math.max(0, longRectWidth);
+                      const longRectRadius = 0;
                       const longDurationRectEl = hasTail &&
                         longRectRenderWidth > 0 && (
                           <rect
