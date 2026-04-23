@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { FileMusic, Cloud, UserPlus, LogIn, PenTool, Save, Share2, Settings, ChevronDown, Info } from 'lucide-react';
+import { FileMusic, Cloud, UserPlus, LogIn, PenTool, Save, Share2, Settings, ChevronDown, Info, CircleHelp } from 'lucide-react';
 import { AppLogo } from '../components/AppLogo';
 import { LOCALE_STORAGE_KEY, DEFAULT_LOCALE, LOCALES, getTranslations } from '../i18n';
 import { useNoodimeisterOptional } from '../store/NoodimeisterContext';
@@ -21,6 +21,7 @@ export default function LandingPage() {
   const setThemeMode = (mode) => { if (store?.setTheme) store.setTheme(mode); };
   const t = useMemo(() => getTranslations(locale), [locale]);
   const aboutLabel = locale === 'en' ? 'About' : locale === 'fi' ? 'Tietoa' : 'Teave';
+  const howToLabel = locale === 'en' ? 'How to?' : locale === 'fi' ? 'Miten?' : 'Kuidas?';
 
   useEffect(() => {
     const close = (e) => {
@@ -100,6 +101,13 @@ export default function LandingPage() {
                       className="w-full inline-flex items-center gap-2 px-3 py-2.5 text-left text-sm font-medium text-amber-800 dark:text-white hover:bg-amber-50 dark:hover:bg-white/10 transition-colors"
                     >
                       <Info className="w-4 h-4" /> {aboutLabel}
+                    </Link>
+                    <Link
+                      to="/kuidas"
+                      onClick={() => setSettingsOpen(false)}
+                      className="w-full inline-flex items-center gap-2 px-3 py-2.5 text-left text-sm font-medium text-amber-800 dark:text-white hover:bg-amber-50 dark:hover:bg-white/10 transition-colors"
+                    >
+                      <CircleHelp className="w-4 h-4" /> {howToLabel}
                     </Link>
                   </div>
                 )}

@@ -11,6 +11,8 @@ const LoginPage = lazyWithRetry(() => import('./pages/LoginPage'));
 const HinnakiriPage = lazyWithRetry(() => import('./pages/HinnakiriPage'));
 const ToetaPage = lazyWithRetry(() => import('./pages/ToetaPage'));
 const AboutPage = lazyWithRetry(() => import('./pages/AboutPage'));
+const HowToPage = lazyWithRetry(() => import('./pages/HowToPage'));
+const ComposerPage = lazyWithRetry(() => import('./pages/ComposerPage'));
 const AdminGrantSupportPage = lazyWithRetry(() => import('./pages/AdminGrantSupportPage'));
 const AdminRegistrationPage = lazyWithRetry(() => import('./pages/AdminRegistrationPage'));
 const UserDashboard = lazyWithRetry(() => import('./components/UserDashboard'));
@@ -260,6 +262,9 @@ function AppRoutes() {
             element={SHOW_SUPPORT_AND_PRICING_UI ? <ToetaPage /> : <Navigate to="/" replace />}
           />
           <Route path="/teave" element={<AboutPage />} />
+          <Route path="/kuidas" element={<HowToPage />} />
+          <Route path="/koostaja" element={<ComposerPage />} />
+          <Route path="/how-to" element={<Navigate to="/kuidas" replace />} />
           <Route path="/about" element={<Navigate to="/teave" replace />} />
           <Route path="/administraator" element={<AdminGrantSupportPage />} />
           <Route path="/administraator/register" element={<AdminRegistrationPage />} />

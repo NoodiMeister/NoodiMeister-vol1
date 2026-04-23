@@ -482,6 +482,8 @@ export function TraditionalNotationView({
   onNoteBeatChange,
   noteInputMode = false,
   canHandDragNotes = false,
+  timeSignatureOffset = { x: 0, y: 0 },
+  onTimeSignatureOffsetChange,
   onNoteTeacherLabelChange,
   onNoteLabelClick,
   getPitchY, // (pitch, octave) => Y relative to staff center (Timeline arvutab JO/viiulivõtme järgi)
@@ -497,6 +499,10 @@ export function TraditionalNotationView({
   getStaffHeight = () => 140,
   showStaffSpacerHandles = false,
   onStaffSpacerMouseDown, // (systemIndex) => (e) => { ... } – ridade vertikaalne liigutamine (Layout)
+  onSystemYOffsetChange,
+  canHandDragSystems = false,
+  onSystemXOffsetChange,
+  systemXOffsets = [],
   showLyricSpacerHandles = false,
   onLyricSpacerMouseDown,
   onLyricSpacerNudge,
@@ -525,6 +531,8 @@ export function TraditionalNotationView({
   const [, setOptionalFontVersion] = useState(0);
   const [noteDrag, setNoteDrag] = useState(null); // { noteIndex, staffY } when dragging a note to change pitch
   const [noteBeatDrag, setNoteBeatDrag] = useState(null); // { noteIndex, startClientX } when hand tool dragging note to new beat
+  const [timeSigDrag, setTimeSigDrag] = useState(null); // { startClientX, startClientY, startOffsetX, startOffsetY }
+  const [systemDrag, setSystemDrag] = useState(null); // { systemIndex, startClientX, startClientY }
   const lastPitchRef = useRef(null); // avoid duplicate updates when pitch unchanged
   const tinWhistleFontFamily = hasBundledOptionalFont('TinWhistleTab') ? 'TinWhistleTab' : 'Noto Sans';
   const recorderFontFamily = hasBundledOptionalFont('RecorderFont') ? 'RecorderFont' : 'Noto Sans';
@@ -585,15 +593,17 @@ export function TraditionalNotationView({
   }, [systems, effectiveMeasuresProp, effectiveMarginLeft, timeSignature]);
 
   const getBeatFromX = React.useCallback((x) => {
+    const firstSystemOffsetX = Number(systemXOffsets?.[systems?.[0]?.systemIndex]) || 0;
+    const normalizedX = x - firstSystemOffsetX;
     for (const m of measureLayout) {
-      if (x >= m.xStart && x <= m.xEnd) {
-        const t = (m.xEnd - m.xStart) > 0 ? (x - m.xStart) / (m.xEnd - m.xStart) : 0;
+      if (normalizedX >= m.xStart && normalizedX <= m.xEnd) {
+        const t = (m.xEnd - m.xStart) > 0 ? (normalizedX - m.xStart) / (m.xEnd - m.xStart) : 0;
         return m.startBeat + t * (m.endBeat - m.startBeat);
       }
     }
     if (measureLayout.length > 0) return measureLayout[0].startBeat;
     return 0;
-  }, [measureLayout]);
+  }, [measureLayout, systemXOffsets, systems]);
 
   useEffect(() => {
     if (!noteBeatDrag || typeof onNoteBeatChange !== 'function' || !timelineSvgRef?.current) return;
@@ -639,6 +649,45 @@ export function TraditionalNotationView({
       window.removeEventListener('mouseup', onUp);
     };
   }, [noteDrag, onNotePitchChange, getPitchFromY, timelineSvgRef]);
+
+  useEffect(() => {
+    if (!timeSigDrag || typeof onTimeSignatureOffsetChange !== 'function') return;
+    const onMove = (e) => {
+      onTimeSignatureOffsetChange({
+        x: timeSigDrag.startOffsetX + (e.clientX - timeSigDrag.startClientX),
+        y: timeSigDrag.startOffsetY + (e.clientY - timeSigDrag.startClientY),
+      });
+    };
+    const onUp = () => setTimeSigDrag(null);
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    return () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+  }, [timeSigDrag, onTimeSignatureOffsetChange]);
+
+  useEffect(() => {
+    if (!systemDrag) return;
+    const onMove = (e) => {
+      const deltaX = e.clientX - systemDrag.startClientX;
+      const deltaY = e.clientY - systemDrag.startClientY;
+      if (Math.abs(deltaX) >= 0.5 && typeof onSystemXOffsetChange === 'function') {
+        onSystemXOffsetChange(systemDrag.systemIndex, deltaX);
+      }
+      if (Math.abs(deltaY) >= 0.5 && typeof onSystemYOffsetChange === 'function') {
+        onSystemYOffsetChange(systemDrag.systemIndex, deltaY);
+      }
+      setSystemDrag({ systemIndex: systemDrag.systemIndex, startClientX: e.clientX, startClientY: e.clientY });
+    };
+    const onUp = () => setSystemDrag(null);
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    return () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+  }, [systemDrag, onSystemXOffsetChange, onSystemYOffsetChange]);
 
   const renderAnchoredRepeatBarline = React.useCallback(
     ({ x, topY, bottomY, staffSpace, type }) => {
@@ -758,6 +807,7 @@ export function TraditionalNotationView({
   return (
     <g className="traditional-notation">
       {systems.map((sys) => {
+        const systemOffsetX = Number(systemXOffsets?.[sys.systemIndex]) || 0;
         const pageIndex = isHorizontal ? Math.floor(sys.yOffset / a4PageHeight) : 0;
         const groupTransform = isHorizontal && pageWidth ? `translate(${pageIndex * pageWidth}, ${-pageIndex * a4PageHeight})` : undefined;
         /** Top/bottom staff lines for full system (all staves); used for bracket + connected barlines — not per-row `staffY`. */
@@ -768,6 +818,22 @@ export function TraditionalNotationView({
         const bracketBottomY = systemBottomStaffLineY;
         return (
           <g key={sys.systemIndex} transform={groupTransform}>
+            <g transform={systemOffsetX ? `translate(${systemOffsetX}, 0)` : undefined}>
+            {canHandDragSystems && (
+              <rect
+                x={0}
+                y={sys.yOffset}
+                width={Math.max(Number(pageWidth) || 0, effectiveMarginLeft + (sys.measureWidths ?? []).reduce((a, b) => a + b, 0) + 120)}
+                height={timelineHeight * (multiStaff ? staffList.length : 1)}
+                fill="transparent"
+                style={{ cursor: 'grab' }}
+                onMouseDown={(e) => {
+                  if (e.button !== 0) return;
+                  e.stopPropagation();
+                  setSystemDrag({ systemIndex: sys.systemIndex, startClientX: e.clientX, startClientY: e.clientY });
+                }}
+              />
+            )}
             {/* Spacer handle first so system bracket (SMuFL) paints on top and stays visible */}
             {showStaffSpacerHandles && typeof onStaffSpacerMouseDown === 'function' && (
               <rect
@@ -1068,7 +1134,24 @@ export function TraditionalNotationView({
                             measureStartX: effectiveMarginLeft,
                           });
                       return (
-                        <g transform={`translate(${timeSigX}, ${staffY})`}>{renderTimeSignature(timeSignature, timeSignatureMode, centerY, timeSigTextColor, timeSigNoteFill, 0, { denominatorType: pedagogicalTimeSigDenominatorType, denominatorColor: pedagogicalTimeSigDenominatorColor, denominatorInstrument: pedagogicalTimeSigDenominatorInstrument, denominatorEmoji: pedagogicalTimeSigDenominatorEmoji })}</g>
+                        <g
+                          transform={`translate(${timeSigX + (Number(timeSignatureOffset?.x) || 0)}, ${staffY + (Number(timeSignatureOffset?.y) || 0)})`}
+                          onMouseDown={canHandDragNotes && typeof onTimeSignatureOffsetChange === 'function'
+                            ? (e) => {
+                                if (e.button !== 0) return;
+                                e.stopPropagation();
+                                setTimeSigDrag({
+                                  startClientX: e.clientX,
+                                  startClientY: e.clientY,
+                                  startOffsetX: Number(timeSignatureOffset?.x) || 0,
+                                  startOffsetY: Number(timeSignatureOffset?.y) || 0,
+                                });
+                              }
+                            : undefined}
+                          style={canHandDragNotes ? { cursor: 'grab' } : undefined}
+                        >
+                          {renderTimeSignature(timeSignature, timeSignatureMode, centerY, timeSigTextColor, timeSigNoteFill, 0, { denominatorType: pedagogicalTimeSigDenominatorType, denominatorColor: pedagogicalTimeSigDenominatorColor, denominatorInstrument: pedagogicalTimeSigDenominatorInstrument, denominatorEmoji: pedagogicalTimeSigDenominatorEmoji })}
+                        </g>
                       );
                     })()
                   )}
@@ -1800,6 +1883,7 @@ export function TraditionalNotationView({
                 </g>
               );
             })}
+            </g>
           </g>
         );
       })}

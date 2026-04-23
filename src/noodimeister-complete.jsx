@@ -190,6 +190,7 @@ function buildDemoVisibilityProject({ figurenotes, grandStaff }) {
     activeStaffIndex: 0,
     staffYOffsets: staves.map(() => 0),
     systemYOffsets: [],
+    systemXOffsets: [],
     pageDesignDataUrl: null,
   };
 }
@@ -1736,6 +1737,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   const [timeSignatureMode, setTimeSignatureMode] = useState('pedagogical'); // 'classic' or 'pedagogical'
   const [timeSignatureEditField, setTimeSignatureEditField] = useState('numerator'); // 'numerator' or 'denominator'
   const [timeSignatureSize, setTimeSignatureSize] = useState(36); // Time signature font size in figurenotation (12–200), one value per project
+  const [timeSignatureOffset, setTimeSignatureOffset] = useState({ x: 0, y: 0 }); // Hand tool draggable placement override (px)
   const [pedagogicalTimeSigDenominatorType, setPedagogicalTimeSigDenominatorType] = useState('rhythm'); // 'number' | 'rhythm' | 'instrument' | 'emoji'
   const [pedagogicalTimeSigDenominatorColor, setPedagogicalTimeSigDenominatorColor] = useState('#1a1a1a');
   const [pedagogicalTimeSigDenominatorInstrument, setPedagogicalTimeSigDenominatorInstrument] = useState('handbell'); // handbell | boomwhacker | triangle
@@ -1833,6 +1835,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   const [layoutLineBreakBefore, setLayoutLineBreakBefore] = useState([]);
   const [measureStretchFactors, setMeasureStretchFactors] = useState([]);
   const [systemYOffsets, setSystemYOffsets] = useState([]);
+  const [systemXOffsets, setSystemXOffsets] = useState([]);
   const [layoutPageBreakBefore, setLayoutPageBreakBefore] = useState([]);
   /** Extra blank pages appended after the last content page (does not change measure layout). */
   const [layoutExtraPages, setLayoutExtraPages] = useState(0);
@@ -2248,9 +2251,11 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   const [figurenotesChordBlocks, setFigurenotesChordBlocks] = useState(false); // Akordirežiim figuurnotatsioonis: värvilised akordiplokid akordireal
   const [figurenotesChordBlocksShowTones, setFigurenotesChordBlocksShowTones] = useState(true); // Akordiplokis: näita lisanoote (noodinimed + värvifiguurid)
   const [figurenotesMelodyShowNoteNames, setFigurenotesMelodyShowNoteNames] = useState(true); // Figuurnotatsioonis meloodiarea nootide peal noodinimed (C, D, E)
+  const pixelsPerBeatLinkedToFigureSizeRef = useRef(true);
 
   // Hoia rütmiboksi (pixelsPerBeat) laius kooskõlas noodigraafika suurusega – magneetiline seos
   useEffect(() => {
+    if (!pixelsPerBeatLinkedToFigureSizeRef.current) return;
     setPixelsPerBeat((prev) => {
       const target = Math.max(40, Math.min(100, figurenotesSize));
       return target;
@@ -4008,6 +4013,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     staffYOffsets,
     measureStretchFactors: measureStretchFactors?.length ? measureStretchFactors : undefined,
     systemYOffsets: systemYOffsets?.length ? systemYOffsets : undefined,
+    systemXOffsets: systemXOffsets?.length ? systemXOffsets : undefined,
     timeSignature,
     timeSignatureMode,
     keySignature,
@@ -4118,6 +4124,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     pageDesignPositionX,
     pageDesignPositionY,
     pageDesignCrop,
+    timeSignatureOffset,
     visibleStaves: visibleStaves.length === staves.length ? visibleStaves : staves.map(() => true),
     instrumentPartGroups,
     intermissionLabels,
@@ -4126,7 +4133,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     lyricFontSize,
     noteheadShape,
     noteheadEmoji
-  }), [staves, activeStaffIndex, staffYOffsets, measureStretchFactors, systemYOffsets, visibleStaves, instrumentPartGroups, intermissionLabels, timeSignature, timeSignatureMode, keySignature, staffLines, notationStyle, pixelsPerBeat, notationMode, instrumentNotationVariant, linkedNotationByStaffId, tinWhistleLinkedFingeringScalePercent, cursorPosition, addedMeasures, measureRepeatMarks, setupCompleted, songTitle, author, pickupEnabled, pickupQuantity, pickupDuration, pageOrientation, paperSize, layoutMeasuresPerLine, layoutLineBreakBefore, layoutPageBreakBefore, layoutExtraPages, layoutSystemGap, layoutPartsGap, layoutPartsGapMm, layoutSizeUnit, layoutConnectedBarlines, layoutGlobalSpacingMultiplier, notationCtx?.globalSpacingMultiplier, notationCtx?.staffSpacing, notationCtx?.measureWidthMultiplier, viewMode, partLayoutMeasuresPerLine, partLayoutLineBreakBefore, partLayoutPageBreakBefore, partLayoutExtraPages, showPageNavigator, pageFlowDirection, viewFitPage, viewSmartPage, visibleToolIds, tuningReferenceNote, tuningReferenceOctave, tuningReferenceHz, playNoteOnInsert, figurenotesSize, figurenotesStems, figurenotesChordLineGap, figurenotesChordBlocks, figurenotesChordBlocksShowTones, figurenotesMelodyShowNoteNames, timeSignatureSize, pedagogicalTimeSigDenominatorType, pedagogicalTimeSigDenominatorColor, pedagogicalTimeSigDenominatorInstrument, pedagogicalTimeSigDenominatorEmoji, showBarNumbers, barNumberSize, showRhythmSyllables, showAllNoteLabels, enableEmojiOverlays, joClefStaffPosition, relativeNotationShowKeySignature, relativeNotationShowTraditionalClef, isPedagogicalProject, pedagogicalAudioBpm, pedagogicalAudioPlaybackRate, pedagogicalSyncMode, pedagogicalSyncStartBeat, pedagogicalSyncStartTimeSec, pedagogicalSyncEndBeat, pedagogicalSyncEndTimeSec, pedagogicalRhythmStep, pedagogicalPlayheadStyle, pedagogicalPlayheadEmoji, pedagogicalPlayheadEmojiSize, cursorLineStrokeWidth, pedagogicalPlayheadMovement, chords, textBoxes, documentFontFamily, lyricFontFamily, titleFontSize, authorFontSize, titleFontFamily, authorFontFamily, titleBold, titleItalic, titleUnderline, titleWeight, authorBold, authorItalic, authorUnderline, authorWeight, titleAlignment, authorAlignment, staffRowAlignment, pageDesignDataUrl, pageDesignOpacity, pageDesignFit, pageDesignPositionX, pageDesignPositionY, pageDesignCrop, lyricLineIndex, lyricLineYOffset, lyricFontSize, noteheadShape, noteheadEmoji]);
+  }), [staves, activeStaffIndex, staffYOffsets, measureStretchFactors, systemYOffsets, systemXOffsets, visibleStaves, instrumentPartGroups, intermissionLabels, timeSignature, timeSignatureMode, keySignature, staffLines, notationStyle, pixelsPerBeat, notationMode, instrumentNotationVariant, linkedNotationByStaffId, tinWhistleLinkedFingeringScalePercent, cursorPosition, addedMeasures, measureRepeatMarks, setupCompleted, songTitle, author, pickupEnabled, pickupQuantity, pickupDuration, pageOrientation, paperSize, layoutMeasuresPerLine, layoutLineBreakBefore, layoutPageBreakBefore, layoutExtraPages, layoutSystemGap, layoutPartsGap, layoutPartsGapMm, layoutSizeUnit, layoutConnectedBarlines, layoutGlobalSpacingMultiplier, notationCtx?.globalSpacingMultiplier, notationCtx?.staffSpacing, notationCtx?.measureWidthMultiplier, viewMode, partLayoutMeasuresPerLine, partLayoutLineBreakBefore, partLayoutPageBreakBefore, partLayoutExtraPages, showPageNavigator, pageFlowDirection, viewFitPage, viewSmartPage, visibleToolIds, tuningReferenceNote, tuningReferenceOctave, tuningReferenceHz, playNoteOnInsert, figurenotesSize, figurenotesStems, figurenotesChordLineGap, figurenotesChordBlocks, figurenotesChordBlocksShowTones, figurenotesMelodyShowNoteNames, timeSignatureSize, pedagogicalTimeSigDenominatorType, pedagogicalTimeSigDenominatorColor, pedagogicalTimeSigDenominatorInstrument, pedagogicalTimeSigDenominatorEmoji, showBarNumbers, barNumberSize, showRhythmSyllables, showAllNoteLabels, enableEmojiOverlays, joClefStaffPosition, relativeNotationShowKeySignature, relativeNotationShowTraditionalClef, isPedagogicalProject, pedagogicalAudioBpm, pedagogicalAudioPlaybackRate, pedagogicalSyncMode, pedagogicalSyncStartBeat, pedagogicalSyncStartTimeSec, pedagogicalSyncEndBeat, pedagogicalSyncEndTimeSec, pedagogicalRhythmStep, pedagogicalPlayheadStyle, pedagogicalPlayheadEmoji, pedagogicalPlayheadEmojiSize, cursorLineStrokeWidth, pedagogicalPlayheadMovement, chords, textBoxes, documentFontFamily, lyricFontFamily, titleFontSize, authorFontSize, titleFontFamily, authorFontFamily, titleBold, titleItalic, titleUnderline, titleWeight, authorBold, authorItalic, authorUnderline, authorWeight, titleAlignment, authorAlignment, staffRowAlignment, pageDesignDataUrl, pageDesignOpacity, pageDesignFit, pageDesignPositionX, pageDesignPositionY, pageDesignCrop, timeSignatureOffset, lyricLineIndex, lyricLineYOffset, lyricFontSize, noteheadShape, noteheadEmoji]);
 
   const saveToStorageSync = useCallback(() => {
     try {
@@ -4276,6 +4283,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         if (Array.isArray(data.staffYOffsets)) setStaffYOffsets(data.staffYOffsets);
       if (Array.isArray(data.measureStretchFactors)) setMeasureStretchFactors(data.measureStretchFactors);
       if (Array.isArray(data.systemYOffsets)) setSystemYOffsets(data.systemYOffsets);
+      if (Array.isArray(data.systemXOffsets)) setSystemXOffsets(data.systemXOffsets);
       } else {
         const scoreData = data.scoreData ?? data.notes;
         const notesArr = Array.isArray(scoreData) ? scoreData : [];
@@ -4302,7 +4310,10 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       if (data.notationMode) setNotationMode(data.notationMode);
       if (data.noteheadShape) setNoteheadShape(data.noteheadShape);
       if (data.noteheadEmoji != null) setNoteheadEmoji(data.noteheadEmoji);
-      if (data.pixelsPerBeat != null) setPixelsPerBeat(data.pixelsPerBeat);
+      if (data.pixelsPerBeat != null) {
+        pixelsPerBeatLinkedToFigureSizeRef.current = false;
+        setPixelsPerBeat(data.pixelsPerBeat);
+      }
       if (data.figurenotesSize != null) setFigurenotesSize(Math.max(12, Math.min(100, data.figurenotesSize)));
       if (data.figurenotesStems != null) setFigurenotesStems(!!data.figurenotesStems);
       if (data.figurenotesChordLineGap != null) setFigurenotesChordLineGap(Math.max(0, Math.min(20, Number(data.figurenotesChordLineGap))));
@@ -4456,6 +4467,9 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       else setPageDesignPositionX(50);
       if (typeof data.pageDesignPositionY === 'number') setPageDesignPositionY(clampNumber(data.pageDesignPositionY, 0, 100));
       else setPageDesignPositionY(50);
+      if (data.timeSignatureOffset && Number.isFinite(data.timeSignatureOffset.x) && Number.isFinite(data.timeSignatureOffset.y)) {
+        setTimeSignatureOffset({ x: Number(data.timeSignatureOffset.x), y: Number(data.timeSignatureOffset.y) });
+      } else setTimeSignatureOffset({ x: 0, y: 0 });
       if (data.pageDesignCrop && typeof data.pageDesignCrop.top === 'number' && typeof data.pageDesignCrop.right === 'number' && typeof data.pageDesignCrop.bottom === 'number' && typeof data.pageDesignCrop.left === 'number') {
         setPageDesignCrop({
           top: clampNumber(data.pageDesignCrop.top, 0, 50),
@@ -4615,6 +4629,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
           if (Array.isArray(data.staffYOffsets)) setStaffYOffsets(data.staffYOffsets);
           if (Array.isArray(data.measureStretchFactors)) setMeasureStretchFactors(data.measureStretchFactors);
           if (Array.isArray(data.systemYOffsets)) setSystemYOffsets(data.systemYOffsets);
+          if (Array.isArray(data.systemXOffsets)) setSystemXOffsets(data.systemXOffsets);
         } else {
           const instId = data.instrument || 'single-staff-treble';
           const cfg = INSTRUMENT_CONFIG_BASE[instId];
@@ -4638,7 +4653,10 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         if (data.staffLines != null) setStaffLines(data.staffLines);
         if (data.notationStyle) setNotationStyle(data.notationStyle);
         else if (data.gridOnlyMode != null) setNotationStyle(data.gridOnlyMode ? 'FIGURENOTES' : 'TRADITIONAL');
-        if (data.pixelsPerBeat != null) setPixelsPerBeat(data.pixelsPerBeat);
+        if (data.pixelsPerBeat != null) {
+          pixelsPerBeatLinkedToFigureSizeRef.current = false;
+          setPixelsPerBeat(data.pixelsPerBeat);
+        }
         if (data.figurenotesSize != null) setFigurenotesSize(Math.max(12, Math.min(100, data.figurenotesSize)));
         if (data.figurenotesStems != null) setFigurenotesStems(!!data.figurenotesStems);
       if (data.figurenotesChordLineGap != null) setFigurenotesChordLineGap(Math.max(0, Math.min(20, Number(data.figurenotesChordLineGap))));
@@ -4761,6 +4779,9 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         else setPageDesignPositionX(50);
         if (typeof data.pageDesignPositionY === 'number') setPageDesignPositionY(clampNumber(data.pageDesignPositionY, 0, 100));
         else setPageDesignPositionY(50);
+        if (data.timeSignatureOffset && Number.isFinite(data.timeSignatureOffset.x) && Number.isFinite(data.timeSignatureOffset.y)) {
+          setTimeSignatureOffset({ x: Number(data.timeSignatureOffset.x), y: Number(data.timeSignatureOffset.y) });
+        } else setTimeSignatureOffset({ x: 0, y: 0 });
         if (data.pageDesignCrop && typeof data.pageDesignCrop.top === 'number' && typeof data.pageDesignCrop.right === 'number' && typeof data.pageDesignCrop.bottom === 'number' && typeof data.pageDesignCrop.left === 'number') {
           setPageDesignCrop({ top: clampNumber(data.pageDesignCrop.top, 0, 50), right: clampNumber(data.pageDesignCrop.right, 0, 50), bottom: clampNumber(data.pageDesignCrop.bottom, 0, 50), left: clampNumber(data.pageDesignCrop.left, 0, 50) });
         } else setPageDesignCrop({ top: 0, right: 0, bottom: 0, left: 0 });
@@ -6975,7 +6996,10 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         }
         break;
       case 'layout':
-        if (option.id.startsWith('spacing-')) setPixelsPerBeat(option.value);
+        if (option.id.startsWith('spacing-')) {
+          pixelsPerBeatLinkedToFigureSizeRef.current = false;
+          setPixelsPerBeat(option.value);
+        }
         break;
       case 'instruments': {
         if (option.type === 'category') break;
@@ -12800,7 +12824,11 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                             value={pixelsPerBeat}
                             onChange={(e) => {
                               const v = parseInt(e.target.value, 10);
-                            if (!isNaN(v)) { dirtyRef.current = true; setPixelsPerBeat(Math.max(40, Math.min(500, v))); }
+                            if (!isNaN(v)) {
+                              dirtyRef.current = true;
+                              pixelsPerBeatLinkedToFigureSizeRef.current = false;
+                              setPixelsPerBeat(Math.max(40, Math.min(500, v)));
+                            }
                             }}
                             className="w-20 px-2 py-1.5 rounded border-2 border-amber-200 bg-amber-50 text-amber-900"
                           />
@@ -12867,7 +12895,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                         <button type="button" title={t('layout.compressMeasureShortcut')} onClick={() => { dirtyRef.current = true; setMeasureStretchFactors((prev) => { const next = [...(prev || [])]; while (next.length <= cursorMeasureIndex) next.push(1); next[cursorMeasureIndex] = Math.max(0.25, (next[cursorMeasureIndex] ?? 1) - 0.1); return next; }); }} className="py-1.5 px-2 rounded bg-slate-100 text-slate-800 hover:bg-slate-200 font-medium">{t('layout.compressMeasure')}</button>
                         <button type="button" title={t('layout.stretchMeasureShortcut')} onClick={() => { dirtyRef.current = true; setMeasureStretchFactors((prev) => { const next = [...(prev || [])]; while (next.length <= cursorMeasureIndex) next.push(1); next[cursorMeasureIndex] = Math.min(4, (next[cursorMeasureIndex] ?? 1) + 0.1); return next; }); }} className="py-1.5 px-2 rounded bg-slate-100 text-slate-800 hover:bg-slate-200 font-medium">{t('layout.stretchMeasure')}</button>
                       </div>
-                      <button type="button" onClick={() => { dirtyRef.current = true; (viewMode === 'score' ? setLayoutLineBreakBefore : setPartLayoutLineBreakBefore)([]); (viewMode === 'score' ? setLayoutPageBreakBefore : setPartLayoutPageBreakBefore)([]); (viewMode === 'score' ? setLayoutMeasuresPerLine : setPartLayoutMeasuresPerLine)(0); (viewMode === 'score' ? setLayoutExtraPages : setPartLayoutExtraPages)(0); setMeasureStretchFactors([]); setSystemYOffsets([]); setLayoutSystemGap(15); setLayoutPartsGap(10); setLayoutConnectedBarlines(true); setLayoutGlobalSpacingMultiplier(1); setPixelsPerBeat(85); setFigurenotesSize(85); }} className="mt-3 w-full py-2 px-3 rounded-lg bg-slate-100 text-slate-800 text-sm font-semibold hover:bg-slate-200 border border-slate-300" title={t('layout.resetLayoutHint')}>{t('layout.resetLayout')}</button>
+                      <button type="button" onClick={() => { dirtyRef.current = true; (viewMode === 'score' ? setLayoutLineBreakBefore : setPartLayoutLineBreakBefore)([]); (viewMode === 'score' ? setLayoutPageBreakBefore : setPartLayoutPageBreakBefore)([]); (viewMode === 'score' ? setLayoutMeasuresPerLine : setPartLayoutMeasuresPerLine)(0); (viewMode === 'score' ? setLayoutExtraPages : setPartLayoutExtraPages)(0); setMeasureStretchFactors([]); setSystemYOffsets([]); setSystemXOffsets([]); setLayoutSystemGap(15); setLayoutPartsGap(10); setLayoutConnectedBarlines(true); setLayoutGlobalSpacingMultiplier(1); pixelsPerBeatLinkedToFigureSizeRef.current = true; setPixelsPerBeat(85); setFigurenotesSize(85); }} className="mt-3 w-full py-2 px-3 rounded-lg bg-slate-100 text-slate-800 text-sm font-semibold hover:bg-slate-200 border border-slate-300" title={t('layout.resetLayoutHint')}>{t('layout.resetLayout')}</button>
                     </div>
                     {pageDesignDataUrl && (
                       <>
@@ -14132,6 +14160,12 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                   onNotePitchChange={(staffIdx === activeStaffIndex || renderFigurenotesAsCombinedSystem) ? onNotePitchChange : undefined}
                   onNoteBeatChange={(staffIdx === activeStaffIndex || renderFigurenotesAsCombinedSystem) ? onNoteBeatChange : undefined}
                   canHandDragNotes={cursorTool === 'hand'}
+                  timeSignatureOffset={timeSignatureOffset}
+                  onTimeSignatureOffsetChange={(nextOffset) => {
+                    if (!nextOffset || !Number.isFinite(nextOffset.x) || !Number.isFinite(nextOffset.y)) return;
+                    dirtyRef.current = true;
+                    setTimeSignatureOffset({ x: Number(nextOffset.x), y: Number(nextOffset.y) });
+                  }}
                   ghostPitch={ghostPitch}
                   ghostOctave={ghostOctave}
                   ghostAccidental={ghostAccidental}
@@ -14221,6 +14255,16 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                       return next;
                     });
                   } : undefined}
+                  onSystemXOffsetChange={isFirstVisible ? (systemIndex, deltaX) => {
+                    dirtyRef.current = true;
+                    setSystemXOffsets((prev) => {
+                      const next = [...(prev || [])];
+                      while (next.length <= systemIndex) next.push(0);
+                      next[systemIndex] = (next[systemIndex] ?? 0) + deltaX;
+                      return next;
+                    });
+                  } : undefined}
+                  systemXOffsets={systemXOffsets}
                   onLyricLineYOffsetChange={isFirstVisible ? (deltaY) => {
                     dirtyRef.current = true;
                     setLyricLineYOffset((prev) => Math.max(-40, Math.min(120, (prev ?? 0) + deltaY)));
@@ -14706,7 +14750,7 @@ function getFingeringForNote(pitch, octave, instrumentId) {
 }
 
 // Timeline Component – multi-system layout (VexFlow loogika). (PAGE_BREAK_GAP on defineeritud üleval.)
-function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, pageWidth, cursorPosition, notationMode, staffLines, clefType, keySignature = 'C', relativeNotationShowKeySignature = false, relativeNotationShowTraditionalClef = false, onJoClefPositionChange, joClefFocused = false, onJoClefFocus, instrument = 'single-staff-treble', instrumentNotationVariant = 'standard', instrumentConfig = {}, showBarNumbers = true, barNumberSize = 11, showRhythmSyllables = false, joClefStaffPosition: joClefStaffPositionProp, showAllNoteLabels = false, enableEmojiOverlays = true, noteheadShape = 'oval', noteheadEmoji = '♪', onNoteTeacherLabelChange, onNoteLabelClick, chords = [], isDotted, isRest, selectedDuration, noteInputMode, selectedNoteIndex, isNoteSelected, notes: allNotes, onStaffAddNote, onNoteClick, onNoteMouseDown, onNoteMouseEnter, onNotePitchChange, onNoteBeatChange, canHandDragNotes = false, ghostPitch, ghostOctave, ghostAccidental = 0, ghostAccidentalIsExplicit = false, onFigureBeatClick, onChordLineMouseMove, onChordLineClick, notationStyle, layoutMeasuresPerLine = 4, layoutLineBreakBefore = [], layoutPageBreakBefore = [], layoutSystemGap = 120, layoutPartsGap, layoutConnectedBarlines = false, staffRowAlignment = 'center', staffIndexInScore = 0, systemTotalHeight, layoutGlobalSpacingMultiplier = 1, systems: systemsProp, baseYOffset = 0, isActiveStaff = true, staffCount = 1, staffHeight: staffHeightProp, figurenotesSize = 16, figurenotesStems = false, figurenotesChordLineGap = 6, figurenotesChordBlocks = false, figurenotesChordBlocksShowTones = true, figurenotesMelodyShowNoteNames = true, figurenotesRowHeight: figurenotesRowHeightProp, figurenotesChordLineHeight: figurenotesChordLineHeightProp, figurenotesLyricReserveHeight = 0, timeSignatureSize = 16, pedagogicalTimeSigDenominatorType = 'rhythm', pedagogicalTimeSigDenominatorColor = '#1a1a1a', pedagogicalTimeSigDenominatorInstrument = 'handbell', pedagogicalTimeSigDenominatorEmoji = '🥁', themeColors: themeColorsProp, pedagogicalPlayheadStyle = 'line', pedagogicalPlayheadEmoji = '🎵', pedagogicalPlayheadEmojiSize = 32, cursorSizePx, cursorLineStrokeWidth = 4, cursorSubRow = 0, pedagogicalPlayheadMovement = 'arch', isPedagogicalAudioPlaying = false, isExportingAnimation = false, exportCursorRef, scoreContainerRef, pageFlowDirection = 'vertical', pageOrientation = 'portrait', isFirstInBraceGroup = false, braceGroupSize = 0, lyricFontFamily = 'sans-serif', lyricFontSize = 12, lyricLineYOffset = 0, translateLabel, showLayoutBreakIcons = false, showStaffSpacerHandles = false, showLyricSpacerHandles = false, onSystemYOffsetChange, onLyricLineYOffsetChange, onToggleLineBreakAfter, onRemoveRepeatMark, selectedRepeatMark = null, onSelectRepeatMark, activeLyricNoteIndex = null, physicalPageGapPx = 3, disablePhysicalPageGaps = false, hideCursorOverlay = false, exportNotationSvgRef = null, multiStaffInstruments = null, multiStaffMeasuresByInstrument = null, combinedCursorRowOffsetPx = 0, combinedActiveStaffRowIndex = 0, cursorStaffClefType = null, tinWhistleLinkedFingeringScale = 1, linkedNotationByStaffId = null }) {
+function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, pageWidth, cursorPosition, notationMode, staffLines, clefType, keySignature = 'C', relativeNotationShowKeySignature = false, relativeNotationShowTraditionalClef = false, onJoClefPositionChange, joClefFocused = false, onJoClefFocus, instrument = 'single-staff-treble', instrumentNotationVariant = 'standard', instrumentConfig = {}, showBarNumbers = true, barNumberSize = 11, showRhythmSyllables = false, joClefStaffPosition: joClefStaffPositionProp, showAllNoteLabels = false, enableEmojiOverlays = true, noteheadShape = 'oval', noteheadEmoji = '♪', onNoteTeacherLabelChange, onNoteLabelClick, chords = [], isDotted, isRest, selectedDuration, noteInputMode, selectedNoteIndex, isNoteSelected, notes: allNotes, onStaffAddNote, onNoteClick, onNoteMouseDown, onNoteMouseEnter, onNotePitchChange, onNoteBeatChange, canHandDragNotes = false, timeSignatureOffset = { x: 0, y: 0 }, onTimeSignatureOffsetChange, ghostPitch, ghostOctave, ghostAccidental = 0, ghostAccidentalIsExplicit = false, onFigureBeatClick, onChordLineMouseMove, onChordLineClick, notationStyle, layoutMeasuresPerLine = 4, layoutLineBreakBefore = [], layoutPageBreakBefore = [], layoutSystemGap = 120, layoutPartsGap, layoutConnectedBarlines = false, staffRowAlignment = 'center', staffIndexInScore = 0, systemTotalHeight, layoutGlobalSpacingMultiplier = 1, systems: systemsProp, baseYOffset = 0, isActiveStaff = true, staffCount = 1, staffHeight: staffHeightProp, figurenotesSize = 16, figurenotesStems = false, figurenotesChordLineGap = 6, figurenotesChordBlocks = false, figurenotesChordBlocksShowTones = true, figurenotesMelodyShowNoteNames = true, figurenotesRowHeight: figurenotesRowHeightProp, figurenotesChordLineHeight: figurenotesChordLineHeightProp, figurenotesLyricReserveHeight = 0, timeSignatureSize = 16, pedagogicalTimeSigDenominatorType = 'rhythm', pedagogicalTimeSigDenominatorColor = '#1a1a1a', pedagogicalTimeSigDenominatorInstrument = 'handbell', pedagogicalTimeSigDenominatorEmoji = '🥁', themeColors: themeColorsProp, pedagogicalPlayheadStyle = 'line', pedagogicalPlayheadEmoji = '🎵', pedagogicalPlayheadEmojiSize = 32, cursorSizePx, cursorLineStrokeWidth = 4, cursorSubRow = 0, pedagogicalPlayheadMovement = 'arch', isPedagogicalAudioPlaying = false, isExportingAnimation = false, exportCursorRef, scoreContainerRef, pageFlowDirection = 'vertical', pageOrientation = 'portrait', isFirstInBraceGroup = false, braceGroupSize = 0, lyricFontFamily = 'sans-serif', lyricFontSize = 12, lyricLineYOffset = 0, translateLabel, showLayoutBreakIcons = false, showStaffSpacerHandles = false, showLyricSpacerHandles = false, onSystemYOffsetChange, onSystemXOffsetChange, systemXOffsets = [], onLyricLineYOffsetChange, onToggleLineBreakAfter, onRemoveRepeatMark, selectedRepeatMark = null, onSelectRepeatMark, activeLyricNoteIndex = null, physicalPageGapPx = 3, disablePhysicalPageGaps = false, hideCursorOverlay = false, exportNotationSvgRef = null, multiStaffInstruments = null, multiStaffMeasuresByInstrument = null, combinedCursorRowOffsetPx = 0, combinedActiveStaffRowIndex = 0, cursorStaffClefType = null, tinWhistleLinkedFingeringScale = 1, linkedNotationByStaffId = null }) {
   const themeColors = themeColorsProp || { staffLineColor: '#000', noteFill: '#1a1a1a', textColor: '#1a1a1a', isDark: false };
   const safeKey = keySignature ?? 'C';
   // Alati lõplik number (mitte NaN) — varajane `return null` enne hookide kasutamist rikkus Reacti hookide reeglid ja võis jätta noodiala tühjaks.
@@ -15413,6 +15457,8 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
           onNoteMouseEnter={onNoteMouseEnter}
           onNoteBeatChange={onNoteBeatChange}
           canHandDragNotes={canHandDragNotes}
+          timeSignatureOffset={timeSignatureOffset}
+          onTimeSignatureOffsetChange={onTimeSignatureOffsetChange}
           timelineSvgRef={timelineSvgRef}
           onBeatSlotClick={onFigureBeatClick}
           onChordLineMouseMove={onChordLineMouseMove}
@@ -15428,6 +15474,10 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
           figureBaseWidth={FIGURE_BASE_WIDTH * (layoutGlobalSpacingMultiplier ?? 1)}
           showStaffSpacerHandles={showStaffSpacerHandles && typeof onSystemYOffsetChange === 'function'}
           onStaffSpacerMouseDown={typeof onSystemYOffsetChange === 'function' ? (systemIndex) => (e) => { e.stopPropagation(); setStaffSpacerDrag({ systemIndex, startClientY: e.clientY, cumulativeDelta: 0 }); } : undefined}
+          onSystemYOffsetChange={onSystemYOffsetChange}
+          canHandDragSystems={canHandDragNotes}
+          onSystemXOffsetChange={onSystemXOffsetChange}
+          systemXOffsets={systemXOffsets}
           showLyricSpacerHandles={showLyricSpacerHandles && typeof onLyricLineYOffsetChange === 'function'}
           onLyricSpacerMouseDown={typeof onLyricLineYOffsetChange === 'function' ? (e) => { e.stopPropagation(); setLyricSpacerDrag({ active: true, startClientY: e.clientY, cumulativeDelta: 0 }); } : undefined}
           onLyricSpacerNudge={typeof onLyricLineYOffsetChange === 'function' ? (deltaY) => onLyricLineYOffsetChange(deltaY) : undefined}
@@ -15482,6 +15532,8 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
           onNoteBeatChange={onNoteBeatChange}
           noteInputMode={noteInputMode}
           canHandDragNotes={canHandDragNotes}
+          timeSignatureOffset={timeSignatureOffset}
+          onTimeSignatureOffsetChange={onTimeSignatureOffsetChange}
           getPitchY={getPitchY}
           getPitchFromY={getPitchFromY}
           timelineSvgRef={timelineSvgRef}
@@ -15495,6 +15547,10 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
           getStaffHeight={getStaffHeight}
           showStaffSpacerHandles={showStaffSpacerHandles && typeof onSystemYOffsetChange === 'function'}
           onStaffSpacerMouseDown={typeof onSystemYOffsetChange === 'function' ? (systemIndex) => (e) => { e.stopPropagation(); setStaffSpacerDrag({ systemIndex, startClientY: e.clientY, cumulativeDelta: 0 }); } : undefined}
+          onSystemYOffsetChange={onSystemYOffsetChange}
+          canHandDragSystems={canHandDragNotes}
+          onSystemXOffsetChange={onSystemXOffsetChange}
+          systemXOffsets={systemXOffsets}
           showLyricSpacerHandles={showLyricSpacerHandles && typeof onLyricLineYOffsetChange === 'function'}
           onLyricSpacerMouseDown={typeof onLyricLineYOffsetChange === 'function' ? (e) => { e.stopPropagation(); setLyricSpacerDrag({ active: true, startClientY: e.clientY, cumulativeDelta: 0 }); } : undefined}
           onLyricSpacerNudge={typeof onLyricLineYOffsetChange === 'function' ? (deltaY) => onLyricLineYOffsetChange(deltaY) : undefined}

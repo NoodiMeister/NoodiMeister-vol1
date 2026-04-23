@@ -484,6 +484,8 @@ export function FigurenotesView({
   onNoteMouseEnter,
   onNoteBeatChange,
   canHandDragNotes = false,
+  timeSignatureOffset = { x: 0, y: 0 },
+  onTimeSignatureOffsetChange,
   timelineSvgRef,
   onBeatSlotClick,
   onChordLineMouseMove,
@@ -499,6 +501,10 @@ export function FigurenotesView({
   figureBaseWidth = FIGURE_BASE_WIDTH,
   showStaffSpacerHandles = false,
   onStaffSpacerMouseDown,
+  onSystemYOffsetChange,
+  canHandDragSystems = false,
+  onSystemXOffsetChange,
+  systemXOffsets = [],
   showLyricSpacerHandles = false,
   onLyricSpacerMouseDown,
   onLyricSpacerNudge,
@@ -540,6 +546,8 @@ export function FigurenotesView({
   }, []);
 
   const [noteBeatDrag, setNoteBeatDrag] = useState(null);
+  const [timeSigDrag, setTimeSigDrag] = useState(null); // { startClientX, startClientY, startOffsetX, startOffsetY }
+  const [systemDrag, setSystemDrag] = useState(null); // { systemIndex, startClientX, startClientY }
   const measureLayout = useMemo(() => {
     const sys = systems?.[0];
     if (!sys || !layoutSourceMeasures?.length) return [];
@@ -581,16 +589,18 @@ export function FigurenotesView({
   }, [systems, layoutSourceMeasures, marginLeft, beatsPerMeasure, notationScale]);
   const getBeatFromX = useCallback(
     (x) => {
+      const firstSystemOffsetX = Number(systemXOffsets?.[systems?.[0]?.systemIndex]) || 0;
+      const normalizedX = x - firstSystemOffsetX;
       for (const m of measureLayout) {
-        if (x >= m.xStart && x <= m.xEnd) {
+        if (normalizedX >= m.xStart && normalizedX <= m.xEnd) {
           const t =
-            m.xEnd - m.xStart > 0 ? (x - m.xStart) / (m.xEnd - m.xStart) : 0;
+            m.xEnd - m.xStart > 0 ? (normalizedX - m.xStart) / (m.xEnd - m.xStart) : 0;
           return m.startBeat + t * (m.endBeat - m.startBeat);
         }
       }
       return measureLayout.length > 0 ? measureLayout[0].startBeat : 0;
     },
-    [measureLayout],
+    [measureLayout, systemXOffsets, systems],
   );
   useEffect(() => {
     if (
@@ -615,6 +625,49 @@ export function FigurenotesView({
     window.addEventListener("mouseup", onUp);
     return () => window.removeEventListener("mouseup", onUp);
   }, [noteBeatDrag, onNoteBeatChange, getBeatFromX, timelineSvgRef]);
+
+  useEffect(() => {
+    if (!timeSigDrag || typeof onTimeSignatureOffsetChange !== "function") return;
+    const onMove = (e) => {
+      onTimeSignatureOffsetChange({
+        x: timeSigDrag.startOffsetX + (e.clientX - timeSigDrag.startClientX),
+        y: timeSigDrag.startOffsetY + (e.clientY - timeSigDrag.startClientY),
+      });
+    };
+    const onUp = () => setTimeSigDrag(null);
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+  }, [timeSigDrag, onTimeSignatureOffsetChange]);
+
+  useEffect(() => {
+    if (!systemDrag) return;
+    const onMove = (e) => {
+      const deltaX = e.clientX - systemDrag.startClientX;
+      const deltaY = e.clientY - systemDrag.startClientY;
+      if (Math.abs(deltaX) >= 0.5 && typeof onSystemXOffsetChange === "function") {
+        onSystemXOffsetChange(systemDrag.systemIndex, deltaX);
+      }
+      if (Math.abs(deltaY) >= 0.5 && typeof onSystemYOffsetChange === "function") {
+        onSystemYOffsetChange(systemDrag.systemIndex, deltaY);
+      }
+      setSystemDrag({
+        systemIndex: systemDrag.systemIndex,
+        startClientX: e.clientX,
+        startClientY: e.clientY,
+      });
+    };
+    const onUp = () => setSystemDrag(null);
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+  }, [systemDrag, onSystemXOffsetChange, onSystemYOffsetChange]);
 
   const renderAnchoredRepeatBarline = useCallback(
     ({ x, topY, bottomY, staffSpace, type }) => {
@@ -721,6 +774,7 @@ export function FigurenotesView({
   return (
     <>
       {systems.map((sys) => {
+        const systemOffsetX = Number(systemXOffsets?.[sys.systemIndex]) || 0;
         const pageIndex = isHorizontal
           ? Math.floor(sys.yOffset / a4PageHeight)
           : 0;
@@ -730,6 +784,37 @@ export function FigurenotesView({
             : undefined;
         return (
           <g key={sys.systemIndex} transform={groupTransform}>
+            <g transform={systemOffsetX ? `translate(${systemOffsetX}, 0)` : undefined}>
+            {canHandDragSystems && (
+              <rect
+                x={0}
+                y={sys.yOffset}
+                width={Math.max(1, Number(pageWidth) || 1000)}
+                height={
+                  combinedRows
+                    ? (instruments.length - 1) * rowStepPx +
+                      melodyRowHeight +
+                      chordLineGap +
+                      chordLineHeight +
+                      lyricReserveHeight
+                    : melodyRowHeight +
+                      chordLineGap +
+                      chordLineHeight +
+                      lyricReserveHeight
+                }
+                fill="transparent"
+                style={{ cursor: "grab" }}
+                onMouseDown={(e) => {
+                  if (e.button !== 0) return;
+                  e.stopPropagation();
+                  setSystemDrag({
+                    systemIndex: sys.systemIndex,
+                    startClientX: e.clientX,
+                    startClientY: e.clientY,
+                  });
+                }}
+              />
+            )}
             {showStaffSpacerHandles &&
               typeof onStaffSpacerMouseDown === "function" && (
                 <rect
@@ -825,14 +910,38 @@ export function FigurenotesView({
                       FIGURE_TIME_SIG_REPEAT_START_CLEARANCE_PX -
                       FIGURE_TIME_SIGNATURE_LEFT_SHIFT_PX
                     : getFigureTimeSignatureX(marginLeft);
-                  return renderTimeSignature(
-                    timeSignature,
-                    timeSignatureMode,
-                    centerY,
-                    timeSignatureSize,
-                    timeSigTextColor,
-                    timeSigNoteFill,
-                    timeSigX,
+                  return (
+                    <g
+                      transform={`translate(${Number(timeSignatureOffset?.x) || 0}, ${Number(timeSignatureOffset?.y) || 0})`}
+                      onMouseDown={
+                        canHandDragNotes &&
+                        typeof onTimeSignatureOffsetChange === "function"
+                          ? (e) => {
+                              if (e.button !== 0) return;
+                              e.stopPropagation();
+                              setTimeSigDrag({
+                                startClientX: e.clientX,
+                                startClientY: e.clientY,
+                                startOffsetX:
+                                  Number(timeSignatureOffset?.x) || 0,
+                                startOffsetY:
+                                  Number(timeSignatureOffset?.y) || 0,
+                              });
+                            }
+                          : undefined
+                      }
+                      style={canHandDragNotes ? { cursor: "grab" } : undefined}
+                    >
+                      {renderTimeSignature(
+                        timeSignature,
+                        timeSignatureMode,
+                        centerY,
+                        timeSignatureSize,
+                        timeSigTextColor,
+                        timeSigNoteFill,
+                        timeSigX,
+                      )}
+                    </g>
                   );
                 })()}
               </g>
@@ -2825,6 +2934,7 @@ export function FigurenotesView({
                   </g>
                 );
               })()}
+            </g>
           </g>
         );
       })}

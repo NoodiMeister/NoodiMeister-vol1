@@ -993,6 +993,12 @@ export default function MinuTöödPage() {
             >
               <FolderOpen className="w-5 h-5" /> {t['mywork.openLastModified']}
             </a>
+            <a
+              href={`${basePath}/koostaja`}
+              className="inline-flex items-center gap-2 px-6 py-3 rounded-xl border-2 border-amber-400 bg-white dark:bg-zinc-900 text-amber-800 dark:text-white font-semibold hover:bg-amber-50 dark:hover:bg-white/10 transition-colors no-underline"
+            >
+              <FolderOpen className="w-5 h-5" /> {t['mywork.openComposer'] || 'Ava lehekoostaja'}
+            </a>
             <button
               type="button"
               onClick={() => importMusicXmlInputRef.current?.click()}
@@ -1111,6 +1117,12 @@ export default function MinuTöödPage() {
                         >
                           <FilePlus className="w-4 h-4" /> {t['mywork.newWorkInFolder']}
                         </a>
+                        <a
+                          href={`${basePath}/koostaja?cloud=google&saveFolderId=${encodeURIComponent(folder.id)}`}
+                          className="ml-2 inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-white text-amber-900 border border-amber-300 hover:bg-amber-50 transition-colors no-underline"
+                        >
+                          <FolderOpen className="w-4 h-4" /> {t['mywork.openComposer'] || 'Ava lehekoostaja'}
+                        </a>
                       </li>
                       {files.length === 0 ? (
                         <li className="py-4 text-sm text-amber-700/90 dark:text-white/80 pl-2">
@@ -1145,6 +1157,14 @@ export default function MinuTöödPage() {
                             >
                               <ExternalLink className="w-5 h-5" aria-hidden />
                             </button>
+                            <a
+                              href={`${basePath}/koostaja?fileId=${encodeURIComponent(f.id)}&cloud=google`}
+                              className="p-2 rounded-lg text-amber-700 dark:text-white/80 hover:bg-amber-100 dark:hover:bg-white/10 border border-transparent hover:border-amber-200 transition-colors"
+                              title={t['mywork.openInComposer'] || 'Ava lehekoostajas'}
+                              aria-label={t['mywork.openInComposer'] || 'Ava lehekoostajas'}
+                            >
+                              <FolderOpen className="w-5 h-5" aria-hidden />
+                            </a>
                             <button
                               type="button"
                               onClick={(e) => { e.preventDefault(); handleCopyGoogleFile(f.id, f.name, folder.id); }}
@@ -1268,6 +1288,12 @@ export default function MinuTöödPage() {
                         >
                           <FilePlus className="w-4 h-4" /> {t['mywork.newWorkInFolder']}
                         </a>
+                        <a
+                          href={`${basePath}/koostaja?cloud=onedrive&saveFolderId=${encodeURIComponent(folder.id)}`}
+                          className="ml-2 inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-white text-amber-900 border border-amber-300 hover:bg-amber-50 transition-colors no-underline"
+                        >
+                          <FolderOpen className="w-4 h-4" /> {t['mywork.openComposer'] || 'Ava lehekoostaja'}
+                        </a>
                       </li>
                       {files.length === 0 ? (
                         <li className="py-4 text-sm text-amber-700/90 dark:text-white/80 pl-2">
@@ -1302,6 +1328,14 @@ export default function MinuTöödPage() {
                             >
                               <ExternalLink className="w-5 h-5" aria-hidden />
                             </button>
+                            <a
+                              href={`${basePath}/koostaja?fileId=${encodeURIComponent(f.id)}&cloud=onedrive`}
+                              className="p-2 rounded-lg text-amber-700 dark:text-white/80 hover:bg-amber-100 dark:hover:bg-white/10 border border-transparent hover:border-amber-200 transition-colors"
+                              title={t['mywork.openInComposer'] || 'Ava lehekoostajas'}
+                              aria-label={t['mywork.openInComposer'] || 'Ava lehekoostajas'}
+                            >
+                              <FolderOpen className="w-5 h-5" aria-hidden />
+                            </a>
                             <button
                               type="button"
                               onClick={(e) => { e.preventDefault(); handleCopyOneDriveFile(f.id, f.name, folder.id); }}
