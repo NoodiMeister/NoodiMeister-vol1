@@ -83,6 +83,16 @@ const CONTENT = {
             ],
           },
           {
+            q: 'Kuidas kasutada Tekst / Text tööriista?',
+            steps: [
+              'Ava tööriistaribalt “Tekst / Text”.',
+              'Lohista noodilehel ala, kuhu tekst peab ilmuma (tekstikast tekib täpselt valitud alasse).',
+              'Sisesta sisu (nt kommentaar, juhis, tempo) ja kinnita.',
+              'Vajadusel liiguta või skaleeri tekstikasti, et see ei kattuks nootide, akordide ega laulusõnadega.',
+              'Kontrolli sama paigutust enne eksporti PDF/Print eelvaates.',
+            ],
+          },
+          {
             q: 'Kuidas akorde lisada?',
             steps: [
               'Vali akordi sisestuse tööriist.',
@@ -238,6 +248,10 @@ const CONTENT = {
         title: 'Text, works, and import',
         qa: [
           {
+            q: 'How do I use the Text tool?',
+            a: 'Select “Text”, drag over the exact target area on score page, type the content, then verify it does not overlap notes/chords/lyrics and matches PDF/print preview.',
+          },
+          {
             q: 'How do I place a text box precisely?',
             a: 'Drag over the target area on the score page. The text box is created exactly in that selected region.',
           },
@@ -333,6 +347,10 @@ const CONTENT = {
       {
         title: 'Teksti, tiedostot ja tuonti',
         qa: [
+          {
+            q: 'Miten käytän Text-työkalua?',
+            a: 'Valitse “Text”, vedä nuottisivulla tarkka alue, kirjoita sisältö ja varmista lopuksi, ettei tekstilaatikko peitä nuotteja/sointuja/sanoitusta sekä että asettelu vastaa PDF-/tulostusesikatselua.',
+          },
           {
             q: 'Miten lisään tekstilaatikon tarkasti?',
             a: 'Vedä hiirellä haluttu alue nuottisivulla. Tekstilaatikko luodaan juuri siihen kohtaan.',
