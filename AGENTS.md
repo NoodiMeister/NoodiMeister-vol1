@@ -74,6 +74,16 @@ Kõik muudatused peavad hoidma kasutaja teekonnad tervena:
   - süsteemivahetus tohib toimuda alles pärast seda, kui **kõik sama süsteemi read** (kõik nähtavad stavid) on paigutatud
   - figuurnotatsiooni süsteemi vertikaalne samm arvutatakse kui: kõigi nähtavate staffide kogukõrgus + staffidevahelised vahed + süsteemivahe
 
+- **Standard: engraving anchors ja drift-invariandid (kõik notatsioonirežiimid)**
+  - **Põhireegel:** staff-jooned, taktijooned ja glüüfid (võtmed, accidentalid, kordusmärgid jne) peavad lähtuma **samast ankruraamist** (`barlineFrame` / `anchorFrame`), mitte eraldi valemitest eri vaadetes.
+  - **Ühik:** kõik paigutuskonstandid peavad olema väljendatud `staffSpace` suhtes; väldi “paljaid px” väärtusi renderi keskloogikas.
+  - **Renderi jaotus:** geomeetrilised objektid (`line`/`path`) jäävad geomeetriaks; SMuFL sümbolid jäävad glüüfideks — kuid nende `x/y/size` arvutatakse samast raamistikust.
+  - **Kordusmärgid (kohustuslik):** `repeatStart/repeatEnd` ei tohi “hõljuda” ega dubleeruda lõpujoonega; kui taktil on `repeatEnd`, ei tohi sama ankru peal lisaks tekkida fallback-final-barline.
+  - **Avaankur (kohustuslik):** kui rea alguses on kordusmärk, peab taktimõõt/helistik jääma loetavaks; kattumine (`repeatStart` vs `time signature`/`key signature`) on regressioon.
+  - **Drift-lävi:** sama sisendi korral peab paigutus olema deterministlik; sama tüüpi glüüfide ankrud eri ridades/režiimides ei tohi lahkneda rohkem kui kokkulepitud optiline kalibratsioon (`kx/ky/ks`).
+  - **Kalibratsioon:** optilised parandused on lubatud ainult nimega konstantidena (nt `*_INSET_STAFF_SPACES`, `*_HEIGHT_MULTIPLIER`) ühes kohas; ära dubleeri samu “magic numbreid” view failides.
+  - **Kontroll enne merge'i:** kui muudatus puudutab taktijooni, kordusmärke, võtmemärke või taktimõõtu, tee vähemalt üks visuaalne smoke nii `traditional` kui `figurenotes` vaates ning kinnita, et ankrud on kooskõlas.
+
 - **Standard: veateated kasutajale**
   - kasutajale: inimkeelne selgitus + järgmine samm
   - arendajale: struktureeritud info (allikas, kood, kirjeldus)

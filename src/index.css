@@ -23,6 +23,8 @@ html, body, #root {
 .main-score-area {
   -webkit-overflow-scrolling: touch;
   overflow-scrolling: touch;
+  /* Keep score workspace contrast consistent: white paper on black desk in all themes. */
+  background: #000;
 }
 
 /* Noodipaber: A4 tunnetus, turvaala äärtest. Laius/kõrgus tulevad inline stiilidest (794×1123 px). */

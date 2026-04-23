@@ -1669,7 +1669,11 @@ export function TraditionalNotationView({
                           {enableEmojiOverlays && (isVabanotatsioon || true) && (() => {
                             const labelAboveY = staffY + pitchY - spacing * 2.2;
                             const hasCustom = note.teacherLabel != null && note.teacherLabel !== '';
-                            const displayText = hasCustom ? expandEmojiShortcuts(note.teacherLabel) : (showAllNoteLabels && isVabanotatsioon ? getJoName(note.pitch, note.octave, keySignature) : '');
+                            const displayText = hasCustom
+                              ? expandEmojiShortcuts(note.teacherLabel)
+                              : (showAllNoteLabels && isVabanotatsioon
+                                ? getJoName(note.pitch, note.octave, keySignature, joClefStaffPosition)
+                                : '');
                             const canEdit = typeof onNoteLabelClick === 'function';
                             return (
                               <g key="teacher-label" data-teacher-label style={{ cursor: canEdit ? 'pointer' : undefined }} onClick={canEdit ? (ev) => { ev.stopPropagation(); onNoteLabelClick(globalNoteIndex); } : undefined} title={canEdit ? (translateLabel ? translateLabel('teacher.noteLabelHint') : null) || 'Klõpsa valimiseks' : undefined}>
