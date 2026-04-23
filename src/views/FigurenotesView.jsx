@@ -54,6 +54,76 @@ const FIGURE_REPEAT_NOTE_MIN_GAP_PX = 3;
 const NOTATION_SIZE_REF = 75;
 
 /**
+ * Horizontal space reserved left/right of the beat grid for repeat SMuFL barlines.
+ * Beat geometry must use only the middle “content” width; dividing full measure width
+ * (including lanes) by beats stretches the grid through repeat lanes and misaligns notes vs beat lines.
+ */
+function computeRepeatLaneWidths({
+  sys,
+  layoutSourceMeasures,
+  measureIndexInSystem,
+  notationScale,
+}) {
+  const repeatStaffSpaceForLane = 10 * notationScale;
+  const repeatThinWForLane = Math.max(
+    1,
+    repeatStaffSpaceForLane * THIN_BARLINE_THICKNESS,
+  );
+  const repeatThickWForLane = Math.max(
+    2,
+    repeatStaffSpaceForLane * THICK_BARLINE_THICKNESS,
+  );
+  const repeatGapForLane = Math.max(
+    1.2,
+    repeatStaffSpaceForLane * BARLINE_SEPARATION,
+  );
+  const repeatDotRForLane = Math.max(1.2, repeatStaffSpaceForLane * 0.16) + 1;
+  const repeatBlockWidthForLane =
+    repeatThickWForLane / 2 +
+    repeatGapForLane +
+    repeatThinWForLane +
+    repeatGapForLane +
+    repeatDotRForLane * 2;
+  const repeatBothSplitForLane = Math.max(
+    1.2,
+    repeatStaffSpaceForLane * 0.18,
+  );
+  const idx = sys.measureIndices[measureIndexInSystem];
+  const m = layoutSourceMeasures[idx];
+  if (!m) return { left: 0, right: 0, total: 0 };
+  const prev =
+    measureIndexInSystem > 0
+      ? layoutSourceMeasures[sys.measureIndices[measureIndexInSystem - 1]]
+      : null;
+  const next =
+    measureIndexInSystem < sys.measureIndices.length - 1
+      ? layoutSourceMeasures[sys.measureIndices[measureIndexInSystem + 1]]
+      : null;
+  const leftRepeat = getLeftBarlineRepeatRender({
+    measureIndexInSystem,
+    measure: m,
+    prevMeasureInSystem: prev,
+  });
+  const hasLeftRepeat =
+    leftRepeat.variant === "start" || leftRepeat.variant === "both";
+  const hasRightRepeat = shouldDrawRepeatEndGlyphOnRight(m, next);
+  const leftLaneInner =
+    repeatBlockWidthForLane +
+    (leftRepeat.variant === "both" ? repeatBothSplitForLane : 0);
+  const leftLaneWidth = hasLeftRepeat
+    ? leftLaneInner + FIGURE_REPEAT_NOTE_MIN_GAP_PX * 2
+    : 0;
+  const rightLaneWidth = hasRightRepeat
+    ? repeatBlockWidthForLane + FIGURE_REPEAT_NOTE_MIN_GAP_PX * 2
+    : 0;
+  return {
+    left: leftLaneWidth,
+    right: rightLaneWidth,
+    total: leftLaneWidth + rightLaneWidth,
+  };
+}
+
+/**
  * Lõputaktijoon (topelt): õhukese joone vasak serv = takti/löögikasti parem serv (measureRightX);
  * paks joon paremal, vahe nende vahel — topeltjoon ei tungi kasti sisse (varem paks keskendus servale).
  * Vertikaalselt taktikasti sisemised ülemine/alumine äär; akordirea korral kuni akordirea alumise servani.
@@ -469,19 +539,42 @@ export function FigurenotesView({
   const measureLayout = useMemo(() => {
     const sys = systems?.[0];
     if (!sys || !layoutSourceMeasures?.length) return [];
-    const mw = sys.measureWidths ?? [];
+    const mw =
+      sys.measureWidths ??
+      sys.measureIndices.map(() => sys.measureWidth ?? beatsPerMeasure * 80);
+    const mwDefault = sys.measureWidth ?? beatsPerMeasure * 80;
     return sys.measureIndices
       .map((measureIdx, j) => {
         const measure = layoutSourceMeasures[measureIdx];
         if (!measure) return null;
-        const xStart = marginLeft + mw.slice(0, j).reduce((a, b) => a + b, 0);
-        const xEnd = xStart + (mw[j] ?? 0);
+        const lanes = computeRepeatLaneWidths({
+          sys,
+          layoutSourceMeasures,
+          measureIndexInSystem: j,
+          notationScale,
+        });
+        const baseW = mw[j] ?? mwDefault;
+        let measureX = marginLeft;
+        for (let i = 0; i < j; i += 1) {
+          const bi = mw[i] ?? mwDefault;
+          const li = computeRepeatLaneWidths({
+            sys,
+            layoutSourceMeasures,
+            measureIndexInSystem: i,
+            notationScale,
+          });
+          measureX += bi + li.total;
+        }
+        const beatContentLeft = measureX + lanes.left;
+        const beatContentWidth = baseW;
+        const xStart = beatContentLeft;
+        const xEnd = beatContentLeft + beatContentWidth;
         const startBeat = measure.startBeat;
         const endBeat = measure.endBeat ?? measure.startBeat + beatsPerMeasure;
         return { xStart, xEnd, startBeat, endBeat };
       })
       .filter(Boolean);
-  }, [systems, layoutSourceMeasures, marginLeft, beatsPerMeasure]);
+  }, [systems, layoutSourceMeasures, marginLeft, beatsPerMeasure, notationScale]);
   const getBeatFromX = useCallback(
     (x) => {
       for (const m of measureLayout) {
@@ -713,83 +806,47 @@ export function FigurenotesView({
               </g>
             )}
 
-            {sys.measureIndices.map((measureIdx, j) => {
+            {(() => {
               const measureWidths =
                 sys.measureWidths ??
                 sys.measureIndices.map(
                   () => sys.measureWidth ?? beatsPerMeasure * 80,
                 );
-              const repeatStaffSpaceForLane = 10 * notationScale;
-              const repeatThinWForLane = Math.max(
-                1,
-                repeatStaffSpaceForLane * THIN_BARLINE_THICKNESS,
-              );
-              const repeatThickWForLane = Math.max(
-                2,
-                repeatStaffSpaceForLane * THICK_BARLINE_THICKNESS,
-              );
-              const repeatGapForLane = Math.max(
-                1.2,
-                repeatStaffSpaceForLane * BARLINE_SEPARATION,
-              );
-              const repeatDotRForLane =
-                Math.max(1.2, repeatStaffSpaceForLane * 0.16) + 1;
-              const repeatBlockWidthForLane =
-                repeatThickWForLane / 2 +
-                repeatGapForLane +
-                repeatThinWForLane +
-                repeatGapForLane +
-                repeatDotRForLane * 2;
-              const repeatBothSplitForLane = Math.max(
-                1.2,
-                repeatStaffSpaceForLane * 0.18,
-              );
-              const getRepeatLaneExtraWidth = (measureIndexInSystem) => {
-                const idx = sys.measureIndices[measureIndexInSystem];
-                const m = layoutSourceMeasures[idx];
-                if (!m) return 0;
-                const prev =
-                  measureIndexInSystem > 0
-                    ? layoutSourceMeasures[sys.measureIndices[measureIndexInSystem - 1]]
-                    : null;
-                const next =
-                  measureIndexInSystem < sys.measureIndices.length - 1
-                    ? layoutSourceMeasures[sys.measureIndices[measureIndexInSystem + 1]]
-                    : null;
-                const leftRepeat = getLeftBarlineRepeatRender({
-                  measureIndexInSystem,
-                  measure: m,
-                  prevMeasureInSystem: prev,
+              const mwDefault = sys.measureWidth ?? beatsPerMeasure * 80;
+              let systemTimelineWidth = 0;
+              for (let jj = 0; jj < sys.measureIndices.length; jj += 1) {
+                const baseW = measureWidths[jj] ?? mwDefault;
+                const ln = computeRepeatLaneWidths({
+                  sys,
+                  layoutSourceMeasures,
+                  measureIndexInSystem: jj,
+                  notationScale,
                 });
-                const hasLeftRepeat =
-                  leftRepeat.variant === "start" ||
-                  leftRepeat.variant === "both";
-                const hasRightRepeat = shouldDrawRepeatEndGlyphOnRight(m, next);
-                const leftLaneInner =
-                  repeatBlockWidthForLane +
-                  (leftRepeat.variant === "both"
-                    ? repeatBothSplitForLane
-                    : 0);
-                const leftLaneWidth = hasLeftRepeat
-                  ? leftLaneInner + FIGURE_REPEAT_NOTE_MIN_GAP_PX * 2
-                  : 0;
-                const rightLaneWidth = hasRightRepeat
-                  ? repeatBlockWidthForLane + FIGURE_REPEAT_NOTE_MIN_GAP_PX * 2
-                  : 0;
-                return leftLaneWidth + rightLaneWidth;
-              };
-              const baseMeasureWidth =
-                measureWidths[j] ?? sys.measureWidth ?? beatsPerMeasure * 80;
-              const measureWidth = baseMeasureWidth + getRepeatLaneExtraWidth(j);
+                systemTimelineWidth += baseW + ln.total;
+              }
+              return sys.measureIndices.map((measureIdx, j) => {
+              const lanesJ = computeRepeatLaneWidths({
+                sys,
+                layoutSourceMeasures,
+                measureIndexInSystem: j,
+                notationScale,
+              });
+              const baseMeasureWidth = measureWidths[j] ?? mwDefault;
+              const measureWidth = baseMeasureWidth + lanesJ.total;
               const measureX =
                 marginLeft +
-                measureWidths
-                  .slice(0, j)
-                  .reduce(
-                    (a, b, idxInSlice) =>
-                      a + b + getRepeatLaneExtraWidth(idxInSlice),
-                    0,
-                  );
+                measureWidths.slice(0, j).reduce((a, _b, idxInSlice) => {
+                  const bi = measureWidths[idxInSlice] ?? mwDefault;
+                  const li = computeRepeatLaneWidths({
+                    sys,
+                    layoutSourceMeasures,
+                    measureIndexInSystem: idxInSlice,
+                    notationScale,
+                  });
+                  return a + bi + li.total;
+                }, 0);
+              const beatContentLeft = measureX + lanesJ.left;
+              const beatContentWidth = baseMeasureWidth;
               const mBarForBeatBox = layoutSourceMeasures[measureIdx];
               const prevBarForBeatBox =
                 j > 0 ? layoutSourceMeasures[sys.measureIndices[j - 1]] : null;
@@ -826,7 +883,7 @@ export function FigurenotesView({
                     const measure = instMeasures[measureIdx];
                     if (!measure) return null;
                     const beatsInMeasure = measure.beatCount ?? beatsPerMeasure;
-                    const beatWidth = measureWidth / beatsInMeasure;
+                    const beatWidth = beatContentWidth / beatsInMeasure;
                     const measureIndexInSystem = sys.measureIndices.indexOf(measureIdx);
                     const prevMeasureInSystem =
                       measureIndexInSystem > 0
@@ -846,10 +903,6 @@ export function FigurenotesView({
                       measure,
                       nextMeasureInSystem,
                     );
-                    const hasLeftRepeat =
-                      leftRepeatRender.variant === "start" ||
-                      leftRepeatRender.variant === "both";
-                    const hasRightRepeat = !!drawRightRepeat;
                     const repeatStaffSpace = 10 * notationScale;
                     const repeatThinW = Math.max(
                       1,
@@ -871,27 +924,6 @@ export function FigurenotesView({
                       repeatThinW +
                       repeatGap +
                       repeatDotR * 2;
-                    const repeatBothSplit = Math.max(
-                      1.2,
-                      repeatStaffSpace * 0.18,
-                    );
-                    const leftRepeatInnerExtent =
-                      repeatBlockWidth +
-                      (leftRepeatRender.variant === "both" ? repeatBothSplit : 0);
-                    const leftRepeatSymbolBoxWidth = hasLeftRepeat
-                      ? Math.min(
-                          measureWidth * 0.45,
-                          leftRepeatInnerExtent +
-                            FIGURE_REPEAT_NOTE_MIN_GAP_PX * 2,
-                        )
-                      : 0;
-                    const rightRepeatSymbolBoxWidth = hasRightRepeat
-                      ? Math.min(
-                          measureWidth * 0.45,
-                          repeatBlockWidth + FIGURE_REPEAT_NOTE_MIN_GAP_PX * 2,
-                        )
-                      : 0;
-
                     /** Interpret duration as beats (1=quarter, 0.5=eighth) or measure fraction (0.125=eighth in 4/4). */
                     const durationInBeats = (d) =>
                       d > 0 && d < 0.5 ? d * (beatsInMeasure || 4) : d;
@@ -929,7 +961,7 @@ export function FigurenotesView({
                       const slotCenter =
                         (Math.min(slotIndex, slotsPerBeat - 1) + 0.5) /
                         slotsPerBeat;
-                      return measureX + (beatIndex + slotCenter) * beatWidth;
+                      return beatContentLeft + (beatIndex + slotCenter) * beatWidth;
                     };
                     const getRestBoxWidth = (note) => {
                       const beatInMeasure = note.beat - measure.startBeat;
@@ -1296,7 +1328,7 @@ export function FigurenotesView({
                                 strokeWidth={sw}
                               />
                               {/* Repeat symbol lanes are intentionally transparent.
-                                  Space is enforced via note-center clamping logic below. */}
+                                  Beat grid is offset into the middle “content” width so notes align with beat lines. */}
                               {!hideBeatBoxLeftStroke && (
                                 <line
                                   x1={measureX}
@@ -1317,9 +1349,9 @@ export function FigurenotesView({
                           (_, b) => (
                             <line
                               key={`beat-${b}`}
-                              x1={measureX + (b + 1) * beatWidth}
+                              x1={beatContentLeft + (b + 1) * beatWidth}
                               y1={sys.yOffset + padVertical}
-                              x2={measureX + (b + 1) * beatWidth}
+                              x2={beatContentLeft + (b + 1) * beatWidth}
                               y2={sys.yOffset + melodyRowHeight - padVertical}
                               stroke="#e0e0e0"
                               strokeWidth="1"
@@ -1351,7 +1383,7 @@ export function FigurenotesView({
                                   <rect
                                     key={`beat-hit-${beatIndex}-${slotIndex}`}
                                     x={
-                                      measureX +
+                                      beatContentLeft +
                                       (beatIndex + slotIndex / slotsPerBeat) *
                                         beatWidth
                                     }
@@ -1616,7 +1648,7 @@ export function FigurenotesView({
                               <rect
                                 x={marginLeft}
                                 y={sys.yOffset + melodyRowHeight + chordLineGap}
-                                width={measureWidths.reduce((a, b) => a + b, 0)}
+                                width={systemTimelineWidth}
                                 height={chordLineHeight}
                                 fill="rgba(0,0,0,0.03)"
                                 stroke="#e8e8e8"
@@ -1633,10 +1665,7 @@ export function FigurenotesView({
                                       melodyRowHeight +
                                       chordLineGap
                                     }
-                                    width={measureWidths.reduce(
-                                      (a, b) => a + b,
-                                      0,
-                                    )}
+                                    width={systemTimelineWidth}
                                     height={chordLineHeight}
                                     fill="transparent"
                                     style={{ cursor: "pointer" }}
@@ -1705,7 +1734,7 @@ export function FigurenotesView({
                           if (!chordBlocksEnabled || chordLineHeight <= 0) {
                             return chordsInMeasure.map((chord) => {
                               const chordX =
-                                measureX +
+                                beatContentLeft +
                                 (chord.beatPosition - measure.startBeat) *
                                   beatWidth;
                               return (
@@ -1840,9 +1869,9 @@ export function FigurenotesView({
                                 const endRatio =
                                   (slotEnd - measureStart) / beatsInMeasure;
                                 const rawX =
-                                  measureX + startRatio * measureWidth;
+                                  beatContentLeft + startRatio * beatContentWidth;
                                 const rawW =
-                                  (endRatio - startRatio) * measureWidth;
+                                  (endRatio - startRatio) * beatContentWidth;
                                 const rectX = rawX + leftInset;
                                 const rectWidth = Math.max(
                                   0,
@@ -2108,7 +2137,8 @@ export function FigurenotesView({
                                 (a.note.beat ?? 0) - (b.note.beat ?? 0) ||
                                 a.idx - b.idx,
                             );
-                            const beatLeft = measureX + beatIndex * beatWidth;
+                            const beatLeft =
+                              beatContentLeft + beatIndex * beatWidth;
                             let leftEdge = beatLeft + 1; // left edge of first short note in this beat
                             group.forEach(({ idx, figureSize }) => {
                               const center = leftEdge + figureSize / 2;
@@ -2126,30 +2156,11 @@ export function FigurenotesView({
                               figureSizeByNoteIndex.get(idx) ??
                               figureSizeBaseForMeasure;
                             const halfFigure = figureSize / 2;
-                            const minCenter = hasLeftRepeat
-                              ? measureX +
-                                leftRepeatSymbolBoxWidth +
-                                halfFigure
-                              : measureX + halfFigure;
-                            const maxCenter = hasRightRepeat
-                              ? measureX +
-                                measureWidth -
-                                rightRepeatSymbolBoxWidth -
-                                halfFigure
-                              : measureX + measureWidth - halfFigure;
-                            if (minCenter > maxCenter) {
-                              return Math.max(
-                                measureX + halfFigure,
-                                Math.min(
-                                  baseCenter,
-                                  measureX + measureWidth - halfFigure,
-                                ),
-                              );
-                            }
-                            return Math.max(
-                              minCenter,
-                              Math.min(baseCenter, maxCenter),
-                            );
+                            const minCenter = beatContentLeft + halfFigure;
+                            const maxCenter =
+                              beatContentLeft + beatContentWidth - halfFigure;
+                            if (minCenter > maxCenter) return baseCenter;
+                            return Math.max(minCenter, Math.min(baseCenter, maxCenter));
                           };
                           const beamGroups = figurenotesStems
                             ? computeBeamGroups(
@@ -2404,8 +2415,8 @@ export function FigurenotesView({
                             const longRectEndX =
                               durLabel === "1/2" || durLabel === "1/1"
                                 ? Math.min(
-                                    measureX + measureWidth,
-                                    measureX +
+                                    beatContentLeft + beatContentWidth,
+                                    beatContentLeft +
                                       (endBeat - measure.startBeat) * beatWidth,
                                   )
                                 : null;
@@ -2711,9 +2722,11 @@ export function FigurenotesView({
                         </>
                       );
                     })()}
+                  })}
                 </g>
               );
-            })}
+            });
+            })()}
             {/* Fallback: draw final double bar at end of score if last measure is in this system (in case it was skipped in the loop). */}
             {Array.isArray(layoutSourceMeasures) &&
               layoutSourceMeasures.length > 0 &&
@@ -2728,8 +2741,19 @@ export function FigurenotesView({
                   sys.measureIndices.map(
                     () => sys.measureWidth ?? beatsPerMeasure * 80,
                   );
+                const mwDefault = sys.measureWidth ?? beatsPerMeasure * 80;
                 const xRight =
-                  marginLeft + mw.slice(0, j + 1).reduce((a, b) => a + b, 0);
+                  marginLeft +
+                  mw.slice(0, j + 1).reduce((a, _b, idxInSlice) => {
+                    const bi = mw[idxInSlice] ?? mwDefault;
+                    const li = computeRepeatLaneWidths({
+                      sys,
+                      layoutSourceMeasures,
+                      measureIndexInSystem: idxInSlice,
+                      notationScale,
+                    });
+                    return a + bi + li.total;
+                  }, 0);
                 const fg = getFinalDoubleBarlineGeometry({
                   measureRightX: xRight,
                   notationScale,
