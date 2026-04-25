@@ -585,19 +585,6 @@ export function scoreToSvg (container, options = {}) {
   const sceneY = headerBottomPx > 0
     ? Math.max(0, ty - headerBottomPx - chromeH)
     : ty;
-  const rawTextBoxes = Array.isArray(options.textBoxes) ? options.textBoxes : [];
-  // Hoia tekstikastid samas vertikaalses koordinaatraamis kui notatsioon:
-  // kui eemaldame ekraani päisest/chrome'ist tuleneva Y-nihke notatsioonilt,
-  // peame sama tegema ka kastidele, muidu PDF/printis kast "vajub" allapoole.
-  const textBoxYOffset = headerBottomPx > 0 ? (headerBottomPx + chromeH) : 0;
-  const exportTextBoxes = textBoxYOffset > 0
-    ? rawTextBoxes.map((box) => {
-      if (!box || typeof box !== 'object') return box;
-      const y = Number(box.y);
-      if (!Number.isFinite(y)) return box;
-      return { ...box, y: Math.max(0, y - textBoxYOffset) };
-    })
-    : rawTextBoxes;
   const { width, height, viewBox } = getSvgIntrinsicDimensions(notationSvg, pageWidth);
   const sourceContentWidth = container.scrollWidth || pageWidth;
   const sourceContentHeight = container.scrollHeight || pageHeight;
@@ -628,7 +615,6 @@ export function scoreToSvg (container, options = {}) {
     sceneHeight: height,
     sceneViewBox: viewBox,
     exportScaleFactor: options.exportScaleFactor,
-    textBoxes: exportTextBoxes,
   });
 }
 
