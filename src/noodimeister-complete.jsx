@@ -6402,7 +6402,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       setSaveFeedback(`${(INSTRUMENT_I18N_KEYS?.[currentInstrumentId] ? t(INSTRUMENT_I18N_KEYS[currentInstrumentId]) : currentInstrumentId) || 'Instrument'}: noot on ulatusest väljas (${low}–${high})`);
       setTimeout(() => setSaveFeedback(''), 2600);
     }
-    const durationLabel = lastDurationRef.current ?? selectedDuration;
+    const durationLabel = options.overrideDurationLabel ?? lastDurationRef.current ?? selectedDuration;
     let effectiveDuration = getEffectiveDuration(durationLabel);
     let tupletPayload = null;
     if (tupletMode) {
@@ -8489,6 +8489,15 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
               setIsRest(true);
               const restIdx = toolbox.options.findIndex(opt => opt.value === 'rest');
               if (restIdx >= 0) setSelectedOptionIndex(restIdx);
+              if (noteInputMode) {
+                addNoteAtCursor('C', ghostOctave, 0, {
+                  insertAtBeat: cursorPosition,
+                  overrideDurationLabel: dur,
+                  forceRest: true,
+                  forceDotted: false,
+                  skipPlay: true,
+                });
+              }
               return;
             }
             lastDurationRef.current = dur;
@@ -8814,10 +8823,17 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
           if (restNextRef.current) {
             restNextRef.current = false;
             e.preventDefault();
-            const effectiveDuration = getEffectiveDuration(dur);
+            lastDurationRef.current = dur;
+            setSelectedDuration(dur);
             // Insert a rest at the cursor beat (replace any placeholder rest),
             // not appended to the end of the note list.
-            addNoteAtCursor('C', ghostOctave, 0, { insertAtBeat: cursorPosition, forceRest: true, forceDotted: false, skipPlay: true });
+            addNoteAtCursor('C', ghostOctave, 0, {
+              insertAtBeat: cursorPosition,
+              overrideDurationLabel: dur,
+              forceRest: true,
+              forceDotted: false,
+              skipPlay: true,
+            });
             return;
           }
           lastDurationRef.current = dur;
@@ -9994,12 +10010,53 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     : activeTextLineType === 'author'
       ? (authorAlignment || 'right')
       : (activeBox?.textAlign || 'center');
+  const activeFontSizeValue = activeTextLineType === 'title'
+    ? titleFontSize
+    : activeTextLineType === 'author'
+      ? authorFontSize
+      : activeTextLineType === 'lyrics'
+        ? lyricFontSize
+        : (activeBox?.fontSize ?? 14);
+  const activeFontSizeMin = activeTextLineType === 'author' || activeTextLineType === 'lyrics' ? 8 : 10;
+  const activeLineHeightValue = activeBox
+    ? resolveTextBoxLineHeightPx(activeBox, activeFontSizeValue)
+    : null;
   const applyActiveTextAlign = (value) => {
     dirtyRef.current = true;
     if (activeTextLineType === 'title') setTitleAlignment(value);
     else if (activeTextLineType === 'author') setAuthorAlignment(value);
     else if (activeBox) setTextBoxes((prev) => prev.map((b) => b.id === activeBox.id ? { ...b, textAlign: value } : b));
   };
+  const applyActiveFontSizeValue = (nextRaw) => {
+    const v = Math.max(activeFontSizeMin, Math.min(200, Math.round(Number(nextRaw) || activeFontSizeValue || activeFontSizeMin)));
+    dirtyRef.current = true;
+    if (activeTextLineType === 'title') setTitleFontSize(v);
+    else if (activeTextLineType === 'author') setAuthorFontSize(v);
+    else if (activeTextLineType === 'lyrics') setLyricFontSize(v);
+    else if (activeBox) {
+      setTextBoxes((prev) => prev.map((b) => {
+        if (b.id !== activeBox.id) return b;
+        const prevFontSize = Math.max(8, Number(b.fontSize) || 14);
+        const hasExplicitLineHeight = Number.isFinite(Number(b.lineHeight)) && Number(b.lineHeight) > 0;
+        const next = { ...b, fontSize: v };
+        if (hasExplicitLineHeight && prevFontSize > 0) {
+          const ratio = v / prevFontSize;
+          next.lineHeight = Math.max(v, Math.round(Number(b.lineHeight) * ratio));
+        }
+        return next;
+      }));
+    }
+  };
+  const adjustActiveFontSizeValue = (delta) => applyActiveFontSizeValue(activeFontSizeValue + delta);
+  const applyActiveLineHeightValue = (nextRaw) => {
+    if (!activeBox) return;
+    const minValue = Math.max(8, Math.round((activeBox.fontSize || 14) * 0.8));
+    const maxValue = 300;
+    const v = Math.max(minValue, Math.min(maxValue, Math.round(Number(nextRaw) || activeLineHeightValue || minValue)));
+    dirtyRef.current = true;
+    setTextBoxes((prev) => prev.map((b) => b.id === activeBox.id ? { ...b, lineHeight: v } : b));
+  };
+  const adjustActiveLineHeightValue = (delta) => applyActiveLineHeightValue((activeLineHeightValue || 0) + delta);
   const activeColumnCount = Math.max(1, Math.min(5, Math.floor(Number(activeBox?.columnCount) || 1)));
   const floatingTextToolPopup = showFloatingTextTool && createPortal(
     <div
@@ -10176,36 +10233,69 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       <div>
         <label className="block text-[10px] font-semibold text-amber-700 dark:text-amber-300 mb-0.5">{t('textTool.fontSize')}</label>
         <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => adjustActiveFontSizeValue(-1)}
+            className="px-2 py-1 rounded text-xs font-semibold bg-amber-100 dark:bg-zinc-700 text-amber-900 dark:text-amber-100 hover:bg-amber-200 dark:hover:bg-zinc-600"
+            title="-1"
+          >
+            -
+          </button>
           <input
-            type="range"
-            min={activeTextLineType === 'author' || activeTextLineType === 'lyrics' ? 8 : 10}
+            type="number"
+            min={activeFontSizeMin}
             max={200}
             step={1}
-            value={activeTextLineType === 'title' ? titleFontSize : activeTextLineType === 'author' ? authorFontSize : activeTextLineType === 'lyrics' ? lyricFontSize : (activeBox?.fontSize ?? 14)}
+            value={activeFontSizeValue}
             onChange={(e) => {
-              const minVal = activeTextLineType === 'author' || activeTextLineType === 'lyrics' ? 8 : 10;
-              const v = Math.max(minVal, Math.min(200, Number(e.target.value)));
-              dirtyRef.current = true;
-              if (activeTextLineType === 'title') setTitleFontSize(v);
-              else if (activeTextLineType === 'author') setAuthorFontSize(v);
-              else if (activeTextLineType === 'lyrics') setLyricFontSize(v);
-              else if (activeBox) setTextBoxes((prev) => prev.map((b) => b.id === activeBox.id ? { ...b, fontSize: v } : b));
+              applyActiveFontSizeValue(e.target.value);
             }}
-            className="flex-1 h-2 rounded-lg appearance-none bg-amber-200 dark:bg-amber-800 accent-amber-600"
+            onWheel={(e) => e.currentTarget.blur()}
+            className="w-full px-2 py-1.5 rounded border border-amber-300 dark:border-amber-600 bg-white dark:bg-zinc-800 text-amber-900 dark:text-white text-sm"
           />
-          <span className="text-xs font-medium text-amber-800 dark:text-amber-200 w-8 tabular-nums text-right">
-            {activeTextLineType === 'title' ? titleFontSize : activeTextLineType === 'author' ? authorFontSize : activeTextLineType === 'lyrics' ? lyricFontSize : (activeBox?.fontSize ?? 14)}
-          </span>
-        </div>
-        {/* Ruler: tick marks for font size */}
-        <div className="flex justify-between mt-0.5 px-0.5 text-[9px] text-amber-600 dark:text-amber-400 select-none pointer-events-none">
-          {[10, 20, 30, 40, 50, 60, 72, 100, 150, 200]
-            .filter((n) => n >= ((activeTextLineType === 'author' || activeTextLineType === 'lyrics') ? 8 : 10) && n <= 200)
-            .map((n) => (
-              <span key={n}>{n}</span>
-            ))}
+          <button
+            type="button"
+            onClick={() => adjustActiveFontSizeValue(1)}
+            className="px-2 py-1 rounded text-xs font-semibold bg-amber-100 dark:bg-zinc-700 text-amber-900 dark:text-amber-100 hover:bg-amber-200 dark:hover:bg-zinc-600"
+            title="+1"
+          >
+            +
+          </button>
         </div>
       </div>
+      {activeBox && (
+        <div>
+          <label className="block text-[10px] font-semibold text-amber-700 dark:text-amber-300 mb-0.5">{t('textTool.lineHeight') || 'Reavahe'}</label>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => adjustActiveLineHeightValue(-1)}
+              className="px-2 py-1 rounded text-xs font-semibold bg-amber-100 dark:bg-zinc-700 text-amber-900 dark:text-amber-100 hover:bg-amber-200 dark:hover:bg-zinc-600"
+              title="-1"
+            >
+              -
+            </button>
+            <input
+              type="number"
+              min={Math.max(8, Math.round((activeBox.fontSize || 14) * 0.8))}
+              max={300}
+              step={1}
+              value={activeLineHeightValue ?? resolveTextBoxLineHeightPx(activeBox, activeBox.fontSize || 14)}
+              onChange={(e) => applyActiveLineHeightValue(e.target.value)}
+              onWheel={(e) => e.currentTarget.blur()}
+              className="w-full px-2 py-1.5 rounded border border-amber-300 dark:border-amber-600 bg-white dark:bg-zinc-800 text-amber-900 dark:text-white text-sm"
+            />
+            <button
+              type="button"
+              onClick={() => adjustActiveLineHeightValue(1)}
+              className="px-2 py-1 rounded text-xs font-semibold bg-amber-100 dark:bg-zinc-700 text-amber-900 dark:text-amber-100 hover:bg-amber-200 dark:hover:bg-zinc-600"
+              title="+1"
+            >
+              +
+            </button>
+          </div>
+        </div>
+      )}
       <div>
         <label className="block text-[10px] font-semibold text-amber-700 dark:text-amber-300 mb-0.5">{t('textTool.weight')}</label>
         <input
@@ -15164,6 +15254,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                         : null}
                       keySignature={keySignature}
                       keyboardPlaysPiano={pianoStripVisible && (notationStyle === 'FIGURENOTES' || notationMode === 'vabanotatsioon')}
+                      blockedShortcuts={[effectiveShortcutPrefs['app.noteInputToggle']]}
                       ignoreKeyboardWhenModalOpen={newWorkSetupOpen || saveCloudDialogOpen || googleLoadPickerOpen || settingsOpen || shortcutsOpen || showPdfExportPreview || isInstrumentManagerOpen}
                     />
                   </div>
@@ -15850,6 +15941,12 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
     return systems.length > 0 ? { system: systems[0], localBeat: cursorPosition } : null;
   };
   const cursorInfo = findCursorSystem();
+  const selectedDurationBeatsForCursor = (() => {
+    const dur = (typeof selectedDuration === 'string' ? selectedDuration : null) || '1/4';
+    const baseMap = { '1/1': 4, '1/2': 2, '1/4': 1, '1/8': 0.5, '1/16': 0.25, '1/32': 0.125 };
+    const base = baseMap[dur] ?? 1;
+    return isDotted ? base * 1.5 : base;
+  })();
   const cursorSlotCenterX = cursorInfo ? (() => {
     const sys = cursorInfo.system;
     const widths = sys.measureWidths ?? sys.measureIndices.map(() => sys.measureWidth ?? beatsPerMeasure * 80);
@@ -15859,8 +15956,11 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
       const beatCount = m?.beatCount ?? beatsPerMeasure;
       const mw = widths[j] ?? 80 * beatCount;
       const beatWidth = mw / beatCount;
-      if (beatLeft < beatCount)
-        return marginLeft + widths.slice(0, j).reduce((a, b) => a + b, 0) + (beatLeft + 0.5) * beatWidth;
+      if (beatLeft < beatCount) {
+        // Show cursor over the center of the currently selected input duration.
+        const centerOffsetBeats = selectedDurationBeatsForCursor * 0.5;
+        return marginLeft + widths.slice(0, j).reduce((a, b) => a + b, 0) + (beatLeft + centerOffsetBeats) * beatWidth;
+      }
       beatLeft -= beatCount;
     }
     const j = Math.max(0, sys.measureIndices.length - 1);

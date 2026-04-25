@@ -7,6 +7,16 @@
 import { useEffect, useRef, useMemo } from 'react';
 import { buildKeyboardMap } from './keyboardMap.js';
 
+function matchesBlockedShortcut(e, shortcut) {
+  if (!shortcut || typeof shortcut.code !== 'string' || shortcut.code.length === 0) return false;
+  return (
+    e.code === shortcut.code &&
+    !!e.shiftKey === !!shortcut.shift &&
+    !!e.altKey === !!shortcut.alt &&
+    !!(e.metaKey || e.ctrlKey) === !!shortcut.mod
+  );
+}
+
 /**
  * @param {number} firstNote – MIDI esimene noot (nt 48)
  * @param {number} lastNote – MIDI viimane noot (nt 72)
@@ -15,8 +25,9 @@ import { buildKeyboardMap } from './keyboardMap.js';
  * @param {boolean} [enabled=true]
  * @param {boolean} [keyboardPlaysPiano=false] – true: ASDFGHJ/WETYUOP jne mängivad klaverit (ära reserveeri A–G noodisise jaoks)
  * @param {boolean} [ignoreWhenModalOpen=false] – true: kui dialoog (Uue faili jms) on avatud, klahve ei töötle
+ * @param {Array<{code:string,shift?:boolean,alt?:boolean,mod?:boolean}>} [blockedShortcuts=[]] – shortcuts reserved for app actions (e.g. N-mode toggle)
  */
-export function useKeyboardHandler(firstNote, lastNote, playNote, stopNote, enabled = true, keyboardPlaysPiano = false, ignoreWhenModalOpen = false) {
+export function useKeyboardHandler(firstNote, lastNote, playNote, stopNote, enabled = true, keyboardPlaysPiano = false, ignoreWhenModalOpen = false, blockedShortcuts = []) {
   const keyMap = useMemo(
     () => buildKeyboardMap(firstNote, lastNote),
     [firstNote, lastNote]
@@ -33,6 +44,7 @@ export function useKeyboardHandler(firstNote, lastNote, playNote, stopNote, enab
       const tag = e.target?.tagName?.toUpperCase?.();
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
       if (ignoreWhenModalOpen) return;
+      if (Array.isArray(blockedShortcuts) && blockedShortcuts.some((shortcut) => matchesBlockedShortcut(e, shortcut))) return;
       // Tavarežiimis reserveeri A–G noodisise kiirklahvide jaoks; Figurenotes/pedagoogilises režiimis luba need klaveriks.
       if (reserveLetterKeys && !e.metaKey && !e.ctrlKey && !e.altKey && /^[a-g]$/i.test(e.key || '')) return;
       const code = e.code;
@@ -63,5 +75,5 @@ export function useKeyboardHandler(firstNote, lastNote, playNote, stopNote, enab
       window.removeEventListener('keydown', onKeyDown, { capture: true });
       window.removeEventListener('keyup', onKeyUp, { capture: true });
     };
-  }, [enabled, keyboardPlaysPiano, ignoreWhenModalOpen, keyMap, playNote, stopNote]);
+  }, [enabled, keyboardPlaysPiano, ignoreWhenModalOpen, blockedShortcuts, keyMap, playNote, stopNote]);
 }

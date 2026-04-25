@@ -34,6 +34,8 @@ export function InteractivePiano({
   keyboardPlaysPiano = false,
   /** true: kui dialoog (Uue faili jms) on avatud, arvutiklahve ei töötle */
   ignoreKeyboardWhenModalOpen = false,
+  /** Shortcut pref objects reserved for app-level actions (blocked from piano mapping). */
+  blockedShortcuts = [],
 }) {
   const { activeNotes, playNote, stopNote } = usePianoEngine(engineOptions);
 
@@ -53,7 +55,16 @@ export function InteractivePiano({
     [stopNote, onNoteStop]
   );
 
-  useKeyboardHandler(firstNote, lastNote, handlePlayNote, handleStopNote, true, keyboardPlaysPiano, ignoreKeyboardWhenModalOpen);
+  useKeyboardHandler(
+    firstNote,
+    lastNote,
+    handlePlayNote,
+    handleStopNote,
+    true,
+    keyboardPlaysPiano,
+    ignoreKeyboardWhenModalOpen,
+    blockedShortcuts
+  );
   const midi = useMidiHandler(handlePlayNote, handleStopNote, true);
 
   return (
