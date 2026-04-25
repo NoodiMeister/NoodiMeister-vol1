@@ -2326,7 +2326,11 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   const [staffRowAlignment, setStaffRowAlignment] = useState('center'); // 'left' | 'center' | 'right' – figuurnotatsiooni rea joondus
   const titleInputRef = useRef(null);
   const authorInputRef = useRef(null);
+  const textToolPopupRef = useRef(null);
+  const textToolDragRef = useRef(null); // { startX, startY, startTop, startLeft }
+  const previousTextToolAnchorRef = useRef('');
   const [textToolPosition, setTextToolPosition] = useState({ top: 0, left: 0 });
+  const [textToolManualPosition, setTextToolManualPosition] = useState(null);
   // Pedagoogiline notatsioon: salvestatud heli animeerimine (kursor liigub heli järgi)
   const [pedagogicalAudioUrl, setPedagogicalAudioUrl] = useState(null); // object URL või null
   const [pedagogicalAudioBpm, setPedagogicalAudioBpm] = useState(120);
@@ -6366,6 +6370,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   // When options.insertAtBeat is set (e.g. from figure-beat click), use it so the writer follows the cursor/click position (avoids stale cursorPosition from async setState).
   const addNoteAtCursor = useCallback((pitch, octave, accidental, options = {}) => {
     const insertBeat = typeof options.insertAtBeat === 'number' ? options.insertAtBeat : cursorPosition;
+    const EPS = 1e-6;
     const oct = octave ?? ghostOctave;
     // Figuurnotatsioonis kasutaja ei näe võtmemärke – kui accidental pole ette antud, võta helistikust (nt G-duur → F#).
     const keyAccForPitch = getAccidentalForPitchInKey(pitch, keySignature);
@@ -6398,6 +6403,18 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       }
     }
     assertCursorTimeModelInputs('addNoteAtCursor', insertBeat, durationLabel, effectiveDuration);
+    const activeMeasure = Array.isArray(measuresRef.current)
+      ? measuresRef.current.find((m) => insertBeat >= (Number(m?.startBeat) || 0) - EPS && insertBeat < (Number(m?.endBeat) || 0) - EPS)
+      : null;
+    if (activeMeasure) {
+      const measureEndBeat = Number(activeMeasure.endBeat) || 0;
+      const beatsLeftInMeasure = Math.max(0, measureEndBeat - insertBeat);
+      if (effectiveDuration > beatsLeftInMeasure + EPS) {
+        setSaveFeedback('Valitud rütm ei mahu takti. Vali lühem kestus või liigu järgmisse takti.');
+        setTimeout(() => setSaveFeedback(''), 2600);
+        return;
+      }
+    }
     const accidentalPayload = notationStyle === 'FIGURENOTES'
       ? (accResolved !== 0 ? { accidental: accResolved } : {})
       : (accResolved === keyAccForPitch ? {} : { accidental: accResolved });
@@ -6425,7 +6442,6 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
 
     const insertIntoStaffNotes = (noteList) => {
       const withBeats = notesWithExplicitBeats(noteList);
-      const EPS = 1e-6;
       const ndur = (n) => noteDurationInQuarterBeats(n);
       const newEnd = insertBeat + effectiveDuration;
 
@@ -9622,26 +9638,109 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
 
   // Position the floating text tool popup near the active text (title, author, lyrics input, or selected text box)
   const updateTextToolPosition = useCallback(() => {
+    const viewportMargin = 8;
+    const popupGap = 8;
+    const popupRect = textToolPopupRef.current?.getBoundingClientRect?.();
+    const popupWidth = Math.max(220, Math.round(popupRect?.width || 280));
+    const popupHeight = Math.max(80, Math.round(popupRect?.height || 220));
+    const viewportWidth = typeof window !== 'undefined' ? window.innerWidth : 1920;
+    const viewportHeight = typeof window !== 'undefined' ? window.innerHeight : 1080;
+    if (textToolManualPosition) {
+      const clampedTop = Math.max(viewportMargin, Math.min(textToolManualPosition.top, viewportHeight - popupHeight - viewportMargin));
+      const clampedLeft = Math.max(viewportMargin, Math.min(textToolManualPosition.left, viewportWidth - popupWidth - viewportMargin));
+      setTextToolPosition({ top: clampedTop, left: clampedLeft });
+      return;
+    }
+
+    const resolvePosition = (anchorRect) => {
+      if (!anchorRect) return;
+      const anchorTop = Number(anchorRect.top) || 0;
+      const anchorBottom = Number(anchorRect.bottom) || anchorTop;
+      const anchorLeft = Number(anchorRect.left) || 0;
+      const anchorWidth = Math.max(0, Number(anchorRect.width) || 0);
+
+      // Prefer below the anchor. If it would overflow viewport bottom, flip above.
+      const belowTop = anchorBottom + popupGap;
+      const aboveTop = anchorTop - popupHeight - popupGap;
+      let top = belowTop;
+      if (belowTop + popupHeight > viewportHeight - viewportMargin && aboveTop >= viewportMargin) {
+        top = aboveTop;
+      }
+      top = Math.max(viewportMargin, Math.min(top, viewportHeight - popupHeight - viewportMargin));
+
+      const centeredLeft = anchorLeft + (anchorWidth / 2) - (popupWidth / 2);
+      const left = Math.max(viewportMargin, Math.min(centeredLeft, viewportWidth - popupWidth - viewportMargin));
+      setTextToolPosition({ top, left });
+    };
+
     const box = selectedTextboxId ? textBoxes.find((b) => b.id === selectedTextboxId) : null;
     if (activeTextLineType === 'title' && titleInputRef.current) {
       const r = titleInputRef.current.getBoundingClientRect();
-      setTextToolPosition({ top: r.bottom + 8, left: r.left + (r.width / 2) - 140 });
+      resolvePosition(r);
     } else if (activeTextLineType === 'author' && authorInputRef.current) {
       const r = authorInputRef.current.getBoundingClientRect();
-      setTextToolPosition({ top: r.bottom + 8, left: r.left + (r.width / 2) - 140 });
+      resolvePosition(r);
     } else if (activeTextLineType === 'lyrics' && lyricInputRef.current) {
       const r = lyricInputRef.current.getBoundingClientRect();
-      setTextToolPosition({ top: r.bottom + 8, left: r.left + (r.width / 2) - 140 });
+      resolvePosition(r);
     } else if (box && scoreContainerRef.current) {
       const cr = scoreContainerRef.current.getBoundingClientRect();
       const w = box.width ?? 200;
       const h = box.height ?? 60;
-      setTextToolPosition({
-        top: cr.top + box.y + h + 8,
-        left: cr.left + box.x + Math.max(0, (w / 2) - 140),
+      resolvePosition({
+        top: cr.top + box.y,
+        bottom: cr.top + box.y + h,
+        left: cr.left + box.x,
+        width: w,
       });
     }
-  }, [activeTextLineType, selectedTextboxId, textBoxes]);
+  }, [activeTextLineType, selectedTextboxId, textBoxes, textToolManualPosition]);
+
+  const handleTextToolDragStart = useCallback((e) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+    textToolDragRef.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      startTop: textToolPosition.top,
+      startLeft: textToolPosition.left,
+    };
+  }, [textToolPosition.top, textToolPosition.left]);
+
+  useEffect(() => {
+    const onMouseMove = (e) => {
+      const state = textToolDragRef.current;
+      if (!state) return;
+      const nextTop = state.startTop + (e.clientY - state.startY);
+      const nextLeft = state.startLeft + (e.clientX - state.startX);
+      const manualPos = { top: nextTop, left: nextLeft };
+      setTextToolManualPosition(manualPos);
+      setTextToolPosition(manualPos);
+    };
+    const onMouseUp = () => {
+      if (!textToolDragRef.current) return;
+      textToolDragRef.current = null;
+    };
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+    return () => {
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+    };
+  }, []);
+
+  useEffect(() => {
+    const anchorKey = activeTextLineType ? `line:${activeTextLineType}` : (selectedTextboxId ? `box:${selectedTextboxId}` : '');
+    if (previousTextToolAnchorRef.current !== anchorKey) {
+      previousTextToolAnchorRef.current = anchorKey;
+      setTextToolManualPosition(null);
+    }
+    if (!anchorKey) {
+      textToolDragRef.current = null;
+      setTextToolManualPosition(null);
+    }
+  }, [activeTextLineType, selectedTextboxId]);
 
   useLayoutEffect(() => {
     if (!activeTextLineType && !selectedTextboxId) return;
@@ -9891,13 +9990,18 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   const activeColumnCount = Math.max(1, Math.min(5, Math.floor(Number(activeBox?.columnCount) || 1)));
   const floatingTextToolPopup = showFloatingTextTool && createPortal(
     <div
+      ref={textToolPopupRef}
       data-text-tool-popup
       className="fixed z-[100] flex flex-col gap-2 p-3 rounded-xl shadow-xl border-2 border-amber-300 bg-white dark:bg-zinc-900 dark:border-amber-600 w-[280px]"
-      style={{ top: textToolPosition.top, left: Math.max(8, textToolPosition.left) }}
+      style={{ top: textToolPosition.top, left: textToolPosition.left }}
       role="dialog"
       aria-label={t('textTool.title')}
     >
-      <div className="text-xs font-bold text-amber-800 dark:text-amber-200 uppercase tracking-wide">
+      <div
+        className="text-xs font-bold text-amber-800 dark:text-amber-200 uppercase tracking-wide cursor-move select-none"
+        onMouseDown={handleTextToolDragStart}
+        title={t('textTool.dragToMove') || 'Lohista liigutamiseks'}
+      >
         {activeTextLineType === 'title'
           ? t('textTool.forTitle')
           : activeTextLineType === 'author'
