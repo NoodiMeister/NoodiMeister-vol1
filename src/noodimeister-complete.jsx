@@ -9717,7 +9717,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   }
   const { Music2, Clock, Hash, Type, Piano, Palette, Layout, Check, Save, FolderOpen, Plus, Settings, Key, Repeat, Cloud, LogOut, LogIn, UserPlus, User, CloudUpload, CloudDownload, FolderPlus, ChevronDown, Eye, ArrowDown, ArrowRight, Hand, MousePointer, Keyboard, ExternalLink } = icons || {};
 
-  const getActiveLyricIndices = useCallback(() => {
+  const getActiveLyricIndices = () => {
     if (lyricChainIndex !== null) return [lyricChainIndex];
     const start = selectionStart >= 0 && selectionEnd >= 0
       ? Math.min(selectionStart, selectionEnd)
@@ -9729,15 +9729,15 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     const out = [];
     for (let i = start; i <= end; i += 1) out.push(i);
     return out;
-  }, [lyricChainIndex, selectionStart, selectionEnd, selectedNoteIndex, noteIndexAtCursor]);
+  };
 
-  const applyLyricPatch = useCallback((patcher) => {
+  const applyLyricPatch = (patcher) => {
     const indices = getActiveLyricIndices();
     if (!indices.length) return;
     const idxSet = new Set(indices);
     dirtyRef.current = true;
     setNotes((prev) => prev.map((n, i) => (idxSet.has(i) ? patcher(n) : n)));
-  }, [getActiveLyricIndices]);
+  };
 
   const lyricColorKey = getLyricColorKeyByIndex(lyricLineIndex);
   const activeLyricIndices = getActiveLyricIndices();
@@ -9749,7 +9749,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
 
   const showFloatingTextTool = (activeTextLineType === 'title' || activeTextLineType === 'author' || activeTextLineType === 'lyrics') || selectedTextboxId;
   const activeBox = selectedTextboxId ? textBoxes.find((b) => b.id === selectedTextboxId) : null;
-  const extractTextStyleFromClipboardHtml = useCallback((html) => {
+  const extractTextStyleFromClipboardHtml = (html) => {
     if (!html || typeof DOMParser === 'undefined') return null;
     try {
       const doc = new DOMParser().parseFromString(html, 'text/html');
@@ -9790,8 +9790,8 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     } catch (_) {
       return null;
     }
-  }, []);
-  const measureTextboxHeightForWidth = useCallback((text, width, style = {}, columnCount = 1) => {
+  };
+  const measureTextboxHeightForWidth = (text, width, style = {}, columnCount = 1) => {
     if (typeof document === 'undefined') return null;
     const probe = document.createElement('div');
     probe.style.position = 'absolute';
@@ -9820,8 +9820,8 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     const h = Math.ceil(probe.scrollHeight);
     probe.remove();
     return h;
-  }, [documentFontFamily]);
-  const computeTextboxAutoFitPatch = useCallback((box, pastedText, stylePatch = null) => {
+  };
+  const computeTextboxAutoFitPatch = (box, pastedText, stylePatch = null) => {
     const baseStyle = {
       fontFamily: stylePatch?.fontFamily || box.fontFamily || documentFontFamily,
       fontSize: stylePatch?.fontSize || box.fontSize || 14,
@@ -9876,7 +9876,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       width: Math.max(minW, Math.round(nextW)),
       height: Math.max(minH, Math.round(Math.min(measuredH, maxHOnPage))),
     };
-  }, [a4PageHeightVal, documentFontFamily, effectiveLayoutPageWidth, measureTextboxHeightForWidth]);
+  };
   const activeTextAlign = activeTextLineType === 'title'
     ? (titleAlignment || 'center')
     : activeTextLineType === 'author'
