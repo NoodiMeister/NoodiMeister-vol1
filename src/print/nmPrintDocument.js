@@ -134,13 +134,9 @@ export function runIsolatedPrintFromHtml (fullDocumentHtml, opts = {}) {
         finish();
       }
     };
-    const readyPromise = idoc?.fonts?.ready
-      ? idoc.fonts.ready.catch(() => null)
-      : Promise.resolve(null);
-    Promise.race([
-      readyPromise,
-      new Promise((resolve) => setTimeout(resolve, 1200)),
-    ]).finally(triggerPrint);
+    waitForPrintFontsReady(idoc)
+      .catch(() => null)
+      .finally(triggerPrint);
   } catch (e) {
     if (blankHostDocument) {
       document.documentElement.classList.remove('nm-print-svg-mode');
@@ -150,6 +146,26 @@ export function runIsolatedPrintFromHtml (fullDocumentHtml, opts = {}) {
       onFinished?.();
     } catch (_) {}
     throw e;
+  }
+}
+
+async function waitForPrintFontsReady (doc) {
+  const fonts = doc?.fonts;
+  if (!fonts?.ready) return;
+  // Wait until document fonts are loaded (or timeout), to reduce print fallback
+  // metrics drift that can alter textbox line layout between editor and PDF preview.
+  const timeoutMs = 4500;
+  const startedAt = Date.now();
+  try {
+    await Promise.race([
+      fonts.ready,
+      new Promise((resolve) => setTimeout(resolve, timeoutMs)),
+    ]);
+  } catch (_) {
+    return;
+  }
+  while (fonts.status !== 'loaded' && Date.now() - startedAt < timeoutMs) {
+    await new Promise((resolve) => setTimeout(resolve, 120));
   }
 }
 

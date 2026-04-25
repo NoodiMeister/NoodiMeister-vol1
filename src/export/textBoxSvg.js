@@ -1,4 +1,5 @@
 import { resolveExportTextFamily } from './exportFontAssets';
+import { resolveTextBoxLineHeightPx } from '../utils/textBoxLayoutModel';
 
 function escapeXml(str) {
   if (str == null) return '';
@@ -14,7 +15,7 @@ function getBoxTextLayout(box) {
   const width = Math.max(40, Number(box?.width) || 200);
   const height = Math.max(24, Number(box?.height) || 60);
   const fontSize = Math.max(8, Number(box?.fontSize) || 14);
-  const lineHeight = Math.max(fontSize * 1.2, fontSize + 2);
+  const lineHeight = resolveTextBoxLineHeightPx(box, fontSize);
   // Print/PDF peab kasutama täpselt salvestatud teksti ridu (ainult \n murre),
   // et vältida ekspordi automaatset ümberpaigutust võrreldes editoriga.
   const lines = String(box?.text || '').split(/\r?\n/);

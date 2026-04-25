@@ -424,7 +424,20 @@ function renderTimeSignature(timeSignature, timeSignatureMode, centerY, textColo
 
 
 function renderStandardRest(note, x, y, staffSpace) {
-  const glyph = smuflRestForDurationLabel(note.durationLabel || '1/4');
+  const resolveRestDurationLabel = (n) => {
+    const EPS = 1e-6;
+    const numericDuration = Number(n?.duration);
+    if (Number.isFinite(numericDuration) && numericDuration > EPS) {
+      if (Math.abs(numericDuration - 4) < EPS) return '1/1';
+      if (Math.abs(numericDuration - 2) < EPS) return '1/2';
+      if (Math.abs(numericDuration - 1) < EPS) return '1/4';
+      if (Math.abs(numericDuration - 0.5) < EPS) return '1/8';
+      if (Math.abs(numericDuration - 0.25) < EPS) return '1/16';
+      if (Math.abs(numericDuration - 0.125) < EPS) return '1/32';
+    }
+    return n?.durationLabel || '1/4';
+  };
+  const glyph = smuflRestForDurationLabel(resolveRestDurationLabel(note));
   return (
     <SmuflGlyph
       x={x}
@@ -1582,7 +1595,19 @@ export function TraditionalNotationView({
                       if (note.isRest) {
                         const drawRestGlyph = shouldDrawRestGlyph(measure.notes, noteIdx);
                         const restSyllable = drawRestGlyph && showRhythmSyllables ? getRhythmSyllableForNote(note) : '';
-                        const dur = note.durationLabel || '1/4';
+                        const dur = (() => {
+                          const EPS = 1e-6;
+                          const numericDuration = Number(note?.duration);
+                          if (Number.isFinite(numericDuration) && numericDuration > EPS) {
+                            if (Math.abs(numericDuration - 4) < EPS) return '1/1';
+                            if (Math.abs(numericDuration - 2) < EPS) return '1/2';
+                            if (Math.abs(numericDuration - 1) < EPS) return '1/4';
+                            if (Math.abs(numericDuration - 0.5) < EPS) return '1/8';
+                            if (Math.abs(numericDuration - 0.25) < EPS) return '1/16';
+                            if (Math.abs(numericDuration - 0.125) < EPS) return '1/32';
+                          }
+                          return note.durationLabel || '1/4';
+                        })();
                         const restAnchorY =
                           dur === '1/1'
                             ? staffY + staffLinePositions[1] // whole rest hangs from 2nd line (from top)

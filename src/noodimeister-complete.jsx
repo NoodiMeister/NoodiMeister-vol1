@@ -94,6 +94,7 @@ import { registerSmuflFontsForJsPdf } from './export/registerSmuflFontForJsPdf';
 import { getScorePageDimensions } from './layout/LayoutManager';
 import { getPageCount, normalizePaperSize } from './utils/pageGeometry';
 import { openCloudFileInNewBrowserTab } from './utils/appUrls';
+import { resolveTextBoxLineHeightPx } from './utils/textBoxLayoutModel';
 import {
   resolveInstrumentRange,
   resolveInstrumentRangeMidi,
@@ -2963,6 +2964,12 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   const fillGapWithRests = (startBeat, endBeat) => {
     const rests = [];
     let t = startBeat;
+    const EPS = 1e-6;
+    const snapBeat = (value) => {
+      const v = Number(value) || 0;
+      // Stabilize floating-point accumulation across long edit sessions.
+      return Math.round(v * 1000000) / 1000000;
+    };
     const durationsOrdered = [
       { beats: 4, label: '1/1' },
       { beats: 2, label: '1/2' },
@@ -2972,9 +2979,13 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       { beats: 0.125, label: '1/32' },
     ];
     const remaining = () => endBeat - t;
-    while (remaining() > 1e-6) {
+    while (remaining() > EPS) {
       const r = remaining();
-      const d = durationsOrdered.find((x) => x.beats <= r + 1e-6) || durationsOrdered[durationsOrdered.length - 1];
+      const d = durationsOrdered.find((x) => x.beats <= r + EPS);
+      // Do not overfill timeline: tiny residuals under smallest supported duration
+      // are floating-point artifacts (or unsupported tuplet fractions) and must not
+      // be converted into an extra rest that extends past endBeat.
+      if (!d) break;
       rests.push({
         id: makeId('rest'),
         pitch: 'C',
@@ -2985,7 +2996,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         isRest: true,
         beat: t,
       });
-      t += d.beats;
+      t = snapBeat(t + d.beats);
       if (rests.length > 20000) break;
     }
     return rests;
@@ -9904,7 +9915,9 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     probe.style.padding = '4px 8px';
     probe.style.width = `${Math.max(60, Number(width) || 60)}px`;
     probe.style.fontFamily = style.fontFamily || documentFontFamily || 'serif';
-    probe.style.fontSize = `${Math.max(8, Number(style.fontSize) || 14)}px`;
+    const resolvedFontSize = Math.max(8, Number(style.fontSize) || 14);
+    probe.style.fontSize = `${resolvedFontSize}px`;
+    probe.style.lineHeight = `${resolveTextBoxLineHeightPx(style, resolvedFontSize)}px`;
     if (style.fontWeight) probe.style.fontWeight = style.fontWeight;
     if (style.fontStyle) probe.style.fontStyle = style.fontStyle;
     if (style.textDecoration) probe.style.textDecoration = style.textDecoration;
@@ -14848,6 +14861,8 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
               const w = box.width ?? 200;
               const h = box.height ?? 60;
               const align = box.textAlign ?? 'center';
+              const boxFontSize = box.fontSize || 14;
+              const boxLineHeight = resolveTextBoxLineHeightPx(box, boxFontSize);
               const columnCount = Math.max(1, Math.min(5, Math.floor(Number(box.columnCount) || 1)));
               const textBoxEditingDisabled = showPdfExportPreview || isExportingPdf;
               const isSelected = !textBoxEditingDisabled && selectedTextboxId === box.id;
@@ -14861,7 +14876,8 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                     top: box.y,
                     width: w,
                     height: h,
-                    fontSize: box.fontSize || 14,
+                    fontSize: boxFontSize,
+                    lineHeight: `${boxLineHeight}px`,
                     fontFamily: box.fontFamily || documentFontFamily,
                     fontWeight: box.fontWeight || (box.fontWeightNumeric || undefined),
                     fontStyle: box.fontStyle || undefined,
@@ -14923,6 +14939,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                         className="flex-1 min-w-0 block h-full overflow-auto whitespace-pre-wrap break-words resize-none bg-transparent outline-none"
                         style={{
                           textAlign: align,
+                          lineHeight: `${boxLineHeight}px`,
                           columnCount: columnCount > 1 ? columnCount : undefined,
                           columnGap: columnCount > 1 ? '16px' : undefined,
                           columnFill: columnCount > 1 ? 'auto' : undefined,
@@ -14933,6 +14950,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                         className="flex-1 min-w-0 block h-full overflow-hidden whitespace-pre-wrap break-words"
                         style={{
                           textAlign: align,
+                          lineHeight: `${boxLineHeight}px`,
                           columnCount: columnCount > 1 ? columnCount : undefined,
                           columnGap: columnCount > 1 ? '16px' : undefined,
                           columnFill: columnCount > 1 ? 'auto' : undefined,
