@@ -1055,6 +1055,10 @@ const DEFAULT_SHORTCUT_PREFS = {
   'toolbox.pianoKeyboard': { code: 'Digit0', shift: true, alt: false, mod: false },
   'toolbox.timelinePanel': { code: 'KeyT', shift: true, alt: false, mod: true },
   'toolbox.chords': { code: 'KeyA', shift: false, alt: false, mod: true }, // Ctrl/Cmd + A
+  'app.tie': { code: 'KeyT', shift: false, alt: false, mod: false },
+  'app.slur': { code: 'KeyS', shift: false, alt: false, mod: false },
+  /** Legato kaare pikendamine: vali kaare esimene või teine ots, seejärel E (järgmine heliline noot ajas). */
+  'app.extendSlur': { code: 'KeyE', shift: false, alt: false, mod: false },
 };
 
 const SHORTCUT_ACTION_LABELS = {
@@ -1078,6 +1082,9 @@ const SHORTCUT_ACTION_LABELS = {
   'app.copy': 'Kopeeri',
   'app.paste': 'Kleebi',
   'app.clipboardHistory': 'Lopikelaua ajalugu',
+  'app.tie': 'Pidekaar (T) — kaks sama helikõrguse nooti',
+  'app.slur': 'Legato kaar (S) — kaks või enam nooti (vahemik)',
+  'app.extendSlur': 'Legato kaare pikendamine (E) — vali kaare ots, siis E',
 };
 
 function normalizeShortcutPref(pref) {
@@ -7231,6 +7238,328 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     }
   }, [playNoteOnInsert, getNoteAtBeat, playPianoNote, getEffectivePlaybackBpm, noteDurationInQuarterBeats, keySignature]);
 
+  const applyTieToSelection = useCallback(() => {
+    if (notationStyle === 'FIGURENOTES' || (notationMode !== 'traditional' && notationMode !== 'vabanotatsioon')) return;
+    const range = (selectionStart >= 0 && selectionEnd >= 0)
+      ? { lo: Math.min(selectionStart, selectionEnd), hi: Math.max(selectionStart, selectionEnd) }
+      : null;
+    const inds = range
+      ? Array.from({ length: range.hi - range.lo + 1 }, (_, k) => range.lo + k)
+      : (selectedNoteIndex >= 0 ? [selectedNoteIndex] : []);
+    if (inds.length !== 2) {
+      setSaveFeedback('Pidekaar (T): vali kaks nooti (Shift + nooled või tärk).');
+      setTimeout(() => setSaveFeedback(''), 2800);
+      return;
+    }
+    const sorted = inds
+      .map((i) => ({ i, beat: getBeatAtNoteIndex(notes, i) }))
+      .sort((a, b) => a.beat - b.beat || a.i - b.i);
+    const leftI = sorted[0].i;
+    const rightI = sorted[1].i;
+    const na = notes[leftI];
+    const nb = notes[rightI];
+    if (!na || !nb || na.isRest || nb.isRest) {
+      setSaveFeedback('Pidekaar vajab kahte helilist (mitte puhkuse) nooti.');
+      setTimeout(() => setSaveFeedback(''), 2600);
+      return;
+    }
+    if (noteToMidi(na) !== noteToMidi(nb)) {
+      setSaveFeedback('Pidekaar: mõlemal nootidel peab olema sama helistik.');
+      setTimeout(() => setSaveFeedback(''), 3000);
+      return;
+    }
+    const isOn = Number(na.tieTo) === Number(nb.id) && (nb.tiedFrom == null || Number(nb.tiedFrom) === Number(na.id));
+    saveToHistory(notes);
+    setNotes((prev) => {
+      const withIds = prev.map((n, k) => ({ ...n, id: n.id != null ? n.id : Date.now() + k * 0.0001 }));
+      const a0 = { ...withIds[leftI] };
+      const b0 = { ...withIds[rightI] };
+      delete a0.tieTo; delete a0.tiedFrom; delete a0.slurTo; delete a0.slurFrom;
+      delete b0.tieTo; delete b0.tiedFrom; delete b0.slurTo; delete b0.slurFrom;
+      if (isOn) {
+        withIds[leftI] = a0;
+        withIds[rightI] = b0;
+        return withIds;
+      }
+      a0.tieTo = b0.id;
+      b0.tiedFrom = a0.id;
+      withIds[leftI] = a0;
+      withIds[rightI] = b0;
+      return withIds;
+    });
+    dirtyRef.current = true;
+  }, [
+    notationStyle, notationMode, selectionStart, selectionEnd, selectedNoteIndex, notes,
+    getBeatAtNoteIndex, noteToMidi, saveToHistory, setNotes, setSaveFeedback,
+  ]);
+
+  const applySlurToSelection = useCallback(() => {
+    if (notationStyle === 'FIGURENOTES' || (notationMode !== 'traditional' && notationMode !== 'vabanotatsioon')) return;
+    const range = (selectionStart >= 0 && selectionEnd >= 0)
+      ? { lo: Math.min(selectionStart, selectionEnd), hi: Math.max(selectionStart, selectionEnd) }
+      : null;
+    const inds = range
+      ? Array.from({ length: range.hi - range.lo + 1 }, (_, k) => range.lo + k)
+      : (selectedNoteIndex >= 0 ? [selectedNoteIndex] : []);
+    if (inds.length < 2) {
+      setSaveFeedback('Legato kaar (S): vali kaks või enam nooti.');
+      setTimeout(() => setSaveFeedback(''), 2800);
+      return;
+    }
+    const sorted = inds
+      .map((i) => ({ i, beat: getBeatAtNoteIndex(notes, i) }))
+      .sort((a, b) => a.beat - b.beat || a.i - b.i);
+    const iFirst = sorted[0].i;
+    const iLast = sorted[sorted.length - 1].i;
+    const n0 = notes[iFirst];
+    const n1 = notes[iLast];
+    if (!n0 || !n1 || n0.isRest || n1.isRest) {
+      setSaveFeedback('Legato kaar vajab helistavaid (mitte puhkuse) noote.');
+      setTimeout(() => setSaveFeedback(''), 2600);
+      return;
+    }
+    const isOn = Number(n0.slurTo) === Number(n1.id) && (n1.slurFrom == null || Number(n1.slurFrom) === Number(n0.id));
+    saveToHistory(notes);
+    setNotes((prev) => {
+      const withIds = prev.map((n, k) => ({ ...n, id: n.id != null ? n.id : Date.now() + k * 0.0001 }));
+      for (const ii of inds) {
+        if (ii < 0 || ii >= withIds.length) continue;
+        const x = { ...withIds[ii] };
+        delete x.slurTo; delete x.slurFrom;
+        withIds[ii] = x;
+      }
+      if (isOn) {
+        return withIds;
+      }
+      const a = { ...withIds[iFirst] };
+      const b = { ...withIds[iLast] };
+      a.slurTo = b.id;
+      b.slurFrom = a.id;
+      withIds[iFirst] = a;
+      withIds[iLast] = b;
+      return withIds;
+    });
+    dirtyRef.current = true;
+  }, [
+    notationStyle, notationMode, selectionStart, selectionEnd, selectedNoteIndex, notes,
+    getBeatAtNoteIndex, saveToHistory, setNotes, setSaveFeedback,
+  ]);
+
+  /** Kui on üks noot valitud — kaare alg- või lõpp-ankur, tagasta { startId, endId } pildi / klahvijoone jaoks. */
+  const activeLegatoSlurPair = useMemo(() => {
+    if (notationStyle === 'FIGURENOTES' || (notationMode !== 'traditional' && notationMode !== 'vabanotatsioon')) {
+      return null;
+    }
+    const hasRange = selectionStart >= 0 && selectionEnd >= 0;
+    const isSingle = !hasRange
+      ? selectedNoteIndex >= 0
+      : (Math.min(selectionStart, selectionEnd) === Math.max(selectionStart, selectionEnd));
+    if (!isSingle) return null;
+    const idx = hasRange ? Math.min(selectionStart, selectionEnd) : selectedNoteIndex;
+    if (idx < 0 || idx >= notes.length) return null;
+    const n = notes[idx];
+    if (!n || n.isRest) return null;
+    if (n.slurTo && !n.slurFrom) {
+      return { startId: n.id, endId: n.slurTo };
+    }
+    if (n.slurFrom) {
+      return { startId: n.slurFrom, endId: n.id };
+    }
+    return null;
+  }, [notationStyle, notationMode, selectionStart, selectionEnd, selectedNoteIndex, notes]);
+
+  const applyLegatoSlurRemoveForPair = useCallback((pair) => {
+    if (notationStyle === 'FIGURENOTES' || (notationMode !== 'traditional' && notationMode !== 'vabanotatsioon')) return;
+    if (!pair) return;
+    const { startId, endId } = pair;
+    if (startId == null || endId == null) return;
+    const sIdx = notes.findIndex((x) => x && Number(x.id) === Number(startId));
+    const eIdx = notes.findIndex((x) => x && Number(x.id) === Number(endId));
+    if (sIdx < 0 || eIdx < 0) return;
+    saveToHistory(notes);
+    setNotes((prev) => {
+      const withIds = prev.map((n, k) => ({ ...n, id: n.id != null ? n.id : Date.now() + k * 0.0001 }));
+      const a0 = { ...withIds[sIdx] };
+      const b0 = { ...withIds[eIdx] };
+      delete a0.slurTo; delete a0.slurFrom;
+      delete b0.slurTo; delete b0.slurFrom;
+      withIds[sIdx] = a0;
+      withIds[eIdx] = b0;
+      return withIds;
+    });
+    dirtyRef.current = true;
+  }, [notationStyle, notationMode, notes, saveToHistory, setNotes]);
+
+  const applyLegatoSlurExtendForPair = useCallback((pair) => {
+    if (notationStyle === 'FIGURENOTES' || (notationMode !== 'traditional' && notationMode !== 'vabanotatsioon')) return;
+    if (!pair) return;
+    const { startId, endId } = pair;
+    const endIdx = notes.findIndex((x) => x && Number(x.id) === Number(endId));
+    const startIdx = notes.findIndex((x) => x && Number(x.id) === Number(startId));
+    if (endIdx < 0 || startIdx < 0) return;
+    const arr = notes
+      .map((nn, i) => ({ n: nn, i, beat: getBeatAtNoteIndex(notes, i) }))
+      .sort((a, b) => a.beat - b.beat || a.i - b.i);
+    const pos = arr.findIndex((x) => x.i === endIdx);
+    if (pos < 0) return;
+    let k = pos + 1;
+    while (k < arr.length && arr[k].n && arr[k].n.isRest) k += 1;
+    if (k >= arr.length) {
+      setSaveFeedback('Järgmist helilist nooti pole — legato kaart ei saa pikendada.');
+      setTimeout(() => setSaveFeedback(''), 3000);
+      return;
+    }
+    const nextIdx = arr[k].i;
+    const nextNote = notes[nextIdx];
+    if (!nextNote || nextNote.isRest) return;
+    if (Number(nextNote.id) === Number(notes[endIdx].id)) return;
+    saveToHistory(notes);
+    setNotes((prev) => {
+      const withIds = prev.map((nn, kk) => ({ ...nn, id: nn.id != null ? nn.id : Date.now() + kk * 0.0001 }));
+      const newEnd = { ...withIds[nextIdx] };
+      const oldEnd = { ...withIds[endIdx] };
+      const st = { ...withIds[startIdx] };
+      delete oldEnd.slurFrom; delete oldEnd.slurTo;
+      newEnd.slurFrom = st.id;
+      st.slurTo = newEnd.id;
+      withIds[endIdx] = oldEnd;
+      withIds[startIdx] = st;
+      withIds[nextIdx] = newEnd;
+      return withIds;
+    });
+    dirtyRef.current = true;
+  }, [
+    notationStyle, notationMode, notes, getBeatAtNoteIndex, saveToHistory, setNotes, setSaveFeedback,
+  ]);
+
+  const applyLegatoSlurRetractForPair = useCallback((pair) => {
+    if (notationStyle === 'FIGURENOTES' || (notationMode !== 'traditional' && notationMode !== 'vabanotatsioon')) return;
+    if (!pair) return;
+    const { startId, endId } = pair;
+    const endIdx = notes.findIndex((x) => x && Number(x.id) === Number(endId));
+    const startIdx = notes.findIndex((x) => x && Number(x.id) === Number(startId));
+    if (endIdx < 0 || startIdx < 0) return;
+    const arr = notes
+      .map((nn, i) => ({ n: nn, i, beat: getBeatAtNoteIndex(notes, i) }))
+      .sort((a, b) => a.beat - b.beat || a.i - b.i);
+    const pos = arr.findIndex((x) => x.i === endIdx);
+    if (pos < 0) return;
+    let k = pos - 1;
+    while (k >= 0 && arr[k].n && arr[k].n.isRest) k -= 1;
+    if (k < 0) {
+      setSaveFeedback('Eelmist helilist nooti pole — legato kaart ei saa taandada.');
+      setTimeout(() => setSaveFeedback(''), 2800);
+      return;
+    }
+    const prevIdx = arr[k].i;
+    if (prevIdx === startIdx) {
+      applyLegatoSlurRemoveForPair(pair);
+      return;
+    }
+    saveToHistory(notes);
+    setNotes((prev) => {
+      const withIds = prev.map((nn, kk) => ({ ...nn, id: nn.id != null ? nn.id : Date.now() + kk * 0.0001 }));
+      const newEnd = { ...withIds[prevIdx] };
+      const oldEnd = { ...withIds[endIdx] };
+      const st = { ...withIds[startIdx] };
+      delete oldEnd.slurFrom; delete oldEnd.slurTo;
+      newEnd.slurFrom = st.id;
+      st.slurTo = newEnd.id;
+      withIds[endIdx] = oldEnd;
+      withIds[startIdx] = st;
+      withIds[prevIdx] = newEnd;
+      return withIds;
+    });
+    dirtyRef.current = true;
+  }, [
+    notationStyle, notationMode, notes, getBeatAtNoteIndex, saveToHistory, setNotes, setSaveFeedback, applyLegatoSlurRemoveForPair,
+  ]);
+
+  /** Legato kaare pikendamine: vali kaare **alg- või lõppnoot**; E (või aktiivse kaare juures →) liigutab kaare lõppu ajas edasi järgmise helilise noodi peale (puhkeid vahele jätab). */
+  const applyExtendSlurFromSelection = useCallback(() => {
+    if (notationStyle === 'FIGURENOTES' || (notationMode !== 'traditional' && notationMode !== 'vabanotatsioon')) return;
+    if (activeLegatoSlurPair) {
+      applyLegatoSlurExtendForPair(activeLegatoSlurPair);
+      return;
+    }
+    const hasRange = selectionStart >= 0 && selectionEnd >= 0;
+    const isSingle = !hasRange
+      ? selectedNoteIndex >= 0
+      : (Math.min(selectionStart, selectionEnd) === Math.max(selectionStart, selectionEnd));
+    if (!isSingle) {
+      setSaveFeedback('Legato pikendamine (E): vali üks noot — kaare esimene või teine ots.');
+      setTimeout(() => setSaveFeedback(''), 3200);
+      return;
+    }
+    const idx = hasRange ? Math.min(selectionStart, selectionEnd) : selectedNoteIndex;
+    if (idx < 0 || idx >= notes.length) return;
+    const n = notes[idx];
+    if (!n || n.isRest) {
+      setSaveFeedback('Vali heliline noot, millel on legato kaar (või loo kaar S-ga).');
+      setTimeout(() => setSaveFeedback(''), 3000);
+      return;
+    }
+    if (!n.slurTo && !n.slurFrom) {
+      setSaveFeedback('Sellel noodil pole legato kaart. Loo esmalt legato (S) või vali kaare ots.');
+      setTimeout(() => setSaveFeedback(''), 3600);
+      return;
+    }
+    let endNote = n;
+    let endIdx = idx;
+    if (n.slurTo && !n.slurFrom) {
+      const eid = n.slurTo;
+      const ei = notes.findIndex((x) => x && Number(x.id) === Number(eid));
+      if (ei < 0) return;
+      endNote = notes[ei];
+      endIdx = ei;
+    } else if (n.slurFrom) {
+      endNote = n;
+      endIdx = idx;
+    }
+    const startId = endNote?.slurFrom;
+    if (startId == null) {
+      setSaveFeedback('Legato andmed on vigased (puudub kaare algus).');
+      setTimeout(() => setSaveFeedback(''), 2800);
+      return;
+    }
+    const startIdx = notes.findIndex((x) => x && Number(x.id) === Number(startId));
+    if (startIdx < 0) return;
+    const arr = notes
+      .map((nn, i) => ({ n: nn, i, beat: getBeatAtNoteIndex(notes, i) }))
+      .sort((a, b) => a.beat - b.beat || a.i - b.i);
+    const pos = arr.findIndex((x) => x.i === endIdx);
+    if (pos < 0) return;
+    let k = pos + 1;
+    while (k < arr.length && arr[k].n && arr[k].n.isRest) k += 1;
+    if (k >= arr.length) {
+      setSaveFeedback('Järgmist helilist nooti pole — legato kaart ei saa pikendada.');
+      setTimeout(() => setSaveFeedback(''), 3000);
+      return;
+    }
+    const nextIdx = arr[k].i;
+    const nextNote = notes[nextIdx];
+    if (!nextNote || nextNote.isRest) return;
+    if (Number(nextNote.id) === Number(endNote.id)) return;
+    saveToHistory(notes);
+    setNotes((prev) => {
+      const withIds = prev.map((nn, kk) => ({ ...nn, id: nn.id != null ? nn.id : Date.now() + kk * 0.0001 }));
+      const newEnd = { ...withIds[nextIdx] };
+      const oldEnd = { ...withIds[endIdx] };
+      const st = { ...withIds[startIdx] };
+      delete oldEnd.slurFrom; delete oldEnd.slurTo;
+      newEnd.slurFrom = st.id;
+      st.slurTo = newEnd.id;
+      withIds[endIdx] = oldEnd;
+      withIds[startIdx] = st;
+      withIds[nextIdx] = newEnd;
+      return withIds;
+    });
+    dirtyRef.current = true;
+  }, [
+    activeLegatoSlurPair, applyLegatoSlurExtendForPair, notationStyle, notationMode, selectionStart, selectionEnd, selectedNoteIndex, notes,
+    getBeatAtNoteIndex, saveToHistory, setNotes, setSaveFeedback,
+  ]);
+
   // Laulutekst: ära luba kursoril jääda nootide vahele – põrka tagasi viimasele kehtivale noodi beat'ile.
   // NB! N-režiimis peab kursor saama liikuda ka tühjale kohale (noodi sisestus), seega seda kaitset seal ei rakenda.
   useEffect(() => {
@@ -7447,6 +7776,59 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       }
       if (isTypingInInput) return;
       if (shortcutsOpen) return;
+
+      if (
+        activeLegatoSlurPair
+        && (notationMode === 'traditional' || notationMode === 'vabanotatsioon')
+        && notationStyle !== 'FIGURENOTES'
+      ) {
+        if (e.code === 'ArrowRight' && !modKey && !e.shiftKey) {
+          e.preventDefault();
+          e.stopPropagation();
+          applyLegatoSlurExtendForPair(activeLegatoSlurPair);
+          return;
+        }
+        if (e.code === 'ArrowLeft' && !modKey && !e.shiftKey) {
+          e.preventDefault();
+          e.stopPropagation();
+          applyLegatoSlurRetractForPair(activeLegatoSlurPair);
+          return;
+        }
+        if (isDeleteKey) {
+          e.preventDefault();
+          e.stopPropagation();
+          applyLegatoSlurRemoveForPair(activeLegatoSlurPair);
+          return;
+        }
+        if (e.code === 'Escape' && !modKey) {
+          e.preventDefault();
+          e.stopPropagation();
+          applySelectionModel(CURSOR_SELECTION_NONE);
+          return;
+        }
+      }
+
+      if ((notationMode === 'traditional' || notationMode === 'vabanotatsioon') && notationStyle !== 'FIGURENOTES'
+        && (selectedNoteIndex >= 0 || (selectionStart >= 0 && selectionEnd >= 0))) {
+        if (matchesShortcutPref(e, effectiveShortcutPrefs['app.tie'])) {
+          e.preventDefault();
+          e.stopPropagation();
+          applyTieToSelection();
+          return;
+        }
+        if (matchesShortcutPref(e, effectiveShortcutPrefs['app.slur'])) {
+          e.preventDefault();
+          e.stopPropagation();
+          applySlurToSelection();
+          return;
+        }
+        if (matchesShortcutPref(e, effectiveShortcutPrefs['app.extendSlur'])) {
+          e.preventDefault();
+          e.stopPropagation();
+          applyExtendSlurFromSelection();
+          return;
+        }
+      }
 
       // Cmd/Ctrl+S – save: to cloud (Google Drive / OneDrive) when logged in with that provider, otherwise to browser
       if (matchesShortcutPref(e, effectiveShortcutPrefs['app.save'])) {
@@ -8889,6 +9271,8 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     maxCursor, setScoreZoomLevel, durationToBeats, hasFullAccess, pickupEnabled, pickupQuantity, pickupDuration, isScorePlaybackPlaying, stopScorePlayback, isInstrumentManagerOpen,
     effectiveShortcutPrefs,     expandScoreForNoteInputAdvance, addNoteAtCursor,
     notesWithExplicitBeats, getBeatAtNoteIndex, noteToMidi,
+    applyTieToSelection, applySlurToSelection, applyExtendSlurFromSelection,
+    activeLegatoSlurPair, applyLegatoSlurExtendForPair, applyLegatoSlurRetractForPair, applyLegatoSlurRemoveForPair, applySelectionModel,
   ]);
 
   // JO-võti: klõps väljaspool võtit lõpetab valiku
@@ -16226,6 +16610,8 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
           onRemoveRepeatMark={onRemoveRepeatMark}
           selectedRepeatMark={selectedRepeatMark}
           onSelectRepeatMark={onSelectRepeatMark}
+          activeLegatoSlurPair={activeLegatoSlurPair}
+          onLegatoPathClick={(endGlobal) => { applySelectionModel({ kind: 'note', index: endGlobal }); }}
         />
       )}
 

@@ -4,7 +4,7 @@
  * Abijooned genereeritakse, kui JO-võti või nootid väljuvad 5-liini süsteemist.
  * Paigutuse tööriistad (Staff Spacer, taktide laiendamine { }) rakenduvad siin.
  */
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, Fragment } from 'react';
 import { JoClefSymbol, TrebleClefSymbol, BassClefSymbol, getJoClefPixelWidth, getJoClefJoStripeBounds } from '../components/ClefSymbols';
 import { RhythmSyllableLabel } from '../components/RhythmSyllableLabel';
 import { getJoName } from '../notation/joNames';
@@ -93,6 +93,12 @@ import {
   getBarlineFrame,
   getRepeatRightGlyphX,
 } from '../notation/repeatBarlineLayout';
+import { getTiePathD, getTieSlurPathD } from '../notation/tieSlurGeometry';
+import {
+  buildTieSlurAnchorMapForStaffSystem,
+  findNoteInInstMeasuresById,
+  isNoteLeftEndpointForSpanner,
+} from '../notation/tieSlurAnchors';
 
 const LAYOUT = { MARGIN_LEFT: 60, CLEF_WIDTH: 45, MEASURE_MIN_WIDTH: 28 };
 
@@ -367,57 +373,85 @@ function TimeSigDigits({ x, y, fontSize, number, fill }) {
   );
 }
 
-function renderTimeSignature(timeSignature, timeSignatureMode, centerY, textColor = '#333', noteFill = '#333', x = 45, pedagogicalOptions = {}) {
+/**
+ * Trad. taktimõõt: eraldusjoon (_TIME_SIG_LAYOUT_.Y_LINE semantika) = noodijoonestiku 3. joon (keskjoon, centerY);
+ * nagu MuseScore / Sibelius / Finale — ükski number ei tohi 3. joonega kattuda; joon on numbrite “vahes”.
+ * SMuFL numbrid: (x,y) = dominant-baseline middle ≈ keskendatud; poolläbimõõt ∝ font.
+ */
+const TIME_SIG_REFS = {
+  FONT_NUM_AT_REF_SP: 5.2,
+  DEN_FALLBACK_RATIO: 25 / 26,
+  STROKE_REFS: 1.5,
+  /** Ligikaudne poolekõrgus aja numbri (Leland timeSig) fonti suurusest */
+  DIGIT_HALF_HEIGHT_FACTOR: 0.34,
+  /** Minimaalne tühimik (sp) 3. joone ja numbritinti vahel */
+  MIDDLE_LINE_PAD_SP: 0.16,
+};
+
+function renderTimeSignature(timeSignature, timeSignatureMode, centerY, textColor = '#333', noteFill = '#333', x = 45, pedagogicalOptions = {}, staffSpace = STAFF_SPACE) {
   const L = TIME_SIG_LAYOUT;
-  // Sama ankur mis FigurenotesView: keskjoon = staff keskjoon (ilma y = centerY - 2 / -10 hack’ita).
-  const y = centerY;
-  const yLine = y + L.Y_LINE;
-  const fNum = 52;
-  const fDen = 52;
-  const fDenFallback = 50;
-  const numeratorDigits = <TimeSigDigits x={x} y={y + L.Y_NUM} fontSize={fNum} number={timeSignature.beats} fill={textColor} />;
+  const scale = Math.max(0.3, staffSpace / STAFF_SPACE);
+  // centerY = 3. (keskmine) joon: getStaffLinePositions(..., 5, ...)[2]
+  const yMiddle = centerY;
+  const fNum = Math.max(8, Math.round(TIME_SIG_REFS.FONT_NUM_AT_REF_SP * staffSpace));
+  const fDen = fNum;
+  const digitHalfH = Math.max(2.5, fNum * TIME_SIG_REFS.DIGIT_HALF_HEIGHT_FACTOR);
+  const linePad = staffSpace * TIME_SIG_REFS.MIDDLE_LINE_PAD_SP;
+  const yLine = yMiddle;
+  const yNum = yMiddle - digitHalfH - linePad;
+  const yDen = yMiddle + digitHalfH + linePad;
+  const lineHalf = L.LINE_HALF * scale;
+  const fDenFallback = Math.max(8, Math.round(fNum * TIME_SIG_REFS.DEN_FALLBACK_RATIO));
+  const strokeW = Math.max(1, TIME_SIG_REFS.STROKE_REFS * scale);
+  const q = 6 * scale;
+  const numeratorDigits = <TimeSigDigits x={x} y={yNum} fontSize={fNum} number={timeSignature.beats} fill={textColor} />;
   const denType = pedagogicalOptions.denominatorType || 'rhythm';
   const denColor = pedagogicalOptions.denominatorColor || noteFill || textColor;
   const denInstrument = pedagogicalOptions.denominatorInstrument || 'handbell';
   const denEmoji = pedagogicalOptions.denominatorEmoji || '🥁';
 
   if (timeSignatureMode === 'pedagogical') {
-    const stemX = x + L.STEM_X_OFFSET;
-    const noteX = x + L.NOTE_X_OFFSET;
-    const noteY = y + L.NOTE_Y;
-    const stemY1 = y + L.STEM_Y1;
-    const stemY2 = y + L.STEM_Y2;
+    // Jooned TIME_SIG.Y_LINE suhtes: sama geomeetria, aga joon 3. peal (yLine = yMiddle).
+    const stemX = x + L.STEM_X_OFFSET * scale;
+    const noteX = x + L.NOTE_X_OFFSET * scale;
+    const noteY = yLine + (L.NOTE_Y - L.Y_LINE) * scale;
+    const stemY1 = yLine + (L.STEM_Y1 - L.Y_LINE) * scale;
+    const stemY2 = yLine + (L.STEM_Y2 - L.Y_LINE) * scale;
+    const r1 = L.WHOLE_RX * scale;
+    const r1y = L.WHOLE_RY * scale;
+    const r2 = L.ELLIPSE_RX * scale;
+    const r2y = L.ELLIPSE_RY * scale;
 
     const getRhythmSymbolForDenominator = () => {
       switch (timeSignature.beatUnit) {
-        case 1: return <ellipse cx={noteX} cy={noteY} rx={L.WHOLE_RX} ry={L.WHOLE_RY} fill="none" stroke={textColor} strokeWidth="1.5" />;
-        case 2: return (<><ellipse cx={noteX} cy={noteY} rx={L.ELLIPSE_RX} ry={L.ELLIPSE_RY} fill="none" stroke={textColor} strokeWidth="1.5" /><line x1={stemX} y1={stemY1} x2={stemX} y2={stemY2} stroke={textColor} strokeWidth="1.5" /></>);
-        case 4: return (<><ellipse cx={noteX} cy={noteY} rx={L.ELLIPSE_RX} ry={L.ELLIPSE_RY} fill={denColor} /><line x1={stemX} y1={stemY1} x2={stemX} y2={stemY2} stroke={textColor} strokeWidth="1.5" /></>);
-        case 8: return (<><ellipse cx={noteX} cy={noteY} rx={L.ELLIPSE_RX} ry={L.ELLIPSE_RY} fill={denColor} /><line x1={stemX} y1={stemY1} x2={stemX} y2={stemY2} stroke={textColor} strokeWidth="1.5" /><path d={`M ${stemX} ${stemY2} Q ${stemX - 6} ${stemY2 - 2} ${stemX} ${stemY2 - 5}`} fill={denColor} /></>);
-        case 16: return (<><ellipse cx={noteX} cy={noteY} rx={L.ELLIPSE_RX} ry={L.ELLIPSE_RY} fill={denColor} /><line x1={stemX} y1={stemY1} x2={stemX} y2={stemY2} stroke={textColor} strokeWidth="1.5" /><path d={`M ${stemX} ${stemY2} Q ${stemX - 6} ${stemY2 - 2} ${stemX} ${stemY2 - 5} M ${stemX} ${stemY2 - 3} Q ${stemX - 6} ${stemY2 - 5} ${stemX} ${stemY2 - 8}`} fill={denColor} /></>);
+        case 1: return <ellipse cx={noteX} cy={noteY} rx={r1} ry={r1y} fill="none" stroke={textColor} strokeWidth={strokeW} />;
+        case 2: return (<><ellipse cx={noteX} cy={noteY} rx={r2} ry={r2y} fill="none" stroke={textColor} strokeWidth={strokeW} /><line x1={stemX} y1={stemY1} x2={stemX} y2={stemY2} stroke={textColor} strokeWidth={strokeW} /></>);
+        case 4: return (<><ellipse cx={noteX} cy={noteY} rx={r2} ry={r2y} fill={denColor} /><line x1={stemX} y1={stemY1} x2={stemX} y2={stemY2} stroke={textColor} strokeWidth={strokeW} /></>);
+        case 8: return (<><ellipse cx={noteX} cy={noteY} rx={r2} ry={r2y} fill={denColor} /><line x1={stemX} y1={stemY1} x2={stemX} y2={stemY2} stroke={textColor} strokeWidth={strokeW} /><path d={`M ${stemX} ${stemY2} Q ${stemX - q} ${stemY2 - 2 * scale} ${stemX} ${stemY2 - 5 * scale}`} fill={denColor} /></>);
+        case 16: return (<><ellipse cx={noteX} cy={noteY} rx={r2} ry={r2y} fill={denColor} /><line x1={stemX} y1={stemY1} x2={stemX} y2={stemY2} stroke={textColor} strokeWidth={strokeW} /><path d={`M ${stemX} ${stemY2} Q ${stemX - q} ${stemY2 - 2 * scale} ${stemX} ${stemY2 - 5 * scale} M ${stemX} ${stemY2 - 3 * scale} Q ${stemX - q} ${stemY2 - 5 * scale} ${stemX} ${stemY2 - 8 * scale}`} fill={denColor} /></>);
         default: return <TimeSigDigits x={noteX} y={stemY2} fontSize={fDenFallback} number={timeSignature.beatUnit} fill={textColor} />;
       }
     };
 
     const getDenominatorVisual = () => {
       if (denType === 'number') return <TimeSigDigits x={noteX} y={stemY2} fontSize={fDenFallback} number={timeSignature.beatUnit} fill={denColor} />;
-      if (denType === 'emoji') return <text x={noteX} y={stemY2 + 2} textAnchor="middle" fontSize={Math.max(18, fDenFallback)}>{denEmoji}</text>;
+      if (denType === 'emoji') return <text x={noteX} y={stemY2 + 2 * scale} textAnchor="middle" fontSize={Math.max(8, Math.max(18 * scale, fDenFallback))}>{denEmoji}</text>;
       if (denType === 'instrument') {
-        if (denInstrument === 'boomwhacker') return <rect x={noteX - 8} y={noteY - 6} width={16} height={12} rx={6} fill={denColor} stroke={textColor} strokeWidth="1.2" />;
-        if (denInstrument === 'triangle') return <path d={`M ${noteX} ${noteY - 7} L ${noteX - 7} ${noteY + 6} L ${noteX + 7} ${noteY + 6} Z`} fill="none" stroke={denColor} strokeWidth="1.8" />;
-        return (<><circle cx={noteX} cy={noteY - 1} r={6} fill={denColor} /><rect x={noteX - 1.2} y={noteY + 5} width={2.4} height={10} rx={1.2} fill={denColor} /></>);
+        if (denInstrument === 'boomwhacker') return <rect x={noteX - 8 * scale} y={noteY - 6 * scale} width={16 * scale} height={12 * scale} rx={6 * scale} fill={denColor} stroke={textColor} strokeWidth={1.2 * scale} />;
+        if (denInstrument === 'triangle') return <path d={`M ${noteX} ${noteY - 7 * scale} L ${noteX - 7 * scale} ${noteY + 6 * scale} L ${noteX + 7 * scale} ${noteY + 6 * scale} Z`} fill="none" stroke={denColor} strokeWidth={1.8 * scale} />;
+        return (<><circle cx={noteX} cy={noteY - 1 * scale} r={6 * scale} fill={denColor} /><rect x={noteX - 1.2 * scale} y={noteY + 5 * scale} width={2.4 * scale} height={10 * scale} rx={1.2 * scale} fill={denColor} /></>);
       }
       return getRhythmSymbolForDenominator();
     };
 
-    return (<g><g stroke="none">{numeratorDigits}</g><line x1={x - L.LINE_HALF} y1={yLine} x2={x + L.LINE_HALF} y2={yLine} stroke={textColor} strokeWidth="1.5" />{getDenominatorVisual()}</g>);
+    return (<g><g stroke="none">{numeratorDigits}</g><line x1={x - lineHalf} y1={yLine} x2={x + lineHalf} y2={yLine} stroke={textColor} strokeWidth={strokeW} />{getDenominatorVisual()}</g>);
   }
 
   return (
     <g>
       {numeratorDigits}
-      <line x1={x - L.LINE_HALF} y1={yLine} x2={x + L.LINE_HALF} y2={yLine} stroke={textColor} strokeWidth="1.5" />
-      <TimeSigDigits x={x} y={y + L.Y_DEN} fontSize={fDen} number={timeSignature.beatUnit} fill={textColor} />
+      <line x1={x - lineHalf} y1={yLine} x2={x + lineHalf} y2={yLine} stroke={textColor} strokeWidth={strokeW} />
+      <TimeSigDigits x={x} y={yDen} fontSize={fDen} number={timeSignature.beatUnit} fill={textColor} />
     </g>
   );
 }
@@ -538,6 +572,10 @@ export function TraditionalNotationView({
   onRemoveRepeatMark, // (measureIndex, markType: 'repeatStart'|'repeatEnd'|'segno'|'coda'|'volta1'|'volta2') => void
   selectedRepeatMark = null, // { measureIndex, markType } | null
   onSelectRepeatMark, // (measureIndex, markType) => void
+  /** { startId, endId } | null — valitud legato kaar (kaare ots) → sinine joon + nool. */
+  activeLegatoSlurPair = null,
+  /** (endGlobalNoteIndex) => void — klõps valitud (sinisel) legato kaarel: vali lõppnoot. */
+  onLegatoPathClick,
 }) {
   const spacing = staffSpaceProp ?? STAFF_SPACE;
   const isVabanotatsioon = notationMode === 'vabanotatsioon';
@@ -1167,7 +1205,7 @@ export function TraditionalNotationView({
                             : undefined}
                           style={canHandDragNotes ? { cursor: 'grab' } : undefined}
                         >
-                          {renderTimeSignature(timeSignature, timeSignatureMode, centerY, timeSigTextColor, timeSigNoteFill, 0, { denominatorType: pedagogicalTimeSigDenominatorType, denominatorColor: pedagogicalTimeSigDenominatorColor, denominatorInstrument: pedagogicalTimeSigDenominatorInstrument, denominatorEmoji: pedagogicalTimeSigDenominatorEmoji })}
+                          {renderTimeSignature(timeSignature, timeSignatureMode, centerY, timeSigTextColor, timeSigNoteFill, 0, { denominatorType: pedagogicalTimeSigDenominatorType, denominatorColor: pedagogicalTimeSigDenominatorColor, denominatorInstrument: pedagogicalTimeSigDenominatorInstrument, denominatorEmoji: pedagogicalTimeSigDenominatorEmoji }, spacing)}
                         </g>
                       );
                     })()
@@ -1176,7 +1214,27 @@ export function TraditionalNotationView({
                   {/* Taktid: jooned, akordid, nootid (per staff) */}
                   {Array.isArray(instMeasures) && (() => {
                     const beatsPerMeasure = measureLengthInQuarterBeats(timeSignature);
-                    return sys.measureIndices.map((measureIdx, j) => {
+                    const isHandbellsStaffForTie = String((multiStaff ? inst?.instrumentId : instrument) || '') === 'handbells';
+                    const tieSlurAnchorMap = buildTieSlurAnchorMapForStaffSystem({
+                      instMeasures,
+                      measureIndices: sys.measureIndices,
+                      sys,
+                      timeSignature,
+                      staffY,
+                      firstLineY,
+                      lastLineY,
+                      centerY,
+                      staffLines,
+                      spacing,
+                      staffCenterY,
+                      staffResolvePitchY,
+                      middleLineY,
+                      isHandbellsStaff: isHandbellsStaffForTie,
+                      effectiveMarginLeft,
+                    });
+                    return (
+                    <Fragment key={`ts-${sys.systemIndex}-${String(inst.id)}`}>
+                    {sys.measureIndices.map((measureIdx, j) => {
                       const measure = instMeasures[measureIdx];
                       if (!measure) return null;
                 const prevMeasureInSystem = j > 0 ? instMeasures[sys.measureIndices[j - 1]] : null;
@@ -1552,6 +1610,57 @@ export function TraditionalNotationView({
                         </g>
                       );
                     })}
+                    {(() => {
+                      const out = [];
+                      const strokeTie = themeColors?.noteFill || 'var(--note-fill, #1a1a1a)';
+                      for (const n of measure.notes) {
+                        if (!n || n.isRest) continue;
+                        if (n.tieTo) {
+                          const t = findNoteInInstMeasuresById(instMeasures, n.tieTo);
+                          if (!t) continue;
+                          if (!isNoteLeftEndpointForSpanner(n, t.note)) continue;
+                          const a = tieSlurAnchorMap.get(Number(n.id));
+                          const b = tieSlurAnchorMap.get(Number(t.note.id));
+                          if (!a || !b) continue;
+                          out.push(
+                            <path
+                              key={`tie-${n.id}`}
+                              d={getTiePathD(a.x, a.y, b.x, b.y, { spacing, bulgeUp: !a.stemUp })}
+                              fill="none"
+                              stroke={strokeTie}
+                              strokeWidth={Math.max(0.7, spacing * 0.08)}
+                              strokeLinecap="round"
+                            />,
+                          );
+                        }
+                        if (n.slurTo) {
+                          const t = findNoteInInstMeasuresById(instMeasures, n.slurTo);
+                          if (!t) continue;
+                          if (!isNoteLeftEndpointForSpanner(n, t.note)) continue;
+                          const isActiveSlur = activeLegatoSlurPair
+                            && Number(activeLegatoSlurPair.startId) === Number(n.id)
+                            && Number(activeLegatoSlurPair.endId) === Number(n.slurTo);
+                          if (isActiveSlur) continue;
+                          const a = tieSlurAnchorMap.get(Number(n.id));
+                          const b = tieSlurAnchorMap.get(Number(t.note.id));
+                          if (!a || !b) continue;
+                          const midP = (a.pitchY + b.pitchY) / 2;
+                          const bulgeUp = midP < middleLineY;
+                          out.push(
+                            <path
+                              key={`slur-${n.id}`}
+                              d={getTieSlurPathD(a.x, a.y, b.x, b.y, { kind: 'slur', spacing, bulgeUp })}
+                              fill="none"
+                              stroke={strokeTie}
+                              strokeWidth={Math.max(0.9, spacing * 0.1)}
+                              strokeLinecap="round"
+                            />,
+                          );
+                        }
+                      }
+                      if (out.length === 0) return null;
+                      return <g className="nm-tie-slur-back" style={{ pointerEvents: 'none' }}>{out}</g>;
+                    })()}
                     {measure.notes.map((note, noteIdx) => {
                       const noteX = getRenderedNoteCenterX(note, noteIdx);
                       let globalNoteIndex = 0;
@@ -1909,9 +2018,59 @@ export function TraditionalNotationView({
                         </g>
                       );
                     })}
+                    {activeLegatoSlurPair && (() => {
+                      for (const n of measure.notes) {
+                        if (!n || n.isRest || !n.slurTo) continue;
+                        if (Number(n.id) !== Number(activeLegatoSlurPair.startId)
+                          || Number(n.slurTo) !== Number(activeLegatoSlurPair.endId)) continue;
+                        const t = findNoteInInstMeasuresById(instMeasures, n.slurTo);
+                        if (!t) return null;
+                        if (!isNoteLeftEndpointForSpanner(n, t.note)) return null;
+                        const a = tieSlurAnchorMap.get(Number(n.id));
+                        const b = tieSlurAnchorMap.get(Number(t.note.id));
+                        if (!a || !b) return null;
+                        const midP = (a.pitchY + b.pitchY) / 2;
+                        const bulgeUp = midP < middleLineY;
+                        const d = getTieSlurPathD(a.x, a.y, b.x, b.y, { kind: 'slur', spacing, bulgeUp });
+                        const w = Math.max(0.9, spacing * 0.1);
+                        let endGlobal = 0;
+                        for (let mi = 0; mi < t.measureIndex; mi += 1) {
+                          endGlobal += (instMeasures[mi]?.notes?.length ?? 0);
+                        }
+                        endGlobal += t.noteIndex;
+                        return (
+                          <g key="nm-legato-slur-active" className="nm-legato-slur-active" style={{ pointerEvents: onLegatoPathClick ? 'auto' : 'none' }}>
+                            <path
+                              d={d}
+                              fill="none"
+                              stroke="#2563eb"
+                              strokeWidth={w}
+                              strokeLinecap="round"
+                            />
+                            {typeof onLegatoPathClick === 'function' && (
+                              <path
+                                d={d}
+                                fill="none"
+                                stroke="transparent"
+                                strokeWidth={Math.max(12, w * 4)}
+                                strokeLinecap="round"
+                                style={{ pointerEvents: 'stroke', cursor: 'pointer' }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onLegatoPathClick(endGlobal);
+                                }}
+                              />
+                            )}
+                          </g>
+                        );
+                      }
+                      return null;
+                    })()}
                   </g>
                 );
-              });
+              })}
+            </Fragment>
+            );
             })()}
 
                 </g>
