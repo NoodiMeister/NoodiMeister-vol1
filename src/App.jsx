@@ -11,6 +11,9 @@ const LoginPage = lazyWithRetry(() => import('./pages/LoginPage'));
 const HinnakiriPage = lazyWithRetry(() => import('./pages/HinnakiriPage'));
 const ToetaPage = lazyWithRetry(() => import('./pages/ToetaPage'));
 const AboutPage = lazyWithRetry(() => import('./pages/AboutPage'));
+const PublicHomePage = lazyWithRetry(() => import('./pages/PublicHomePage'));
+const PrivacyPage = lazyWithRetry(() => import('./pages/PrivacyPage'));
+const TermsPage = lazyWithRetry(() => import('./pages/TermsPage'));
 const HowToPage = lazyWithRetry(() => import('./pages/HowToPage'));
 const ComposerPage = lazyWithRetry(() => import('./pages/ComposerPage'));
 const AdminGrantSupportPage = lazyWithRetry(() => import('./pages/AdminGrantSupportPage'));
@@ -262,6 +265,10 @@ function AppRoutes() {
             element={SHOW_SUPPORT_AND_PRICING_UI ? <ToetaPage /> : <Navigate to="/" replace />}
           />
           <Route path="/teave" element={<AboutPage />} />
+          <Route path="/privaatsus" element={<PrivacyPage />} />
+          <Route path="/tingimused" element={<TermsPage />} />
+          <Route path="/privacy" element={<Navigate to="/privaatsus" replace />} />
+          <Route path="/terms" element={<Navigate to="/tingimused" replace />} />
           <Route path="/kuidas" element={<HowToPage />} />
           <Route path="/koostaja" element={<ComposerPage />} />
           <Route path="/how-to" element={<Navigate to="/kuidas" replace />} />
@@ -271,7 +278,7 @@ function AppRoutes() {
           <Route path="/administraator-registreerimine" element={<Navigate to="/administraator/register" replace />} />
           <Route path="/admin" element={<Navigate to="/administraator" replace />} />
           <Route path="/landing" element={<LandingPage />} />
-          <Route path="/" element={<Navigate to="/demo-intro" replace />} />
+          <Route path="/" element={<PublicHomePage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Suspense>

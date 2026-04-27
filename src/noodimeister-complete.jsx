@@ -228,6 +228,47 @@ function applyThemeToDocument(mode, primaryColor) {
   document.documentElement.setAttribute('data-primary-color', primaryColor);
 }
 
+/** Eemaldab projekti/import-faili laiendi, et saada pealkirja/eksport-stem. */
+function stripProjectFileNameForExport(name) {
+  return String(name || '').replace(/\.(nm|noodimeister|json|musicxml|xml|pdf)$/i, '').trim();
+}
+
+/**
+ * PDF/eksport: ohutu failinime tüvi (UTF-8 tähed lubatud; ainult teed/rez. sümbolid eemal).
+ * Vana regex [^\w\-.] eemaldas eesti tähed ja tühjendas pealkirja.
+ */
+function sanitizeExportFileNameStem(raw) {
+  let s = String(raw ?? '').trim();
+  if (!s) return '';
+  s = s.replace(/[<>:"/\\|?*\u0000-\u001f]/g, '');
+  s = s.replace(/\s+/g, ' ').trim();
+  s = s.replace(/^[.\s]+|[.\s]+$/g, '');
+  if (!s) return '';
+  return s.length > 200 ? s.slice(0, 200).trim() : s;
+}
+
+/** Tühi pealkiri: ära kasuta allalaadimiseks ainult generilist rakendusefaili nime. */
+function isUnusableAppLikeExportStem(stem) {
+  const s = String(stem || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  if (!s) return true;
+  return s === 'noodimeister' || s === 'noodimeistri' || s === 'noodi meister' || s === 'noodimeister-demo' || s === 'nm';
+}
+
+/**
+ * PDF failinimi: eelistab noodipealkirja; muidu avatud projekti faili nime (ilma .nm);
+ * puhastab UTF-8 ja ei kasuta tühja pealkirja korral lehe/rakenduse vaikimisi hüüdnime asemel failinime vihjet.
+ */
+function getPdfExportDownloadFileName(songTitle, cloudFileName, localFileName, untitledLabel) {
+  const fromTitle = sanitizeExportFileNameStem(songTitle);
+  if (fromTitle) return `${fromTitle}.pdf`;
+  const fromCloud = sanitizeExportFileNameStem(stripProjectFileNameForExport(cloudFileName));
+  if (fromCloud && !isUnusableAppLikeExportStem(fromCloud)) return `${fromCloud}.pdf`;
+  const fromLocal = sanitizeExportFileNameStem(stripProjectFileNameForExport(localFileName));
+  if (fromLocal && !isUnusableAppLikeExportStem(fromLocal)) return `${fromLocal}.pdf`;
+  const u = sanitizeExportFileNameStem(untitledLabel) || 'score';
+  return `${u}.pdf`;
+}
+
 // Rütmiõppe režiim: Kodály silpide pildid (public/) – kui rütmirežiim on sisse lülitatud, kasutatakse neid faile
 var RHYTHM_SYLLABLE_IMAGES = {
   '1/4': '/ta.svg',      // veerandnoot
@@ -2258,6 +2299,8 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   /** Jooksiv min taktide arv nootide järgi; addMeasure on defineeritud varem kui useMemo */
   const minMeasuresFromNotesRef = useRef(1);
   const [songTitle, setSongTitle] = useState('');
+  /** Viimase kohalikult avatud .nm nimi (PDF/eksport kui noodipealkiri tühi). */
+  const [localProjectFileName, setLocalProjectFileName] = useState('');
   const [author, setAuthor] = useState('');
   const [copyrightFooter, setCopyrightFooter] = useState('');
   const [pickupEnabled, setPickupEnabled] = useState(false);
@@ -2606,7 +2649,11 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   const isImportPdfFlow = (searchParams && typeof searchParams.get === 'function' && searchParams.get('importPdf')) === '1';
   const partStaffId = searchParams && typeof searchParams.get === 'function' ? searchParams.get('staffId') : undefined;
   // Kui fail on avatud pilvest (/app?fileId=...), hoiame meeles, millisest teenusest ja millise fileId-ga, et Cmd/Ctrl+S kirjutaks sama faili üle (mitte ei looks koopiat).
-  const [openedCloudFile, setOpenedCloudFile] = useState(null); // { provider: 'google' | 'onedrive', fileId: string }
+  const [openedCloudFile, setOpenedCloudFile] = useState(null); // { provider, fileId, modifiedTime?, eTag?, fileName? }
+  const pdfExportDownloadFileName = useMemo(
+    () => getPdfExportDownloadFileName(songTitle, openedCloudFile?.fileName, localProjectFileName, t('common.untitled')),
+    [songTitle, openedCloudFile, localProjectFileName, t]
+  );
   useEffect(() => {
     // Kui töö avati pilvest, peab Ctrl/Cmd+S vaikimisi kirjutama tagasi pilve,
     // mitte brauseri localStorage-sse.
@@ -2806,6 +2853,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     setNewWorkSetupOpen(false);
     // New work must never stay bound to a previously opened cloud file.
     setOpenedCloudFile(null);
+    setLocalProjectFileName('');
     // Stay on /app (openLocal=1) so AppOrRedirect does not send user back to /tood
     setSearchParams({ local: '1' });
     dirtyRef.current = true;
@@ -3899,7 +3947,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   }, []);
 
   const handlePdfExportChooseLocation = useCallback(async () => {
-    const filename = ((songTitle || t('common.untitled')).replace(/\s+/g, '-').replace(/[^\w\-.]/g, '') || 'score') + '.pdf';
+    const filename = pdfExportDownloadFileName;
     try {
       if (typeof window.showSaveFilePicker !== 'function') {
         setPdfExportSaveLocation('downloads');
@@ -3915,7 +3963,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     } catch (e) {
       if (e?.name !== 'AbortError') setPdfExportSaveLocation('downloads');
     }
-  }, [songTitle, t]);
+  }, [pdfExportDownloadFileName]);
 
   const exportToPdf = useCallback(async (saveOptions = {}) => {
     const { fileHandle, usePreviewSvg, previewSvgData } = saveOptions;
@@ -3960,7 +4008,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
           await pdf.svg(svgEl, { x: 0, y: 0, width: widthPt, height: heightPt });
         }
       }
-      const filename = ((songTitle || t('common.untitled')).replace(/\s+/g, '-').replace(/[^\w\-.]/g, '') || 'score') + '.pdf';
+      const filename = pdfExportDownloadFileName;
       if (fileHandle && typeof fileHandle.createWritable === 'function') {
         const blob = pdf.output('blob');
         const writable = await fileHandle.createWritable();
@@ -3976,7 +4024,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     } finally {
       setIsExportingPdf(false);
     }
-  }, [songTitle, t, pageOrientation, paperSize]);
+  }, [pdfExportDownloadFileName, t, pageOrientation, paperSize]);
 
   const printPdfBlob = useCallback(async (blob) => {
     if (!blob) return;
@@ -4651,6 +4699,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     if (!file) return;
     // Local file open should never keep "overwrite cloud file" binding.
     setOpenedCloudFile(null);
+    setLocalProjectFileName(String(file.name || ''));
     const reader = new FileReader();
     reader.onload = (ev) => {
       try {
@@ -4673,6 +4722,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     try {
       // Loading from browser storage is not a cloud file; avoid accidental overwrite to cloud.
       setOpenedCloudFile(null);
+      setLocalProjectFileName('');
       const raw = localStorage.getItem(STORAGE_KEY);
       if (!raw) {
         setSaveFeedback('Salvestatud faili pole');
@@ -4958,7 +5008,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
           const copyId = await googleDrive.createFileInFolder(token, targetFolderId, conflictName, json);
           if (copyId) {
             const copyMeta = await googleDrive.getFileMetadata(token, copyId).catch(() => null);
-            setOpenedCloudFile({ provider: 'google', fileId: copyId, modifiedTime: copyMeta?.modifiedTime || '' });
+            setOpenedCloudFile({ provider: 'google', fileId: copyId, modifiedTime: copyMeta?.modifiedTime || '', fileName: copyMeta?.name || conflictName });
           }
           clearDirty();
           setSaveFeedback('Pilvefail muutus mujal – salvestasin konfliktikoopia.');
@@ -4967,7 +5017,12 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         }
         await googleDrive.updateProjectFile(token, openedCloudFile.fileId, json);
         const freshMeta = await googleDrive.getFileMetadata(token, openedCloudFile.fileId).catch(() => null);
-        setOpenedCloudFile({ provider: 'google', fileId: openedCloudFile.fileId, modifiedTime: freshMeta?.modifiedTime || remoteModified || knownModified || '' });
+        setOpenedCloudFile({
+          provider: 'google',
+          fileId: openedCloudFile.fileId,
+          modifiedTime: freshMeta?.modifiedTime || remoteModified || knownModified || '',
+          fileName: freshMeta?.name || openedCloudFile.fileName,
+        });
         clearDirty();
         setSaveFeedback('Salvestatud pilve (sama fail)!');
         setTimeout(() => setSaveFeedback(''), 2500);
@@ -4993,7 +5048,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         // Mark as opened cloud file so Ctrl/Cmd+S overwrites this file next time (no duplicates).
         if (fileId) {
           const meta = await googleDrive.getFileMetadata(token, fileId).catch(() => null);
-          setOpenedCloudFile({ provider: 'google', fileId, modifiedTime: meta?.modifiedTime || '' });
+          setOpenedCloudFile({ provider: 'google', fileId, modifiedTime: meta?.modifiedTime || '', fileName: meta?.name || fileName });
         }
         clearDirty();
         setSaveFeedback('Salvestatud pilve!');
@@ -5034,7 +5089,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       const fileId = await googleDrive.createFileInFolder(token, folderId, fileName, json);
       if (fileId) {
         const meta = await googleDrive.getFileMetadata(token, fileId).catch(() => null);
-        setOpenedCloudFile({ provider: 'google', fileId, modifiedTime: meta?.modifiedTime || '' });
+        setOpenedCloudFile({ provider: 'google', fileId, modifiedTime: meta?.modifiedTime || '', fileName: meta?.name || fileName });
       }
       authStorage.addGoogleSaveFolder(folderId, '');
       try { await googleDrive.setSaveFoldersConfig(token, authStorage.getGoogleSaveFolders()); } catch (_) {}
@@ -5067,7 +5122,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       const fileId = await googleDrive.createFileInFolder(token, folderId, fileName, json);
       if (fileId) {
         const meta = await googleDrive.getFileMetadata(token, fileId).catch(() => null);
-        setOpenedCloudFile({ provider: 'google', fileId, modifiedTime: meta?.modifiedTime || '' });
+        setOpenedCloudFile({ provider: 'google', fileId, modifiedTime: meta?.modifiedTime || '', fileName: meta?.name || fileName });
       }
       authStorage.addGoogleSaveFolder(folderId, name);
       try { await googleDrive.setSaveFoldersConfig(token, authStorage.getGoogleSaveFolders()); } catch (_) {}
@@ -5130,7 +5185,12 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         try {
           await oneDrive.updateFileContent(token, openedCloudFile.fileId, json, 'application/json', knownETag ? { ifMatch: knownETag } : {});
           const freshMeta = await oneDrive.getFileMetadata(token, openedCloudFile.fileId).catch(() => null);
-          setOpenedCloudFile({ provider: 'onedrive', fileId: openedCloudFile.fileId, eTag: freshMeta?.eTag || knownETag || '' });
+          setOpenedCloudFile({
+            provider: 'onedrive',
+            fileId: openedCloudFile.fileId,
+            eTag: freshMeta?.eTag || knownETag || '',
+            fileName: freshMeta?.name || openedCloudFile.fileName,
+          });
         } catch (e) {
           if (String(e?.message || '').includes('teises seadmes muutunud')) {
             const meta = await oneDrive.getFileMetadata(token, openedCloudFile.fileId).catch(() => null);
@@ -5140,7 +5200,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
             const savedItem = await oneDrive.uploadFileToFolder(token, folderId, conflictName, json, 'application/json');
             if (savedItem?.id) {
               const copyMeta = await oneDrive.getFileMetadata(token, savedItem.id).catch(() => null);
-              setOpenedCloudFile({ provider: 'onedrive', fileId: savedItem.id, eTag: copyMeta?.eTag || '' });
+              setOpenedCloudFile({ provider: 'onedrive', fileId: savedItem.id, eTag: copyMeta?.eTag || '', fileName: copyMeta?.name || conflictName });
             }
             clearDirty();
             setSaveFeedback('Pilvefail muutus mujal – salvestasin konfliktikoopia.');
@@ -5171,7 +5231,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       const savedItem = await oneDrive.uploadFileToFolder(token, folderId, fileName, json, 'application/json');
       if (savedItem?.id) {
         const meta = await oneDrive.getFileMetadata(token, savedItem.id).catch(() => null);
-        setOpenedCloudFile({ provider: 'onedrive', fileId: savedItem.id, eTag: meta?.eTag || '' });
+        setOpenedCloudFile({ provider: 'onedrive', fileId: savedItem.id, eTag: meta?.eTag || '', fileName: meta?.name || fileName });
       }
       clearDirty();
       setSaveFeedback(t('feedback.savedToCloud') || 'Salvestatud pilve!');
@@ -5226,7 +5286,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
           try { await googleDrive.setSaveFoldersConfig(token, authStorage.getGoogleSaveFolders()); } catch (_) {}
         }
         const created = await googleDrive.copyProjectFile(token, openedCloudFile.fileId, folderId, baseName);
-        if (created?.id) setOpenedCloudFile({ provider: 'google', fileId: created.id });
+        if (created?.id) setOpenedCloudFile({ provider: 'google', fileId: created.id, fileName: baseName });
       } else if (openedCloudFile.provider === 'onedrive') {
         const token = authStorage.getStoredMicrosoftTokenFromAuth?.();
         if (!token) throw new Error('OneDrive token puudub');
@@ -5241,7 +5301,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         }
         const result = await oneDrive.copyProjectFile(token, openedCloudFile.fileId, folderId, baseName);
         if (!result?.ok || !result?.id) throw new Error(result?.error || 'Koopia tegemine ebaõnnestus');
-        setOpenedCloudFile({ provider: 'onedrive', fileId: result.id });
+        setOpenedCloudFile({ provider: 'onedrive', fileId: result.id, fileName: result.name || baseName });
       }
       setSaveFeedback((t('file.copy') || 'Tee koopia') + ' ✓');
       setTimeout(() => setSaveFeedback(''), 2500);
@@ -5313,7 +5373,8 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         setSaveFeedback(t('feedback.loadedFromCloud') || 'Laaditud pilvest!');
         setTimeout(() => setSaveFeedback(''), 2500);
         const meta = await googleDrive.getFileMetadata(token, fileId).catch(() => null);
-        setOpenedCloudFile({ provider: 'google', fileId, modifiedTime: meta?.modifiedTime || '' });
+        setLocalProjectFileName('');
+        setOpenedCloudFile({ provider: 'google', fileId, modifiedTime: meta?.modifiedTime || '', fileName: meta?.name || '' });
       } else {
         setSaveFeedback('Vigane projektifail');
         setTimeout(() => setSaveFeedback(''), 2500);
@@ -5399,7 +5460,8 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
           setSaveFeedback('Laaditud pilvest!');
           setTimeout(() => setSaveFeedback(''), 2500);
           const meta = await oneDrive.getFileMetadata(token, picked.id).catch(() => null);
-          setOpenedCloudFile({ provider: 'onedrive', fileId: picked.id, eTag: meta?.eTag || '' });
+          setLocalProjectFileName('');
+          setOpenedCloudFile({ provider: 'onedrive', fileId: picked.id, eTag: meta?.eTag || '', fileName: picked.name || meta?.name || '' });
         } else {
           setSaveFeedback('Vigane projektifail');
           setTimeout(() => setSaveFeedback(''), 2500);
@@ -5481,6 +5543,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         if (hasStaves || hasNotes) {
           // This is a local (browser) restore, not a cloud-opened file.
           setOpenedCloudFile(null);
+          setLocalProjectFileName('');
           importProject(data);
         }
       }
@@ -5512,6 +5575,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         if (cancelled) return;
         advanceImportTimeline(3, 0.93);
         setOpenedCloudFile(null);
+        setLocalProjectFileName(String(fileName || ''));
         applyParsedMusicXml(parsed);
         finishImportTimeline(true, 0.96);
         sessionStorage.removeItem('nm:pending-musicxml-import');
@@ -5556,6 +5620,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       const applied = report?.draftProject ? importProject(report.draftProject) : false;
       const notesCount = report?.draftProject?.staves?.[0]?.notes?.length || 0;
       if (applied) {
+        if (fileName) setLocalProjectFileName(fileName);
         const prefix = fileName ? `PDF "${fileName}"` : 'PDF';
         setSaveFeedback(`${prefix} imporditud muudetava mustandina (${notesCount} nooti). Kontrolli rütmid/hääled.`);
         setTimeout(() => setSaveFeedback(''), 5500);
@@ -5590,6 +5655,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     if (demoSeedKeyRef.current === key) return;
     demoSeedKeyRef.current = key;
     setOpenedCloudFile(null);
+    setLocalProjectFileName('');
     importProject(buildDemoVisibilityProject({ figurenotes, grandStaff: grandStaff && !figurenotes }));
   }, [demoVisibility, isReady, importProject, searchParams]);
 
@@ -5619,7 +5685,8 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
             setTimeout(() => setSaveFeedback(''), 2500);
             // Märgi, et praegu avatud fail on OneDrive'i fail – Cmd/Ctrl+S saab selle üle kirjutada sama fileId-ga.
             const meta = await oneDrive.getFileMetadata(token, driveFileId).catch(() => null);
-            setOpenedCloudFile({ provider: 'onedrive', fileId: driveFileId, eTag: meta?.eTag || '' });
+            setLocalProjectFileName('');
+            setOpenedCloudFile({ provider: 'onedrive', fileId: driveFileId, eTag: meta?.eTag || '', fileName: meta?.name || '' });
           } else {
             setSaveFeedback('Vigane projektifail');
             setTimeout(() => setSaveFeedback(''), 3000);
@@ -5651,7 +5718,8 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
             setTimeout(() => setSaveFeedback(''), 2500);
             // Märgi, et praegu avatud fail on Google Drive'i fail – Cmd/Ctrl+S saab selle üle kirjutada sama fileId-ga.
             const meta = await googleDrive.getFileMetadata(token, driveFileId).catch(() => null);
-            setOpenedCloudFile({ provider: 'google', fileId: driveFileId, modifiedTime: meta?.modifiedTime || '' });
+            setLocalProjectFileName('');
+            setOpenedCloudFile({ provider: 'google', fileId: driveFileId, modifiedTime: meta?.modifiedTime || '', fileName: meta?.name || '' });
           } else {
             setSaveFeedback('Vigane projektifail');
             setTimeout(() => setSaveFeedback(''), 3000);
@@ -8174,9 +8242,9 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         // but mouse click is what finally "drops" the note (handled in onFigureBeatClick).
       }
 
-      // Stage V: Copy (Ctrl+C) – always allowed in selection mode; in Figurenotes view
-      // also allow copying while N-mode is ON so users can select & duplicate patterns.
-      if (matchesShortcutPref(e, effectiveShortcutPrefs['app.copy']) && (!noteInputMode || notationStyle === 'FIGURENOTES')) {
+      // Stage V: Copy (Ctrl+C) – always allowed in selection mode; N-režiimis (sh trad.)
+      // luba, kui on vähemalt üks noot/valimivalik (Shift+nooled saavad selle luua; figuuris ka ilma eraldi tingimuseta).
+      if (matchesShortcutPref(e, effectiveShortcutPrefs['app.copy']) && (!noteInputMode || notationStyle === 'FIGURENOTES' || getSelectedNotes().length > 0)) {
         e.preventDefault();
         copySelectionToClipboard();
         return;
@@ -8635,6 +8703,64 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         };
         const selectedDurStep = Number(durationLabelToQuarterBeats(selectedDuration)) || 1;
         const cursorStep = Math.max(0.125, selectedDurStep);
+        // N + Pointer (select) + Shift+◀/▶: sama aja-joone nootide vahemik kui SEL-režiimis → Cmd/Ctrl+C
+        if (
+          e.shiftKey
+          && cursorToolRef.current === 'select'
+          && (e.code === 'ArrowLeft' || e.code === 'ArrowRight')
+          && (!activeToolbox || activeToolbox === 'rhythm')
+        ) {
+          const withBeats = notesWithExplicitBeats(notes);
+          const sorted = withBeats
+            .map((n, i) => ({ n, i, beat: Number(n.beat) || 0 }))
+            .sort((a, b) => {
+              if (a.beat !== b.beat) return a.beat - b.beat;
+              const ma = noteToMidi(a.n);
+              const mb = noteToMidi(b.n);
+              if (ma !== mb) return ma - mb;
+              return a.i - b.i;
+            });
+          const order = sorted.map((s) => s.i);
+          if (order.length > 0) {
+            const posOf = (idx) => order.indexOf(idx);
+            const horizDir = e.code === 'ArrowRight' ? 1 : -1;
+            const applyNModeNoteRange = (a, b, focusIdx) => {
+              e.preventDefault();
+              applySelectionModel({ kind: 'range', anchorIndex: a, focusIndex: b });
+              setCursorSubRow(0);
+              const beat = getBeatAtNoteIndex(notes, focusIdx);
+              setCursorPosition(beat);
+              playNoteAtBeatIfEnabled(beat);
+            };
+            if (selectionStart < 0 || selectionEnd < 0) {
+              const baseIdx = selectedNoteIndex >= 0 ? selectedNoteIndex : getNoteIndexAtCursor();
+              if (baseIdx >= 0) {
+                const p = posOf(baseIdx);
+                if (p >= 0) {
+                  const q = p + horizDir;
+                  if (q >= 0 && q < order.length) {
+                    applyNModeNoteRange(baseIdx, order[q], order[q]);
+                    return;
+                  }
+                }
+              }
+            } else {
+              const lo = Math.min(selectionStart, selectionEnd);
+              const hi = Math.max(selectionStart, selectionEnd);
+              const pLo = posOf(lo);
+              const pHi = posOf(hi);
+              if (pLo >= 0 && pHi >= 0) {
+                if (horizDir > 0 && pHi < order.length - 1) {
+                  applyNModeNoteRange(lo, order[pHi + 1], order[pHi + 1]);
+                  return;
+                } else if (horizDir < 0 && pLo > 0) {
+                  applyNModeNoteRange(order[pLo - 1], hi, order[pLo - 1]);
+                  return;
+                }
+              }
+            }
+          }
+        }
         if (e.code === 'ArrowLeft') {
           e.preventDefault();
           // Ära tee esmalt taktitaseme “teleporti”: muidu kursor hüppab tühja koha (nt kustutatud figuurnoodi) üle
@@ -9412,7 +9538,24 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   const paperMm = PAPER_SIZE_MM[paperSize] || PAPER_SIZE_MM.a4;
   const paperWidthMm = pageOrientation === 'landscape' ? paperMm.height : paperMm.width;
   const pxPerMm = paperWidthMm > 0 ? (effectiveLayoutPageWidth / paperWidthMm) : (LAYOUT.PAGE_WIDTH_PX / 210);
-  const staffLineSpanPx = getTraditionalStaffLineSpanPx({ staffLines, staffSpace: STAFF_SPACE });
+  /**
+   * Noodigraafika suurus (12–100, ref 65): skaleerib traditsioonilise + pedagoogilise (vabanotatsioon) joone- ja pesa-mõõdud.
+   * Figuurnotatsioonis kasutatakse eraldi figuurnoti suurust (effectiveFigurenotesSize jms).
+   */
+  const NOTATION_GRAPHIC_SIZE_REF = 65;
+  const figurenotesSizeClamped = Math.max(12, Math.min(100, Number(figurenotesSize) || 65));
+  const tradNotationSizeRatio = figurenotesSizeClamped / NOTATION_GRAPHIC_SIZE_REF;
+  const baseStaffBlockHeightPx = getStaffHeight();
+  const traditionalScoredHeightPx = notationStyle !== 'FIGURENOTES'
+    ? Math.max(80, Math.min(360, Math.round(baseStaffBlockHeightPx * tradNotationSizeRatio)))
+    : baseStaffBlockHeightPx;
+  const traditionalStaffSpacePx = notationStyle !== 'FIGURENOTES'
+    ? Math.max(5, Math.min(24, STAFF_SPACE * tradNotationSizeRatio))
+    : STAFF_SPACE;
+  const staffLineSpanPx = getTraditionalStaffLineSpanPx({
+    staffLines,
+    staffSpace: notationStyle !== 'FIGURENOTES' ? traditionalStaffSpacePx : STAFF_SPACE,
+  });
   const traditionalPartsGapPx = getTraditionalInterStaffGapPx({ layoutPartsGapMm, pxPerMm });
   /**
    * Figuurnotatsiooni "fit-to-row" kaitse:
@@ -9422,11 +9565,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
    * Kui rida on lukustatud (nt 4 takti reas), vähendame vajadusel figuuri suurust automaatselt,
    * et viimane takt ei läheks üle scorepage piiri.
    */
-  const figurenotesSizeClamped = Math.max(12, Math.min(100, Number(figurenotesSize) || 65));
-  const effectiveFigurenotesSize = (() => {
-    // Keep user-selected figure size (with hard safety clamp only).
-    return figurenotesSizeClamped;
-  })();
+  const effectiveFigurenotesSize = figurenotesSizeClamped;
 
   /** Figurenotes row height (beat-box / line) scales with effective notation size so barlines and box match note size. */
   const figurenotesRowHeight = Math.max(FIGURE_ROW_HEIGHT, Math.round(FIGURE_ROW_HEIGHT * effectiveFigurenotesSize / 75));
@@ -9496,7 +9635,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     stavesCount: staves.length,
     staffLineSpanPx,
     interStaffGapPx: traditionalPartsGapPxEffective,
-    getStaffHeight,
+    getStaffHeight: notationStyle === 'FIGURENOTES' ? getStaffHeight : () => traditionalScoredHeightPx,
   });
   const systemsForScore = useMemo(() => {
     if (notationStyle === 'FIGURENOTES') {
@@ -9512,7 +9651,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     const opts = { measuresPerLine: effectiveLayoutMeasuresPerLine, lineBreakBefore: effectiveLayoutLineBreakBefore, pageBreakBefore: effectiveLayoutPageBreakBefore, systemGap: effectiveTraditionalSystemGap, staffCount: staves.length, staffHeight: traditionalLayoutStaffHeight, measureStretchFactors, globalSpacingMultiplier: layoutGlobalSpacingMultiplier, pageHeight: a4PageHeightPx };
     const raw = computeLayout(measures, timeSignature, pixelsPerBeat, effectiveLayoutPageWidth, opts);
     return raw.map((s, i) => ({ ...s, yOffset: s.yOffset + (systemYOffsets[i] ?? 0) }));
-  }, [notationStyle, measures, timeSignature, pixelsPerBeat, effectiveLayoutPageWidth, pageOrientation, effectiveLayoutMeasuresPerLine, effectiveLayoutLineBreakBefore, effectiveLayoutPageBreakBefore, effectiveTraditionalSystemGap, layoutGlobalSpacingMultiplier, staves.length, measureStretchFactors, systemYOffsets, a4PageHeightPx, figurenotesTotalRowHeight, figurenotesChordBlocks, layoutPartsGap, visibleStaffCountForLayout, traditionalLayoutStaffHeight]);
+  }, [notationStyle, measures, timeSignature, pixelsPerBeat, effectiveLayoutPageWidth, pageOrientation, effectiveLayoutMeasuresPerLine, effectiveLayoutLineBreakBefore, effectiveLayoutPageBreakBefore, effectiveTraditionalSystemGap, layoutGlobalSpacingMultiplier, staves.length, measureStretchFactors, systemYOffsets, a4PageHeightPx, figurenotesTotalRowHeight, figurenotesChordBlocks, layoutPartsGap, visibleStaffCountForLayout, traditionalLayoutStaffHeight, staffLineSpanPx, figurenotesSize]);
   useEffect(() => { systemsForScoreRef.current = systemsForScore; }, [systemsForScore]);
   // Nutikas fookus: ainult valitud read; vähem ridu = suurem rea kõrgus (HEV/solfedž)
   const visibleStaffList = useMemo(() => {
@@ -9522,11 +9661,14 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     });
     return list;
   }, [staves, visibleStaves]);
+  const focusStaffHeightScaled = notationStyle !== 'FIGURENOTES'
+    ? Math.max(120, Math.min(560, Math.round(FOCUS_STAFF_HEIGHT * (traditionalScoredHeightPx / baseStaffBlockHeightPx))))
+    : FOCUS_STAFF_HEIGHT;
   const effectiveStaffHeight = notationStyle === 'FIGURENOTES'
     ? figurenotesTotalRowHeight
     : (visibleStaffList.length > 0 && visibleStaffList.length < staves.length
-      ? FOCUS_STAFF_HEIGHT
-      : ((visibleStaffList.length > 1 || staves.length > 1) ? traditionalStaffStepPx : getStaffHeight()));
+      ? focusStaffHeightScaled
+      : ((visibleStaffList.length > 1 || staves.length > 1) ? traditionalStaffStepPx : traditionalScoredHeightPx));
   const perStaffRowStep = notationStyle === 'FIGURENOTES'
     ? (effectiveStaffHeight + layoutPartsGap)
     : ((visibleStaffList.length > 1 || staves.length > 1) ? traditionalStaffStepPx : (effectiveStaffHeight + layoutPartsGap));
@@ -9566,12 +9708,22 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       const totalCore = sys.length > 0 ? lastY + figurenotesTotalRowHeight + 40 : figurenotesTotalRowHeight + 40;
       return scoreHeadBlockReservePx + maxBaseYOffset + totalCore;
     }
-    const opts = { measuresPerLine: effectiveLayoutMeasuresPerLine, lineBreakBefore: effectiveLayoutLineBreakBefore, pageBreakBefore: effectiveLayoutPageBreakBefore, systemGap: effectiveTraditionalSystemGap, staffCount: layoutStaffCount, measureStretchFactors, globalSpacingMultiplier: layoutGlobalSpacingMultiplier, pageHeight: a4PageHeightPx };
+    const opts = {
+      measuresPerLine: effectiveLayoutMeasuresPerLine,
+      lineBreakBefore: effectiveLayoutLineBreakBefore,
+      pageBreakBefore: effectiveLayoutPageBreakBefore,
+      systemGap: effectiveTraditionalSystemGap,
+      staffCount: layoutStaffCount,
+      staffHeight: traditionalLayoutStaffHeight,
+      measureStretchFactors,
+      globalSpacingMultiplier: layoutGlobalSpacingMultiplier,
+      pageHeight: a4PageHeightPx,
+    };
     const sys = computeLayout(measures, timeSignature, pixelsPerBeat, effectiveLayoutPageWidth, opts);
     const lastY = sys.length > 0 ? sys[sys.length - 1].yOffset + (systemYOffsets[sys.length - 1] ?? 0) : 0;
-    const perStaffCore = sys.length > 0 ? lastY + layoutStaffCount * getStaffHeight() + 40 : layoutStaffCount * getStaffHeight() + 40;
+    const perStaffCore = sys.length > 0 ? lastY + traditionalLayoutStaffHeight + 40 : traditionalLayoutStaffHeight + 40;
     return scoreHeadBlockReservePx + nVis * perStaffCore + sumBaseYOffset;
-  }, [notationStyle, notationMode, visibleStaffList, staves, effectiveStaffHeight, layoutPartsGap, perStaffRowStep, staffYOffsets, measures, timeSignature, pixelsPerBeat, effectiveLayoutPageWidth, pageOrientation, effectiveLayoutMeasuresPerLine, effectiveLayoutLineBreakBefore, effectiveLayoutPageBreakBefore, effectiveTraditionalSystemGap, layoutGlobalSpacingMultiplier, measureStretchFactors, systemYOffsets, a4PageHeightPx, figurenotesRowHeight, figurenotesTotalRowHeight, figurenotesSize, figurenotesChordBlocks, figurenotesChordLineGap, figurenotesChordLineHeight, scoreHeadBlockReservePx, useManualStaffOffsets]);
+  }, [notationStyle, notationMode, visibleStaffList, staves, effectiveStaffHeight, traditionalLayoutStaffHeight, layoutPartsGap, perStaffRowStep, staffYOffsets, measures, timeSignature, pixelsPerBeat, effectiveLayoutPageWidth, pageOrientation, effectiveLayoutMeasuresPerLine, effectiveLayoutLineBreakBefore, effectiveLayoutPageBreakBefore, effectiveTraditionalSystemGap, layoutGlobalSpacingMultiplier, measureStretchFactors, systemYOffsets, a4PageHeightPx, figurenotesRowHeight, figurenotesTotalRowHeight, figurenotesSize, figurenotesChordBlocks, figurenotesChordLineGap, figurenotesChordLineHeight, scoreHeadBlockReservePx, useManualStaffOffsets]);
   useEffect(() => {
     exportContentBoundsRef.current = { width: basePageWidth, height: logicalContentHeight };
   }, [basePageWidth, logicalContentHeight]);
@@ -12135,6 +12287,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                         setHeaderMenuOpen(null);
                         setPianoStripVisible(false);
                         setOpenedCloudFile(null);
+                        setLocalProjectFileName('');
                         setSearchParams({ new: '1' });
                         setNewWorkSetupOpen(true);
                       }}
@@ -15318,6 +15471,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                   lyricUnderline={lyricUnderline}
                   lyricWeight={lyricWeight}
                   lyricLineYOffset={lyricLineYOffset}
+                  notationStaffSpace={notationStyle !== 'FIGURENOTES' ? traditionalStaffSpacePx : undefined}
                 />
               );
             });
@@ -15778,7 +15932,7 @@ function getFingeringForNote(pitch, octave, instrumentId) {
 }
 
 // Timeline Component – multi-system layout (VexFlow loogika). (PAGE_BREAK_GAP on defineeritud üleval.)
-function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, pageWidth, cursorPosition, notationMode, staffLines, clefType, keySignature = 'C', relativeNotationShowKeySignature = false, relativeNotationShowTraditionalClef = false, onJoClefPositionChange, joClefFocused = false, onJoClefFocus, instrument = 'single-staff-treble', instrumentNotationVariant = 'standard', instrumentConfig = {}, showBarNumbers = true, barNumberSize = 11, showRhythmSyllables = false, joClefStaffPosition: joClefStaffPositionProp, showAllNoteLabels = false, enableEmojiOverlays = true, noteheadShape = 'oval', noteheadEmoji = '♪', onNoteTeacherLabelChange, onNoteLabelClick, chords = [], isDotted, isRest, selectedDuration, noteInputMode, selectedNoteIndex, isNoteSelected, notes: allNotes, onStaffAddNote, onNoteClick, onNoteMouseDown, onNoteMouseEnter, onNotePitchChange, onNoteBeatChange, canHandDragNotes = false, timeSignatureOffset = { x: 0, y: 0 }, onTimeSignatureOffsetChange, ghostPitch, ghostOctave, ghostAccidental = 0, ghostAccidentalIsExplicit = false, onFigureBeatClick, onChordLineMouseMove, onChordLineClick, notationStyle, layoutMeasuresPerLine = 4, layoutLineBreakBefore = [], layoutPageBreakBefore = [], layoutSystemGap = 120, layoutPartsGap, layoutConnectedBarlines = false, staffRowAlignment = 'center', staffIndexInScore = 0, systemTotalHeight, layoutGlobalSpacingMultiplier = 1, systems: systemsProp, baseYOffset = 0, isActiveStaff = true, staffCount = 1, staffHeight: staffHeightProp, figurenotesSize = 16, figurenotesStems = false, figurenotesChordLineGap = 6, figurenotesChordBlocks = false, figurenotesChordBlocksShowTones = true, figurenotesMelodyShowNoteNames = true, figurenotesRowHeight: figurenotesRowHeightProp, figurenotesChordLineHeight: figurenotesChordLineHeightProp, figurenotesLyricReserveHeight = 0, timeSignatureSize = 16, pedagogicalTimeSigDenominatorType = 'rhythm', pedagogicalTimeSigDenominatorColor = '#1a1a1a', pedagogicalTimeSigDenominatorInstrument = 'handbell', pedagogicalTimeSigDenominatorEmoji = '🥁', themeColors: themeColorsProp, pedagogicalPlayheadStyle = 'line', pedagogicalPlayheadEmoji = '🎵', pedagogicalPlayheadEmojiSize = 32, cursorSizePx, cursorLineStrokeWidth = 4, cursorSubRow = 0, pedagogicalPlayheadMovement = 'arch', isPedagogicalAudioPlaying = false, isExportingAnimation = false, exportCursorRef, scoreContainerRef, pageFlowDirection = 'vertical', pageOrientation = 'portrait', isFirstInBraceGroup = false, braceGroupSize = 0, lyricFontFamily = 'sans-serif', lyricFontSize = 12, lyricBold = false, lyricItalic = false, lyricUnderline = false, lyricWeight = 400, lyricLineYOffset = 0, translateLabel, showLayoutBreakIcons = false, showStaffSpacerHandles = false, showLyricSpacerHandles = false, onSystemYOffsetChange, onSystemXOffsetChange, systemXOffsets = [], onLyricLineYOffsetChange, onToggleLineBreakAfter, onRemoveRepeatMark, selectedRepeatMark = null, onSelectRepeatMark, activeLyricNoteIndex = null, physicalPageGapPx = 3, disablePhysicalPageGaps = false, hideCursorOverlay = false, exportNotationSvgRef = null, multiStaffInstruments = null, multiStaffMeasuresByInstrument = null, combinedCursorRowOffsetPx = 0, combinedActiveStaffRowIndex = 0, cursorStaffClefType = null, tinWhistleLinkedFingeringScale = 1, linkedNotationByStaffId = null, activeLegatoSlurPair = null, onLegatoPathClick = undefined }) {
+function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, pageWidth, cursorPosition, notationMode, staffLines, clefType, keySignature = 'C', relativeNotationShowKeySignature = false, relativeNotationShowTraditionalClef = false, onJoClefPositionChange, joClefFocused = false, onJoClefFocus, instrument = 'single-staff-treble', instrumentNotationVariant = 'standard', instrumentConfig = {}, showBarNumbers = true, barNumberSize = 11, showRhythmSyllables = false, joClefStaffPosition: joClefStaffPositionProp, showAllNoteLabels = false, enableEmojiOverlays = true, noteheadShape = 'oval', noteheadEmoji = '♪', onNoteTeacherLabelChange, onNoteLabelClick, chords = [], isDotted, isRest, selectedDuration, noteInputMode, selectedNoteIndex, isNoteSelected, notes: allNotes, onStaffAddNote, onNoteClick, onNoteMouseDown, onNoteMouseEnter, onNotePitchChange, onNoteBeatChange, canHandDragNotes = false, timeSignatureOffset = { x: 0, y: 0 }, onTimeSignatureOffsetChange, ghostPitch, ghostOctave, ghostAccidental = 0, ghostAccidentalIsExplicit = false, onFigureBeatClick, onChordLineMouseMove, onChordLineClick, notationStyle, layoutMeasuresPerLine = 4, layoutLineBreakBefore = [], layoutPageBreakBefore = [], layoutSystemGap = 120, layoutPartsGap, layoutConnectedBarlines = false, staffRowAlignment = 'center', staffIndexInScore = 0, systemTotalHeight, layoutGlobalSpacingMultiplier = 1, systems: systemsProp, baseYOffset = 0, isActiveStaff = true, staffCount = 1, staffHeight: staffHeightProp, figurenotesSize = 16, figurenotesStems = false, figurenotesChordLineGap = 6, figurenotesChordBlocks = false, figurenotesChordBlocksShowTones = true, figurenotesMelodyShowNoteNames = true, figurenotesRowHeight: figurenotesRowHeightProp, figurenotesChordLineHeight: figurenotesChordLineHeightProp, figurenotesLyricReserveHeight = 0, timeSignatureSize = 16, pedagogicalTimeSigDenominatorType = 'rhythm', pedagogicalTimeSigDenominatorColor = '#1a1a1a', pedagogicalTimeSigDenominatorInstrument = 'handbell', pedagogicalTimeSigDenominatorEmoji = '🥁', themeColors: themeColorsProp, pedagogicalPlayheadStyle = 'line', pedagogicalPlayheadEmoji = '🎵', pedagogicalPlayheadEmojiSize = 32, cursorSizePx, cursorLineStrokeWidth = 4, cursorSubRow = 0, pedagogicalPlayheadMovement = 'arch', isPedagogicalAudioPlaying = false, isExportingAnimation = false, exportCursorRef, scoreContainerRef, pageFlowDirection = 'vertical', pageOrientation = 'portrait', isFirstInBraceGroup = false, braceGroupSize = 0, lyricFontFamily = 'sans-serif', lyricFontSize = 12, lyricBold = false, lyricItalic = false, lyricUnderline = false, lyricWeight = 400, lyricLineYOffset = 0, translateLabel, showLayoutBreakIcons = false, showStaffSpacerHandles = false, showLyricSpacerHandles = false, onSystemYOffsetChange, onSystemXOffsetChange, systemXOffsets = [], onLyricLineYOffsetChange, onToggleLineBreakAfter, onRemoveRepeatMark, selectedRepeatMark = null, onSelectRepeatMark, activeLyricNoteIndex = null, physicalPageGapPx = 3, disablePhysicalPageGaps = false, hideCursorOverlay = false, exportNotationSvgRef = null, multiStaffInstruments = null, multiStaffMeasuresByInstrument = null, combinedCursorRowOffsetPx = 0, combinedActiveStaffRowIndex = 0, cursorStaffClefType = null, tinWhistleLinkedFingeringScale = 1, linkedNotationByStaffId = null, notationStaffSpace, activeLegatoSlurPair = null, onLegatoPathClick = undefined }) {
   const themeColors = themeColorsProp || { staffLineColor: '#000', noteFill: '#1a1a1a', textColor: '#1a1a1a', isDark: false };
   const safeKey = keySignature ?? 'C';
   // Alati lõplik number (mitte NaN) — varajane `return null` enne hookide kasutamist rikkus Reacti hookide reeglid ja võis jätta noodiala tühjaks.
@@ -15908,7 +16062,9 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
       })()
     : LAYOUT.MARGIN_LEFT;
 
-  const spacing = STAFF_SPACE;
+  const spacing = (typeof notationStaffSpace === 'number' && Number.isFinite(notationStaffSpace) && notationStaffSpace > 0)
+    ? notationStaffSpace
+    : STAFF_SPACE;
   const getStaffLinePositions = () => {
     if (isTabMode && tabStrings >= 1) {
       const tabSpace = 12;
@@ -16589,7 +16745,8 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
           lyricLineYOffset={lyricLineYOffset}
           isHorizontal={isHorizontal}
           a4PageHeight={a4PageHeight}
-          getStaffHeight={getStaffHeight}
+          staffSpace={spacing}
+          getStaffHeight={() => (Number.isFinite(timelineHeight) && timelineHeight > 0 ? timelineHeight : getStaffHeight())}
           showStaffSpacerHandles={showStaffSpacerHandles && typeof onSystemYOffsetChange === 'function'}
           onStaffSpacerMouseDown={typeof onSystemYOffsetChange === 'function' ? (systemIndex) => (e) => { e.stopPropagation(); setStaffSpacerDrag({ systemIndex, startClientY: e.clientY, cumulativeDelta: 0 }); } : undefined}
           onSystemYOffsetChange={onSystemYOffsetChange}

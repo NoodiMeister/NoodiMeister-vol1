@@ -44,6 +44,11 @@ try {
   const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
   const rootEl = document.getElementById('root');
   if (!rootEl) throw new Error('Element #root ei leitud. Kontrolli index.html.');
+  /**
+   * Staatiline sissejuhatav HTML (enne Reacti) — Googlei OAuth branding / botahelid
+   * näevad avalikke linke. Eemaldatakse pärast käivitust, kui täielik UI laeb.
+   */
+  document.getElementById('nm-prehome')?.remove();
   installRuntimeFontFaces(document);
   warmRuntimeFonts(document).catch(() => {});
   const root = ReactDOM.createRoot(rootEl);

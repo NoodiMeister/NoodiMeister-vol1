@@ -14,6 +14,7 @@
     "preview:open": "vite preview --host 127.0.0.1 --port 4177 --open",
     "preview:full": "npm run build && vite preview --host 127.0.0.1 --port 4177 --open",
     "test:export-smoke": "node scripts/check-export-determinism.mjs",
+    "report:work-hours": "node scripts/generate-work-hours-report.mjs",
     "mark-error-fixed": "node scripts/mark-auth-error-fixed.js",
     "export-symbols": "node scripts/export-all-symbols-png.js",
     "build-gallery": "node scripts/build-gallery-html.js"

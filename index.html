@@ -36,12 +36,40 @@
     <meta http-equiv="Expires" content="0" />
   </head>
   <body>
+    <!--
+      Avalik eel-HTML: OAuth branding / botahed näevad ilma keerulise JS-ta
+      h1, teadet teavit ja linke. main.jsx eemaldab #nm-pärast käivitust. -->
+    <div
+      id="nm-prehome"
+      style="padding: 20px 20px 16px; max-width: 40rem; margin: 0 auto; font-family: system-ui, sans-serif; color: #1c1917; line-height: 1.5"
+    >
+      <h1 style="font-size: 1.5rem; margin: 0 0 0.5rem; font-weight: 700; font-family: Georgia, 'Times New Roman', serif">
+        <a href="/" style="color: #b45309; text-decoration: none">Noodimeister</a>
+      </h1>
+      <p style="margin: 0 0 1rem; font-size: 0.95rem; color: #44403c">
+        Veebipõhine noodigraafika. Tutvu rakendusega; sisselogimist ei nõuta tutvumiseks.
+      </p>
+      <nav style="font-size: 0.9rem" aria-label="Avalikud lingid">
+        <a href="/privaatsus" style="color: #0d6efd">Privaatsus / Privacy</a>
+        <span style="color: #a8a29e"> · </span>
+        <a href="/tingimused" style="color: #0d6efd">Kasutustingimused / Terms</a>
+        <span style="color: #a8a29e"> · </span>
+        <a href="/teave" style="color: #0d6efd">Teave / About</a>
+        <span style="color: #a8a29e"> · </span>
+        <a href="/demo-intro" style="color: #0d6efd">Sissejuhatus</a>
+      </nav>
+    </div>
     <!-- Globaalset root.innerHTML veakäsitlust ei kasutata: see rikuks Reacti DOMi
          ja põhjustaks "removeChild" vigu. Käivituse vead käsitletakse main.jsx catchis,
          tööaegsed vead tuleks katta React Error Boundary-ga. -->
     <div id="root"></div>
     <noscript>
-      <p style="padding:24px;font-family:sans-serif;color:#92400e;">NoodiMeister vajab JavaScripti. Luba JS brauseris või proovi teist brauserit.</p>
+      <p style="padding: 24px; font-family: sans-serif; color: #92400e; max-width: 40rem; margin: 0 auto">
+        Noodimeister vajab JavaScripti täisfunktsioonile. Luba JS brauseris või proovi teist brauserit.
+        Staatilised lingid: <a href="/privaatsus">privaatsus</a> ·
+        <a href="/tingimused">tingimused</a> · <a href="/teave">teave</a> ·
+        <a href="/kuidas">kuidas teha</a>.
+      </p>
     </noscript>
     <!-- MSAL: @azure/msal-browser npm kaudu (Vite bundle), mitte CDN — vältib alcdn.msauth.net blokeeringuid. -->
     <script>

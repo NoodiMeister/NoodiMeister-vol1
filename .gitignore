@@ -5,6 +5,7 @@ dist/
 .DS_Store
 *.log
 logs/
+docs/work-hours-report.md
 .env
 .env.local
 *.pkg

@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { INTRO_TO_LANDING_CROSSFADE_MS, useIntroCrossfade } from '../context/IntroCrossfadeContext';
 
 const BUILD_TAG = '20260326-demo-intro-cache-bust-v32';
@@ -253,6 +254,36 @@ export default function DemoIntroPage() {
             title="Noodimeister"
             aria-label="Noodimeister"
           />
+        </div>
+        <div
+          className="nm-demo-intro__legal-links"
+          style={{
+            position: 'absolute',
+            bottom: 12,
+            left: 0,
+            right: 0,
+            zIndex: 30,
+            textAlign: 'center',
+            fontSize: 12,
+            lineHeight: 1.4
+          }}
+          onClick={(e) => e.stopPropagation()}
+          onTouchStart={(e) => e.stopPropagation()}
+          onKeyDown={(e) => e.stopPropagation()}
+        >
+          <Link
+            to="/privaatsus"
+            style={{ color: 'rgba(255, 252, 245, 0.95)', textDecoration: 'underline', textShadow: '0 1px 3px rgba(0,0,0,0.65)' }}
+          >
+            Privaatsus
+          </Link>
+          <span style={{ color: 'rgba(255,255,255,0.4)', margin: '0 0.4em' }}>·</span>
+          <Link
+            to="/"
+            style={{ color: 'rgba(255, 252, 245, 0.95)', textDecoration: 'underline', textShadow: '0 1px 3px rgba(0,0,0,0.65)' }}
+          >
+            Avaleht
+          </Link>
         </div>
       </div>
     </div>

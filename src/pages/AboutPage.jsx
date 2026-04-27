@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AppLogo } from '../components/AppLogo';
+import { PRIVACY_BODY } from '../content/privacyAndTermsContent';
 import { LOCALE_STORAGE_KEY, DEFAULT_LOCALE } from '../i18n';
 
 function getLocale() {
@@ -39,28 +40,7 @@ const CONTENT = {
       {
         id: 'andmekaitse-turvalisus',
         title: 'Andmekaitse ja turvalisus',
-        body: [
-          '1. Mida Noodimeister töötleb',
-          'Noodimeister töötleb kasutaja kontoga seotud põhiandmeid (nt e-post, nimi, sisselogimise pakkuja), et võimaldada sisselogimist ja kasutajakogemuse isikupärastamist.',
-          'Rakenduses loodud noodifailid salvestatakse kasutaja valiku alusel: kas kasutaja pilvekontole (Google Drive või Microsoft OneDrive), või kasutaja enda seadmesse/eksportfailina.',
-          '2. Sisselogimine ja identiteet',
-          'Toetatud sisselogimine: Google OAuth, Microsoft OAuth (Microsoft Entra / Microsoft konto), lokaalne konto (rakenduse sees).',
-          'Konto identiteet käsitletakse pakkuja ja e-posti kombinatsioonina (provider + email), et vältida erinevate teenusepakkujate kontode vaikimisi kokkuliitmist.',
-          '3. Pilveintegratsioon (Google Drive / OneDrive)',
-          'Kui kasutaja ühendab pilvekonto, küsib rakendus OAuth õigusi failide lugemiseks ja/või salvestamiseks. Õigused sõltuvad valitud teenusest ja kasutusvoost (nt lugemine vs kirjutamine).',
-          'Noodimeister kasutab OneDrive\'i puhul Microsoft Graph API-d ning teeb päringuid kasutaja enda failiruumi kontekstis (/me/...), näiteks: profiili lugemine (/me), failide/kaustade loetlemine, faili sisu lugemine/salvestamine, kaustade loomine ja failide ümbernimetamine/teisaldamine kasutaja käsul.',
-          '4. Kohalik salvestus brauseris',
-          'Rakendus salvestab brauseri localStorage\'isse tehnilisi seansiandmeid, näiteks: sisselogitud kasutaja profiili põhiinfo, OAuth access tokeni ja kehtivusaja, antud õiguste (scope) info, kasutaja eelistused (nt salvestuskausta eelistused).',
-          'Need andmed asuvad kasutaja brauseris. Väljalogimisel eemaldatakse autentimis- ja tokeniandmed rakenduse salvestusest.',
-          '5. Turvapraktikad',
-          'Andmevahetus pilveteenustega toimub HTTPS ühenduse kaudu. OAuth vood kasutavad teenusepakkujate ametlikke autentimislahendusi. Tokenite kehtivust kontrollitakse ning aegunud tokenite korral nõutakse uuesti autentimist. Pilvefailide uuendamisel kasutatakse konfliktikontrolli, et vältida vaikimisi ülekirjutamist olukorras, kus fail on vahepeal mujal muudetud.',
-          '6. Admin-funktsioonid',
-          'Rakenduses on piiratud administraatori API-d (nt toe haldus), mis on kaitstud administraatori autentimisega. Need funktsioonid ei ole mõeldud tavakasutaja tööde sirvimiseks ega õpetaja/õpilase failisisu töötlemiseks.',
-          '7. Mida me ei väida',
-          'Noodimeister ei väida käesoleval hetkel, et teenus oleks sertifitseeritud Microsofti ametlikus rakenduste galeriis ega et kõik avaliku sektori nõuded oleksid automaatselt täidetud. Asutuse tenantisse lubamine toimub alati asutuse riskihinnangu alusel.',
-          '8. Kontakt',
-          'Andmekaitse- ja turvaküsimustes palume ühendust võtta: Rakendust haldab La Stravaganza OÜ, Reg.kood: 17007727, Rakenduse haldaja e-post: info@la-stravaganza.com, Arendaja: Raido Lill.',
-        ],
+        body: PRIVACY_BODY.et,
       },
     ],
   },
@@ -88,13 +68,7 @@ const CONTENT = {
       {
         id: 'data-protection-security',
         title: 'Data protection and security',
-        body: [
-          'Noodimeister processes core account data (for example email, name, and login provider) to enable authentication and personalize user experience.',
-          'Cloud save works with Google Drive or Microsoft OneDrive, based on user choice. For OneDrive, Microsoft Graph API is used in the user context (/me).',
-          'Technical session data (for example token, expiry, granted scopes, and selected preferences) is stored in browser localStorage. On logout, authentication and token data is removed from app storage.',
-          'Data transport uses HTTPS. OAuth flows use official authentication providers. Expired tokens require re-authentication.',
-          'Allowing the app into an institution Microsoft 365 tenant always depends on the institution risk assessment process and governance requirements.',
-        ],
+        body: PRIVACY_BODY.en,
       },
     ],
   },
@@ -126,28 +100,7 @@ const CONTENT = {
       {
         id: 'tietosuoja-tietoturva',
         title: 'Tietosuoja ja tietoturva',
-        body: [
-          '1. Mitä Noodimeister käsittelee',
-          'Noodimeister käsittelee käyttäjätiliin liittyviä perustietoja (esim. sähköposti, nimi, kirjautumisen tarjoaja), jotta kirjautuminen ja käyttäjäkokemuksen personointi on mahdollista.',
-          'Sovelluksessa luodut nuottitiedostot tallennetaan käyttäjän valinnan mukaan joko käyttäjän pilvitilille (Google Drive tai Microsoft OneDrive) tai käyttäjän omalle laitteelle / vientitiedostona.',
-          '2. Kirjautuminen ja identiteetti',
-          'Tuetut kirjautumistavat: Google OAuth, Microsoft OAuth (Microsoft Entra / Microsoft-tili), paikallinen tili (sovelluksen sisällä).',
-          'Tilin identiteetti käsitellään palveluntarjoajan ja sähköpostin yhdistelmänä (provider + email), jotta eri palveluntarjoajien tilejä ei yhdistetä oletuksena.',
-          '3. Pilvi-integraatio (Google Drive / OneDrive)',
-          'Kun käyttäjä yhdistää pilvitilin, sovellus pyytää OAuth-oikeuksia tiedostojen lukemiseen ja/tai tallentamiseen. Oikeudet riippuvat valitusta palvelusta ja käyttötilanteesta (esim. lukeminen vs kirjoittaminen).',
-          'OneDriven kohdalla Noodimeister käyttää Microsoft Graph API:a ja tekee kyselyitä käyttäjän omassa tiedostotilakontekstissa (/me/...), esimerkiksi: profiilin luku (/me), tiedostojen/kansioiden listaus, tiedoston sisällön luku/tallennus, kansioiden luonti sekä tiedostojen uudelleennimeäminen/siirtäminen käyttäjän pyynnöstä.',
-          '4. Paikallinen tallennus selaimessa',
-          'Sovellus tallentaa selaimen localStorageen teknisiä istuntotietoja, esimerkiksi: kirjautuneen käyttäjän profiilin perustiedot, OAuth access tokenin ja voimassaoloajan, annettujen oikeuksien (scope) tiedot sekä käyttäjän asetuksia (esim. tallennuskansiovalinnat).',
-          'Nämä tiedot sijaitsevat käyttäjän selaimessa. Uloskirjautumisen yhteydessä todennus- ja token-tiedot poistetaan sovelluksen tallennuksesta.',
-          '5. Tietoturvakäytännöt',
-          'Tiedonsiirto pilvipalveluihin tapahtuu HTTPS-yhteydellä. OAuth-virrat käyttävät palveluntarjoajien virallisia todennusratkaisuja. Tokenien voimassaolo tarkistetaan, ja vanhentuneet tokenit vaativat uudelleentodennuksen. Pilvitiedostojen päivityksessä käytetään ristiriitatarkistusta, jotta oletusarvoinen ylikirjoitus vältetään tilanteessa, jossa tiedostoa on muutettu muualla.',
-          '6. Ylläpitotoiminnot',
-          'Sovelluksessa on rajattuja ylläpitäjän API-toimintoja (esim. tuen hallinta), jotka on suojattu ylläpitäjän todennuksella. Nämä toiminnot eivät ole tarkoitettu tavallisen käyttäjän töiden selaamiseen tai opettajan/oppilaan tiedostosisällön käsittelyyn.',
-          '7. Mitä emme väitä',
-          'Noodimeister ei tällä hetkellä väitä, että palvelu olisi sertifioitu Microsoftin virallisessa sovellusgalleriassa tai että kaikki julkisen sektorin vaatimukset täyttyisivät automaattisesti. Organisaation tenant-käyttöönotto tapahtuu aina organisaation oman riskiarvion perusteella.',
-          '8. Yhteystiedot',
-          'Tietosuoja- ja tietoturvakysymyksissä ota yhteyttä: Sovellusta ylläpitää La Stravaganza OÜ, Y-tunnus: 17007727, ylläpidon sähköposti: info@la-stravaganza.com, kehittäjä: Raido Lill.',
-        ],
+        body: PRIVACY_BODY.fi,
       },
     ],
   },
