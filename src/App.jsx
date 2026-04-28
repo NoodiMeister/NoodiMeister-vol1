@@ -278,7 +278,8 @@ function AppRoutes() {
           <Route path="/administraator-registreerimine" element={<Navigate to="/administraator/register" replace />} />
           <Route path="/admin" element={<Navigate to="/administraator" replace />} />
           <Route path="/landing" element={<LandingPage />} />
-          <Route path="/" element={<PublicHomePage />} />
+          <Route path="/" element={<Navigate to="/demo-intro" replace />} />
+          <Route path="/avaleht" element={<PublicHomePage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Suspense>
