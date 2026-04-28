@@ -115,6 +115,15 @@ Kõik muudatused peavad hoidma kasutaja teekonnad tervena:
   - **No-overwrite + jälgitavus:** impordi käigus peab säilima failiohutus: “create new” vaikimisi, selge konfliktikäitumine (duplicate/rename/version) ja kasutajale arusaadav teade, mida imporditi, mida ei suudetud lugeda ja mida soovitatakse käsitsi kontrollida.
   - **Kvaliteedinõue:** import ei tohi “pakendada” kogu partituuri ühte instrumenti ilma nähtava hoiatuseta; part-id, staffid ja hääled peavad säilima nii täpselt kui sisend lubab. Kui täpne taastamine pole võimalik, tuleb see kasutajale selgelt välja tuua ning pakkuda parandatavat tulemust, mitte vaikset andmekadu.
 
+- **Standard: selection state machine (kohustuslik kõikides režiimides)**
+  - **Üks tõde valikule:** valik on üks mudel (`selectionModel`), millel on selged tüübid: `none`, `singleNote`, `noteRange`, `measureRange`, `singleObject` (nt repeat mark), `objectList` (katkendlikud objektid). Ära hoia paralleelseid "peidetud tõdesid".
+  - **Ühesed modifikaatorid:** `Click` = single, `Shift+Click` = range extend (ajaliselt järjestikune), `Cmd/Ctrl+Click` = lisa/eemalda `objectList` valikust. Sama kaart peab kehtima `traditional`, `figurenotes`, `pedagogical` vaates.
+  - **Mode sõltumatus valikule:** `SEL` ja `N-mode` võivad käske piirata, kuid valiku semantika peab jääma samaks. Kui objekt on valitud, peab `Delete/Backspace` käitumine olema prognoositav ja tüübi-põhine (nt repeat mark eemaldus, nootide asendus pausidega).
+  - **Deterministlikud üleminekud:** igal sündmusel (`click`, `shift+arrow`, `shift+drag`, `esc`, `delete`, `copy`, `paste`) on täpselt üks lubatud üleminek. "Best effort" või vaikimisi fallback, mis muudab selection type’i ilma nähtava põhjuseta, on regressioon.
+  - **Kohustuslik visuaalne tagasiside:** igal selection type’il on oma nähtav marker (single highlight, range rectangle, measure highlight, object highlight). Kui state on aktiivne ja markerit ei kuvata, loetakse see bugiks.
+  - **Kopeeri-kleebi reegel:** `objectList` = merge-käitumine, `noteRange/measureRange` = ajavahemiku overwrite-käitumine. Käitumine peab olema ühtlane kõikides režiimides ja sama sisendi korral deterministlik.
+  - **Smoke enne merge’i:** testi minimaalselt: (1) click single -> highlight, (2) shift-extend -> range marker, (3) cmd/ctrl-click toggle list, (4) selected repeat mark delete, (5) esc clear, (6) copy/paste vastab selection type’ile.
+
 ### Filosoofia vs regressioonid (AI jaoks kohustuslik eristus)
 
 - **Filosoofia** (eesmärk, prioriteedid) ütleb *kuhu* liigume ja *mida* ei tohi ohverdada.

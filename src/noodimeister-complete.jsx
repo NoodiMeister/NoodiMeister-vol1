@@ -1903,6 +1903,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   const [selectionStart, setSelectionStart] = useState(-1);
   const [selectionEnd, setSelectionEnd] = useState(-1);
   const [selectedRepeatMark, setSelectedRepeatMark] = useState(null); // { measureIndex, markType } | null
+  const [selectedRepeatMarks, setSelectedRepeatMarks] = useState([]); // [{ measureIndex, markType }]
   /** SEL: Shift+nool laiendab taktivalikut; Cmd+Backspace kustutab valitud taktid. */
   const [measureSelection, setMeasureSelection] = useState(null); // { start: number, end: number } | null
   const [cursorSelection, dispatchCursorSelection] = useReducer(
@@ -1995,6 +1996,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     setSelectionEnd(legacy.selectionEnd);
     setMeasureSelection(legacy.measureSelection);
     setSelectedRepeatMark(null);
+    setSelectedRepeatMarks([]);
   }, []);
 
   // Paigutus: lehekülje suund, taktide arv rea kohta (0 = automaatne), käsitsi rea- ja lehevahetused
@@ -8144,13 +8146,28 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       if (e.key === 'Escape') {
         setSelectedTextboxId(null);
         setSelectedRepeatMark(null);
+        setSelectedRepeatMarks([]);
       }
 
-      if (!noteInputMode && isDeleteKey && selectedRepeatMark?.measureIndex != null && selectedRepeatMark?.markType) {
+      if (isDeleteKey && (
+        (selectedRepeatMark?.measureIndex != null && selectedRepeatMark?.markType)
+        || (Array.isArray(selectedRepeatMarks) && selectedRepeatMarks.length > 0)
+      )) {
         e.preventDefault();
         dirtyRef.current = true;
-        setMeasureRepeatMarks((prev) => removeRepeatMark(prev, selectedRepeatMark.measureIndex, selectedRepeatMark.markType));
+        const marks = Array.isArray(selectedRepeatMarks) && selectedRepeatMarks.length > 0
+          ? selectedRepeatMarks
+          : [selectedRepeatMark];
+        setMeasureRepeatMarks((prev) => {
+          let next = prev;
+          for (const m of marks) {
+            if (!m || m.measureIndex == null || !m.markType) continue;
+            next = removeRepeatMark(next, m.measureIndex, m.markType);
+          }
+          return next;
+        });
         setSelectedRepeatMark(null);
+        setSelectedRepeatMarks([]);
         return;
       }
 
@@ -10187,6 +10204,8 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     if (notationStyle !== 'FIGURENOTES') {
       setNoteInputMode(false);
     }
+    setSelectedRepeatMark(null);
+    setSelectedRepeatMarks([]);
     applySelectionModel({ kind: 'range', anchorIndex: noteIndex, focusIndex: noteIndex });
     // Keep a single truth: selection anchor also sets cursor/playhead.
     setCursorSubRow(0);
@@ -15412,6 +15431,8 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                         }
                       }
                       if (!(noteInputMode && cursorTool !== 'select')) {
+                        setSelectedRepeatMark(null);
+                        setSelectedRepeatMarks([]);
                         applySelectionModel({ kind: 'note', index });
                       }
                       setCursorSubRow(0);
@@ -15450,6 +15471,8 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                         }
                       }
                       if (!(noteInputMode && cursorTool !== 'select')) {
+                        setSelectedRepeatMark(null);
+                        setSelectedRepeatMarks([]);
                         applySelectionModel({ kind: 'note', index });
                       }
                       setCursorSubRow(0); // Laulusõnade režiim: kursor alati meloodiareal
@@ -15601,9 +15624,24 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                     setMeasureRepeatMarks((prev) => removeRepeatMark(prev, measureIndex, markType));
                   }}
                   selectedRepeatMark={selectedRepeatMark}
-                  onSelectRepeatMark={(measureIndex, markType) => {
+                  selectedRepeatMarks={selectedRepeatMarks}
+                  onSelectRepeatMark={(measureIndex, markType, options = {}) => {
                     applySelectionModel(CURSOR_SELECTION_NONE);
-                    setSelectedRepeatMark({ measureIndex, markType });
+                    const target = { measureIndex, markType };
+                    if (options?.toggle) {
+                      setSelectedRepeatMarks((prev) => {
+                        const list = Array.isArray(prev) ? prev : [];
+                        const exists = list.some((m) => m.measureIndex === measureIndex && m.markType === markType);
+                        const next = exists
+                          ? list.filter((m) => !(m.measureIndex === measureIndex && m.markType === markType))
+                          : [...list, target];
+                        setSelectedRepeatMark(next.length > 0 ? next[next.length - 1] : null);
+                        return next;
+                      });
+                      return;
+                    }
+                    setSelectedRepeatMark(target);
+                    setSelectedRepeatMarks([target]);
                   }}
                   activeLegatoSlurPair={staffIdx === activeStaffIndex ? activeLegatoSlurPair : null}
                   onLegatoPathClick={staffIdx === activeStaffIndex ? (endGlobal) => { applySelectionModel({ kind: 'note', index: endGlobal }); } : undefined}
@@ -15629,6 +15667,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                     setSelectionStart(-1);
                     setSelectionEnd(-1);
                     setSelectedRepeatMark(null);
+                    setSelectedRepeatMarks([]);
                     setCursorSubRow(0);
                     setCursorPosition(getBeatAtNoteIndex(notes, index));
                   } : undefined}
@@ -16133,7 +16172,7 @@ function getFingeringForNote(pitch, octave, instrumentId) {
 }
 
 // Timeline Component – multi-system layout (VexFlow loogika). (PAGE_BREAK_GAP on defineeritud üleval.)
-function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, pageWidth, cursorPosition, notationMode, staffLines, clefType, keySignature = 'C', relativeNotationShowKeySignature = false, relativeNotationShowTraditionalClef = false, onJoClefPositionChange, joClefFocused = false, onJoClefFocus, instrument = 'single-staff-treble', instrumentNotationVariant = 'standard', instrumentConfig = {}, showBarNumbers = true, barNumberSize = 11, showRhythmSyllables = false, joClefStaffPosition: joClefStaffPositionProp, showAllNoteLabels = false, enableEmojiOverlays = true, noteheadShape = 'oval', noteheadEmoji = '♪', onNoteTeacherLabelChange, onNoteLabelClick, chords = [], isDotted, isRest, selectedDuration, noteInputMode, selectedNoteIndex, isNoteSelected, notes: allNotes, onStaffAddNote, onNoteClick, onNoteMouseDown, onNoteMouseEnter, onNotePitchChange, onNoteBeatChange, canHandDragNotes = false, timeSignatureOffset = { x: 0, y: 0 }, onTimeSignatureOffsetChange, ghostPitch, ghostOctave, ghostAccidental = 0, ghostAccidentalIsExplicit = false, onFigureBeatClick, onChordLineMouseMove, onChordLineClick, notationStyle, layoutMeasuresPerLine = 4, layoutLineBreakBefore = [], layoutPageBreakBefore = [], layoutSystemGap = 120, layoutPartsGap, layoutConnectedBarlines = false, staffRowAlignment = 'center', staffIndexInScore = 0, systemTotalHeight, layoutGlobalSpacingMultiplier = 1, systems: systemsProp, baseYOffset = 0, isActiveStaff = true, staffCount = 1, staffHeight: staffHeightProp, figurenotesSize = 16, figurenotesStems = false, figurenotesChordLineGap = 6, figurenotesChordBlocks = false, figurenotesChordBlocksShowTones = true, figurenotesMelodyShowNoteNames = true, figurenotesRowHeight: figurenotesRowHeightProp, figurenotesChordLineHeight: figurenotesChordLineHeightProp, figurenotesLyricReserveHeight = 0, timeSignatureSize = 16, pedagogicalTimeSigDenominatorType = 'rhythm', pedagogicalTimeSigDenominatorColor = '#1a1a1a', pedagogicalTimeSigDenominatorInstrument = 'handbell', pedagogicalTimeSigDenominatorEmoji = '🥁', themeColors: themeColorsProp, pedagogicalPlayheadStyle = 'line', pedagogicalPlayheadEmoji = '🎵', pedagogicalPlayheadEmojiSize = 32, cursorSizePx, cursorLineStrokeWidth = 4, cursorSubRow = 0, pedagogicalPlayheadMovement = 'arch', isPedagogicalAudioPlaying = false, isExportingAnimation = false, exportCursorRef, scoreContainerRef, pageFlowDirection = 'vertical', pageOrientation = 'portrait', isFirstInBraceGroup = false, braceGroupSize = 0, lyricFontFamily = 'sans-serif', lyricFontSize = 12, lyricBold = false, lyricItalic = false, lyricUnderline = false, lyricWeight = 400, lyricLineYOffset = 0, translateLabel, showLayoutBreakIcons = false, showStaffSpacerHandles = false, showLyricSpacerHandles = false, onSystemYOffsetChange, onSystemXOffsetChange, systemXOffsets = [], onLyricLineYOffsetChange, onToggleLineBreakAfter, onRemoveRepeatMark, selectedRepeatMark = null, onSelectRepeatMark, activeLyricNoteIndex = null, physicalPageGapPx = 3, disablePhysicalPageGaps = false, hideCursorOverlay = false, exportNotationSvgRef = null, multiStaffInstruments = null, multiStaffMeasuresByInstrument = null, combinedCursorRowOffsetPx = 0, combinedActiveStaffRowIndex = 0, cursorStaffClefType = null, tinWhistleLinkedFingeringScale = 1, linkedNotationByStaffId = null, notationStaffSpace, activeLegatoSlurPair = null, onLegatoPathClick = undefined }) {
+function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, pageWidth, cursorPosition, notationMode, staffLines, clefType, keySignature = 'C', relativeNotationShowKeySignature = false, relativeNotationShowTraditionalClef = false, onJoClefPositionChange, joClefFocused = false, onJoClefFocus, instrument = 'single-staff-treble', instrumentNotationVariant = 'standard', instrumentConfig = {}, showBarNumbers = true, barNumberSize = 11, showRhythmSyllables = false, joClefStaffPosition: joClefStaffPositionProp, showAllNoteLabels = false, enableEmojiOverlays = true, noteheadShape = 'oval', noteheadEmoji = '♪', onNoteTeacherLabelChange, onNoteLabelClick, chords = [], isDotted, isRest, selectedDuration, noteInputMode, selectedNoteIndex, isNoteSelected, notes: allNotes, onStaffAddNote, onNoteClick, onNoteMouseDown, onNoteMouseEnter, onNotePitchChange, onNoteBeatChange, canHandDragNotes = false, timeSignatureOffset = { x: 0, y: 0 }, onTimeSignatureOffsetChange, ghostPitch, ghostOctave, ghostAccidental = 0, ghostAccidentalIsExplicit = false, onFigureBeatClick, onChordLineMouseMove, onChordLineClick, notationStyle, layoutMeasuresPerLine = 4, layoutLineBreakBefore = [], layoutPageBreakBefore = [], layoutSystemGap = 120, layoutPartsGap, layoutConnectedBarlines = false, staffRowAlignment = 'center', staffIndexInScore = 0, systemTotalHeight, layoutGlobalSpacingMultiplier = 1, systems: systemsProp, baseYOffset = 0, isActiveStaff = true, staffCount = 1, staffHeight: staffHeightProp, figurenotesSize = 16, figurenotesStems = false, figurenotesChordLineGap = 6, figurenotesChordBlocks = false, figurenotesChordBlocksShowTones = true, figurenotesMelodyShowNoteNames = true, figurenotesRowHeight: figurenotesRowHeightProp, figurenotesChordLineHeight: figurenotesChordLineHeightProp, figurenotesLyricReserveHeight = 0, timeSignatureSize = 16, pedagogicalTimeSigDenominatorType = 'rhythm', pedagogicalTimeSigDenominatorColor = '#1a1a1a', pedagogicalTimeSigDenominatorInstrument = 'handbell', pedagogicalTimeSigDenominatorEmoji = '🥁', themeColors: themeColorsProp, pedagogicalPlayheadStyle = 'line', pedagogicalPlayheadEmoji = '🎵', pedagogicalPlayheadEmojiSize = 32, cursorSizePx, cursorLineStrokeWidth = 4, cursorSubRow = 0, pedagogicalPlayheadMovement = 'arch', isPedagogicalAudioPlaying = false, isExportingAnimation = false, exportCursorRef, scoreContainerRef, pageFlowDirection = 'vertical', pageOrientation = 'portrait', isFirstInBraceGroup = false, braceGroupSize = 0, lyricFontFamily = 'sans-serif', lyricFontSize = 12, lyricBold = false, lyricItalic = false, lyricUnderline = false, lyricWeight = 400, lyricLineYOffset = 0, translateLabel, showLayoutBreakIcons = false, showStaffSpacerHandles = false, showLyricSpacerHandles = false, onSystemYOffsetChange, onSystemXOffsetChange, systemXOffsets = [], onLyricLineYOffsetChange, onToggleLineBreakAfter, onRemoveRepeatMark, selectedRepeatMark = null, selectedRepeatMarks = [], onSelectRepeatMark, activeLyricNoteIndex = null, physicalPageGapPx = 3, disablePhysicalPageGaps = false, hideCursorOverlay = false, exportNotationSvgRef = null, multiStaffInstruments = null, multiStaffMeasuresByInstrument = null, combinedCursorRowOffsetPx = 0, combinedActiveStaffRowIndex = 0, cursorStaffClefType = null, tinWhistleLinkedFingeringScale = 1, linkedNotationByStaffId = null, notationStaffSpace, activeLegatoSlurPair = null, onLegatoPathClick = undefined }) {
   const themeColors = themeColorsProp || { staffLineColor: '#000', noteFill: '#1a1a1a', textColor: '#1a1a1a', isDark: false };
   const safeKey = keySignature ?? 'C';
   // Alati lõplik number (mitte NaN) — varajane `return null` enne hookide kasutamist rikkus Reacti hookide reeglid ja võis jätta noodiala tühjaks.
@@ -16885,6 +16924,9 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
           themeColors={themeColors}
           instruments={Array.isArray(multiStaffInstruments) && multiStaffInstruments.length > 1 ? multiStaffInstruments : []}
           effectiveMeasuresPerInstrument={multiStaffMeasuresByInstrument || {}}
+          selectedRepeatMark={selectedRepeatMark}
+          selectedRepeatMarks={selectedRepeatMarks}
+          onSelectRepeatMark={onSelectRepeatMark}
           figurenotesCombinedRowStepPx={timelineHeight + (layoutPartsGap ?? 0)}
           figurenotesCombinedActiveStaffRowIndex={combinedActiveStaffRowIndex}
         />
@@ -16972,6 +17014,7 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
           systemTotalHeight={systemTotalHeight}
           onRemoveRepeatMark={onRemoveRepeatMark}
           selectedRepeatMark={selectedRepeatMark}
+          selectedRepeatMarks={selectedRepeatMarks}
           onSelectRepeatMark={onSelectRepeatMark}
           activeLegatoSlurPair={activeLegatoSlurPair}
           onLegatoPathClick={onLegatoPathClick}

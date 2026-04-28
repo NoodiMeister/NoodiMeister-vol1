@@ -577,6 +577,7 @@ export function TraditionalNotationView({
   themeColors,
   onRemoveRepeatMark, // (measureIndex, markType: 'repeatStart'|'repeatEnd'|'segno'|'coda'|'volta1'|'volta2') => void
   selectedRepeatMark = null, // { measureIndex, markType } | null
+  selectedRepeatMarks = [], // [{ measureIndex, markType }]
   onSelectRepeatMark, // (measureIndex, markType) => void
   /** { startId, endId } | null — valitud legato kaar (kaare ots) → sinine joon + nool. */
   activeLegatoSlurPair = null,
@@ -867,7 +868,8 @@ export function TraditionalNotationView({
   const systemBracketCapSize = 14;
   const smuflMusicFontStack = "'Leland', 'Bravura', serif";
   const isRepeatMarkSelected = (measureIndex, markType) => (
-    selectedRepeatMark?.measureIndex === measureIndex && selectedRepeatMark?.markType === markType
+    (selectedRepeatMark?.measureIndex === measureIndex && selectedRepeatMark?.markType === markType)
+    || (Array.isArray(selectedRepeatMarks) && selectedRepeatMarks.some((m) => m?.measureIndex === measureIndex && m?.markType === markType))
   );
 
   return (
@@ -1402,7 +1404,7 @@ export function TraditionalNotationView({
                           <g
                             onClick={typeof onSelectRepeatMark === 'function' ? (e) => {
                               e.stopPropagation();
-                              onSelectRepeatMark(measureIdx, 'repeatStart');
+                              onSelectRepeatMark(measureIdx, 'repeatStart', { toggle: !!(e.metaKey || e.ctrlKey) });
                             } : undefined}
                             style={{ cursor: onSelectRepeatMark ? 'pointer' : undefined }}
                             pointerEvents={onSelectRepeatMark ? 'auto' : 'none'}
@@ -1423,7 +1425,7 @@ export function TraditionalNotationView({
                           </g>
                         ) : leftBarlineRepeat.variant === 'start' ? (
                           <g
-                            onClick={typeof onSelectRepeatMark === 'function' ? (e) => { e.stopPropagation(); onSelectRepeatMark(measureIdx, 'repeatStart'); } : undefined}
+                            onClick={typeof onSelectRepeatMark === 'function' ? (e) => { e.stopPropagation(); onSelectRepeatMark(measureIdx, 'repeatStart', { toggle: !!(e.metaKey || e.ctrlKey) }); } : undefined}
                             style={{ cursor: onSelectRepeatMark ? 'pointer' : undefined }}
                             pointerEvents={onSelectRepeatMark ? 'auto' : 'none'}
                           >
@@ -1454,7 +1456,7 @@ export function TraditionalNotationView({
                         {/* Right barline: E041 kui pole ühendatud E042-ga järgmise takti vasakul */}
                         {measure.repeatEnd && drawRepeatEndGlyphRight ? (
                           <g
-                            onClick={typeof onSelectRepeatMark === 'function' ? (e) => { e.stopPropagation(); onSelectRepeatMark(measureIdx, 'repeatEnd'); } : undefined}
+                            onClick={typeof onSelectRepeatMark === 'function' ? (e) => { e.stopPropagation(); onSelectRepeatMark(measureIdx, 'repeatEnd', { toggle: !!(e.metaKey || e.ctrlKey) }); } : undefined}
                             style={{ cursor: onSelectRepeatMark ? 'pointer' : undefined }}
                             pointerEvents={onSelectRepeatMark ? 'auto' : 'none'}
                           >
@@ -1560,7 +1562,7 @@ export function TraditionalNotationView({
                         parts.push(
                           <g
                             key="segno"
-                            onClick={typeof onSelectRepeatMark === 'function' ? (e) => { e.stopPropagation(); onSelectRepeatMark(measureIdx, 'segno'); } : undefined}
+                            onClick={typeof onSelectRepeatMark === 'function' ? (e) => { e.stopPropagation(); onSelectRepeatMark(measureIdx, 'segno', { toggle: !!(e.metaKey || e.ctrlKey) }); } : undefined}
                             style={{ cursor: onSelectRepeatMark ? 'pointer' : undefined }}
                             pointerEvents={onSelectRepeatMark ? 'auto' : 'none'}
                           >
@@ -1576,7 +1578,7 @@ export function TraditionalNotationView({
                         parts.push(
                           <g
                             key="coda"
-                            onClick={typeof onSelectRepeatMark === 'function' ? (e) => { e.stopPropagation(); onSelectRepeatMark(measureIdx, 'coda'); } : undefined}
+                            onClick={typeof onSelectRepeatMark === 'function' ? (e) => { e.stopPropagation(); onSelectRepeatMark(measureIdx, 'coda', { toggle: !!(e.metaKey || e.ctrlKey) }); } : undefined}
                             style={{ cursor: onSelectRepeatMark ? 'pointer' : undefined }}
                             pointerEvents={onSelectRepeatMark ? 'auto' : 'none'}
                           >
@@ -1594,7 +1596,7 @@ export function TraditionalNotationView({
                         parts.push(
                           <g
                             key="volta"
-                            onClick={typeof onSelectRepeatMark === 'function' ? (e) => { e.stopPropagation(); onSelectRepeatMark(measureIdx, key); } : undefined}
+                            onClick={typeof onSelectRepeatMark === 'function' ? (e) => { e.stopPropagation(); onSelectRepeatMark(measureIdx, key, { toggle: !!(e.metaKey || e.ctrlKey) }); } : undefined}
                             style={{ cursor: onSelectRepeatMark ? 'pointer' : undefined }}
                             pointerEvents={onSelectRepeatMark ? 'auto' : 'none'}
                           >

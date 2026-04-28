@@ -514,6 +514,9 @@ export function FigurenotesView({
   onLyricSpacerNudge,
   themeColors,
   activeLyricNoteIndex = null,
+  selectedRepeatMark = null, // { measureIndex, markType } | null
+  selectedRepeatMarks = [], // [{ measureIndex, markType }]
+  onSelectRepeatMark, // (measureIndex, markType) => void
   /** Mitme rea ühendatud figuurisüsteem (orchestration): instrumentide read + taktid iga rea jaoks. */
   instruments = [],
   effectiveMeasuresPerInstrument = {},
@@ -543,6 +546,15 @@ export function FigurenotesView({
   const padVertical = Math.max(2, Math.round(4 * notationScale));
   const barLineInset = Math.max(2, Math.round(5 * notationScale));
   const barLineWidth = Math.max(2, Math.round(5 * notationScale));
+  const isRepeatMarkSelected = (measureIndex, markType) =>
+    (
+      selectedRepeatMark?.measureIndex === measureIndex &&
+      selectedRepeatMark?.markType === markType
+    ) ||
+    (Array.isArray(selectedRepeatMarks) &&
+      selectedRepeatMarks.some(
+        (m) => m?.measureIndex === measureIndex && m?.markType === markType,
+      ));
   const debugRepeatOverlay = useMemo(() => {
     if (typeof window === "undefined") return false;
     const p = new URLSearchParams(window.location.search);
@@ -1226,7 +1238,8 @@ export function FigurenotesView({
                             rx={longRectRadius}
                             ry={longRectRadius}
                             fill={fill}
-                            stroke="none"
+                            stroke="#000"
+                            strokeWidth={2}
                           />
                         );
 
@@ -1677,21 +1690,135 @@ export function FigurenotesView({
                             return (
                               <>
                                 {leftR.variant === "both" ? (
-                                  renderAnchoredRepeatBarline({
-                                    x: measureX,
-                                    topY: barLineTopY,
-                                    bottomY: barLineBottomY,
-                                    staffSpace: rowBarFrame.staffSpace,
-                                    type: "both",
-                                  })
+                                  <g
+                                    onClick={
+                                      typeof onSelectRepeatMark === "function"
+                                        ? (e) => {
+                                            e.stopPropagation();
+                                            onSelectRepeatMark(
+                                              measureIdx,
+                                              "repeatStart",
+                                              { toggle: !!(e.metaKey || e.ctrlKey) },
+                                            );
+                                          }
+                                        : undefined
+                                    }
+                                    style={{
+                                      cursor: onSelectRepeatMark
+                                        ? "pointer"
+                                        : undefined,
+                                    }}
+                                    pointerEvents={
+                                      onSelectRepeatMark ? "auto" : "none"
+                                    }
+                                  >
+                                    {renderAnchoredRepeatBarline({
+                                      x: measureX,
+                                      topY: barLineTopY,
+                                      bottomY: barLineBottomY,
+                                      staffSpace: rowBarFrame.staffSpace,
+                                      type: "both",
+                                    })}
+                                    {isRepeatMarkSelected(
+                                      measureIdx,
+                                      "repeatStart",
+                                    ) && (
+                                      <rect
+                                        x={measureX - rowBarFrame.staffSpace * 2}
+                                        y={
+                                          barLineTopY -
+                                          rowBarFrame.staffSpace * 0.5
+                                        }
+                                        width={rowBarFrame.staffSpace * 4}
+                                        height={
+                                          barLineBottomY -
+                                          barLineTopY +
+                                          rowBarFrame.staffSpace
+                                        }
+                                        fill="#93c5fd"
+                                        opacity="0.32"
+                                        rx={3}
+                                      />
+                                    )}
+                                    {onSelectRepeatMark && (
+                                      <rect
+                                        x={measureX - rowBarFrame.staffSpace * 2}
+                                        y={barLineTopY - rowBarFrame.staffSpace}
+                                        width={rowBarFrame.staffSpace * 4}
+                                        height={
+                                          barLineBottomY -
+                                          barLineTopY +
+                                          rowBarFrame.staffSpace * 2
+                                        }
+                                        fill="transparent"
+                                      />
+                                    )}
+                                  </g>
                                 ) : leftR.variant === "start" ? (
-                                  renderAnchoredRepeatBarline({
-                                    x: measureX,
-                                    topY: barLineTopY,
-                                    bottomY: barLineBottomY,
-                                    staffSpace: rowBarFrame.staffSpace,
-                                    type: "start",
-                                  })
+                                  <g
+                                    onClick={
+                                      typeof onSelectRepeatMark === "function"
+                                        ? (e) => {
+                                            e.stopPropagation();
+                                            onSelectRepeatMark(
+                                              measureIdx,
+                                              "repeatStart",
+                                              { toggle: !!(e.metaKey || e.ctrlKey) },
+                                            );
+                                          }
+                                        : undefined
+                                    }
+                                    style={{
+                                      cursor: onSelectRepeatMark
+                                        ? "pointer"
+                                        : undefined,
+                                    }}
+                                    pointerEvents={
+                                      onSelectRepeatMark ? "auto" : "none"
+                                    }
+                                  >
+                                    {renderAnchoredRepeatBarline({
+                                      x: measureX,
+                                      topY: barLineTopY,
+                                      bottomY: barLineBottomY,
+                                      staffSpace: rowBarFrame.staffSpace,
+                                      type: "start",
+                                    })}
+                                    {isRepeatMarkSelected(
+                                      measureIdx,
+                                      "repeatStart",
+                                    ) && (
+                                      <rect
+                                        x={measureX - rowBarFrame.staffSpace * 2}
+                                        y={
+                                          barLineTopY -
+                                          rowBarFrame.staffSpace * 0.5
+                                        }
+                                        width={rowBarFrame.staffSpace * 4}
+                                        height={
+                                          barLineBottomY -
+                                          barLineTopY +
+                                          rowBarFrame.staffSpace
+                                        }
+                                        fill="#93c5fd"
+                                        opacity="0.32"
+                                        rx={3}
+                                      />
+                                    )}
+                                    {onSelectRepeatMark && (
+                                      <rect
+                                        x={measureX - rowBarFrame.staffSpace * 2}
+                                        y={barLineTopY - rowBarFrame.staffSpace}
+                                        width={rowBarFrame.staffSpace * 2.2}
+                                        height={
+                                          barLineBottomY -
+                                          barLineTopY +
+                                          rowBarFrame.staffSpace * 2
+                                        }
+                                        fill="transparent"
+                                      />
+                                    )}
+                                  </g>
                                 ) : leftR.variant === "barline" ? (
                                   <line
                                     x1={measureX}
@@ -1703,7 +1830,28 @@ export function FigurenotesView({
                                   />
                                 ) : null}
                                 {drawEnd ? (
-                                  <>
+                                  <g
+                                    onClick={
+                                      typeof onSelectRepeatMark === "function"
+                                        ? (e) => {
+                                            e.stopPropagation();
+                                            onSelectRepeatMark(
+                                              measureIdx,
+                                              "repeatEnd",
+                                              { toggle: !!(e.metaKey || e.ctrlKey) },
+                                            );
+                                          }
+                                        : undefined
+                                    }
+                                    style={{
+                                      cursor: onSelectRepeatMark
+                                        ? "pointer"
+                                        : undefined,
+                                    }}
+                                    pointerEvents={
+                                      onSelectRepeatMark ? "auto" : "none"
+                                    }
+                                  >
                                     {renderAnchoredRepeatBarline({
                                       x: anchoredRepeatRightX,
                                       topY: barLineTopY,
@@ -1711,6 +1859,56 @@ export function FigurenotesView({
                                       staffSpace: rightBarFrame.staffSpace,
                                       type: "end",
                                     })}
+                                    {isRepeatMarkSelected(
+                                      measureIdx,
+                                      "repeatEnd",
+                                    ) && (
+                                      <rect
+                                        x={
+                                          Math.min(anchoredRepeatRightX, xRight) -
+                                          rightBarFrame.staffSpace * 2
+                                        }
+                                        y={
+                                          barLineTopY -
+                                          rightBarFrame.staffSpace * 0.5
+                                        }
+                                        width={
+                                          Math.abs(
+                                            xRight - anchoredRepeatRightX,
+                                          ) +
+                                          rightBarFrame.staffSpace * 4
+                                        }
+                                        height={
+                                          barLineBottomY -
+                                          barLineTopY +
+                                          rightBarFrame.staffSpace
+                                        }
+                                        fill="#93c5fd"
+                                        opacity="0.32"
+                                        rx={3}
+                                      />
+                                    )}
+                                    {onSelectRepeatMark && (
+                                      <rect
+                                        x={
+                                          Math.min(anchoredRepeatRightX, xRight) -
+                                          rightBarFrame.staffSpace * 2
+                                        }
+                                        y={barLineTopY - rightBarFrame.staffSpace}
+                                        width={
+                                          Math.abs(
+                                            xRight - anchoredRepeatRightX,
+                                          ) +
+                                          rightBarFrame.staffSpace * 4
+                                        }
+                                        height={
+                                          barLineBottomY -
+                                          barLineTopY +
+                                          rightBarFrame.staffSpace * 2
+                                        }
+                                        fill="transparent"
+                                      />
+                                    )}
                                     {debugRepeatOverlay && (
                                       <>
                                         <line
@@ -1753,7 +1951,7 @@ export function FigurenotesView({
                                         </text>
                                       </>
                                     )}
-                                  </>
+                                  </g>
                                 ) : (
                                   isRightBarlineOfSystem &&
                                   !showFinalBar && (
@@ -1787,6 +1985,78 @@ export function FigurenotesView({
                                     />
                                   </g>
                                 )}
+                                {(() => {
+                                  if (!onSelectRepeatMark) return null;
+                                  const markerY =
+                                    sys.yOffset +
+                                    padVertical -
+                                    Math.max(12, 12 * notationScale);
+                                  const markers = [];
+                                  if (mBar.segno) markers.push({ key: "segno", label: "segno", glyph: SMUFL_GLYPH.segno });
+                                  if (mBar.coda) markers.push({ key: "coda", label: "coda", glyph: SMUFL_GLYPH.coda });
+                                  if (mBar.volta1) markers.push({ key: "volta1", label: "1." });
+                                  if (mBar.volta2) markers.push({ key: "volta2", label: "2." });
+                                  if (markers.length === 0) return null;
+                                  const step = Math.max(20, 20 * notationScale);
+                                  const fontSize = Math.max(12, 16 * notationScale);
+                                  return markers.map((mk, idx) => {
+                                    const x = measureX + 6 + idx * step;
+                                    const selected = isRepeatMarkSelected(measureIdx, mk.key);
+                                    return (
+                                      <g
+                                        key={`fig-marker-${measureIdx}-${mk.key}`}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          onSelectRepeatMark(measureIdx, mk.key, {
+                                            toggle: !!(e.metaKey || e.ctrlKey),
+                                          });
+                                        }}
+                                        style={{ cursor: "pointer" }}
+                                        pointerEvents="auto"
+                                      >
+                                        {selected && (
+                                          <rect
+                                            x={x - fontSize * 0.6}
+                                            y={markerY - fontSize * 0.7}
+                                            width={fontSize * 1.2}
+                                            height={fontSize * 1.2}
+                                            fill="#93c5fd"
+                                            opacity="0.32"
+                                            rx={3}
+                                          />
+                                        )}
+                                        {mk.glyph ? (
+                                          <SmuflGlyph
+                                            x={x}
+                                            y={markerY}
+                                            glyph={mk.glyph}
+                                            fontSize={fontSize}
+                                            fill="#1a1a1a"
+                                          />
+                                        ) : (
+                                          <text
+                                            x={x}
+                                            y={markerY}
+                                            textAnchor="middle"
+                                            dominantBaseline="middle"
+                                            fontSize={fontSize * 0.85}
+                                            fontFamily="sans-serif"
+                                            fill="#1a1a1a"
+                                          >
+                                            {mk.label}
+                                          </text>
+                                        )}
+                                        <rect
+                                          x={x - fontSize * 0.6}
+                                          y={markerY - fontSize * 0.7}
+                                          width={fontSize * 1.2}
+                                          height={fontSize * 1.2}
+                                          fill="transparent"
+                                        />
+                                      </g>
+                                    );
+                                  });
+                                })()}
                               </>
                             );
                           })()}
@@ -2769,6 +3039,44 @@ export function FigurenotesView({
                               strokeWidth={barLineWidth}
                             />
                           ) : null}
+                          {(leftR.variant === "start" || leftR.variant === "both") &&
+                            onSelectRepeatMark && (
+                              <g
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onSelectRepeatMark(measureIdx, "repeatStart", { toggle: !!(e.metaKey || e.ctrlKey) });
+                                }}
+                                style={{ cursor: "pointer" }}
+                                pointerEvents="auto"
+                              >
+                                {isRepeatMarkSelected(measureIdx, "repeatStart") && (
+                                  <rect
+                                    x={measureX - rightBarFrame.staffSpace * 2}
+                                    y={barLineTopY - rightBarFrame.staffSpace * 0.5}
+                                    width={rightBarFrame.staffSpace * 4}
+                                    height={
+                                      barLineBottomY -
+                                      barLineTopY +
+                                      rightBarFrame.staffSpace
+                                    }
+                                    fill="#93c5fd"
+                                    opacity="0.32"
+                                    rx={3}
+                                  />
+                                )}
+                                <rect
+                                  x={measureX - rightBarFrame.staffSpace * 2}
+                                  y={barLineTopY - rightBarFrame.staffSpace}
+                                  width={rightBarFrame.staffSpace * 4}
+                                  height={
+                                    barLineBottomY -
+                                    barLineTopY +
+                                    rightBarFrame.staffSpace * 2
+                                  }
+                                  fill="transparent"
+                                />
+                              </g>
+                            )}
                           {drawEnd ? (
                             repeatSmuflPerRow.map((rp, rowIdx) => (
                               <g key={`repeat-right-${measureIdx}-${rowIdx}`}>
@@ -2840,6 +3148,55 @@ export function FigurenotesView({
                               />
                             )
                           )}
+                          {drawEnd && onSelectRepeatMark && (
+                            <g
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onSelectRepeatMark(measureIdx, "repeatEnd", { toggle: !!(e.metaKey || e.ctrlKey) });
+                              }}
+                              style={{ cursor: "pointer" }}
+                              pointerEvents="auto"
+                            >
+                              {isRepeatMarkSelected(measureIdx, "repeatEnd") && (
+                                <rect
+                                  x={
+                                    Math.min(anchoredRepeatRightX, xRight) -
+                                    rightBarFrame.staffSpace * 2
+                                  }
+                                  y={barLineTopY - rightBarFrame.staffSpace * 0.5}
+                                  width={
+                                    Math.abs(xRight - anchoredRepeatRightX) +
+                                    rightBarFrame.staffSpace * 4
+                                  }
+                                  height={
+                                    barLineBottomY -
+                                    barLineTopY +
+                                    rightBarFrame.staffSpace
+                                  }
+                                  fill="#93c5fd"
+                                  opacity="0.32"
+                                  rx={3}
+                                />
+                              )}
+                              <rect
+                                x={
+                                  Math.min(anchoredRepeatRightX, xRight) -
+                                  rightBarFrame.staffSpace * 2
+                                }
+                                y={barLineTopY - rightBarFrame.staffSpace}
+                                width={
+                                  Math.abs(xRight - anchoredRepeatRightX) +
+                                  rightBarFrame.staffSpace * 4
+                                }
+                                height={
+                                  barLineBottomY -
+                                  barLineTopY +
+                                  rightBarFrame.staffSpace * 2
+                                }
+                                fill="transparent"
+                              />
+                            </g>
+                          )}
                           {showFinalBar && finalGeom && (
                             <g>
                               <line
@@ -2860,6 +3217,78 @@ export function FigurenotesView({
                               />
                             </g>
                           )}
+                          {(() => {
+                            if (!onSelectRepeatMark) return null;
+                            const markerY =
+                              sys.yOffset +
+                              padVertical -
+                              Math.max(12, 12 * notationScale);
+                            const markers = [];
+                            if (measureBar.segno) markers.push({ key: "segno", label: "segno", glyph: SMUFL_GLYPH.segno });
+                            if (measureBar.coda) markers.push({ key: "coda", label: "coda", glyph: SMUFL_GLYPH.coda });
+                            if (measureBar.volta1) markers.push({ key: "volta1", label: "1." });
+                            if (measureBar.volta2) markers.push({ key: "volta2", label: "2." });
+                            if (markers.length === 0) return null;
+                            const step = Math.max(20, 20 * notationScale);
+                            const fontSize = Math.max(12, 16 * notationScale);
+                            return markers.map((mk, idx) => {
+                              const x = measureX + 6 + idx * step;
+                              const selected = isRepeatMarkSelected(measureIdx, mk.key);
+                              return (
+                                <g
+                                  key={`fig-marker-combined-${measureIdx}-${mk.key}`}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onSelectRepeatMark(measureIdx, mk.key, {
+                                      toggle: !!(e.metaKey || e.ctrlKey),
+                                    });
+                                  }}
+                                  style={{ cursor: "pointer" }}
+                                  pointerEvents="auto"
+                                >
+                                  {selected && (
+                                    <rect
+                                      x={x - fontSize * 0.6}
+                                      y={markerY - fontSize * 0.7}
+                                      width={fontSize * 1.2}
+                                      height={fontSize * 1.2}
+                                      fill="#93c5fd"
+                                      opacity="0.32"
+                                      rx={3}
+                                    />
+                                  )}
+                                  {mk.glyph ? (
+                                    <SmuflGlyph
+                                      x={x}
+                                      y={markerY}
+                                      glyph={mk.glyph}
+                                      fontSize={fontSize}
+                                      fill="#1a1a1a"
+                                    />
+                                  ) : (
+                                    <text
+                                      x={x}
+                                      y={markerY}
+                                      textAnchor="middle"
+                                      dominantBaseline="middle"
+                                      fontSize={fontSize * 0.85}
+                                      fontFamily="sans-serif"
+                                      fill="#1a1a1a"
+                                    >
+                                      {mk.label}
+                                    </text>
+                                  )}
+                                  <rect
+                                    x={x - fontSize * 0.6}
+                                    y={markerY - fontSize * 0.7}
+                                    width={fontSize * 1.2}
+                                    height={fontSize * 1.2}
+                                    fill="transparent"
+                                  />
+                                </g>
+                              );
+                            });
+                          })()}
                         </>
                       );
                     })()}
