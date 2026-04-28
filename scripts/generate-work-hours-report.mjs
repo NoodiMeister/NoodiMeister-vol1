@@ -49,6 +49,7 @@ for (const ts of timestamps) {
 }
 
 const rows = [];
+const rowsByMonth = new Map();
 let totalConservative = 0;
 let totalRealistic = 0;
 let totalIntensive = 0;
@@ -76,6 +77,12 @@ for (const [date, events] of [...byDay.entries()].sort((a, b) =>
     intensive: round1(estimated.intensive),
     cumulativeRealistic: round1(cumulativeRealistic),
   });
+
+  const monthKey = date.slice(0, 7);
+  if (!rowsByMonth.has(monthKey)) {
+    rowsByMonth.set(monthKey, []);
+  }
+  rowsByMonth.get(monthKey).push(rows[rows.length - 1]);
 }
 
 const firstCommit = timestamps[0];
@@ -106,19 +113,44 @@ lines.push(`- Konservatiivne tundide hinnang: ${round1(totalConservative)} h`);
 lines.push(`- Realistlik tundide hinnang: ${round1(totalRealistic)} h`);
 lines.push(`- Intensiivne tundide hinnang: ${round1(totalIntensive)} h`);
 lines.push("");
-lines.push("## Päevade lõikes");
+lines.push("## Kuude lõikes");
 lines.push("");
-lines.push(
-  "| Kuupäev | Commit'e | Commit-akna kestus (h) | Konservatiivne (h) | Realistlik (h) | Intensiivne (h) | Realistlik kumulatiivne (h) |",
-);
-lines.push(
-  "| --- | ---: | ---: | ---: | ---: | ---: | ---: |",
-);
-for (const row of rows) {
-  lines.push(
-    `| ${row.date} | ${row.commits} | ${row.spanHours.toFixed(1)} | ${row.conservative.toFixed(1)} | ${row.realistic.toFixed(1)} | ${row.intensive.toFixed(1)} | ${row.cumulativeRealistic.toFixed(1)} |`,
+
+for (const monthKey of [...rowsByMonth.keys()].sort()) {
+  const monthRows = rowsByMonth.get(monthKey);
+  const monthCommitCount = monthRows.reduce((sum, row) => sum + row.commits, 0);
+  const monthConservative = round1(
+    monthRows.reduce((sum, row) => sum + row.conservative, 0),
   );
+  const monthRealistic = round1(
+    monthRows.reduce((sum, row) => sum + row.realistic, 0),
+  );
+  const monthIntensive = round1(
+    monthRows.reduce((sum, row) => sum + row.intensive, 0),
+  );
+
+  lines.push(`### ${monthKey}`);
+  lines.push("");
+  lines.push(`- Commit'e: ${monthCommitCount}`);
+  lines.push(`- Aktiivseid tööpäevi: ${monthRows.length}`);
+  lines.push(`- Konservatiivne: ${monthConservative} h`);
+  lines.push(`- Realistlik: ${monthRealistic} h`);
+  lines.push(`- Intensiivne: ${monthIntensive} h`);
+  lines.push("");
+  lines.push(
+    "| Kuupäev | Commit'e | Commit-akna kestus (h) | Konservatiivne (h) | Realistlik (h) | Intensiivne (h) | Realistlik kumulatiivne (h) |",
+  );
+  lines.push(
+    "| --- | ---: | ---: | ---: | ---: | ---: | ---: |",
+  );
+  for (const row of monthRows) {
+    lines.push(
+      `| ${row.date} | ${row.commits} | ${row.spanHours.toFixed(1)} | ${row.conservative.toFixed(1)} | ${row.realistic.toFixed(1)} | ${row.intensive.toFixed(1)} | ${row.cumulativeRealistic.toFixed(1)} |`,
+    );
+  }
+  lines.push("");
 }
+
 lines.push("");
 lines.push("## Märkused");
 lines.push("");
