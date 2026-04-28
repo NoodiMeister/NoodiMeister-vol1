@@ -1063,6 +1063,7 @@ function ChordIcon() {
 const DEFAULT_SHORTCUT_PREFS = {
   // File / app actions
   'app.undo': { code: 'KeyZ', shift: false, alt: false, mod: true },
+  'app.redo': { code: 'KeyZ', shift: true, alt: false, mod: true },
   'app.save': { code: 'KeyS', shift: false, alt: false, mod: true },
   'app.print': { code: 'KeyP', shift: false, alt: false, mod: true },
   'app.addMeasure': { code: 'KeyB', shift: false, alt: false, mod: true },
@@ -1104,6 +1105,7 @@ const DEFAULT_SHORTCUT_PREFS = {
 
 const SHORTCUT_ACTION_LABELS = {
   'app.undo': 'Undo',
+  'app.redo': 'Redo',
   'app.save': 'Salvesta',
   'app.print': 'Prindi',
   'app.addMeasure': 'Lisa takt',
@@ -5953,24 +5955,143 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     return isDotted ? base * 1.5 : base;
   };
 
+  const createHistorySnapshot = useCallback((newNotes) => ({
+    notes: JSON.parse(JSON.stringify(Array.isArray(newNotes) ? newNotes : notes)),
+    layout: {
+      pageOrientation,
+      paperSize,
+      layoutMeasuresPerLine,
+      layoutLineBreakBefore,
+      layoutPageBreakBefore,
+      layoutExtraPages,
+      layoutSystemGap,
+      layoutPartsGap,
+      layoutPartsGapMm,
+      layoutSizeUnit,
+      layoutConnectedBarlines,
+      layoutGlobalSpacingMultiplier,
+      partLayoutMeasuresPerLine,
+      partLayoutLineBreakBefore,
+      partLayoutPageBreakBefore,
+      partLayoutExtraPages,
+      measureStretchFactors,
+      systemYOffsets,
+      systemXOffsets,
+      pixelsPerBeat,
+      figurenotesSize,
+    },
+  }), [
+    notes,
+    pageOrientation,
+    paperSize,
+    layoutMeasuresPerLine,
+    layoutLineBreakBefore,
+    layoutPageBreakBefore,
+    layoutExtraPages,
+    layoutSystemGap,
+    layoutPartsGap,
+    layoutPartsGapMm,
+    layoutSizeUnit,
+    layoutConnectedBarlines,
+    layoutGlobalSpacingMultiplier,
+    partLayoutMeasuresPerLine,
+    partLayoutLineBreakBefore,
+    partLayoutPageBreakBefore,
+    partLayoutExtraPages,
+    measureStretchFactors,
+    systemYOffsets,
+    systemXOffsets,
+    pixelsPerBeat,
+    figurenotesSize,
+  ]);
+
   // Stage V: History management for undo/redo (ref vältib TDZ – saveToHistory kasutatakse updateNoteTeacherLabel/clearAllNoteLabels juba varem)
   const saveToHistory = useCallback((newNotes) => {
     dirtyRef.current = true;
+    const snapshot = createHistorySnapshot(newNotes);
     setHistory(prev => {
       const newHistory = prev.slice(0, historyIndex + 1);
-      newHistory.push(JSON.parse(JSON.stringify(newNotes)));
+      newHistory.push(snapshot);
       return newHistory.slice(-50); // Keep last 50 states
     });
     setHistoryIndex(prev => Math.min(prev + 1, 49));
-  }, [historyIndex]);
+  }, [createHistorySnapshot, historyIndex]);
   saveToHistoryRef.current = saveToHistory;
 
   const undo = useCallback(() => {
     if (historyIndex >= 0 && history[historyIndex]) {
-      setNotes(JSON.parse(JSON.stringify(history[historyIndex])));
+      const snapshot = history[historyIndex];
+      const applySnapshot = (snap) => {
+        const snapNotes = Array.isArray(snap) ? snap : snap.notes;
+        if (Array.isArray(snapNotes)) {
+          setNotes(JSON.parse(JSON.stringify(snapNotes)));
+        }
+        const layout = Array.isArray(snap) ? null : snap.layout;
+        if (layout) {
+          if (layout.pageOrientation === 'portrait' || layout.pageOrientation === 'landscape') setPageOrientation(layout.pageOrientation);
+          if (layout.paperSize === 'a4' || layout.paperSize === 'a3' || layout.paperSize === 'a5') setPaperSize(layout.paperSize);
+          if (layout.layoutMeasuresPerLine != null) setLayoutMeasuresPerLine(layout.layoutMeasuresPerLine);
+          if (Array.isArray(layout.layoutLineBreakBefore)) setLayoutLineBreakBefore(layout.layoutLineBreakBefore);
+          if (Array.isArray(layout.layoutPageBreakBefore)) setLayoutPageBreakBefore(layout.layoutPageBreakBefore);
+          if (layout.layoutExtraPages != null) setLayoutExtraPages(Math.max(0, Math.round(Number(layout.layoutExtraPages) || 0)));
+          if (layout.layoutSystemGap != null) setLayoutSystemGap(Math.max(5, Math.min(250, Number(layout.layoutSystemGap))));
+          if (layout.layoutPartsGap != null) setLayoutPartsGap(Math.max(2, Math.min(80, Number(layout.layoutPartsGap))));
+          if (layout.layoutPartsGapMm != null) setLayoutPartsGapMm(Math.max(0, Math.min(100, Number(layout.layoutPartsGapMm))));
+          if (layout.layoutSizeUnit === 'mm' || layout.layoutSizeUnit === 'cm') setLayoutSizeUnit(layout.layoutSizeUnit);
+          if (layout.layoutConnectedBarlines != null) setLayoutConnectedBarlines(!!layout.layoutConnectedBarlines);
+          if (layout.layoutGlobalSpacingMultiplier != null) setLayoutGlobalSpacingMultiplier(Math.max(0.5, Math.min(2, Number(layout.layoutGlobalSpacingMultiplier) || 1)));
+          if (layout.partLayoutMeasuresPerLine != null) setPartLayoutMeasuresPerLine(layout.partLayoutMeasuresPerLine);
+          if (Array.isArray(layout.partLayoutLineBreakBefore)) setPartLayoutLineBreakBefore(layout.partLayoutLineBreakBefore);
+          if (Array.isArray(layout.partLayoutPageBreakBefore)) setPartLayoutPageBreakBefore(layout.partLayoutPageBreakBefore);
+          if (layout.partLayoutExtraPages != null) setPartLayoutExtraPages(Math.max(0, Math.round(Number(layout.partLayoutExtraPages) || 0)));
+          if (Array.isArray(layout.measureStretchFactors)) setMeasureStretchFactors(layout.measureStretchFactors);
+          if (Array.isArray(layout.systemYOffsets)) setSystemYOffsets(layout.systemYOffsets);
+          if (Array.isArray(layout.systemXOffsets)) setSystemXOffsets(layout.systemXOffsets);
+          if (layout.pixelsPerBeat != null) setPixelsPerBeat(Math.max(40, Math.min(500, Number(layout.pixelsPerBeat) || 85)));
+          if (layout.figurenotesSize != null) setFigurenotesSize(Math.max(12, Math.min(100, Number(layout.figurenotesSize) || 85)));
+        }
+      };
+      applySnapshot(snapshot);
       setHistoryIndex((prev) => prev - 1);
     }
   }, [history, historyIndex]);
+  const redo = useCallback(() => {
+    const redoIndex = historyIndex + 1;
+    if (redoIndex >= 0 && redoIndex < history.length && history[redoIndex]) {
+      const snapshot = history[redoIndex];
+      const prevNotes = Array.isArray(snapshot) ? snapshot : snapshot.notes;
+      if (Array.isArray(prevNotes)) {
+        setNotes(JSON.parse(JSON.stringify(prevNotes)));
+      }
+      const layout = Array.isArray(snapshot) ? null : snapshot.layout;
+      if (layout) {
+        if (layout.pageOrientation === 'portrait' || layout.pageOrientation === 'landscape') setPageOrientation(layout.pageOrientation);
+        if (layout.paperSize === 'a4' || layout.paperSize === 'a3' || layout.paperSize === 'a5') setPaperSize(layout.paperSize);
+        if (layout.layoutMeasuresPerLine != null) setLayoutMeasuresPerLine(layout.layoutMeasuresPerLine);
+        if (Array.isArray(layout.layoutLineBreakBefore)) setLayoutLineBreakBefore(layout.layoutLineBreakBefore);
+        if (Array.isArray(layout.layoutPageBreakBefore)) setLayoutPageBreakBefore(layout.layoutPageBreakBefore);
+        if (layout.layoutExtraPages != null) setLayoutExtraPages(Math.max(0, Math.round(Number(layout.layoutExtraPages) || 0)));
+        if (layout.layoutSystemGap != null) setLayoutSystemGap(Math.max(5, Math.min(250, Number(layout.layoutSystemGap))));
+        if (layout.layoutPartsGap != null) setLayoutPartsGap(Math.max(2, Math.min(80, Number(layout.layoutPartsGap))));
+        if (layout.layoutPartsGapMm != null) setLayoutPartsGapMm(Math.max(0, Math.min(100, Number(layout.layoutPartsGapMm))));
+        if (layout.layoutSizeUnit === 'mm' || layout.layoutSizeUnit === 'cm') setLayoutSizeUnit(layout.layoutSizeUnit);
+        if (layout.layoutConnectedBarlines != null) setLayoutConnectedBarlines(!!layout.layoutConnectedBarlines);
+        if (layout.layoutGlobalSpacingMultiplier != null) setLayoutGlobalSpacingMultiplier(Math.max(0.5, Math.min(2, Number(layout.layoutGlobalSpacingMultiplier) || 1)));
+        if (layout.partLayoutMeasuresPerLine != null) setPartLayoutMeasuresPerLine(layout.partLayoutMeasuresPerLine);
+        if (Array.isArray(layout.partLayoutLineBreakBefore)) setPartLayoutLineBreakBefore(layout.partLayoutLineBreakBefore);
+        if (Array.isArray(layout.partLayoutPageBreakBefore)) setPartLayoutPageBreakBefore(layout.partLayoutPageBreakBefore);
+        if (layout.partLayoutExtraPages != null) setPartLayoutExtraPages(Math.max(0, Math.round(Number(layout.partLayoutExtraPages) || 0)));
+        if (Array.isArray(layout.measureStretchFactors)) setMeasureStretchFactors(layout.measureStretchFactors);
+        if (Array.isArray(layout.systemYOffsets)) setSystemYOffsets(layout.systemYOffsets);
+        if (Array.isArray(layout.systemXOffsets)) setSystemXOffsets(layout.systemXOffsets);
+        if (layout.pixelsPerBeat != null) setPixelsPerBeat(Math.max(40, Math.min(500, Number(layout.pixelsPerBeat) || 85)));
+        if (layout.figurenotesSize != null) setFigurenotesSize(Math.max(12, Math.min(100, Number(layout.figurenotesSize) || 85)));
+      }
+      setHistoryIndex((prev) => Math.min(prev + 1, history.length - 1));
+    }
+  }, [history, historyIndex]);
+  const canUndo = historyIndex >= 0 && !!history[historyIndex];
+  const canRedo = historyIndex + 1 < history.length && !!history[historyIndex + 1];
 
   // Get selected notes for range selection
   const getSelectedNotes = useCallback(() => {
@@ -7906,11 +8027,22 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         undo();
         return;
       }
+      if (matchesShortcutPref(e, effectiveShortcutPrefs['app.redo'])) {
+        e.preventDefault();
+        redo();
+        return;
+      }
       // Safety guard: never let Cmd/Ctrl+Z fall through to note-entry branches,
       // even if shortcut prefs are temporarily mismatched.
       if (modKey && !e.shiftKey && !e.altKey && (e.code === 'KeyZ' || String(e.key || '').toLowerCase() === 'z')) {
         e.preventDefault();
         undo();
+        return;
+      }
+      // Redo safety guard: Cmd/Ctrl+Shift+Z and Cmd/Ctrl+Y.
+      if (modKey && !e.altKey && ((e.shiftKey && (e.code === 'KeyZ' || String(e.key || '').toLowerCase() === 'z')) || (!e.shiftKey && (e.code === 'KeyY' || String(e.key || '').toLowerCase() === 'y')))) {
+        e.preventDefault();
+        redo();
         return;
       }
       // Text tool inline style shortcuts when title/author/lyrics/textbox editor is active.
@@ -11178,7 +11310,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                     <button
                       key={n}
                       type="button"
-                      onClick={() => setLayoutMeasuresPerLine(n)}
+                      onClick={() => { saveToHistory(notes); setLayoutMeasuresPerLine(n); }}
                       className={`px-4 py-2 rounded-lg font-medium transition-all ${layoutMeasuresPerLine === n ? 'bg-amber-600 text-white shadow-md' : 'bg-amber-100 text-amber-800 hover:bg-amber-200'}`}
                     >
                       {n} takti / rida
@@ -11893,7 +12025,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                     <button
                       key={n}
                       type="button"
-                      onClick={() => { dirtyRef.current = true; (viewMode === 'score' ? setLayoutMeasuresPerLine : setPartLayoutMeasuresPerLine)(n); }}
+                      onClick={() => { saveToHistory(notes); dirtyRef.current = true; (viewMode === 'score' ? setLayoutMeasuresPerLine : setPartLayoutMeasuresPerLine)(n); }}
                       className={`px-3 py-2 rounded-lg text-sm font-medium border-2 transition-colors ${effectiveLayoutMeasuresPerLine === n ? 'bg-amber-600 border-amber-700 text-white' : 'border-amber-200 text-amber-900 bg-amber-50 hover:bg-amber-100'}`}
                     >
                       {n} takti / rida
@@ -12475,6 +12607,26 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
               >
                 {icons?.X ? <icons.X className="w-4 h-4" /> : null}
                 Stop
+              </button>
+              <button
+                type="button"
+                onClick={undo}
+                disabled={!canUndo}
+                className="inline-flex items-center gap-2 px-3 py-2 rounded-lg font-semibold text-sm bg-slate-600 text-white shadow-md hover:bg-slate-500 border border-slate-700/50 disabled:opacity-50 disabled:cursor-not-allowed"
+                title={buildHelpTooltip(locale, 'Undo', effectiveShortcutLabels['app.undo'] || 'Cmd/Ctrl+Z')}
+              >
+                {icons?.RotateCcw ? <icons.RotateCcw className="w-4 h-4" /> : null}
+                Undo
+              </button>
+              <button
+                type="button"
+                onClick={redo}
+                disabled={!canRedo}
+                className="inline-flex items-center gap-2 px-3 py-2 rounded-lg font-semibold text-sm bg-slate-600 text-white shadow-md hover:bg-slate-500 border border-slate-700/50 disabled:opacity-50 disabled:cursor-not-allowed"
+                title={buildHelpTooltip(locale, 'Redo', effectiveShortcutLabels['app.redo'] || 'Cmd/Ctrl+Shift+Z')}
+              >
+                {icons?.RotateCw ? <icons.RotateCw className="w-4 h-4" /> : null}
+                Redo
               </button>
 
               {/* Fail – salvestamine ja laadimine */}
@@ -13999,7 +14151,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                       <h4 className="text-xs font-bold text-amber-900 uppercase mb-2">{t('layout.measuresPerLine')}</h4>
                       <p className="text-xs text-amber-700 mb-2">{t('layout.measuresPerLineHint')}</p>
                       <div className="flex flex-wrap gap-1 mb-3">{(pageOrientation === 'landscape' ? [2, 4, 6, 8, 12, 16] : [2, 3, 4, 6, 8]).map((n) => (
-                        <button key={n} type="button" onClick={() => { dirtyRef.current = true; (viewMode === 'score' ? setLayoutMeasuresPerLine : setPartLayoutMeasuresPerLine)(n); }} className={`px-2 py-1 rounded text-sm font-medium ${effectiveLayoutMeasuresPerLine === n ? 'bg-amber-600 text-white' : 'bg-amber-100 text-amber-800 hover:bg-amber-200'}`}>{n}</button>
+                        <button key={n} type="button" onClick={() => { saveToHistory(notes); dirtyRef.current = true; (viewMode === 'score' ? setLayoutMeasuresPerLine : setPartLayoutMeasuresPerLine)(n); }} className={`px-2 py-1 rounded text-sm font-medium ${effectiveLayoutMeasuresPerLine === n ? 'bg-amber-600 text-white' : 'bg-amber-100 text-amber-800 hover:bg-amber-200'}`}>{n}</button>
                       ))}</div>
                       <div className="mb-3">
                         <h4 className="text-xs font-bold text-amber-900 uppercase mb-1">{t('layout.partsGap')} (mm/cm/px)</h4>
@@ -14109,7 +14261,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                             type="checkbox"
                             checked={effectiveLayoutConnectedBarlines}
                             disabled={isTraditionalMultiStaff}
-                            onChange={(e) => { dirtyRef.current = true; setLayoutConnectedBarlines(e.target.checked); }}
+                            onChange={(e) => { saveToHistory(notes); dirtyRef.current = true; setLayoutConnectedBarlines(e.target.checked); }}
                             className="mt-1 rounded border-amber-300 text-amber-600 focus:ring-amber-500"
                           />
                           <span>
@@ -14177,15 +14329,15 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                       <div className="mb-2">
                         <h4 className="text-xs font-bold text-amber-900 uppercase mb-1">{t('layout.lineBreakSection')}</h4>
                         <div className="grid grid-cols-2 gap-1 text-xs">
-                          <button type="button" disabled={cursorMeasureIndex <= 0} onClick={() => { if (cursorMeasureIndex <= 0) return; dirtyRef.current = true; (viewMode === 'score' ? setLayoutLineBreakBefore : setPartLayoutLineBreakBefore)((prev) => [...new Set([...prev, cursorMeasureIndex])].sort((a, b) => a - b)); }} className="py-1.5 px-2 rounded bg-slate-100 text-slate-800 hover:bg-slate-200 font-medium disabled:opacity-50 disabled:cursor-not-allowed">{t('layout.nextLine')}</button>
-                          <button type="button" disabled={cursorMeasureIndex <= 0} onClick={() => { dirtyRef.current = true; (viewMode === 'score' ? setLayoutLineBreakBefore : setPartLayoutLineBreakBefore)((prev) => prev.filter((i) => i !== cursorMeasureIndex)); }} className="py-1.5 px-2 rounded bg-amber-100 text-amber-800 hover:bg-amber-200 font-medium disabled:opacity-50 disabled:cursor-not-allowed">{t('layout.removeLineBreak')}</button>
+                          <button type="button" disabled={cursorMeasureIndex >= measures.length - 1} onClick={() => { if (cursorMeasureIndex >= measures.length - 1) return; saveToHistory(notes); dirtyRef.current = true; const breakBeforeMeasure = cursorMeasureIndex + 1; (viewMode === 'score' ? setLayoutLineBreakBefore : setPartLayoutLineBreakBefore)((prev) => [...new Set([...prev, breakBeforeMeasure])].sort((a, b) => a - b)); }} className="py-1.5 px-2 rounded bg-slate-100 text-slate-800 hover:bg-slate-200 font-medium disabled:opacity-50 disabled:cursor-not-allowed">{t('layout.nextLine')}</button>
+                          <button type="button" disabled={measures.length <= 1 || (cursorMeasureIndex <= 0 && !effectiveLayoutLineBreakBefore.includes(1))} onClick={() => { if (measures.length <= 1) return; const hasBreakBeforeCurrent = effectiveLayoutLineBreakBefore.includes(cursorMeasureIndex); const hasBreakAfterCurrent = effectiveLayoutLineBreakBefore.includes(cursorMeasureIndex + 1); if (!hasBreakBeforeCurrent && !hasBreakAfterCurrent) return; saveToHistory(notes); dirtyRef.current = true; (viewMode === 'score' ? setLayoutLineBreakBefore : setPartLayoutLineBreakBefore)((prev) => { if (prev.includes(cursorMeasureIndex)) return prev.filter((i) => i !== cursorMeasureIndex); const breakBeforeMeasure = cursorMeasureIndex + 1; return prev.filter((i) => i !== breakBeforeMeasure); }); }} className="py-1.5 px-2 rounded bg-amber-100 text-amber-800 hover:bg-amber-200 font-medium disabled:opacity-50 disabled:cursor-not-allowed">{t('layout.removeLineBreak')}</button>
                         </div>
                       </div>
                       <div className="mb-2">
                         <h4 className="text-xs font-bold text-amber-900 uppercase mb-1">{t('layout.pageBreakSection')}</h4>
                         <div className="grid grid-cols-2 gap-1 text-xs">
-                          <button type="button" disabled={cursorMeasureIndex <= 0} onClick={() => { if (cursorMeasureIndex <= 0) return; dirtyRef.current = true; (viewMode === 'score' ? setLayoutPageBreakBefore : setPartLayoutPageBreakBefore)((prev) => [...new Set([...prev, cursorMeasureIndex])].sort((a, b) => a - b)); }} className="py-1.5 px-2 rounded bg-slate-100 text-slate-800 hover:bg-slate-200 font-medium disabled:opacity-50 disabled:cursor-not-allowed">{t('layout.newPage')}</button>
-                          <button type="button" disabled={cursorMeasureIndex <= 0} onClick={() => { dirtyRef.current = true; (viewMode === 'score' ? setLayoutPageBreakBefore : setPartLayoutPageBreakBefore)((prev) => prev.filter((i) => i !== cursorMeasureIndex)); }} className="py-1.5 px-2 rounded bg-amber-100 text-amber-800 hover:bg-amber-200 font-medium disabled:opacity-50 disabled:cursor-not-allowed">{t('layout.removePageBreak')}</button>
+                          <button type="button" disabled={cursorMeasureIndex >= measures.length - 1} onClick={() => { if (cursorMeasureIndex >= measures.length - 1) return; saveToHistory(notes); dirtyRef.current = true; const breakBeforeMeasure = cursorMeasureIndex + 1; (viewMode === 'score' ? setLayoutPageBreakBefore : setPartLayoutPageBreakBefore)((prev) => [...new Set([...prev, breakBeforeMeasure])].sort((a, b) => a - b)); }} className="py-1.5 px-2 rounded bg-slate-100 text-slate-800 hover:bg-slate-200 font-medium disabled:opacity-50 disabled:cursor-not-allowed">{t('layout.newPage')}</button>
+                          <button type="button" disabled={measures.length <= 1 || (cursorMeasureIndex <= 0 && !effectiveLayoutPageBreakBefore.includes(1))} onClick={() => { if (measures.length <= 1) return; const hasBreakBeforeCurrent = effectiveLayoutPageBreakBefore.includes(cursorMeasureIndex); const hasBreakAfterCurrent = effectiveLayoutPageBreakBefore.includes(cursorMeasureIndex + 1); if (!hasBreakBeforeCurrent && !hasBreakAfterCurrent) return; saveToHistory(notes); dirtyRef.current = true; (viewMode === 'score' ? setLayoutPageBreakBefore : setPartLayoutPageBreakBefore)((prev) => { if (prev.includes(cursorMeasureIndex)) return prev.filter((i) => i !== cursorMeasureIndex); const breakBeforeMeasure = cursorMeasureIndex + 1; return prev.filter((i) => i !== breakBeforeMeasure); }); }} className="py-1.5 px-2 rounded bg-amber-100 text-amber-800 hover:bg-amber-200 font-medium disabled:opacity-50 disabled:cursor-not-allowed">{t('layout.removePageBreak')}</button>
                         </div>
                       </div>
                       <p className="text-xs text-amber-700 mt-2 mb-1">{t('layout.measureWidthHint')}</p>
@@ -14196,6 +14348,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                           <button
                             type="button"
                             onClick={() => {
+                              saveToHistory(notes);
                               dirtyRef.current = true;
                               (viewMode === 'score' ? setLayoutExtraPages : setPartLayoutExtraPages)((prev) => Math.max(0, (Number(prev) || 0) + 1));
                             }}
@@ -14207,6 +14360,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                             type="button"
                             disabled={(viewMode === 'score' ? layoutExtraPages : partLayoutExtraPages) <= 0}
                             onClick={() => {
+                              saveToHistory(notes);
                               dirtyRef.current = true;
                               (viewMode === 'score' ? setLayoutExtraPages : setPartLayoutExtraPages)((prev) => Math.max(0, (Number(prev) || 0) - 1));
                             }}
@@ -14217,10 +14371,10 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                         </div>
                       </div>
                       <div className="grid grid-cols-2 gap-1 text-xs">
-                        <button type="button" title={t('layout.compressMeasureShortcut')} onClick={() => { dirtyRef.current = true; setMeasureStretchFactors((prev) => { const next = [...(prev || [])]; while (next.length <= cursorMeasureIndex) next.push(1); next[cursorMeasureIndex] = Math.max(0.25, (next[cursorMeasureIndex] ?? 1) - 0.1); return next; }); }} className="py-1.5 px-2 rounded bg-slate-100 text-slate-800 hover:bg-slate-200 font-medium">{t('layout.compressMeasure')}</button>
-                        <button type="button" title={t('layout.stretchMeasureShortcut')} onClick={() => { dirtyRef.current = true; setMeasureStretchFactors((prev) => { const next = [...(prev || [])]; while (next.length <= cursorMeasureIndex) next.push(1); next[cursorMeasureIndex] = Math.min(4, (next[cursorMeasureIndex] ?? 1) + 0.1); return next; }); }} className="py-1.5 px-2 rounded bg-slate-100 text-slate-800 hover:bg-slate-200 font-medium">{t('layout.stretchMeasure')}</button>
+                        <button type="button" title={t('layout.compressMeasureShortcut')} onClick={() => { saveToHistory(notes); dirtyRef.current = true; setMeasureStretchFactors((prev) => { const next = [...(prev || [])]; while (next.length <= cursorMeasureIndex) next.push(1); next[cursorMeasureIndex] = Math.max(0.25, (next[cursorMeasureIndex] ?? 1) - 0.1); return next; }); }} className="py-1.5 px-2 rounded bg-slate-100 text-slate-800 hover:bg-slate-200 font-medium">{t('layout.compressMeasure')}</button>
+                        <button type="button" title={t('layout.stretchMeasureShortcut')} onClick={() => { saveToHistory(notes); dirtyRef.current = true; setMeasureStretchFactors((prev) => { const next = [...(prev || [])]; while (next.length <= cursorMeasureIndex) next.push(1); next[cursorMeasureIndex] = Math.min(4, (next[cursorMeasureIndex] ?? 1) + 0.1); return next; }); }} className="py-1.5 px-2 rounded bg-slate-100 text-slate-800 hover:bg-slate-200 font-medium">{t('layout.stretchMeasure')}</button>
                       </div>
-                      <button type="button" onClick={() => { dirtyRef.current = true; (viewMode === 'score' ? setLayoutLineBreakBefore : setPartLayoutLineBreakBefore)([]); (viewMode === 'score' ? setLayoutPageBreakBefore : setPartLayoutPageBreakBefore)([]); (viewMode === 'score' ? setLayoutMeasuresPerLine : setPartLayoutMeasuresPerLine)(0); (viewMode === 'score' ? setLayoutExtraPages : setPartLayoutExtraPages)(0); setMeasureStretchFactors([]); setSystemYOffsets([]); setSystemXOffsets([]); setLayoutSystemGap(15); setLayoutPartsGap(10); setLayoutConnectedBarlines(true); setLayoutGlobalSpacingMultiplier(1); pixelsPerBeatLinkedToFigureSizeRef.current = true; setPixelsPerBeat(85); setFigurenotesSize(85); }} className="mt-3 w-full py-2 px-3 rounded-lg bg-slate-100 text-slate-800 text-sm font-semibold hover:bg-slate-200 border border-slate-300" title={t('layout.resetLayoutHint')}>{t('layout.resetLayout')}</button>
+                      <button type="button" onClick={() => { saveToHistory(notes); dirtyRef.current = true; (viewMode === 'score' ? setLayoutLineBreakBefore : setPartLayoutLineBreakBefore)([]); (viewMode === 'score' ? setLayoutPageBreakBefore : setPartLayoutPageBreakBefore)([]); (viewMode === 'score' ? setLayoutMeasuresPerLine : setPartLayoutMeasuresPerLine)(0); (viewMode === 'score' ? setLayoutExtraPages : setPartLayoutExtraPages)(0); setMeasureStretchFactors([]); setSystemYOffsets([]); setSystemXOffsets([]); setLayoutSystemGap(15); setLayoutPartsGap(10); setLayoutConnectedBarlines(true); setLayoutGlobalSpacingMultiplier(1); pixelsPerBeatLinkedToFigureSizeRef.current = true; setPixelsPerBeat(85); setFigurenotesSize(85); }} className="mt-3 w-full py-2 px-3 rounded-lg bg-slate-100 text-slate-800 text-sm font-semibold hover:bg-slate-200 border border-slate-300" title={t('layout.resetLayoutHint')}>{t('layout.resetLayout')}</button>
                     </div>
                     {pageDesignDataUrl && (
                       <>
