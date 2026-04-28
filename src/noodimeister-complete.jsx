@@ -12613,7 +12613,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                 onClick={undo}
                 disabled={!canUndo}
                 className="inline-flex items-center gap-2 px-3 py-2 rounded-lg font-semibold text-sm bg-slate-600 text-white shadow-md hover:bg-slate-500 border border-slate-700/50 disabled:opacity-50 disabled:cursor-not-allowed"
-                title={buildHelpTooltip(locale, 'Undo', effectiveShortcutLabels['app.undo'] || 'Cmd/Ctrl+Z')}
+                title={buildHelpTooltip(locale, 'Undo', shortcutLabels['app.undo'] || 'Cmd/Ctrl+Z')}
               >
                 {icons?.RotateCcw ? <icons.RotateCcw className="w-4 h-4" /> : null}
                 Undo
@@ -12623,7 +12623,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                 onClick={redo}
                 disabled={!canRedo}
                 className="inline-flex items-center gap-2 px-3 py-2 rounded-lg font-semibold text-sm bg-slate-600 text-white shadow-md hover:bg-slate-500 border border-slate-700/50 disabled:opacity-50 disabled:cursor-not-allowed"
-                title={buildHelpTooltip(locale, 'Redo', effectiveShortcutLabels['app.redo'] || 'Cmd/Ctrl+Shift+Z')}
+                title={buildHelpTooltip(locale, 'Redo', shortcutLabels['app.redo'] || 'Cmd/Ctrl+Shift+Z')}
               >
                 {icons?.RotateCw ? <icons.RotateCw className="w-4 h-4" /> : null}
                 Redo
