@@ -250,6 +250,12 @@ function pitchWithAccidental(pitch, accidental) {
   return letter;
 }
 
+function resolveVisibleAccidentalForTraditional(note, keySignature) {
+  if (!note || note.accidental === undefined || note.accidental === null) return null;
+  const keyAccidental = getAccidentalForPitchInKey(note.pitch, keySignature);
+  return note.accidental === keyAccidental ? null : note.accidental;
+}
+
 /** Vars alla + tala: min vahe (px) tala alumise serva ja ülemise sõrmestusringi ülemise serva vahel (nt 3. joon + beam). */
 const TIN_WHISTLE_BEAM_TO_RING_GAP_MIN_PX = 5;
 
@@ -576,6 +582,7 @@ export function TraditionalNotationView({
   activeLegatoSlurPair = null,
   /** (endGlobalNoteIndex) => void — klõps valitud (sinisel) legato kaarel: vali lõppnoot. */
   onLegatoPathClick,
+  onMeasureStartXChange,
 }) {
   const spacing = staffSpaceProp ?? STAFF_SPACE;
   const isVabanotatsioon = notationMode === 'vabanotatsioon';
@@ -628,6 +635,10 @@ export function TraditionalNotationView({
     timeSigWidthPx +
     2;
   const effectiveMarginLeft = Math.max(marginLeft, minContentStart);
+  useEffect(() => {
+    if (typeof onMeasureStartXChange !== 'function') return;
+    onMeasureStartXChange(effectiveMarginLeft);
+  }, [effectiveMarginLeft, onMeasureStartXChange]);
 
   // Measure layout for getBeatFromX (first system only; notation starts at effectiveMarginLeft after clef/key/time sig)
   const measureLayout = React.useMemo(() => {
@@ -1777,6 +1788,7 @@ export function TraditionalNotationView({
                         precomposedGlyph != null;
                       const glyphFontSize = getGlyphFontSize(spacing);
 
+                      const visibleAccidental = resolveVisibleAccidentalForTraditional(note, keySignature);
                       return (
                         <g key={noteIdx} {...noteGroupProps}>
                           {nLedgerAbove > 0 && Array.from({ length: nLedgerAbove }, (_, i) => (
@@ -1786,8 +1798,8 @@ export function TraditionalNotationView({
                             <line key={`lb-${i}`} x1={noteX - ledgerHalfWidth} y1={staffY + lastLineY + (i + 1) * spacing} x2={noteX + ledgerHalfWidth} y2={staffY + lastLineY + (i + 1) * spacing} stroke="#333" strokeWidth={getLegerLineThickness(spacing)} />
                           ))}
                           {isSelected && <rect x={noteX - 18} y={noteY - 22} width={36} height={44} fill="#93c5fd" opacity="0.3" rx="4" />}
-                          {(note.accidental === 1 || note.accidental === -1 || (note.accidental === 0 && getAccidentalForPitchInKey(note.pitch, keySignature) !== 0)) && (
-                            <text x={noteX - (noteheadRx + ensureMinGlyphHorizontalGapPx(spacing * 0.5))} y={noteY} textAnchor="middle" dominantBaseline="central" fontSize={Math.round(spacing * 1.4)} fill={noteFillColor} fontFamily="serif">{note.accidental === 1 ? '♯' : note.accidental === -1 ? '♭' : '♮'}</text>
+                          {(visibleAccidental === 1 || visibleAccidental === -1 || visibleAccidental === 0) && (
+                            <text x={noteX - (noteheadRx + ensureMinGlyphHorizontalGapPx(spacing * 0.5))} y={noteY} textAnchor="middle" dominantBaseline="central" fontSize={Math.round(spacing * 1.4)} fill={noteFillColor} fontFamily="serif">{visibleAccidental === 1 ? '♯' : visibleAccidental === -1 ? '♭' : '♮'}</text>
                           )}
                           {useLelandPrecomposedRhythm ? (
                             <SmuflGlyph
