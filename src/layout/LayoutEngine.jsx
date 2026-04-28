@@ -118,8 +118,11 @@ function calculateFigureGrid(data, availableWidth, availablePageHeight = 0) {
   const figureScale = Math.max(0.5, figureSizeBase / 75);
   const rawBoxesPerRow = data?.boxesPerRow ?? DEFAULT_BOXES_PER_ROW;
   const boxesPerRow = Math.max(1, Math.round(rawBoxesPerRow / mult));
+  const enforceMeasuresPerLine = data?.enforceMeasuresPerLine !== false;
   const lineBreakBefore = new Set(Array.isArray(data?.lineBreakBefore) ? data.lineBreakBefore : []);
   const pageBreakBefore = new Set(Array.isArray(data?.pageBreakBefore) ? data.pageBreakBefore : []);
+  const excludePickupFromMeasureCount = !!data?.excludePickupFromMeasureCount;
+  const pickupMeasureIndex = Number.isInteger(data?.pickupMeasureIndex) ? data.pickupMeasureIndex : 0;
   const timeSignature = data?.timeSignature ?? { beats: 4, beatUnit: 4 };
   const beatsPerMeasure = measureLengthInQuarterBeats(timeSignature);
   const staffSpacing = Math.max(FIGURE_ROW_HEIGHT, Number(data?.staffSpacing) || SYSTEM_GAP);
@@ -148,6 +151,8 @@ function calculateFigureGrid(data, availableWidth, availablePageHeight = 0) {
   const systems = [];
   let lastYOffset = -staffSpacing;
   let currentRow = [];
+  let currentRowMeasureCount = 0;
+  const getMeasureCountWeight = (i) => (excludePickupFromMeasureCount && i === pickupMeasureIndex ? 0 : 1);
 
   const pixelsPerBeatInput = typeof data?.pixelsPerBeat === 'number' && data.pixelsPerBeat > 0 ? data.pixelsPerBeat : null;
 
@@ -199,7 +204,7 @@ function calculateFigureGrid(data, availableWidth, availablePageHeight = 0) {
 
   for (let i = 0; i < measures.length; i++) {
     const breakBeforeThis = lineBreakBefore.has(i + 1) || pageBreakBefore.has(i + 1);
-    const fullRow = currentRow.length >= boxesPerRow;
+    const fullRow = enforceMeasuresPerLine && currentRowMeasureCount >= boxesPerRow;
     const wouldBeCount = currentRow.length + 1;
     const widthPerMeasure = effectiveWidth / wouldBeCount;
     const overflowBreak = currentRow.length > 0 && widthPerMeasure < minMeasureWidth; // force new line when row would overflow
@@ -207,8 +212,10 @@ function calculateFigureGrid(data, availableWidth, availablePageHeight = 0) {
     if ((breakBeforeThis || fullRow || overflowBreak) && currentRow.length > 0) {
       flushRow(currentRow);
       currentRow = [];
+      currentRowMeasureCount = 0;
     }
     currentRow.push(i);
+    currentRowMeasureCount += getMeasureCountWeight(i);
   }
 
   if (currentRow.length > 0) {

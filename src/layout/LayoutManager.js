@@ -85,6 +85,9 @@ export function computeLayout(measures, timeSignature, pixelsPerBeat, pageWidth,
     globalSpacingMultiplier = 1,
     staffSpacing: optionsStaffSpacing,
     pageHeight: optionsPageHeight,
+    excludePickupFromMeasureCount = false,
+    pickupMeasureIndex = 0,
+    enforceMeasuresPerLine = true,
   } = layoutOptions;
   const mult = Math.max(0.25, Math.min(3, Number(globalSpacingMultiplier) || 1));
   const effectiveMeasuresPerLine = measuresPerLine > 0 ? Math.max(1, Math.round(measuresPerLine / mult)) : 0;
@@ -99,6 +102,7 @@ export function computeLayout(measures, timeSignature, pixelsPerBeat, pageWidth,
   const getFactor = (i) => (Array.isArray(measureStretchFactors) && typeof measureStretchFactors[i] === 'number')
     ? measureStretchFactors[i]
     : 1;
+  const getMeasureCountWeight = (i) => (excludePickupFromMeasureCount && i === pickupMeasureIndex ? 0 : 1);
 
   const buildSystem = (rowIndices, systemIndex, nextPageBreak) => {
     if (rowIndices.length === 0) return null;
@@ -124,12 +128,13 @@ export function computeLayout(measures, timeSignature, pixelsPerBeat, pageWidth,
   if (measuresPerLine > 0 || lineSet.size > 0 || pageSet.size > 0) {
     const systems = [];
     let currentRow = [];
+    let currentRowMeasureCount = 0;
     let nextPageBreak = false;
     let yAcc = 0;
     for (let i = 0; i < measures.length; i++) {
       const forceLine = lineSet.has(i);
       const forcePage = pageSet.has(i);
-      const forceBreak = forceLine || forcePage || (effectiveMeasuresPerLine > 0 && currentRow.length >= effectiveMeasuresPerLine && currentRow.length > 0);
+      const forceBreak = forceLine || forcePage || (enforceMeasuresPerLine && effectiveMeasuresPerLine > 0 && currentRowMeasureCount >= effectiveMeasuresPerLine && currentRow.length > 0);
       if (forceBreak && currentRow.length > 0) {
         const sys = buildSystem([...currentRow], systems.length, nextPageBreak);
         if (sys) {
@@ -146,9 +151,11 @@ export function computeLayout(measures, timeSignature, pixelsPerBeat, pageWidth,
           systems.push(sys);
         }
         currentRow = [];
+        currentRowMeasureCount = 0;
       }
       if (forcePage) nextPageBreak = true;
       currentRow.push(i);
+      currentRowMeasureCount += getMeasureCountWeight(i);
     }
     if (currentRow.length > 0) {
       const sys = buildSystem(currentRow, systems.length, nextPageBreak);

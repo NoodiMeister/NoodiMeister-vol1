@@ -180,6 +180,7 @@ function buildDemoVisibilityProject({ figurenotes, grandStaff }) {
     figurenotesStems: true,
     figurenotesMelodyShowNoteNames: true,
     layoutMeasuresPerLine: 4,
+    layoutStrictMeasuresPerLine: true,
     addedMeasures: 0,
     viewFitPage: true,
     viewSmartPage: false,
@@ -2006,6 +2007,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   /** Paper size for print and PDF: A4, A3, or A5. Page setup determines printable view. */
   const [paperSize, setPaperSize] = useState('a4'); // 'a4' | 'a3' | 'a5'
   const [layoutMeasuresPerLine, setLayoutMeasuresPerLine] = useState(4);
+  const [layoutStrictMeasuresPerLine, setLayoutStrictMeasuresPerLine] = useState(true);
   const [layoutLineBreakBefore, setLayoutLineBreakBefore] = useState([]);
   const [measureStretchFactors, setMeasureStretchFactors] = useState([]);
   const [systemYOffsets, setSystemYOffsets] = useState([]);
@@ -2022,6 +2024,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   // Vaade: partituur vs instrumendi part – instrumendi paigutus on sõltumatu partituurist
   const [viewMode, setViewMode] = useState('score'); // 'score' | 'part'
   const [partLayoutMeasuresPerLine, setPartLayoutMeasuresPerLine] = useState(4);
+  const [partLayoutStrictMeasuresPerLine, setPartLayoutStrictMeasuresPerLine] = useState(true);
   const [partLayoutLineBreakBefore, setPartLayoutLineBreakBefore] = useState([]);
   const [partLayoutPageBreakBefore, setPartLayoutPageBreakBefore] = useState([]);
   const [partLayoutExtraPages, setPartLayoutExtraPages] = useState(0);
@@ -4244,6 +4247,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     pageOrientation,
     paperSize,
     layoutMeasuresPerLine,
+    layoutStrictMeasuresPerLine,
     layoutLineBreakBefore,
     layoutPageBreakBefore,
     layoutExtraPages,
@@ -4258,6 +4262,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     measureWidthMultiplier: notationCtx?.measureWidthMultiplier,
     viewMode,
     partLayoutMeasuresPerLine,
+    partLayoutStrictMeasuresPerLine,
     partLayoutLineBreakBefore,
     partLayoutPageBreakBefore,
     partLayoutExtraPages,
@@ -4346,7 +4351,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     lyricFontSize,
     noteheadShape,
     noteheadEmoji
-  }), [staves, activeStaffIndex, staffYOffsets, measureStretchFactors, systemYOffsets, systemXOffsets, visibleStaves, instrumentPartGroups, intermissionLabels, timeSignature, timeSignatureMode, keySignature, staffLines, notationStyle, pixelsPerBeat, notationMode, instrumentNotationVariant, linkedNotationByStaffId, tinWhistleLinkedFingeringScalePercent, cursorPosition, addedMeasures, measureRepeatMarks, setupCompleted, songTitle, author, pickupEnabled, pickupQuantity, pickupDuration, pageOrientation, paperSize, layoutMeasuresPerLine, layoutLineBreakBefore, layoutPageBreakBefore, layoutExtraPages, layoutSystemGap, layoutPartsGap, layoutPartsGapMm, layoutSizeUnit, layoutConnectedBarlines, layoutGlobalSpacingMultiplier, notationCtx?.globalSpacingMultiplier, notationCtx?.staffSpacing, notationCtx?.measureWidthMultiplier, viewMode, partLayoutMeasuresPerLine, partLayoutLineBreakBefore, partLayoutPageBreakBefore, partLayoutExtraPages, showPageNavigator, pageFlowDirection, viewFitPage, viewSmartPage, visibleToolIds, tuningReferenceNote, tuningReferenceOctave, tuningReferenceHz, playNoteOnInsert, figurenotesSize, figurenotesStems, figurenotesChordLineGap, figurenotesChordBlocks, figurenotesChordBlocksShowTones, figurenotesMelodyShowNoteNames, timeSignatureSize, pedagogicalTimeSigDenominatorType, pedagogicalTimeSigDenominatorColor, pedagogicalTimeSigDenominatorInstrument, pedagogicalTimeSigDenominatorEmoji, showBarNumbers, barNumberSize, showRhythmSyllables, showAllNoteLabels, enableEmojiOverlays, joClefStaffPosition, relativeNotationShowKeySignature, relativeNotationShowTraditionalClef, isPedagogicalProject, pedagogicalAudioBpm, pedagogicalAudioPlaybackRate, pedagogicalSyncMode, pedagogicalSyncStartBeat, pedagogicalSyncStartTimeSec, pedagogicalSyncEndBeat, pedagogicalSyncEndTimeSec, pedagogicalRhythmStep, pedagogicalPlayheadStyle, pedagogicalPlayheadEmoji, pedagogicalPlayheadEmojiSize, cursorLineStrokeWidth, pedagogicalPlayheadMovement, chords, textBoxes, documentFontFamily, lyricFontFamily, lyricBold, lyricItalic, lyricUnderline, lyricWeight, titleFontSize, authorFontSize, titleFontFamily, authorFontFamily, titleColor, authorColor, titleBold, titleItalic, titleUnderline, titleWeight, authorBold, authorItalic, authorUnderline, authorWeight, titleAlignment, authorAlignment, staffRowAlignment, pageDesignDataUrl, pageDesignOpacity, pageDesignFit, pageDesignPositionX, pageDesignPositionY, pageDesignCrop, timeSignatureOffset, lyricLineIndex, lyricLineYOffset, lyricFontSize, noteheadShape, noteheadEmoji]);
+  }), [staves, activeStaffIndex, staffYOffsets, measureStretchFactors, systemYOffsets, systemXOffsets, visibleStaves, instrumentPartGroups, intermissionLabels, timeSignature, timeSignatureMode, keySignature, staffLines, notationStyle, pixelsPerBeat, notationMode, instrumentNotationVariant, linkedNotationByStaffId, tinWhistleLinkedFingeringScalePercent, cursorPosition, addedMeasures, measureRepeatMarks, setupCompleted, songTitle, author, pickupEnabled, pickupQuantity, pickupDuration, pageOrientation, paperSize, layoutMeasuresPerLine, layoutStrictMeasuresPerLine, layoutLineBreakBefore, layoutPageBreakBefore, layoutExtraPages, layoutSystemGap, layoutPartsGap, layoutPartsGapMm, layoutSizeUnit, layoutConnectedBarlines, layoutGlobalSpacingMultiplier, notationCtx?.globalSpacingMultiplier, notationCtx?.staffSpacing, notationCtx?.measureWidthMultiplier, viewMode, partLayoutMeasuresPerLine, partLayoutStrictMeasuresPerLine, partLayoutLineBreakBefore, partLayoutPageBreakBefore, partLayoutExtraPages, showPageNavigator, pageFlowDirection, viewFitPage, viewSmartPage, visibleToolIds, tuningReferenceNote, tuningReferenceOctave, tuningReferenceHz, playNoteOnInsert, figurenotesSize, figurenotesStems, figurenotesChordLineGap, figurenotesChordBlocks, figurenotesChordBlocksShowTones, figurenotesMelodyShowNoteNames, timeSignatureSize, pedagogicalTimeSigDenominatorType, pedagogicalTimeSigDenominatorColor, pedagogicalTimeSigDenominatorInstrument, pedagogicalTimeSigDenominatorEmoji, showBarNumbers, barNumberSize, showRhythmSyllables, showAllNoteLabels, enableEmojiOverlays, joClefStaffPosition, relativeNotationShowKeySignature, relativeNotationShowTraditionalClef, isPedagogicalProject, pedagogicalAudioBpm, pedagogicalAudioPlaybackRate, pedagogicalSyncMode, pedagogicalSyncStartBeat, pedagogicalSyncStartTimeSec, pedagogicalSyncEndBeat, pedagogicalSyncEndTimeSec, pedagogicalRhythmStep, pedagogicalPlayheadStyle, pedagogicalPlayheadEmoji, pedagogicalPlayheadEmojiSize, cursorLineStrokeWidth, pedagogicalPlayheadMovement, chords, textBoxes, documentFontFamily, lyricFontFamily, lyricBold, lyricItalic, lyricUnderline, lyricWeight, titleFontSize, authorFontSize, titleFontFamily, authorFontFamily, titleColor, authorColor, titleBold, titleItalic, titleUnderline, titleWeight, authorBold, authorItalic, authorUnderline, authorWeight, titleAlignment, authorAlignment, staffRowAlignment, pageDesignDataUrl, pageDesignOpacity, pageDesignFit, pageDesignPositionX, pageDesignPositionY, pageDesignCrop, timeSignatureOffset, lyricLineIndex, lyricLineYOffset, lyricFontSize, noteheadShape, noteheadEmoji]);
 
   const saveToStorageSync = useCallback(() => {
     try {
@@ -4622,6 +4627,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       if (data.pageOrientation === 'portrait' || data.pageOrientation === 'landscape') setPageOrientation(data.pageOrientation);
       if (data.paperSize === 'a3' || data.paperSize === 'a4' || data.paperSize === 'a5') setPaperSize(data.paperSize);
       if (data.layoutMeasuresPerLine != null) setLayoutMeasuresPerLine(data.layoutMeasuresPerLine);
+      if (data.layoutStrictMeasuresPerLine != null) setLayoutStrictMeasuresPerLine(!!data.layoutStrictMeasuresPerLine);
       if (Array.isArray(data.layoutLineBreakBefore)) setLayoutLineBreakBefore(data.layoutLineBreakBefore);
       if (Array.isArray(data.layoutPageBreakBefore)) setLayoutPageBreakBefore(data.layoutPageBreakBefore);
       if (data.layoutExtraPages != null) setLayoutExtraPages(Math.max(0, Math.round(Number(data.layoutExtraPages) || 0)));
@@ -4642,6 +4648,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       }
       if (data.viewMode === 'score' || data.viewMode === 'part') setViewMode(data.viewMode);
       if (data.partLayoutMeasuresPerLine != null) setPartLayoutMeasuresPerLine(data.partLayoutMeasuresPerLine);
+      if (data.partLayoutStrictMeasuresPerLine != null) setPartLayoutStrictMeasuresPerLine(!!data.partLayoutStrictMeasuresPerLine);
       if (Array.isArray(data.partLayoutLineBreakBefore)) setPartLayoutLineBreakBefore(data.partLayoutLineBreakBefore);
       if (Array.isArray(data.partLayoutPageBreakBefore)) setPartLayoutPageBreakBefore(data.partLayoutPageBreakBefore);
       if (data.partLayoutExtraPages != null) setPartLayoutExtraPages(Math.max(0, Math.round(Number(data.partLayoutExtraPages) || 0)));
@@ -4771,6 +4778,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     delete p.visibleStaves;
     delete p.viewMode;
     delete p.partLayoutMeasuresPerLine;
+    delete p.partLayoutStrictMeasuresPerLine;
     delete p.partLayoutLineBreakBefore;
     delete p.partLayoutPageBreakBefore;
     delete p.showPageNavigator;
@@ -4912,6 +4920,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         if (data.pageOrientation === 'portrait' || data.pageOrientation === 'landscape') setPageOrientation(data.pageOrientation);
         if (data.paperSize === 'a3' || data.paperSize === 'a4' || data.paperSize === 'a5') setPaperSize(data.paperSize);
         if (data.layoutMeasuresPerLine != null) setLayoutMeasuresPerLine(data.layoutMeasuresPerLine);
+        if (data.layoutStrictMeasuresPerLine != null) setLayoutStrictMeasuresPerLine(!!data.layoutStrictMeasuresPerLine);
         if (Array.isArray(data.layoutLineBreakBefore)) setLayoutLineBreakBefore(data.layoutLineBreakBefore);
         if (Array.isArray(data.layoutPageBreakBefore)) setLayoutPageBreakBefore(data.layoutPageBreakBefore);
         if (data.layoutExtraPages != null) setLayoutExtraPages(Math.max(0, Math.round(Number(data.layoutExtraPages) || 0)));
@@ -4932,6 +4941,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         }
         if (data.viewMode === 'score' || data.viewMode === 'part') setViewMode(data.viewMode);
         if (data.partLayoutMeasuresPerLine != null) setPartLayoutMeasuresPerLine(data.partLayoutMeasuresPerLine);
+        if (data.partLayoutStrictMeasuresPerLine != null) setPartLayoutStrictMeasuresPerLine(!!data.partLayoutStrictMeasuresPerLine);
         if (Array.isArray(data.partLayoutLineBreakBefore)) setPartLayoutLineBreakBefore(data.partLayoutLineBreakBefore);
         if (Array.isArray(data.partLayoutPageBreakBefore)) setPartLayoutPageBreakBefore(data.partLayoutPageBreakBefore);
         if (data.partLayoutExtraPages != null) setPartLayoutExtraPages(Math.max(0, Math.round(Number(data.partLayoutExtraPages) || 0)));
@@ -5961,6 +5971,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       pageOrientation,
       paperSize,
       layoutMeasuresPerLine,
+      layoutStrictMeasuresPerLine,
       layoutLineBreakBefore,
       layoutPageBreakBefore,
       layoutExtraPages,
@@ -5971,6 +5982,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       layoutConnectedBarlines,
       layoutGlobalSpacingMultiplier,
       partLayoutMeasuresPerLine,
+      partLayoutStrictMeasuresPerLine,
       partLayoutLineBreakBefore,
       partLayoutPageBreakBefore,
       partLayoutExtraPages,
@@ -5985,6 +5997,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     pageOrientation,
     paperSize,
     layoutMeasuresPerLine,
+    layoutStrictMeasuresPerLine,
     layoutLineBreakBefore,
     layoutPageBreakBefore,
     layoutExtraPages,
@@ -5995,6 +6008,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     layoutConnectedBarlines,
     layoutGlobalSpacingMultiplier,
     partLayoutMeasuresPerLine,
+    partLayoutStrictMeasuresPerLine,
     partLayoutLineBreakBefore,
     partLayoutPageBreakBefore,
     partLayoutExtraPages,
@@ -6031,6 +6045,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
           if (layout.pageOrientation === 'portrait' || layout.pageOrientation === 'landscape') setPageOrientation(layout.pageOrientation);
           if (layout.paperSize === 'a4' || layout.paperSize === 'a3' || layout.paperSize === 'a5') setPaperSize(layout.paperSize);
           if (layout.layoutMeasuresPerLine != null) setLayoutMeasuresPerLine(layout.layoutMeasuresPerLine);
+          if (layout.layoutStrictMeasuresPerLine != null) setLayoutStrictMeasuresPerLine(!!layout.layoutStrictMeasuresPerLine);
           if (Array.isArray(layout.layoutLineBreakBefore)) setLayoutLineBreakBefore(layout.layoutLineBreakBefore);
           if (Array.isArray(layout.layoutPageBreakBefore)) setLayoutPageBreakBefore(layout.layoutPageBreakBefore);
           if (layout.layoutExtraPages != null) setLayoutExtraPages(Math.max(0, Math.round(Number(layout.layoutExtraPages) || 0)));
@@ -6041,6 +6056,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
           if (layout.layoutConnectedBarlines != null) setLayoutConnectedBarlines(!!layout.layoutConnectedBarlines);
           if (layout.layoutGlobalSpacingMultiplier != null) setLayoutGlobalSpacingMultiplier(Math.max(0.5, Math.min(2, Number(layout.layoutGlobalSpacingMultiplier) || 1)));
           if (layout.partLayoutMeasuresPerLine != null) setPartLayoutMeasuresPerLine(layout.partLayoutMeasuresPerLine);
+          if (layout.partLayoutStrictMeasuresPerLine != null) setPartLayoutStrictMeasuresPerLine(!!layout.partLayoutStrictMeasuresPerLine);
           if (Array.isArray(layout.partLayoutLineBreakBefore)) setPartLayoutLineBreakBefore(layout.partLayoutLineBreakBefore);
           if (Array.isArray(layout.partLayoutPageBreakBefore)) setPartLayoutPageBreakBefore(layout.partLayoutPageBreakBefore);
           if (layout.partLayoutExtraPages != null) setPartLayoutExtraPages(Math.max(0, Math.round(Number(layout.partLayoutExtraPages) || 0)));
@@ -6068,6 +6084,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         if (layout.pageOrientation === 'portrait' || layout.pageOrientation === 'landscape') setPageOrientation(layout.pageOrientation);
         if (layout.paperSize === 'a4' || layout.paperSize === 'a3' || layout.paperSize === 'a5') setPaperSize(layout.paperSize);
         if (layout.layoutMeasuresPerLine != null) setLayoutMeasuresPerLine(layout.layoutMeasuresPerLine);
+        if (layout.layoutStrictMeasuresPerLine != null) setLayoutStrictMeasuresPerLine(!!layout.layoutStrictMeasuresPerLine);
         if (Array.isArray(layout.layoutLineBreakBefore)) setLayoutLineBreakBefore(layout.layoutLineBreakBefore);
         if (Array.isArray(layout.layoutPageBreakBefore)) setLayoutPageBreakBefore(layout.layoutPageBreakBefore);
         if (layout.layoutExtraPages != null) setLayoutExtraPages(Math.max(0, Math.round(Number(layout.layoutExtraPages) || 0)));
@@ -6078,6 +6095,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         if (layout.layoutConnectedBarlines != null) setLayoutConnectedBarlines(!!layout.layoutConnectedBarlines);
         if (layout.layoutGlobalSpacingMultiplier != null) setLayoutGlobalSpacingMultiplier(Math.max(0.5, Math.min(2, Number(layout.layoutGlobalSpacingMultiplier) || 1)));
         if (layout.partLayoutMeasuresPerLine != null) setPartLayoutMeasuresPerLine(layout.partLayoutMeasuresPerLine);
+        if (layout.partLayoutStrictMeasuresPerLine != null) setPartLayoutStrictMeasuresPerLine(!!layout.partLayoutStrictMeasuresPerLine);
         if (Array.isArray(layout.partLayoutLineBreakBefore)) setPartLayoutLineBreakBefore(layout.partLayoutLineBreakBefore);
         if (Array.isArray(layout.partLayoutPageBreakBefore)) setPartLayoutPageBreakBefore(layout.partLayoutPageBreakBefore);
         if (layout.partLayoutExtraPages != null) setPartLayoutExtraPages(Math.max(0, Math.round(Number(layout.partLayoutExtraPages) || 0)));
@@ -9831,6 +9849,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   );
   // Praeguse vaate paigutus: partituur või instrumendi part (instrumentide paigutus ei mõjuta partituuri)
   const effectiveLayoutMeasuresPerLine = viewMode === 'score' ? layoutMeasuresPerLine : partLayoutMeasuresPerLine;
+  const effectiveLayoutStrictMeasuresPerLine = viewMode === 'score' ? layoutStrictMeasuresPerLine : partLayoutStrictMeasuresPerLine;
   const effectiveLayoutLineBreakBefore = viewMode === 'score' ? layoutLineBreakBefore : partLayoutLineBreakBefore;
   const effectiveLayoutPageBreakBefore = viewMode === 'score' ? layoutPageBreakBefore : partLayoutPageBreakBefore;
   const effectiveLayoutExtraPages = viewMode === 'score' ? layoutExtraPages : partLayoutExtraPages;
@@ -9982,14 +10001,14 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         + ((visibleStaffCountForLayout - 1) * layoutPartsGap);
       // Figurenotes multistaff rule: one measure's staves (e.g. piano RH+LH + extra instruments)
       // must stay inside the same system; only full system jumps to the next row.
-      const data = { measures, timeSignature, pixelsPerBeat, staffSpacing: figureSystemCoreHeight + layoutSystemGap, globalSpacingMultiplier: layoutGlobalSpacingMultiplier, boxesPerRow: effectiveLayoutMeasuresPerLine || 4, pageWidth: effectiveLayoutPageWidth, pageHeight: a4PageHeightPx, lineBreakBefore: effectiveLayoutLineBreakBefore, pageBreakBefore: effectiveLayoutPageBreakBefore, figurenotesSize: effectiveFigurenotesSize };
+      const data = { measures, timeSignature, pixelsPerBeat, staffSpacing: figureSystemCoreHeight + layoutSystemGap, globalSpacingMultiplier: layoutGlobalSpacingMultiplier, boxesPerRow: effectiveLayoutMeasuresPerLine || 4, pageWidth: effectiveLayoutPageWidth, pageHeight: a4PageHeightPx, lineBreakBefore: effectiveLayoutLineBreakBefore, pageBreakBefore: effectiveLayoutPageBreakBefore, figurenotesSize: effectiveFigurenotesSize, excludePickupFromMeasureCount: pickupEnabled, pickupMeasureIndex: 0, enforceMeasuresPerLine: effectiveLayoutStrictMeasuresPerLine };
       const raw = calculateLayout('figure', pageOrientation === 'landscape' ? 'landscape' : 'portrait', data);
       return raw.map((s, i) => ({ ...s, yOffset: s.yOffset + (systemYOffsets[i] ?? 0) }));
     }
-    const opts = { measuresPerLine: effectiveLayoutMeasuresPerLine, lineBreakBefore: effectiveLayoutLineBreakBefore, pageBreakBefore: effectiveLayoutPageBreakBefore, systemGap: effectiveTraditionalSystemGap, staffCount: staves.length, staffHeight: traditionalLayoutStaffHeight, measureStretchFactors, globalSpacingMultiplier: layoutGlobalSpacingMultiplier, pageHeight: a4PageHeightPx };
+    const opts = { measuresPerLine: effectiveLayoutMeasuresPerLine, lineBreakBefore: effectiveLayoutLineBreakBefore, pageBreakBefore: effectiveLayoutPageBreakBefore, systemGap: effectiveTraditionalSystemGap, staffCount: staves.length, staffHeight: traditionalLayoutStaffHeight, measureStretchFactors, globalSpacingMultiplier: layoutGlobalSpacingMultiplier, pageHeight: a4PageHeightPx, excludePickupFromMeasureCount: pickupEnabled, pickupMeasureIndex: 0, enforceMeasuresPerLine: effectiveLayoutStrictMeasuresPerLine };
     const raw = computeLayout(measures, timeSignature, pixelsPerBeat, effectiveLayoutPageWidth, opts);
     return raw.map((s, i) => ({ ...s, yOffset: s.yOffset + (systemYOffsets[i] ?? 0) }));
-  }, [notationStyle, measures, timeSignature, pixelsPerBeat, effectiveLayoutPageWidth, pageOrientation, effectiveLayoutMeasuresPerLine, effectiveLayoutLineBreakBefore, effectiveLayoutPageBreakBefore, effectiveTraditionalSystemGap, layoutGlobalSpacingMultiplier, staves.length, measureStretchFactors, systemYOffsets, a4PageHeightPx, figurenotesTotalRowHeight, figurenotesChordBlocks, layoutPartsGap, visibleStaffCountForLayout, traditionalLayoutStaffHeight, staffLineSpanPx, figurenotesSize]);
+  }, [notationStyle, measures, timeSignature, pixelsPerBeat, effectiveLayoutPageWidth, pageOrientation, effectiveLayoutMeasuresPerLine, effectiveLayoutStrictMeasuresPerLine, effectiveLayoutLineBreakBefore, effectiveLayoutPageBreakBefore, effectiveTraditionalSystemGap, layoutGlobalSpacingMultiplier, staves.length, measureStretchFactors, systemYOffsets, a4PageHeightPx, figurenotesTotalRowHeight, figurenotesChordBlocks, layoutPartsGap, visibleStaffCountForLayout, traditionalLayoutStaffHeight, staffLineSpanPx, figurenotesSize, pickupEnabled]);
   useEffect(() => { systemsForScoreRef.current = systemsForScore; }, [systemsForScore]);
   // Nutikas fookus: ainult valitud read; vähem ridu = suurem rea kõrgus (HEV/solfedž)
   const visibleStaffList = useMemo(() => {
@@ -10035,7 +10054,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     const layoutStaffCount = staves.length || 1;
     if (notationStyle === 'FIGURENOTES') {
       const figureSystemCoreHeight = (nVis * figurenotesTotalRowHeight) + ((nVis - 1) * layoutPartsGap);
-      const data = { measures, timeSignature, pixelsPerBeat, staffSpacing: figureSystemCoreHeight + layoutSystemGap, globalSpacingMultiplier: layoutGlobalSpacingMultiplier, boxesPerRow: effectiveLayoutMeasuresPerLine || 4, pageWidth: effectiveLayoutPageWidth, pageHeight: a4PageHeightPx, lineBreakBefore: effectiveLayoutLineBreakBefore, pageBreakBefore: effectiveLayoutPageBreakBefore, figurenotesSize: effectiveFigurenotesSize };
+      const data = { measures, timeSignature, pixelsPerBeat, staffSpacing: figureSystemCoreHeight + layoutSystemGap, globalSpacingMultiplier: layoutGlobalSpacingMultiplier, boxesPerRow: effectiveLayoutMeasuresPerLine || 4, pageWidth: effectiveLayoutPageWidth, pageHeight: a4PageHeightPx, lineBreakBefore: effectiveLayoutLineBreakBefore, pageBreakBefore: effectiveLayoutPageBreakBefore, figurenotesSize: effectiveFigurenotesSize, enforceMeasuresPerLine: effectiveLayoutStrictMeasuresPerLine, excludePickupFromMeasureCount: pickupEnabled, pickupMeasureIndex: 0 };
       const sys = calculateLayout('figure', pageOrientation === 'landscape' ? 'landscape' : 'portrait', data);
       const lastY = sys.length > 0 ? sys[sys.length - 1].yOffset + (systemYOffsets[sys.length - 1] ?? 0) : 0;
       const maxBaseYOffset = entries.reduce((maxY, { staffIdx, visibleIndex }) => {
@@ -10056,12 +10075,15 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       measureStretchFactors,
       globalSpacingMultiplier: layoutGlobalSpacingMultiplier,
       pageHeight: a4PageHeightPx,
+      enforceMeasuresPerLine: effectiveLayoutStrictMeasuresPerLine,
+      excludePickupFromMeasureCount: pickupEnabled,
+      pickupMeasureIndex: 0,
     };
     const sys = computeLayout(measures, timeSignature, pixelsPerBeat, effectiveLayoutPageWidth, opts);
     const lastY = sys.length > 0 ? sys[sys.length - 1].yOffset + (systemYOffsets[sys.length - 1] ?? 0) : 0;
     const perStaffCore = sys.length > 0 ? lastY + traditionalLayoutStaffHeight + 40 : traditionalLayoutStaffHeight + 40;
     return scoreHeadBlockReservePx + nVis * perStaffCore + sumBaseYOffset;
-  }, [notationStyle, notationMode, visibleStaffList, staves, effectiveStaffHeight, traditionalLayoutStaffHeight, layoutPartsGap, perStaffRowStep, staffYOffsets, measures, timeSignature, pixelsPerBeat, effectiveLayoutPageWidth, pageOrientation, effectiveLayoutMeasuresPerLine, effectiveLayoutLineBreakBefore, effectiveLayoutPageBreakBefore, effectiveTraditionalSystemGap, layoutGlobalSpacingMultiplier, measureStretchFactors, systemYOffsets, a4PageHeightPx, figurenotesRowHeight, figurenotesTotalRowHeight, figurenotesSize, figurenotesChordBlocks, figurenotesChordLineGap, figurenotesChordLineHeight, scoreHeadBlockReservePx, useManualStaffOffsets]);
+  }, [notationStyle, notationMode, visibleStaffList, staves, effectiveStaffHeight, traditionalLayoutStaffHeight, layoutPartsGap, perStaffRowStep, staffYOffsets, measures, timeSignature, pixelsPerBeat, effectiveLayoutPageWidth, pageOrientation, effectiveLayoutMeasuresPerLine, effectiveLayoutStrictMeasuresPerLine, effectiveLayoutLineBreakBefore, effectiveLayoutPageBreakBefore, effectiveTraditionalSystemGap, layoutGlobalSpacingMultiplier, measureStretchFactors, systemYOffsets, a4PageHeightPx, figurenotesRowHeight, figurenotesTotalRowHeight, figurenotesSize, figurenotesChordBlocks, figurenotesChordLineGap, figurenotesChordLineHeight, scoreHeadBlockReservePx, useManualStaffOffsets, pickupEnabled]);
   useEffect(() => {
     exportContentBoundsRef.current = { width: basePageWidth, height: logicalContentHeight };
   }, [basePageWidth, logicalContentHeight]);
@@ -12032,6 +12054,20 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                     </button>
                   ))}
                 </div>
+                <label className="mt-2 inline-flex items-center gap-2 text-xs text-amber-800">
+                  <input
+                    type="checkbox"
+                    checked={!effectiveLayoutStrictMeasuresPerLine}
+                    onChange={(e) => {
+                      saveToHistory(notes);
+                      dirtyRef.current = true;
+                      const allowFlexible = !!e.target.checked;
+                      (viewMode === 'score' ? setLayoutStrictMeasuresPerLine : setPartLayoutStrictMeasuresPerLine)(!allowFlexible);
+                    }}
+                    className="rounded border-amber-300 text-amber-600 focus:ring-amber-500"
+                  />
+                  {t('layout.allowFlexibleMeasureCount')}
+                </label>
               </div>
               {notationCtx && (
                 <div>
@@ -14153,6 +14189,20 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                       <div className="flex flex-wrap gap-1 mb-3">{(pageOrientation === 'landscape' ? [2, 4, 6, 8, 12, 16] : [2, 3, 4, 6, 8]).map((n) => (
                         <button key={n} type="button" onClick={() => { saveToHistory(notes); dirtyRef.current = true; (viewMode === 'score' ? setLayoutMeasuresPerLine : setPartLayoutMeasuresPerLine)(n); }} className={`px-2 py-1 rounded text-sm font-medium ${effectiveLayoutMeasuresPerLine === n ? 'bg-amber-600 text-white' : 'bg-amber-100 text-amber-800 hover:bg-amber-200'}`}>{n}</button>
                       ))}</div>
+                      <label className="mb-3 inline-flex items-center gap-2 text-xs text-amber-800">
+                        <input
+                          type="checkbox"
+                          checked={!effectiveLayoutStrictMeasuresPerLine}
+                          onChange={(e) => {
+                            saveToHistory(notes);
+                            dirtyRef.current = true;
+                            const allowFlexible = !!e.target.checked;
+                            (viewMode === 'score' ? setLayoutStrictMeasuresPerLine : setPartLayoutStrictMeasuresPerLine)(!allowFlexible);
+                          }}
+                          className="rounded border-amber-300 text-amber-600 focus:ring-amber-500"
+                        />
+                        {t('layout.allowFlexibleMeasureCount')}
+                      </label>
                       <div className="mb-3">
                         <h4 className="text-xs font-bold text-amber-900 uppercase mb-1">{t('layout.partsGap')} (mm/cm/px)</h4>
                         <p className="text-xs text-amber-700 mb-1">{t('layout.partsGapHint')}</p>
@@ -14374,7 +14424,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                         <button type="button" title={t('layout.compressMeasureShortcut')} onClick={() => { saveToHistory(notes); dirtyRef.current = true; setMeasureStretchFactors((prev) => { const next = [...(prev || [])]; while (next.length <= cursorMeasureIndex) next.push(1); next[cursorMeasureIndex] = Math.max(0.25, (next[cursorMeasureIndex] ?? 1) - 0.1); return next; }); }} className="py-1.5 px-2 rounded bg-slate-100 text-slate-800 hover:bg-slate-200 font-medium">{t('layout.compressMeasure')}</button>
                         <button type="button" title={t('layout.stretchMeasureShortcut')} onClick={() => { saveToHistory(notes); dirtyRef.current = true; setMeasureStretchFactors((prev) => { const next = [...(prev || [])]; while (next.length <= cursorMeasureIndex) next.push(1); next[cursorMeasureIndex] = Math.min(4, (next[cursorMeasureIndex] ?? 1) + 0.1); return next; }); }} className="py-1.5 px-2 rounded bg-slate-100 text-slate-800 hover:bg-slate-200 font-medium">{t('layout.stretchMeasure')}</button>
                       </div>
-                      <button type="button" onClick={() => { saveToHistory(notes); dirtyRef.current = true; (viewMode === 'score' ? setLayoutLineBreakBefore : setPartLayoutLineBreakBefore)([]); (viewMode === 'score' ? setLayoutPageBreakBefore : setPartLayoutPageBreakBefore)([]); (viewMode === 'score' ? setLayoutMeasuresPerLine : setPartLayoutMeasuresPerLine)(0); (viewMode === 'score' ? setLayoutExtraPages : setPartLayoutExtraPages)(0); setMeasureStretchFactors([]); setSystemYOffsets([]); setSystemXOffsets([]); setLayoutSystemGap(15); setLayoutPartsGap(10); setLayoutConnectedBarlines(true); setLayoutGlobalSpacingMultiplier(1); pixelsPerBeatLinkedToFigureSizeRef.current = true; setPixelsPerBeat(85); setFigurenotesSize(85); }} className="mt-3 w-full py-2 px-3 rounded-lg bg-slate-100 text-slate-800 text-sm font-semibold hover:bg-slate-200 border border-slate-300" title={t('layout.resetLayoutHint')}>{t('layout.resetLayout')}</button>
+                      <button type="button" onClick={() => { saveToHistory(notes); dirtyRef.current = true; (viewMode === 'score' ? setLayoutLineBreakBefore : setPartLayoutLineBreakBefore)([]); (viewMode === 'score' ? setLayoutPageBreakBefore : setPartLayoutPageBreakBefore)([]); (viewMode === 'score' ? setLayoutMeasuresPerLine : setPartLayoutMeasuresPerLine)(0); (viewMode === 'score' ? setLayoutStrictMeasuresPerLine : setPartLayoutStrictMeasuresPerLine)(true); (viewMode === 'score' ? setLayoutExtraPages : setPartLayoutExtraPages)(0); setMeasureStretchFactors([]); setSystemYOffsets([]); setSystemXOffsets([]); setLayoutSystemGap(15); setLayoutPartsGap(10); setLayoutConnectedBarlines(true); setLayoutGlobalSpacingMultiplier(1); pixelsPerBeatLinkedToFigureSizeRef.current = true; setPixelsPerBeat(85); setFigurenotesSize(85); }} className="mt-3 w-full py-2 px-3 rounded-lg bg-slate-100 text-slate-800 text-sm font-semibold hover:bg-slate-200 border border-slate-300" title={t('layout.resetLayoutHint')}>{t('layout.resetLayout')}</button>
                     </div>
                     {pageDesignDataUrl && (
                       <>
