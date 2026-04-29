@@ -30,6 +30,11 @@ import * as authStorage from './services/authStorage';
 import { IntroCrossfadeProvider } from './context/IntroCrossfadeContext';
 import { SHOW_SUPPORT_AND_PRICING_UI } from './config/productFlags';
 
+const CANONICAL_PRODUCTION_ORIGIN = 'https://noodimeister.ee';
+const DEPRECATED_PRODUCTION_HOSTS = new Set([
+  'noodi-meister-vol1.vercel.app',
+]);
+
 /** Esc vajutamine logib sisselogitud kasutaja välja ja suunab avalehele. */
 function EscapeLogoutHandler() {
   const navigate = useNavigate();
@@ -222,6 +227,17 @@ function EnvBanner() {
 function AppRoutes() {
   const location = useLocation();
   const pathname = location.pathname || '/';
+
+  // Kui kasutaja avab aegunud deploy-linki (vale Verceli projekt), suuna alati ametlikule domeenile.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const host = String(window.location.hostname || '').toLowerCase();
+    if (!DEPRECATED_PRODUCTION_HOSTS.has(host)) return;
+    const target = new URL(window.location.pathname + window.location.search + window.location.hash, CANONICAL_PRODUCTION_ORIGIN).toString();
+    if (window.location.href !== target) {
+      window.location.replace(target);
+    }
+  }, []);
 
   // Pärast edukat laadimist võta chunk-retry lipu maha, et järgmine deploy võiks uuesti reloadida
   useEffect(() => {
