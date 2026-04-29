@@ -4,7 +4,7 @@
  * Abijooned genereeritakse, kui JO-võti või nootid väljuvad 5-liini süsteemist.
  * Paigutuse tööriistad (Staff Spacer, taktide laiendamine { }) rakenduvad siin.
  */
-import React, { useState, useEffect, useRef, Fragment } from 'react';
+import React, { useState, useEffect, useRef, Fragment, useCallback } from 'react';
 import { JoClefSymbol, TrebleClefSymbol, BassClefSymbol, getJoClefPixelWidth, getJoClefJoStripeBounds } from '../components/ClefSymbols';
 import { RhythmSyllableLabel } from '../components/RhythmSyllableLabel';
 import { getJoName } from '../notation/joNames';
@@ -521,6 +521,7 @@ export function TraditionalNotationView({
   translateLabel,
   showBarNumbers = true,
   barNumberSize = 11,
+  voltaNumberSize = 16,
   showRhythmSyllables = false,
   showAllNoteLabels = false,
   enableEmojiOverlays = true,
@@ -584,6 +585,7 @@ export function TraditionalNotationView({
   /** (endGlobalNoteIndex) => void — klõps valitud (sinisel) legato kaarel: vali lõppnoot. */
   onLegatoPathClick,
   onMeasureStartXChange,
+  pickupEnabled = false,
 }) {
   const spacing = staffSpaceProp ?? STAFF_SPACE;
   const isVabanotatsioon = notationMode === 'vabanotatsioon';
@@ -602,6 +604,12 @@ export function TraditionalNotationView({
   const tinWhistleFingeringScale = typeof tinWhistleLinkedFingeringScale === 'number' && Number.isFinite(tinWhistleLinkedFingeringScale) && tinWhistleLinkedFingeringScale > 0
     ? Math.min(20, Math.max(0.35, tinWhistleLinkedFingeringScale))
     : 1;
+  const getSystemBarNumber = useCallback((system) => {
+    const firstMeasureIndex = system?.measureIndices?.[0];
+    if (!Number.isInteger(firstMeasureIndex)) return null;
+    if (pickupEnabled && firstMeasureIndex === 0) return null;
+    return firstMeasureIndex + 1 - (pickupEnabled ? 1 : 0);
+  }, [pickupEnabled]);
   const instrumentRangeMidi = React.useMemo(() => {
     return resolveInstrumentRangeMidi(instrument, keySignature, instrumentRange);
   }, [instrument, keySignature, instrumentRange]);
@@ -1042,17 +1050,43 @@ export function TraditionalNotationView({
                     (() => {
                       if (multiStaff) {
                         const clefY = instClef === 'treble' ? staffY + trebleGLine : instClef === 'bass' ? staffY + bassFLine : instClef === 'tenor' ? staffY + cClefTenorLine : staffY + cClefAltoLine;
-                        return (
-                          <StaffClefSymbol
-                            key={`clef-${sys.systemIndex}-${staffIndex}-${instClef}`}
-                            x={clefX}
-                            y={clefY}
-                            height={clefFontSize}
-                            clefType={instClef}
-                            fill="#000"
-                            staffSpace={spacing}
-                          />
-                        );
+                        const symbols = [
+                          (
+                            <StaffClefSymbol
+                              key={`clef-${sys.systemIndex}-${staffIndex}-${instClef}`}
+                              x={clefX}
+                              y={clefY}
+                              height={clefFontSize}
+                              clefType={instClef}
+                              fill="#000"
+                              staffSpace={spacing}
+                            />
+                          ),
+                        ];
+                        if (showTraditionalKeySignature && keySignatureInfo.count > 0 && keySignatureInfo.kind) {
+                          const keySigStartX = clefX + LAYOUT.CLEF_WIDTH + TIME_SIG_SPACING.KEY_SIG_FIRST_CENTER_OFFSET_PX;
+                          const keySigGlyph =
+                            keySignatureInfo.kind === 'flat' ? SMUFL_GLYPH.accidentalFlat : SMUFL_GLYPH.accidentalSharp;
+                          const ksFontSize = getGlyphFontSize(spacing);
+                          for (let i = 0; i < keySignatureInfo.count; i += 1) {
+                            const staffPos = getKeySignatureStaffPosition(instClef, keySignatureInfo.kind, i);
+                            const glyphY =
+                              staffY +
+                              getYFromStaffPosition(staffPos, centerY, staffLines, spacing) +
+                              getKeySignatureVerticalDyPx(instClef, keySignatureInfo.kind, i, spacing);
+                            symbols.push(
+                              <SmuflGlyph
+                                key={`ks-trad-${sys.systemIndex}-${staffIndex}-${i}`}
+                                x={keySigStartX + i * keySigStepPx}
+                                y={glyphY}
+                                glyph={keySigGlyph}
+                                fontSize={ksFontSize}
+                                fill="#1a1a1a"
+                              />
+                            );
+                          }
+                        }
+                        return <g>{symbols}</g>;
                       }
                       let g = [];
                       if (isVabanotatsioon) {
@@ -1164,7 +1198,10 @@ export function TraditionalNotationView({
                   )}
 
                   {/* Taktinumber rea alguses: clef'i ees ja ülemise noodijoone kohal */}
-                  {showBarNumbers && staffIndex === 0 && sys.measureIndices.length > 0 && (
+                  {showBarNumbers && staffIndex === 0 && sys.measureIndices.length > 0 && (() => {
+                    const barNumber = getSystemBarNumber(sys);
+                    if (barNumber == null) return null;
+                    return (
                     <text
                       x={Math.max(6, clefX - 8)}
                       y={staffY + firstLineY - 21}
@@ -1175,9 +1212,10 @@ export function TraditionalNotationView({
                       dominantBaseline="hanging"
                       fontFamily="sans-serif"
                     >
-                      {sys.measureIndices[0] + 1}
+                      {barNumber}
                     </text>
-                  )}
+                    );
+                  })()}
 
                   {/* Time signature only on first system (first bar); after clef and key marks */}
                   {sys.systemIndex === 0 && staffIndex === 0 && (
@@ -1593,6 +1631,20 @@ export function TraditionalNotationView({
                       if (measure.volta1 || measure.volta2) {
                         const key = measure.volta2 ? 'volta2' : 'volta1';
                         const num = measure.volta2 ? '2' : '1';
+                        const voltaFontPx = Math.max(10, Number(voltaNumberSize) || 16);
+                        const strokeW = Math.max(1, spacing * 0.08);
+                        const boxInnerPadX = Math.max(spacing * 0.16, voltaFontPx * 0.16);
+                        const boxInnerPadTop = Math.max(spacing * 0.14, voltaFontPx * 0.1);
+                        const boxInnerPadBottom = Math.max(spacing * 0.16, voltaFontPx * 0.14);
+                        const boxHeight = Math.max(spacing * 1.18, voltaFontPx + boxInnerPadTop + boxInnerPadBottom);
+                        const boxTopY = placement.voltaTextY - (voltaFontPx + boxInnerPadTop);
+                        const boxBottomY = boxTopY + boxHeight;
+                        const bracketStartX = measureX + spacing * 0.08;
+                        const bracketEndX = measureX + measureWidth - spacing * 0.08;
+                        const labelX = bracketStartX + boxInnerPadX;
+                        const labelY = boxTopY + boxInnerPadTop + voltaFontPx;
+                        const overlayPadY = Math.max(spacing * 0.18, voltaFontPx * 0.18);
+                        const isRightOpen = key === 'volta2';
                         parts.push(
                           <g
                             key="volta"
@@ -1600,11 +1652,26 @@ export function TraditionalNotationView({
                             style={{ cursor: onSelectRepeatMark ? 'pointer' : undefined }}
                             pointerEvents={onSelectRepeatMark ? 'auto' : 'none'}
                           >
+                            {/* Overlay protection: keep volta box readable above staff graphics. */}
+                            <rect
+                              x={measureX - spacing * 0.1}
+                              y={boxTopY - overlayPadY}
+                              width={Math.max(spacing * 2.2, measureWidth + spacing * 0.2)}
+                              height={(boxBottomY - boxTopY) + overlayPadY * 2}
+                              fill="#ffffff"
+                              opacity="0.92"
+                              pointerEvents="none"
+                            />
                             {isRepeatMarkSelected(measureIdx, key) && (
-                              <rect x={measureX - 2} y={placement.voltaTextY - spacing * 0.8} width={placement.hitW + 2} height={placement.hitH} fill="#93c5fd" opacity="0.32" rx={3} />
+                              <rect x={measureX - 2} y={boxTopY - overlayPadY} width={Math.max(placement.hitW + 2, measureWidth + 4)} height={Math.max(placement.hitH, boxBottomY - boxTopY) + overlayPadY * 2} fill="#93c5fd" opacity="0.32" rx={3} />
                             )}
-                            <text x={placement.voltaTextX} y={placement.voltaTextY} textAnchor="start" fontSize={Math.round(spacing * 1.1)} fontWeight="bold" fill="#1a1a1a" fontFamily={TEXT_FONT_FAMILY}>{num}.</text>
-                            {onSelectRepeatMark && <rect x={measureX} y={placement.voltaTextY - spacing * 0.8} width={placement.hitW} height={placement.hitH} fill="transparent" />}
+                            <line x1={bracketStartX} y1={boxTopY} x2={bracketEndX} y2={boxTopY} stroke="#1a1a1a" strokeWidth={strokeW} />
+                            <line x1={bracketStartX} y1={boxTopY} x2={bracketStartX} y2={boxBottomY} stroke="#1a1a1a" strokeWidth={strokeW} />
+                            {!isRightOpen && (
+                              <line x1={bracketEndX} y1={boxTopY} x2={bracketEndX} y2={boxBottomY} stroke="#1a1a1a" strokeWidth={strokeW} />
+                            )}
+                            <text x={labelX} y={labelY} textAnchor="start" fontSize={voltaFontPx} fontWeight="bold" fill="#1a1a1a" fontFamily={TEXT_FONT_FAMILY}>{num}.</text>
+                            {onSelectRepeatMark && <rect x={measureX} y={boxTopY - overlayPadY} width={Math.max(placement.hitW, measureWidth)} height={Math.max(placement.hitH, boxBottomY - boxTopY) + overlayPadY * 2} fill="transparent" />}
                           </g>
                         );
                       }
@@ -1690,11 +1757,11 @@ export function TraditionalNotationView({
                       const canDragPitch = noteInputMode && !note.isRest && typeof onNotePitchChange === 'function' && typeof getPitchFromY === 'function' && !canHandDragNotes;
                       const canDragBeat = canHandDragNotes && typeof onNoteBeatChange === 'function';
                       const noteGroupProps = {
-                        onClick: (e) => { e.stopPropagation(); onNoteClick?.(globalNoteIndex); },
+                        onClick: (e) => { e.stopPropagation(); onNoteClick?.(globalNoteIndex, e); },
                         onMouseDown: (e) => {
-                          if (typeof onNoteMouseDown === 'function' && e.shiftKey) {
+                          if (typeof onNoteMouseDown === 'function') {
                             onNoteMouseDown(globalNoteIndex, e);
-                            return;
+                            if (e.defaultPrevented) return;
                           }
                           if (canDragBeat && e.button === 0) {
                             e.stopPropagation();
@@ -1921,7 +1988,26 @@ export function TraditionalNotationView({
                             const fs = Math.max(1, Number(lyricFontSize)) || 12;
                             const lyricLineY = staffY + lastLineY + fs * (1.5 + lyricIdx * 1.3) + (lyricLineYOffset || 0);
                             return (
-                              <text key={lyricKey} x={noteX} y={lyricLineY} textAnchor="middle" fontSize={fs} fill={note?.[lyricColorKey] || '#000000'} fontFamily={lyricFontFamily} fontStyle={lyricItalic ? 'italic' : undefined} textDecoration={lyricUnderline ? 'underline' : undefined} fontWeight={lyricBold ? '700' : Math.max(100, Math.min(900, Number(lyricWeight) || 400))}>{lyricText}</text>
+                              <text
+                                key={lyricKey}
+                                x={noteX}
+                                y={lyricLineY}
+                                textAnchor="middle"
+                                fontSize={fs}
+                                fill={note?.[lyricColorKey] || '#000000'}
+                                fontFamily={lyricFontFamily}
+                                fontStyle={lyricItalic ? 'italic' : undefined}
+                                textDecoration={lyricUnderline ? 'underline' : undefined}
+                                fontWeight={lyricBold ? '700' : Math.max(100, Math.min(900, Number(lyricWeight) || 400))}
+                                style={{ cursor: onNoteClick ? 'text' : undefined }}
+                                onClick={onNoteClick ? (e) => {
+                                  e.stopPropagation();
+                                  e.__nmLyricClick = true;
+                                  onNoteClick(globalNoteIndex, e);
+                                } : undefined}
+                              >
+                                {lyricText}
+                              </text>
                             );
                           })}
                           {showRhythmSyllables && (() => {

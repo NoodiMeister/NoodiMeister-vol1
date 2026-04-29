@@ -473,6 +473,7 @@ export function FigurenotesView({
   translateLabel,
   showBarNumbers = true,
   barNumberSize = 11,
+  voltaNumberSize = 16,
   chords = [],
   figurenotesSize = 16,
   figurenotesStems = false,
@@ -524,6 +525,8 @@ export function FigurenotesView({
   figurenotesCombinedRowStepPx = 0,
   /** Aktiivse rea indeks ühendatud figuuris (0 = ülemine); beat-drag ainult sellel real. */
   figurenotesCombinedActiveStaffRowIndex = null,
+  pickupEnabled = false,
+  isStaticPreview = false,
 }) {
   /** Melody row height (beat-box); chord line sits below with chordLineGap and height chordLineHeight (half of melody when in chord mode). */
   const melodyRowHeight = timelineHeight;
@@ -564,60 +567,117 @@ export function FigurenotesView({
   const [noteBeatDrag, setNoteBeatDrag] = useState(null);
   const [timeSigDrag, setTimeSigDrag] = useState(null); // { startClientX, startClientY, startOffsetX, startOffsetY }
   const [systemDrag, setSystemDrag] = useState(null); // { systemIndex, startClientX, startClientY }
-  const measureLayout = useMemo(() => {
-    const sys = systems?.[0];
-    if (!sys || !layoutSourceMeasures?.length) return [];
-    const mw =
-      sys.measureWidths ??
-      sys.measureIndices.map(() => sys.measureWidth ?? beatsPerMeasure * 80);
-    const mwDefault = sys.measureWidth ?? beatsPerMeasure * 80;
-    return sys.measureIndices
-      .map((measureIdx, j) => {
-        const measure = layoutSourceMeasures[measureIdx];
-        if (!measure) return null;
-        const lanes = computeRepeatLaneWidths({
-          sys,
-          layoutSourceMeasures,
-          measureIndexInSystem: j,
-          notationScale,
-        });
-        const baseW = mw[j] ?? mwDefault;
-        let measureX = marginLeft;
-        for (let i = 0; i < j; i += 1) {
-          const bi = mw[i] ?? mwDefault;
-          const li = computeRepeatLaneWidths({
-            sys,
-            layoutSourceMeasures,
-            measureIndexInSystem: i,
-            notationScale,
-          });
-          measureX += bi + li.total;
-        }
-        const beatContentLeft = measureX + lanes.left;
-        const beatContentWidth = baseW;
-        const xStart = beatContentLeft;
-        const xEnd = beatContentLeft + beatContentWidth;
-        const startBeat = measure.startBeat;
-        const endBeat = measure.endBeat ?? measure.startBeat + beatsPerMeasure;
-        return { xStart, xEnd, startBeat, endBeat };
+  const systemMeasureLayouts = useMemo(() => {
+    if (!Array.isArray(systems) || systems.length === 0 || !layoutSourceMeasures?.length) {
+      return [];
+    }
+    const defaultRows = combinedRows ? Math.max(1, instruments.length) : 1;
+    const systemHeightBase =
+      melodyRowHeight +
+      (chordLineHeight > 0 ? chordLineGap + chordLineHeight : 0);
+    return systems
+      .map((sys) => {
+        const mw =
+          sys.measureWidths ??
+          sys.measureIndices.map(() => sys.measureWidth ?? beatsPerMeasure * 80);
+        const mwDefault = sys.measureWidth ?? beatsPerMeasure * 80;
+        const systemOffsetX = Number(systemXOffsets?.[sys.systemIndex]) || 0;
+        const measures = sys.measureIndices
+          .map((measureIdx, j) => {
+            const measure = layoutSourceMeasures[measureIdx];
+            if (!measure) return null;
+            const lanes = computeRepeatLaneWidths({
+              sys,
+              layoutSourceMeasures,
+              measureIndexInSystem: j,
+              notationScale,
+            });
+            const baseW = mw[j] ?? mwDefault;
+            let measureX = marginLeft;
+            for (let i = 0; i < j; i += 1) {
+              const bi = mw[i] ?? mwDefault;
+              const li = computeRepeatLaneWidths({
+                sys,
+                layoutSourceMeasures,
+                measureIndexInSystem: i,
+                notationScale,
+              });
+              measureX += bi + li.total;
+            }
+            const beatContentLeft = measureX + lanes.left + systemOffsetX;
+            const beatContentWidth = baseW;
+            const xStart = beatContentLeft;
+            const xEnd = beatContentLeft + beatContentWidth;
+            const startBeat = measure.startBeat;
+            const endBeat = measure.endBeat ?? measure.startBeat + beatsPerMeasure;
+            return { xStart, xEnd, startBeat, endBeat };
+          })
+          .filter(Boolean);
+        if (!measures.length) return null;
+        return {
+          systemIndex: sys.systemIndex,
+          yTop: sys.yOffset,
+          yBottom: sys.yOffset + systemHeightBase + (defaultRows - 1) * rowStepPx,
+          measures,
+        };
       })
       .filter(Boolean);
-  }, [systems, layoutSourceMeasures, marginLeft, beatsPerMeasure, notationScale]);
-  const getBeatFromX = useCallback(
-    (x) => {
-      const firstSystemOffsetX = Number(systemXOffsets?.[systems?.[0]?.systemIndex]) || 0;
-      const normalizedX = x - firstSystemOffsetX;
-      for (const m of measureLayout) {
-        if (normalizedX >= m.xStart && normalizedX <= m.xEnd) {
+  }, [
+    systems,
+    layoutSourceMeasures,
+    combinedRows,
+    instruments.length,
+    melodyRowHeight,
+    chordLineGap,
+    chordLineHeight,
+    rowStepPx,
+    marginLeft,
+    beatsPerMeasure,
+    notationScale,
+    systemXOffsets,
+  ]);
+  const getSystemBarNumber = useCallback((system) => {
+    const firstMeasureIndex = system?.measureIndices?.[0];
+    if (!Number.isInteger(firstMeasureIndex)) return null;
+    if (pickupEnabled && firstMeasureIndex === 0) return null;
+    return firstMeasureIndex + 1 - (pickupEnabled ? 1 : 0);
+  }, [pickupEnabled]);
+  const getBeatFromPoint = useCallback((x, y) => {
+    const layouts = systemMeasureLayouts;
+    if (!layouts.length) return 0;
+    const mapXWithinSystem = (systemLayout) => {
+      for (const m of systemLayout.measures) {
+        if (x >= m.xStart && x <= m.xEnd) {
           const t =
-            m.xEnd - m.xStart > 0 ? (normalizedX - m.xStart) / (m.xEnd - m.xStart) : 0;
+            m.xEnd - m.xStart > 0 ? (x - m.xStart) / (m.xEnd - m.xStart) : 0;
           return m.startBeat + t * (m.endBeat - m.startBeat);
         }
       }
-      return measureLayout.length > 0 ? measureLayout[0].startBeat : 0;
-    },
-    [measureLayout, systemXOffsets, systems],
-  );
+      const first = systemLayout.measures[0];
+      const last = systemLayout.measures[systemLayout.measures.length - 1];
+      if (x < first.xStart) return first.startBeat;
+      if (x > last.xEnd) return last.endBeat;
+      return first.startBeat;
+    };
+    if (typeof y === "number" && Number.isFinite(y)) {
+      const inRange = layouts.find((s) => y >= s.yTop && y <= s.yBottom);
+      if (inRange) return mapXWithinSystem(inRange);
+      let nearest = layouts[0];
+      let minDy = Math.min(
+        Math.abs(y - nearest.yTop),
+        Math.abs(y - nearest.yBottom),
+      );
+      for (const s of layouts.slice(1)) {
+        const dy = Math.min(Math.abs(y - s.yTop), Math.abs(y - s.yBottom));
+        if (dy < minDy) {
+          nearest = s;
+          minDy = dy;
+        }
+      }
+      return mapXWithinSystem(nearest);
+    }
+    return mapXWithinSystem(layouts[0]);
+  }, [systemMeasureLayouts]);
   useEffect(() => {
     if (
       !noteBeatDrag ||
@@ -631,16 +691,16 @@ export function FigurenotesView({
       if (svg) {
         const pt = svg.createSVGPoint();
         pt.x = e.clientX;
-        pt.y = 0;
+        pt.y = e.clientY;
         const local = pt.matrixTransform(svg.getScreenCTM().inverse());
-        const beat = getBeatFromX(local.x);
+        const beat = getBeatFromPoint(local.x, local.y);
         onNoteBeatChange(noteIndex, beat);
       }
       setNoteBeatDrag(null);
     };
     window.addEventListener("mouseup", onUp);
     return () => window.removeEventListener("mouseup", onUp);
-  }, [noteBeatDrag, onNoteBeatChange, getBeatFromX, timelineSvgRef]);
+  }, [noteBeatDrag, onNoteBeatChange, getBeatFromPoint, timelineSvgRef]);
 
   useEffect(() => {
     if (!timeSigDrag || typeof onTimeSignatureOffsetChange !== "function") return;
@@ -897,20 +957,24 @@ export function FigurenotesView({
                 />
               )}
             {/* Taktinumber iga rea esimese takti vasak ja ülemine nurk (esimese taktikasti nurk) */}
-            {showBarNumbers && sys.measureIndices.length > 0 && (
-              <text
-                x={marginLeft}
-                y={sys.yOffset + padVertical}
-                fontSize={barNumberSize}
-                fontWeight="bold"
-                fill="#555"
-                textAnchor="end"
-                dominantBaseline="text-after-edge"
-                fontFamily="sans-serif"
-              >
-                {sys.measureIndices[0] + 1}
-              </text>
-            )}
+            {showBarNumbers && sys.measureIndices.length > 0 && (() => {
+              const barNumber = getSystemBarNumber(sys);
+              if (barNumber == null) return null;
+              return (
+                <text
+                  x={marginLeft}
+                  y={sys.yOffset + padVertical}
+                  fontSize={barNumberSize}
+                  fontWeight="bold"
+                  fill="#555"
+                  textAnchor="end"
+                  dominantBaseline="text-after-edge"
+                  fontFamily="sans-serif"
+                >
+                  {barNumber}
+                </text>
+              );
+            })()}
 
             {sys.systemIndex === 0 && (
               <g transform={`translate(0, ${sys.yOffset})`}>
@@ -981,6 +1045,17 @@ export function FigurenotesView({
                 });
                 systemTimelineWidth += baseW + ln.total;
               }
+              const systemHasChordContent = sys.measureIndices.some((mi) => {
+                const m = layoutSourceMeasures?.[mi];
+                if (!m) return false;
+                const endBeat = m.endBeat ?? m.startBeat + (m.beatCount ?? beatsPerMeasure);
+                return chords.some(
+                  (c) =>
+                    typeof c?.beatPosition === "number" &&
+                    c.beatPosition >= m.startBeat &&
+                    c.beatPosition < endBeat,
+                );
+              });
               return sys.measureIndices.map((measureIdx, j) => {
               const lanesJ = computeRepeatLaneWidths({
                 sys,
@@ -1056,10 +1131,13 @@ export function FigurenotesView({
                       measure,
                       prevMeasureInSystem,
                     });
-                    const drawRightRepeat = shouldDrawRepeatEndGlyphOnRight(
-                      measure,
-                      nextMeasureInSystem,
-                    );
+                    const drawRightRepeat =
+                      (measureIdx === layoutSourceMeasures.length - 1 &&
+                        !!measure?.repeatEnd) ||
+                      shouldDrawRepeatEndGlyphOnRight(
+                        measure,
+                        nextMeasureInSystem,
+                      );
                     const repeatStaffSpace = 10 * notationScale;
                     const repeatThinW = Math.max(
                       1,
@@ -1986,11 +2064,9 @@ export function FigurenotesView({
                                   </g>
                                 )}
                                 {(() => {
-                                  if (!onSelectRepeatMark) return null;
                                   const markerY =
                                     sys.yOffset +
-                                    padVertical -
-                                    Math.max(12, 12 * notationScale);
+                                    Math.max(10, 12 * notationScale);
                                   const markers = [];
                                   if (mBar.segno) markers.push({ key: "segno", label: "segno", glyph: SMUFL_GLYPH.segno });
                                   if (mBar.coda) markers.push({ key: "coda", label: "coda", glyph: SMUFL_GLYPH.coda });
@@ -1998,22 +2074,54 @@ export function FigurenotesView({
                                   if (mBar.volta2) markers.push({ key: "volta2", label: "2." });
                                   if (markers.length === 0) return null;
                                   const step = Math.max(20, 20 * notationScale);
-                                  const fontSize = Math.max(12, 16 * notationScale);
+                                  const fontSize = Math.max(10, Number(voltaNumberSize) || 16);
                                   return markers.map((mk, idx) => {
                                     const x = measureX + 6 + idx * step;
                                     const selected = isRepeatMarkSelected(measureIdx, mk.key);
                                     return (
                                       <g
                                         key={`fig-marker-${measureIdx}-${mk.key}`}
-                                        onClick={(e) => {
+                                        onClick={typeof onSelectRepeatMark === "function" ? (e) => {
                                           e.stopPropagation();
                                           onSelectRepeatMark(measureIdx, mk.key, {
                                             toggle: !!(e.metaKey || e.ctrlKey),
                                           });
-                                        }}
-                                        style={{ cursor: "pointer" }}
-                                        pointerEvents="auto"
+                                        } : undefined}
+                                        style={{ cursor: onSelectRepeatMark ? "pointer" : undefined }}
+                                        pointerEvents={onSelectRepeatMark ? "auto" : "none"}
                                       >
+                                        {(mk.key === "volta1" || mk.key === "volta2") && (() => {
+                                          const boxInnerPadX = Math.max(fontSize * 0.16, 2);
+                                          const boxInnerPadTop = Math.max(fontSize * 0.1, 1.5);
+                                          const boxInnerPadBottom = Math.max(fontSize * 0.14, 1.8);
+                                          const boxHeight = Math.max(fontSize * 1.12, fontSize + boxInnerPadTop + boxInnerPadBottom);
+                                          const boxTopY = markerY - (fontSize + boxInnerPadTop);
+                                          const boxBottomY = boxTopY + boxHeight;
+                                          const bracketStartX = measureX + 2;
+                                          const bracketEndX = xRight - 2;
+                                          const rightOpen = mk.key === "volta2";
+                                          const sw = Math.max(1, fontSize * 0.08);
+                                          const labelX = bracketStartX + boxInnerPadX;
+                                          const labelY = boxTopY + boxInnerPadTop + fontSize;
+                                          const overlayPadY = Math.max(fontSize * 0.18, 2);
+                                          return (
+                                            <>
+                                              <rect
+                                                x={measureX}
+                                                y={boxTopY - overlayPadY}
+                                                width={Math.max(fontSize * 2.2, xRight - measureX)}
+                                                height={(boxBottomY - boxTopY) + overlayPadY * 2}
+                                                fill="#ffffff"
+                                                opacity="0.92"
+                                                pointerEvents="none"
+                                              />
+                                              <line x1={bracketStartX} y1={boxTopY} x2={bracketEndX} y2={boxTopY} stroke="#1a1a1a" strokeWidth={sw} />
+                                              <line x1={bracketStartX} y1={boxTopY} x2={bracketStartX} y2={boxBottomY} stroke="#1a1a1a" strokeWidth={sw} />
+                                              {!rightOpen && <line x1={bracketEndX} y1={boxTopY} x2={bracketEndX} y2={boxBottomY} stroke="#1a1a1a" strokeWidth={sw} />}
+                                              <text x={labelX} y={labelY} textAnchor="start" fontSize={fontSize * 0.85} fontWeight="bold" fontFamily="sans-serif" fill="#1a1a1a">{mk.label}</text>
+                                            </>
+                                          );
+                                        })()}
                                         {selected && (
                                           <rect
                                             x={x - fontSize * 0.6}
@@ -2033,7 +2141,7 @@ export function FigurenotesView({
                                             fontSize={fontSize}
                                             fill="#1a1a1a"
                                           />
-                                        ) : (
+                                        ) : (mk.key !== "volta1" && mk.key !== "volta2") ? (
                                           <text
                                             x={x}
                                             y={markerY}
@@ -2045,14 +2153,16 @@ export function FigurenotesView({
                                           >
                                             {mk.label}
                                           </text>
+                                        ) : null}
+                                        {onSelectRepeatMark && (
+                                          <rect
+                                            x={x - fontSize * 0.6}
+                                            y={markerY - fontSize * 0.7}
+                                            width={fontSize * 1.2}
+                                            height={fontSize * 1.2}
+                                            fill="transparent"
+                                          />
                                         )}
-                                        <rect
-                                          x={x - fontSize * 0.6}
-                                          y={markerY - fontSize * 0.7}
-                                          width={fontSize * 1.2}
-                                          height={fontSize * 1.2}
-                                          fill="transparent"
-                                        />
                                       </g>
                                     );
                                   });
@@ -2062,6 +2172,7 @@ export function FigurenotesView({
                           })()}
                         {/* Chord line: half-height row below melody; chords drawn in that row. Invisible overlay for cursor-follow on hover. */}
                         {chordLineHeight > 0 &&
+                          (!isStaticPreview || systemHasChordContent) &&
                           j === 0 &&
                           (!combinedRows || staffSi === nStaffRows - 1) && (
                             <>
@@ -2096,11 +2207,14 @@ export function FigurenotesView({
                                             if (!svg) return;
                                             const pt = svg.createSVGPoint();
                                             pt.x = e.clientX;
-                                            pt.y = 0;
+                                            pt.y = e.clientY;
                                             const local = pt.matrixTransform(
                                               svg.getScreenCTM().inverse(),
                                             );
-                                            const beat = getBeatFromX(local.x);
+                                            const beat = getBeatFromPoint(
+                                              local.x,
+                                              local.y,
+                                            );
                                             onChordLineMouseMove(beat);
                                           }
                                         : undefined
@@ -2113,11 +2227,14 @@ export function FigurenotesView({
                                             if (!svg) return;
                                             const pt = svg.createSVGPoint();
                                             pt.x = e.clientX;
-                                            pt.y = 0;
+                                            pt.y = e.clientY;
                                             const local = pt.matrixTransform(
                                               svg.getScreenCTM().inverse(),
                                             );
-                                            const beat = getBeatFromX(local.x);
+                                            const beat = getBeatFromPoint(
+                                              local.x,
+                                              local.y,
+                                            );
                                             onChordLineClick(beat);
                                           }
                                         : undefined
@@ -2664,8 +2781,8 @@ export function FigurenotesView({
                               onClick: (e) => {
                                 e.stopPropagation();
                                 if (combinedRows)
-                                  onNoteClick?.(globalNoteIndex, staffSi);
-                                else onNoteClick?.(globalNoteIndex);
+                                  onNoteClick?.(globalNoteIndex, e, staffSi);
+                                else onNoteClick?.(globalNoteIndex, e);
                               },
                               onMouseDown: (e) => {
                                 if (
@@ -2905,6 +3022,13 @@ export function FigurenotesView({
                                       fontStyle={lyricItalic ? "italic" : undefined}
                                       textDecoration={lyricUnderline ? "underline" : undefined}
                                       fontWeight={lyricBold ? "700" : Math.max(100, Math.min(900, Number(lyricWeight) || 400))}
+                                      style={{ cursor: onNoteClick ? "text" : undefined }}
+                                      onClick={onNoteClick ? (e) => {
+                                        e.stopPropagation();
+                                        e.__nmLyricClick = true;
+                                        if (combinedRows) onNoteClick(globalNoteIndex, e, staffSi);
+                                        else onNoteClick(globalNoteIndex, e);
+                                      } : undefined}
                                     >
                                       {lyricText}
                                     </text>
@@ -2934,10 +3058,13 @@ export function FigurenotesView({
                         measure: measureBar,
                         prevMeasureInSystem: prevBar,
                       });
-                      const drawEnd = shouldDrawRepeatEndGlyphOnRight(
-                        measureBar,
-                        nextBar,
-                      );
+                      const drawEnd =
+                        (measureIdx === layoutSourceMeasures.length - 1 &&
+                          !!measureBar?.repeatEnd) ||
+                        shouldDrawRepeatEndGlyphOnRight(
+                          measureBar,
+                          nextBar,
+                        );
                       const barLineTopY = sys.yOffset + padVertical;
                       const barLineBottomY =
                         sys.yOffset +
@@ -3218,11 +3345,9 @@ export function FigurenotesView({
                             </g>
                           )}
                           {(() => {
-                            if (!onSelectRepeatMark) return null;
                             const markerY =
                               sys.yOffset +
-                              padVertical -
-                              Math.max(12, 12 * notationScale);
+                              Math.max(10, 12 * notationScale);
                             const markers = [];
                             if (measureBar.segno) markers.push({ key: "segno", label: "segno", glyph: SMUFL_GLYPH.segno });
                             if (measureBar.coda) markers.push({ key: "coda", label: "coda", glyph: SMUFL_GLYPH.coda });
@@ -3230,22 +3355,54 @@ export function FigurenotesView({
                             if (measureBar.volta2) markers.push({ key: "volta2", label: "2." });
                             if (markers.length === 0) return null;
                             const step = Math.max(20, 20 * notationScale);
-                            const fontSize = Math.max(12, 16 * notationScale);
+                            const fontSize = Math.max(10, Number(voltaNumberSize) || 16);
                             return markers.map((mk, idx) => {
                               const x = measureX + 6 + idx * step;
                               const selected = isRepeatMarkSelected(measureIdx, mk.key);
                               return (
                                 <g
                                   key={`fig-marker-combined-${measureIdx}-${mk.key}`}
-                                  onClick={(e) => {
+                                  onClick={typeof onSelectRepeatMark === "function" ? (e) => {
                                     e.stopPropagation();
                                     onSelectRepeatMark(measureIdx, mk.key, {
                                       toggle: !!(e.metaKey || e.ctrlKey),
                                     });
-                                  }}
-                                  style={{ cursor: "pointer" }}
-                                  pointerEvents="auto"
+                                  } : undefined}
+                                  style={{ cursor: onSelectRepeatMark ? "pointer" : undefined }}
+                                  pointerEvents={onSelectRepeatMark ? "auto" : "none"}
                                 >
+                                  {(mk.key === "volta1" || mk.key === "volta2") && (() => {
+                                    const boxInnerPadX = Math.max(fontSize * 0.16, 2);
+                                    const boxInnerPadTop = Math.max(fontSize * 0.1, 1.5);
+                                    const boxInnerPadBottom = Math.max(fontSize * 0.14, 1.8);
+                                    const boxHeight = Math.max(fontSize * 1.12, fontSize + boxInnerPadTop + boxInnerPadBottom);
+                                    const boxTopY = markerY - (fontSize + boxInnerPadTop);
+                                    const boxBottomY = boxTopY + boxHeight;
+                                    const bracketStartX = measureX + 2;
+                                    const bracketEndX = xRight - 2;
+                                    const rightOpen = mk.key === "volta2";
+                                    const sw = Math.max(1, fontSize * 0.08);
+                                    const labelX = bracketStartX + boxInnerPadX;
+                                    const labelY = boxTopY + boxInnerPadTop + fontSize;
+                                    const overlayPadY = Math.max(fontSize * 0.18, 2);
+                                    return (
+                                      <>
+                                        <rect
+                                          x={measureX}
+                                          y={boxTopY - overlayPadY}
+                                          width={Math.max(fontSize * 2.2, xRight - measureX)}
+                                          height={(boxBottomY - boxTopY) + overlayPadY * 2}
+                                          fill="#ffffff"
+                                          opacity="0.92"
+                                          pointerEvents="none"
+                                        />
+                                        <line x1={bracketStartX} y1={boxTopY} x2={bracketEndX} y2={boxTopY} stroke="#1a1a1a" strokeWidth={sw} />
+                                        <line x1={bracketStartX} y1={boxTopY} x2={bracketStartX} y2={boxBottomY} stroke="#1a1a1a" strokeWidth={sw} />
+                                        {!rightOpen && <line x1={bracketEndX} y1={boxTopY} x2={bracketEndX} y2={boxBottomY} stroke="#1a1a1a" strokeWidth={sw} />}
+                                        <text x={labelX} y={labelY} textAnchor="start" fontSize={fontSize * 0.85} fontWeight="bold" fontFamily="sans-serif" fill="#1a1a1a">{mk.label}</text>
+                                      </>
+                                    );
+                                  })()}
                                   {selected && (
                                     <rect
                                       x={x - fontSize * 0.6}
@@ -3265,7 +3422,7 @@ export function FigurenotesView({
                                       fontSize={fontSize}
                                       fill="#1a1a1a"
                                     />
-                                  ) : (
+                                  ) : (mk.key !== "volta1" && mk.key !== "volta2") ? (
                                     <text
                                       x={x}
                                       y={markerY}
@@ -3277,14 +3434,16 @@ export function FigurenotesView({
                                     >
                                       {mk.label}
                                     </text>
+                                  ) : null}
+                                  {onSelectRepeatMark && (
+                                    <rect
+                                      x={x - fontSize * 0.6}
+                                      y={markerY - fontSize * 0.7}
+                                      width={fontSize * 1.2}
+                                      height={fontSize * 1.2}
+                                      fill="transparent"
+                                    />
                                   )}
-                                  <rect
-                                    x={x - fontSize * 0.6}
-                                    y={markerY - fontSize * 0.7}
-                                    width={fontSize * 1.2}
-                                    height={fontSize * 1.2}
-                                    fill="transparent"
-                                  />
                                 </g>
                               );
                             });
