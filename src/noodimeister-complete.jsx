@@ -16936,9 +16936,12 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
   const cursorSlotCenterX = cursorInfo ? (() => {
     const sys = cursorInfo.system;
     const widths = sys.measureWidths ?? sys.measureIndices.map(() => sys.measureWidth ?? beatsPerMeasure * 80);
+    const safeTraditionalMeasureStartX = (typeof traditionalMeasureStartX !== 'undefined' && Number.isFinite(traditionalMeasureStartX))
+      ? traditionalMeasureStartX
+      : marginLeft;
     const notationStartX = isFigurenotesMode
       ? marginLeft
-      : (Number.isFinite(traditionalMeasureStartX) ? traditionalMeasureStartX : marginLeft);
+      : safeTraditionalMeasureStartX;
     let beatLeft = cursorInfo.localBeat;
     for (let j = 0; j < sys.measureIndices.length; j++) {
       const m = effectiveMeasures[sys.measureIndices[j]];
