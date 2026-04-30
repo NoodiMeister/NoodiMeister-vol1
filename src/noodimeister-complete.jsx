@@ -7700,6 +7700,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   // authoritative cursor beat, even after figure-system hand-drag/layout moves.
   useEffect(() => {
     if (noteInputMode) return;
+    if (cursorTool === 'select') return;
     if (isPedagogicalAudioPlaying || isExportingAnimation) return;
     if (selectionStart >= 0 || selectionEnd >= 0) return;
     if (measureSelection != null) return;
@@ -7711,6 +7712,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     setCursorPosition(Math.max(0, selectedBeat));
   }, [
     noteInputMode,
+    cursorTool,
     isPedagogicalAudioPlaying,
     isExportingAnimation,
     selectionStart,
