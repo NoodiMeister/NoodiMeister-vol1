@@ -571,7 +571,7 @@ var INSTRUMENT_CATEGORIES = [
   { id: 'singleStaff', labelKey: 'cat.singleStaff', instruments: ['single-staff-treble', 'single-staff-bass'] },
   { id: 'orffTuned', labelKey: 'cat.orffTuned', instruments: ['boomwhackers', 'handbells'] },
   { id: 'orffMallets', labelKey: 'cat.orffMallets', instruments: ['soprano-xylophone', 'alto-xylophone', 'bass-xylophone', 'soprano-metallophone', 'alto-metallophone', 'bass-metallophone', 'glockenspiel'] },
-  { id: 'orffPercussion', labelKey: 'cat.orffPercussion', instruments: ['triangle', 'claves', 'woodblock', 'temple-blocks', 'castanets', 'shakers', 'maracas', 'guiro', 'agogo', 'cowbell', 'cymbals', 'sleighbells', 'djembe', 'cajon'] },
+  { id: 'orffPercussion', labelKey: 'cat.orffPercussion', instruments: ['triangle', 'claves', 'woodblock', 'temple-blocks', 'castanets', 'shakers', 'maracas', 'bongo', 'conga', 'guiro', 'agogo', 'cowbell', 'cymbals', 'rainstick', 'windchimes', 'sleighbells', 'djembe', 'cajon'] },
   { id: 'keyboard', labelKey: 'cat.keyboard', instruments: ['piano', 'electric-piano', 'organ', 'harpsichord', 'accordion', 'celesta'] },
   { id: 'stringsPlucked', labelKey: 'cat.stringsPlucked', instruments: ['guitar', 'ukulele-sopran', 'ukulele-tenor', 'ukulele-bariton', 'ukulele-bass'] },
   { id: 'stringsBowed', labelKey: 'cat.stringsBowed', instruments: ['violin', 'viola', 'cello', 'double-bass', 'strings-ensemble'] },
@@ -600,10 +600,14 @@ var INSTRUMENT_CONFIG_BASE = {
   castanets: { value: 'castanets', range: 'C5-C5', type: 'standard', defaultClef: 'treble', family: 'orff-percussion' },
   shakers: { value: 'shakers', range: 'C5-C5', type: 'standard', defaultClef: 'treble', family: 'orff-percussion' },
   maracas: { value: 'maracas', range: 'C5-C5', type: 'standard', defaultClef: 'treble', family: 'orff-percussion' },
+  bongo: { value: 'bongo', range: 'C5-C5', type: 'standard', defaultClef: 'treble', family: 'orff-percussion' },
+  conga: { value: 'conga', range: 'C5-C5', type: 'standard', defaultClef: 'treble', family: 'orff-percussion' },
   guiro: { value: 'guiro', range: 'C5-C5', type: 'standard', defaultClef: 'treble', family: 'orff-percussion' },
   agogo: { value: 'agogo', range: 'C5-C5', type: 'standard', defaultClef: 'treble', family: 'orff-percussion' },
   cowbell: { value: 'cowbell', range: 'C5-C5', type: 'standard', defaultClef: 'treble', family: 'orff-percussion' },
   cymbals: { value: 'cymbals', range: 'C5-C5', type: 'standard', defaultClef: 'treble', family: 'orff-percussion' },
+  rainstick: { value: 'rainstick', range: 'C5-C5', type: 'standard', defaultClef: 'treble', family: 'orff-percussion' },
+  windchimes: { value: 'windchimes', range: 'C5-C5', type: 'standard', defaultClef: 'treble', family: 'orff-percussion' },
   sleighbells: { value: 'sleighbells', range: 'C5-C5', type: 'standard', defaultClef: 'treble', family: 'orff-percussion' },
   djembe: { value: 'djembe', range: 'C4-C4', type: 'standard', defaultClef: 'bass', family: 'orff-percussion' },
   cajon: { value: 'cajon', range: 'C4-C4', type: 'standard', defaultClef: 'bass', family: 'orff-percussion' },
@@ -651,8 +655,8 @@ var INSTRUMENT_CONFIG_BASE = {
   voice:      { value: 'voice', range: 'C3-C6', type: 'standard', defaultClef: 'treble' }
 };
 var SINGLE_LINE_UNPITCHED_PERCUSSION_IDS = new Set([
-  'triangle', 'claves', 'woodblock', 'temple-blocks', 'castanets', 'shakers', 'maracas', 'guiro',
-  'agogo', 'cowbell', 'cymbals', 'sleighbells', 'djembe', 'cajon', 'snare-drum', 'bass-drum',
+  'triangle', 'claves', 'woodblock', 'temple-blocks', 'castanets', 'shakers', 'maracas', 'bongo', 'conga', 'guiro',
+  'agogo', 'cowbell', 'cymbals', 'rainstick', 'windchimes', 'sleighbells', 'djembe', 'cajon', 'snare-drum', 'bass-drum',
   'kick-drum', 'side-drum'
 ]);
 function isSingleLineUnpitchedPercussion(instId, cfg) {
@@ -686,10 +690,14 @@ var INSTRUMENT_I18N_KEYS = {
   castanets: 'inst.castanets',
   shakers: 'inst.shakers',
   maracas: 'inst.maracas',
+  bongo: 'inst.bongo',
+  conga: 'inst.conga',
   guiro: 'inst.guiro',
   agogo: 'inst.agogo',
   cowbell: 'inst.cowbell',
   cymbals: 'inst.cymbals',
+  rainstick: 'inst.rainstick',
+  windchimes: 'inst.windchimes',
   sleighbells: 'inst.sleighbells',
   djembe: 'inst.djembe',
   cajon: 'inst.cajon',
@@ -718,7 +726,7 @@ var INSTRUMENT_TO_GM_PROGRAM = {
   'soprano-xylophone': 13, 'alto-xylophone': 13, 'bass-xylophone': 13,
   'soprano-metallophone': 10, 'alto-metallophone': 10, 'bass-metallophone': 10,
   triangle: 115, claves: 115, woodblock: 115, 'temple-blocks': 115, castanets: 115,
-  shakers: 115, maracas: 115, guiro: 115, agogo: 115, cowbell: 115, cymbals: 115, sleighbells: 115,
+  shakers: 115, maracas: 115, bongo: 115, conga: 115, guiro: 115, agogo: 115, cowbell: 115, cymbals: 115, rainstick: 115, windchimes: 115, sleighbells: 115,
   djembe: 115, cajon: 115,
   piano: 0, 'electric-piano': 4, organ: 19, harpsichord: 6, accordion: 21, celesta: 8,
   guitar: 24, 'ukulele-sopran': 24, 'ukulele-tenor': 24, 'ukulele-bariton': 24, 'ukulele-bass': 32,
@@ -733,7 +741,7 @@ var INSTRUMENT_TO_SOUNDFONT_NAME = {
   'soprano-xylophone': 'xylophone', 'alto-xylophone': 'xylophone', 'bass-xylophone': 'xylophone',
   'soprano-metallophone': 'glockenspiel', 'alto-metallophone': 'glockenspiel', 'bass-metallophone': 'glockenspiel',
   triangle: 'woodblock', claves: 'woodblock', woodblock: 'woodblock', 'temple-blocks': 'woodblock', castanets: 'woodblock',
-  shakers: 'woodblock', maracas: 'woodblock', guiro: 'woodblock', agogo: 'woodblock', cowbell: 'woodblock', cymbals: 'woodblock', sleighbells: 'woodblock',
+  shakers: 'woodblock', maracas: 'woodblock', bongo: 'woodblock', conga: 'woodblock', guiro: 'woodblock', agogo: 'woodblock', cowbell: 'woodblock', cymbals: 'woodblock', rainstick: 'woodblock', windchimes: 'woodblock', sleighbells: 'woodblock',
   djembe: 'woodblock', cajon: 'woodblock',
   piano: 'acoustic_grand_piano', 'electric-piano': 'electric_piano_1', organ: 'church_organ', harpsichord: 'harpsichord', accordion: 'accordion', celesta: 'celesta',
   guitar: 'acoustic_guitar_nylon', 'ukulele-sopran': 'acoustic_guitar_nylon', 'ukulele-tenor': 'acoustic_guitar_nylon', 'ukulele-bariton': 'acoustic_guitar_nylon', 'ukulele-bass': 'acoustic_bass',
@@ -1767,6 +1775,12 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     const platform = String(navigator.platform || '').toUpperCase();
     return platform.includes('MAC');
   }, []);
+  const isTouchPrimaryDevice = useMemo(() => {
+    if (typeof window === 'undefined' || typeof navigator === 'undefined') return false;
+    const maxTouchPoints = Number(navigator.maxTouchPoints || 0);
+    const coarse = typeof window.matchMedia === 'function' ? window.matchMedia('(pointer: coarse)').matches : false;
+    return maxTouchPoints > 0 || coarse;
+  }, []);
   const addMeasureShortcutLabel = useMemo(
     () => formatShortcutLabel(effectiveShortcutPrefs['app.addMeasure']) || (isMacPlatform ? 'Cmd+B' : 'Ctrl+B'),
     [effectiveShortcutPrefs, isMacPlatform]
@@ -1883,6 +1897,13 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [pianoStripVisible]);
   const togglePianoStripExclusive = useCallback(() => {
+    const currentInstId = staves?.[activeStaffIndex]?.instrumentId;
+    const currentCfg = INSTRUMENT_CONFIG_BASE?.[currentInstId];
+    if (isSingleLineUnpitchedPercussion(currentInstId, currentCfg)) {
+      setPianoStripVisible(false);
+      if (activeToolbox === 'pianoKeyboard') setActiveToolbox(null);
+      return;
+    }
     setPianoStripVisible((prev) => {
       if (!prev) {
         setTimelinePanelVisible(false);
@@ -1893,7 +1914,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       return false;
     });
     setSelectedOptionIndex(0);
-  }, []);
+  }, [staves, activeStaffIndex, activeToolbox]);
   const toggleTimelinePanelExclusive = useCallback(() => {
     setTimelinePanelVisible((prev) => {
       if (!prev) {
@@ -2351,6 +2372,27 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     dirtyRef.current = true;
   }, [notes]);
   const instrument = activeStaff?.instrumentId ?? 'single-staff-treble';
+  const activeInstrumentCfg = instrumentConfig?.[instrument];
+  const isActiveUnpitchedPercussion = isSingleLineUnpitchedPercussion(instrument, activeInstrumentCfg);
+  const showPercussionRhythmInsertButton = noteInputMode
+    && notationMode === 'vabanotatsioon'
+    && isActiveUnpitchedPercussion
+    && isTouchPrimaryDevice;
+  const insertPercussionRhythmNote = () => {
+    if (!showPercussionRhythmInsertButton) return;
+    const singleLinePitch = getSingleLineStaffPitch(instrument, activeInstrumentCfg);
+    addNoteAtCursor(
+      singleLinePitch?.pitch || 'C',
+      singleLinePitch?.octave ?? ghostOctave,
+      0,
+      { forceRest: false }
+    );
+  };
+  useEffect(() => {
+    if (!isActiveUnpitchedPercussion) return;
+    if (pianoStripVisible) setPianoStripVisible(false);
+    if (activeToolbox === 'pianoKeyboard') setActiveToolbox(null);
+  }, [isActiveUnpitchedPercussion, pianoStripVisible, activeToolbox]);
   const setInstrument = useCallback((instId) => {
     setStaves((prev) => {
       if (typeof GLOBAL_NOTATION_CONFIG === 'undefined' || !GLOBAL_NOTATION_CONFIG || typeof INSTRUMENT_CONFIG_BASE === 'undefined' || !INSTRUMENT_CONFIG_BASE) return prev;
@@ -9575,6 +9617,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
           return;
         }
         if (newToolbox === 'pianoKeyboard') {
+          if (isActiveUnpitchedPercussion) return;
           togglePianoStripExclusive();
           return;
         }
@@ -9887,7 +9930,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
           }
         }
         const noteLetter = e.key?.toLowerCase();
-        if (!modKey && !e.altKey && ['c', 'd', 'e', 'f', 'g', 'a', 'b'].includes(noteLetter)) {
+        if (!e.defaultPrevented && !modKey && !e.altKey && ['c', 'd', 'e', 'f', 'g', 'a', 'b'].includes(noteLetter)) {
           e.preventDefault();
           // Kursori asukoht loeb: akordireal (cursorSubRow === 1) → akord; meloodiareal → figuurnoot. Akorditööriistakast avatud → akord.
           // Kasuta cursorSubRow prioriteedina (kui kasutaja on akordirea valinud, ei tohi sisestus minna meloodianoodiks).
@@ -10376,7 +10419,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
 
         // Note input (C-G) – sama loogika mis addNoteAtCursor (kursori löök, mitte järjekorra lõppu kleebimine).
         const noteLetter = e.key.toLowerCase();
-        if (['c', 'd', 'e', 'f', 'g', 'a', 'b'].includes(noteLetter)) {
+        if (!e.defaultPrevented && ['c', 'd', 'e', 'f', 'g', 'a', 'b'].includes(noteLetter)) {
           restNextRef.current = false;
           setGhostAccidentalIsExplicit(false);
           e.preventDefault();
@@ -14245,6 +14288,18 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                 {(notationMode === 'traditional' || notationMode === 'vabanotatsioon') && (
                   <p className="text-[10px] text-amber-600 text-center mt-0.5">{t('noteInput.chordHint')}</p>
                 )}
+                {showPercussionRhythmInsertButton && (
+                  <div className="pt-1.5 border-t border-amber-200 flex items-center justify-center">
+                    <button
+                      type="button"
+                      onClick={insertPercussionRhythmNote}
+                      className="px-3 py-1.5 rounded-md bg-amber-500 text-white text-xs font-semibold hover:bg-amber-600 active:bg-amber-700 transition-colors"
+                      title="Sisesta valitud rütmiga noot"
+                    >
+                      Sisesta rütm
+                    </button>
+                  </div>
+                )}
                 {noteInputMode && toolboxes.pitchInput?.options?.length > 0 && (
                   <div className="pt-1 border-t border-amber-200">
                     <div className="text-[10px] text-amber-700 text-center mb-1">{t('toolbox.pitchInput')}</div>
@@ -15496,6 +15551,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
               {visibleToolsMenuOpen && (
                 <div className="absolute left-0 right-0 top-full mt-1 py-2 rounded-lg bg-white dark:bg-black border-2 border-amber-300 dark:border-white/20 shadow-lg z-50 max-h-64 overflow-auto">
                   {TOOLBOX_ORDER.map((id) => {
+                    if (id === 'pianoKeyboard' && isActiveUnpitchedPercussion) return null;
                     const tb = toolboxes[id];
                     if (!tb) return null;
                     const isVisible = visibleToolIds.includes(id);
@@ -15520,6 +15576,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
             </div>
 
             {TOOLBOX_ORDER.filter((id) => visibleToolIds.includes(id)).map((id) => {
+              if (id === 'pianoKeyboard' && isActiveUnpitchedPercussion) return null;
               const toolbox = toolboxes[id];
               if (!toolbox) return null;
               const helpText = getToolboxHelpText(locale, id, toolbox.name);

@@ -111,6 +111,11 @@ const GAP_BEFORE_CLEF_PX = 6;
 /** Treble clef anchor moved one staff line upward for current score alignment. */
 const TREBLE_CLEF_LINE_INDEX = 2; // 0=top line ... 4=bottom line
 const OUT_OF_RANGE_COLOR = '#dc2626';
+const UNPITCHED_PERCUSSION_IDS = new Set([
+  'triangle', 'claves', 'woodblock', 'temple-blocks', 'castanets', 'shakers', 'maracas', 'guiro',
+  'agogo', 'cowbell', 'cymbals', 'sleighbells', 'djembe', 'cajon', 'snare-drum', 'bass-drum',
+  'kick-drum', 'side-drum',
+]);
 
 function getKeySignatureInfo(keySignature) {
   if (!keySignature || keySignature === 'C') return { count: 0, kind: null };
@@ -1399,8 +1404,17 @@ export function TraditionalNotationView({
                   return baseX + (noteXOverrides.get(noteIdx) ?? 0);
                 };
 
-                /** Käsikellad: pedagoogika — ära kasuta keskjoonest tulenevat varre suunda (varred alati üles). */
-                const isHandbellsStaff = String((multiStaff ? inst?.instrumentId : instrument) || '') === 'handbells';
+                /** Käsikellad + helitud löökpillid pedagoogikas: varred alati üles. */
+                const currentStaffInstrumentId = String((multiStaff ? inst?.instrumentId : instrument) || '');
+                const currentStaffCfg = instrumentConfig?.[currentStaffInstrumentId];
+                const isHandbellsStaff = currentStaffInstrumentId === 'handbells';
+                const isPedagogicalUnpitchedPercussionStaff =
+                  isVabanotatsioon
+                  && (
+                    currentStaffCfg?.family === 'orff-percussion'
+                    || UNPITCHED_PERCUSSION_IDS.has(currentStaffInstrumentId)
+                  );
+                const forceStemUpForStaff = isHandbellsStaff || isPedagogicalUnpitchedPercussionStaff;
 
                 const noteheadRx = getNoteheadRx(spacing);
                 const beamGroupsRaw = computeBeamGroups(measure.notes, measure.startBeat, timeSignature);
@@ -1415,7 +1429,7 @@ export function TraditionalNotationView({
                   }
                   // VexFlow/MuseScore: alla keskmise joone = vars üles; üle keskmise = vars alla. Käsikellad: alati üles.
                   let stemUp;
-                  if (isHandbellsStaff) {
+                  if (forceStemUpForStaff) {
                     stemUp = true;
                   } else {
                     stemUp = noteCys[gr.start] > middleLineY;
@@ -1794,7 +1808,7 @@ export function TraditionalNotationView({
                       const beamGroup = getBeamGroup(noteIdx);
                       const stemUp = beamGroup
                         ? beamGroup.stemUp
-                        : isHandbellsStaff
+                        : forceStemUpForStaff
                           ? true
                           : (pitchY > middleLineY);
                       const canDragPitch = noteInputMode && !note.isRest && typeof onNotePitchChange === 'function' && typeof getPitchFromY === 'function' && !canHandDragNotes;
