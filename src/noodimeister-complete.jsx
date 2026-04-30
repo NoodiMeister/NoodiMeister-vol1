@@ -7696,6 +7696,32 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     setSelectedNoteIndex(noteIndexAtCursor);
   }, [noteInputMode, cursorTool, isPedagogicalAudioPlaying, isExportingAnimation, lyricChainIndex, hasChordRow, cursorSubRow, selectionStart, selectionEnd, measureSelection, noteIndexAtCursor, selectedNoteIndex, notes, cursorPosition, getBeatAtNoteIndex]);
 
+  // Selection anchor invariant: in SEL-mode a concrete selected note remains the
+  // authoritative cursor beat, even after figure-system hand-drag/layout moves.
+  useEffect(() => {
+    if (noteInputMode) return;
+    if (isPedagogicalAudioPlaying || isExportingAnimation) return;
+    if (selectionStart >= 0 || selectionEnd >= 0) return;
+    if (measureSelection != null) return;
+    if (selectedNoteIndex < 0 || selectedNoteIndex >= notes.length) return;
+    const selectedBeat = getBeatAtNoteIndex(notes, selectedNoteIndex);
+    if (!Number.isFinite(selectedBeat)) return;
+    const EPS = 1e-6;
+    if (Math.abs((cursorPosition ?? 0) - selectedBeat) < EPS) return;
+    setCursorPosition(Math.max(0, selectedBeat));
+  }, [
+    noteInputMode,
+    isPedagogicalAudioPlaying,
+    isExportingAnimation,
+    selectionStart,
+    selectionEnd,
+    measureSelection,
+    selectedNoteIndex,
+    notes,
+    cursorPosition,
+    getBeatAtNoteIndex,
+  ]);
+
   /** Noot antud löögil (akordi puhul kõrgeim noteToMidi järgi). Kasutatakse mängimiseks pärast kursori liigutamist. */
   const getNoteAtBeat = useCallback((beat) => {
     const withBeats = notesWithExplicitBeats(notes);
@@ -17447,6 +17473,7 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
   const getCursorXForInfo = (info, centerOffsetBeats = selectedDurationBeatsForCursor * 0.5) => {
     if (!info) return null;
     const sys = info.system;
+    const systemOffsetX = Number(systemXOffsets?.[sys.systemIndex]) || 0;
     const widths = sys.measureWidths ?? sys.measureIndices.map(() => sys.measureWidth ?? beatsPerMeasure * 80);
     const safeTraditionalMeasureStartX = (typeof traditionalMeasureStartX !== 'undefined' && Number.isFinite(traditionalMeasureStartX))
       ? traditionalMeasureStartX
@@ -17461,12 +17488,12 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
       const mw = widths[j] ?? 80 * beatCount;
       const beatWidth = mw / beatCount;
       if (beatLeft < beatCount) {
-        return notationStartX + widths.slice(0, j).reduce((a, b) => a + b, 0) + (beatLeft + centerOffsetBeats) * beatWidth;
+        return notationStartX + systemOffsetX + widths.slice(0, j).reduce((a, b) => a + b, 0) + (beatLeft + centerOffsetBeats) * beatWidth;
       }
       beatLeft -= beatCount;
     }
     const j = Math.max(0, sys.measureIndices.length - 1);
-    const x = notationStartX + widths.slice(0, j + 1).reduce((a, b) => a + b, 0) - (widths[j] ?? 0) * 0.5;
+    const x = notationStartX + systemOffsetX + widths.slice(0, j + 1).reduce((a, b) => a + b, 0) - (widths[j] ?? 0) * 0.5;
     return Number.isFinite(x) ? x : notationStartX + 50;
   };
   const cursorSlotCenterX = getCursorXForInfo(cursorInfo);
