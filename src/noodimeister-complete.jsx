@@ -10330,117 +10330,171 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
 
       // Stage V: Selection mode (kui N-režiim on VÄLJAS) — works also when a toolbox palette is open.
       if (!noteInputMode) {
-        // Vasak/parem: takt-haaval (MuseScore-stiilis); Shift + nool laiendab taktivalikut (Cmd+Backspace kustutab).
+        const ms = measuresRef.current;
+        const hasMeasures = Array.isArray(ms) && ms.length > 0;
+        // Vasak/parem: nootide piiridele/gridile; Shift + nool laiendab note-range'i (esmane) või taktivalikut.
         if (e.code === 'ArrowRight' || e.code === 'ArrowLeft') {
-          const ms = measuresRef.current;
-          if (Array.isArray(ms) && ms.length > 0) {
-            e.preventDefault();
-            const curIdx = getMeasureIndexForBeatMs(ms, cursorPosition, measureLengthInQuarterBeats(timeSignature));
-            // Shift + ◀/▶: extend note range along the score timeline (matches rhythm toolbox hint / teacher expectation).
-            if (e.shiftKey) {
-              const withBeats = notesWithExplicitBeats(notes);
-              const sorted = withBeats.map((n, i) => ({ n, i, beat: Number(n.beat) || 0 }))
-                .sort((a, b) => {
-                  if (a.beat !== b.beat) return a.beat - b.beat;
-                  const ma = noteToMidi(a.n);
-                  const mb = noteToMidi(b.n);
-                  if (ma !== mb) return ma - mb;
-                  return a.i - b.i;
-                });
-              const order = sorted.map((s) => s.i);
-              let noteRangeHandled = false;
-              if (order.length > 0) {
-                const posOf = (idx) => order.indexOf(idx);
-                const dir = e.code === 'ArrowRight' ? 1 : -1;
-                const applyNoteRange = (a, b, focusIdx) => {
-                  applySelectionModel({ kind: 'range', anchorIndex: a, focusIndex: b });
-                  setCursorSubRow(0);
-                  const beat = getBeatAtNoteIndex(notes, focusIdx);
-                  setCursorPosition(beat);
-                  playNoteAtBeatIfEnabled(beat);
-                  noteRangeHandled = true;
-                };
-                if (selectionStart < 0 || selectionEnd < 0) {
-                  const baseIdx = selectedNoteIndex >= 0 ? selectedNoteIndex : getNoteIndexAtCursor();
-                  if (baseIdx >= 0) {
-                    const p = posOf(baseIdx);
-                    if (p >= 0) {
-                      const q = p + dir;
-                      if (q >= 0 && q < order.length) {
-                        applyNoteRange(baseIdx, order[q], order[q]);
-                      }
-                    }
-                  }
-                } else {
-                  const lo = Math.min(selectionStart, selectionEnd);
-                  const hi = Math.max(selectionStart, selectionEnd);
-                  const pLo = posOf(lo);
-                  const pHi = posOf(hi);
-                  if (pLo >= 0 && pHi >= 0) {
-                    if (dir > 0 && pHi < order.length - 1) {
-                      applyNoteRange(lo, order[pHi + 1], order[pHi + 1]);
-                    } else if (dir < 0 && pLo > 0) {
-                      applyNoteRange(order[pLo - 1], hi, order[pLo - 1]);
+          e.preventDefault();
+          const curIdx = hasMeasures
+            ? getMeasureIndexForBeatMs(ms, cursorPosition, measureLengthInQuarterBeats(timeSignature))
+            : 0;
+          // Shift + ◀/▶: extend note range along the score timeline (matches rhythm toolbox hint / teacher expectation).
+          if (e.shiftKey) {
+            const withBeats = notesWithExplicitBeats(notes);
+            const sorted = withBeats.map((n, i) => ({ n, i, beat: Number(n.beat) || 0 }))
+              .sort((a, b) => {
+                if (a.beat !== b.beat) return a.beat - b.beat;
+                const ma = noteToMidi(a.n);
+                const mb = noteToMidi(b.n);
+                if (ma !== mb) return ma - mb;
+                return a.i - b.i;
+              });
+            const order = sorted.map((s) => s.i);
+            let noteRangeHandled = false;
+            if (order.length > 0) {
+              const posOf = (idx) => order.indexOf(idx);
+              const dir = e.code === 'ArrowRight' ? 1 : -1;
+              const applyNoteRange = (a, b, focusIdx) => {
+                applySelectionModel({ kind: 'range', anchorIndex: a, focusIndex: b });
+                setCursorSubRow(0);
+                const beat = getBeatAtNoteIndex(notes, focusIdx);
+                setCursorPosition(beat);
+                playNoteAtBeatIfEnabled(beat);
+                noteRangeHandled = true;
+              };
+              if (selectionStart < 0 || selectionEnd < 0) {
+                const baseIdx = selectedNoteIndex >= 0 ? selectedNoteIndex : getNoteIndexAtCursor();
+                if (baseIdx >= 0) {
+                  const p = posOf(baseIdx);
+                  if (p >= 0) {
+                    const q = p + dir;
+                    if (q >= 0 && q < order.length) {
+                      applyNoteRange(baseIdx, order[q], order[q]);
                     }
                   }
                 }
-              }
-              if (noteRangeHandled) return;
-            }
-            applySelectionModel(CURSOR_SELECTION_NONE);
-            if (e.shiftKey) {
-              const prev = measureSelectionRef.current;
-              let nextSel;
-              if (e.code === 'ArrowRight') {
-                if (!prev) nextSel = { start: curIdx, end: Math.min(curIdx + 1, ms.length - 1) };
-                else nextSel = { start: prev.start, end: Math.min(prev.end + 1, ms.length - 1) };
-              } else if (!prev) nextSel = { start: Math.max(curIdx - 1, 0), end: curIdx };
-              else nextSel = { start: Math.max(prev.start - 1, 0), end: prev.end };
-              applySelectionModel({ kind: 'measureRange', anchorMeasure: nextSel.start, focusMeasure: nextSel.end });
-              const focusIdx = Math.max(nextSel.start, nextSel.end);
-              const focusM = ms[focusIdx] || ms[curIdx];
-              setCursorPosition(focusM.startBeat);
-              playNoteAtBeatIfEnabled(focusM.startBeat);
-              return;
-            }
-            const EPS = 1e-6;
-            const selectedDurStep = Number(durationLabelToQuarterBeats(selectedDuration)) || 1;
-            const cursorStep = Math.max(0.125, selectedDurStep);
-            const spans = notesWithExplicitBeats(notes)
-              .slice()
-              .map((n) => {
-                const start = Number(n?.beat) || 0;
-                const dur = Number(n?.duration) || 1;
-                return { start, end: start + dur };
-              })
-              .sort((a, b) => a.start - b.start);
-            const getNextWrittenBoundary = (dir) => {
-              let best = null;
-              for (let i = 0; i < spans.length; i += 1) {
-                const s = spans[i];
-                const candidates = [s.start, s.end];
-                for (let c = 0; c < candidates.length; c += 1) {
-                  const b = candidates[c];
-                  if (dir > 0) {
-                    if (b > cursorPosition + EPS) best = best == null ? b : Math.min(best, b);
-                  } else if (b < cursorPosition - EPS) {
-                    best = best == null ? b : Math.max(best, b);
+              } else {
+                const lo = Math.min(selectionStart, selectionEnd);
+                const hi = Math.max(selectionStart, selectionEnd);
+                const pLo = posOf(lo);
+                const pHi = posOf(hi);
+                if (pLo >= 0 && pHi >= 0) {
+                  if (dir > 0 && pHi < order.length - 1) {
+                    applyNoteRange(lo, order[pHi + 1], order[pHi + 1]);
+                  } else if (dir < 0 && pLo > 0) {
+                    applyNoteRange(order[pLo - 1], hi, order[pLo - 1]);
                   }
                 }
               }
-              return best;
-            };
-            const dir = e.code === 'ArrowRight' ? 1 : -1;
-            const boundary = getNextWrittenBoundary(dir);
-            const stepped = cursorPosition + dir * cursorStep;
-            const targetBeat = boundary != null ? boundary : stepped;
-            const newBeat = Math.max(0, Math.min(maxCursor, targetBeat));
-            setMeasureSelection(null);
-            setCursorPosition(newBeat);
-            setSelectedNoteIndex(-1);
-            playNoteAtBeatIfEnabled(newBeat);
+            }
+            if (noteRangeHandled) return;
+          }
+          applySelectionModel(CURSOR_SELECTION_NONE);
+          if (e.shiftKey && hasMeasures) {
+            const prev = measureSelectionRef.current;
+            let nextSel;
+            if (e.code === 'ArrowRight') {
+              if (!prev) nextSel = { start: curIdx, end: Math.min(curIdx + 1, ms.length - 1) };
+              else nextSel = { start: prev.start, end: Math.min(prev.end + 1, ms.length - 1) };
+            } else if (!prev) nextSel = { start: Math.max(curIdx - 1, 0), end: curIdx };
+            else nextSel = { start: Math.max(prev.start - 1, 0), end: prev.end };
+            applySelectionModel({ kind: 'measureRange', anchorMeasure: nextSel.start, focusMeasure: nextSel.end });
+            const focusIdx = Math.max(nextSel.start, nextSel.end);
+            const focusM = ms[focusIdx] || ms[curIdx];
+            setCursorPosition(focusM.startBeat);
+            playNoteAtBeatIfEnabled(focusM.startBeat);
             return;
           }
+          const EPS = 1e-6;
+          const selectedDurStep = Number(durationLabelToQuarterBeats(selectedDuration)) || 1;
+          const cursorStep = Math.max(0.125, selectedDurStep);
+          const spans = notesWithExplicitBeats(notes)
+            .slice()
+            .map((n) => {
+              const start = Number(n?.beat) || 0;
+              const dur = Number(n?.duration) || 1;
+              return { start, end: start + dur };
+            })
+            .sort((a, b) => a.start - b.start);
+          const getNextWrittenBoundary = (dir) => {
+            let best = null;
+            for (let i = 0; i < spans.length; i += 1) {
+              const s = spans[i];
+              const candidates = [s.start, s.end];
+              for (let c = 0; c < candidates.length; c += 1) {
+                const b = candidates[c];
+                if (dir > 0) {
+                  if (b > cursorPosition + EPS) best = best == null ? b : Math.min(best, b);
+                } else if (b < cursorPosition - EPS) {
+                  best = best == null ? b : Math.max(best, b);
+                }
+              }
+            }
+            return best;
+          };
+          const getMetricalGridBoundaryBeat = (dir, fromBeat) => {
+            const metricalStep = Math.max(0.125, oneMetricalBeatInQuarterBeats(timeSignature));
+            if (!hasMeasures) return fromBeat + dir * metricalStep;
+            const idx = getMeasureIndexForBeatMs(ms, fromBeat, measureLengthInQuarterBeats(timeSignature));
+            const m = ms[Math.max(0, Math.min(ms.length - 1, idx))];
+            const start = Number(m?.startBeat) || 0;
+            const end = Number(m?.endBeat) || start;
+            const local = Math.max(0, fromBeat - start);
+            if (dir > 0) {
+              const nextSlot = Math.floor((local + EPS) / metricalStep) + 1;
+              const candidate = start + nextSlot * metricalStep;
+              if (candidate < end - EPS) return candidate;
+              const nextMeasure = ms[idx + 1];
+              return nextMeasure ? (Number(nextMeasure.startBeat) || end) : end;
+            }
+            const prevSlot = Math.ceil((local - EPS) / metricalStep) - 1;
+            if (prevSlot >= 0) return start + prevSlot * metricalStep;
+            const prevMeasure = ms[idx - 1];
+            if (!prevMeasure) return start;
+            const pStart = Number(prevMeasure.startBeat) || 0;
+            const pEnd = Number(prevMeasure.endBeat) || pStart;
+            const pLen = Math.max(0, pEnd - pStart);
+            const slotsInPrev = Math.max(0, Math.floor((pLen - EPS) / metricalStep));
+            return pStart + slotsInPrev * metricalStep;
+          };
+          const dir = e.code === 'ArrowRight' ? 1 : -1;
+          const boundary = getNextWrittenBoundary(dir);
+          const stepped = boundary != null
+            ? boundary
+            : getMetricalGridBoundaryBeat(dir, cursorPosition);
+          const targetBeat = Number.isFinite(stepped) ? stepped : (cursorPosition + dir * cursorStep);
+          const newBeat = Math.max(0, Math.min(maxCursor, targetBeat));
+          setMeasureSelection(null);
+          setCursorPosition(newBeat);
+          setSelectedNoteIndex(-1);
+          playNoteAtBeatIfEnabled(newBeat);
+          return;
+        }
+        if (e.code === 'Home' || e.code === 'End') {
+          e.preventDefault();
+          applySelectionModel(CURSOR_SELECTION_NONE);
+          const step = Math.max(0.125, oneMetricalBeatInQuarterBeats(timeSignature));
+          let anchorBeat = 0;
+          if (hasMeasures) {
+            const idx = getMeasureIndexForBeatMs(ms, cursorPosition, measureLengthInQuarterBeats(timeSignature));
+            const m = ms[Math.max(0, Math.min(ms.length - 1, idx))];
+            const start = Number(m?.startBeat) || 0;
+            const end = Number(m?.endBeat) || start;
+            if (e.code === 'Home') anchorBeat = start;
+            else {
+              const len = Math.max(0, end - start);
+              const lastSlot = Math.max(0, Math.floor((len - 1e-6) / step));
+              anchorBeat = start + lastSlot * step;
+            }
+          } else if (e.code === 'End') {
+            anchorBeat = Math.max(0, maxCursor - step);
+          }
+          const clamped = Math.max(0, Math.min(maxCursor, anchorBeat));
+          setMeasureSelection(null);
+          setCursorPosition(clamped);
+          setSelectedNoteIndex(-1);
+          playNoteAtBeatIfEnabled(clamped);
+          return;
         }
 
         // Stage V: Pitch editing – Arrow Up/Down (diatonic), Shift+Arrow or Cmd/Ctrl+Arrow (octave jump) – uses applyToSelectedNotes from top of handler
