@@ -657,6 +657,7 @@ const translations = {
     'file.exportAnimationNoContent': 'Lisa noote või taustheli, et eksportida.',
     'file.exportAnimationExporting': 'Eksportimas…',
     'file.exportAnimationDone': 'Video laaditud alla!',
+    'file.exportAnimationNeedPreviewArea': 'Lülita sisse live preview ala ja joonista noodile stseeniala (katkendjooneline ristkülik); alles siis saab salvestada.',
     // Seaded (modal)
     'settings.title': 'Seaded',
     'settings.songTitle': 'Loo pealkiri',
@@ -1477,6 +1478,7 @@ const translations = {
     'file.exportAnimationNoContent': 'Add notes or backing audio to export.',
     'file.exportAnimationExporting': 'Exporting…',
     'file.exportAnimationDone': 'Video downloaded!',
+    'file.exportAnimationNeedPreviewArea': 'Turn on Live preview area and draw the scene rectangle on the score (dashed box); recording is available only after that.',
     'settings.title': 'Settings',
     'settings.songTitle': 'Song title',
     'settings.author': 'Author / composer',
@@ -2290,6 +2292,7 @@ const translations = {
     'file.exportAnimationNoContent': 'Lisää nuotteja tai taustaääni viedäksesi.',
     'file.exportAnimationExporting': 'Viedään…',
     'file.exportAnimationDone': 'Video ladattu!',
+    'file.exportAnimationNeedPreviewArea': 'Ota käyttöön live preview -alue ja piirrä kohtausalue nuottiviivalle (katkoviiva); tallennus on mahdollista vasta sen jälkeen.',
     'settings.title': 'Asetukset',
     'settings.songTitle': 'Kappaleen nimi',
     'settings.author': 'Tekijä / säveltäjä',

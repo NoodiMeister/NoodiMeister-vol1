@@ -84,6 +84,15 @@ const CONTENT = {
             ],
           },
           {
+            q: 'Miks Animation Record nupp on hall ja kuidas see aktiivseks saada?',
+            steps: [
+              'Animation Record töötab ainult siis, kui Live preview ala on sisse lülitatud.',
+              'Lülita nupp “Live preview ala: ON” aktiivseks.',
+              'Joonista noodilehele katkendjooneline ristkülik (stseeniala), mida soovid videosse salvestada.',
+              'Kui ala on olemas, muutub Record nupp aktiivseks ja salvestus kasutab täpselt seda ala.',
+            ],
+          },
+          {
             q: 'Kuidas laulusõnu lisada? Kuidas lisada rohkem kui 1 rida laulusõnu?',
             steps: [
               'Vali laulusõnade/teksti sisestus.',
@@ -291,6 +300,10 @@ const CONTENT = {
             a: 'Use export/print in editor and verify preview before final output.',
           },
           {
+            q: 'Why is Animation Record greyed out?',
+            a: 'Recording is enabled only after turning on Live preview area and drawing the dashed scene rectangle on the score page.',
+          },
+          {
             q: 'Why does preview look different from score page?',
             a: 'Usually page format/layout settings differ. Check orientation, margins, and system spacing options.',
           },
@@ -393,6 +406,10 @@ const CONTENT = {
           {
             q: 'Miten vien PDF:n tai tulostan?',
             a: 'Käytä editorin vienti-/tulostustoimintoa ja tarkista esikatselu ennen lopullista tulostusta.',
+          },
+          {
+            q: 'Miksi Animation Record on harmaa?',
+            a: 'Tallennus aktivoituu vasta, kun Live preview -alue on päällä ja katkoviivainen kohtausalue on piirretty nuottisivulle.',
           },
           {
             q: 'Miksi esikatselu näyttää erilaiselta kuin nuottisivu?',

@@ -9,6 +9,7 @@ import * as authStorage from './services/authStorage';
 import { refreshGoogleTokenSilently, refreshMicrosoftTokenSilently } from './services/cloudTokenRefresh';
 import { JoClefSymbol, TrebleClefSymbol, BassClefSymbol } from './components/ClefSymbols';
 import { AppLogo } from './components/AppLogo';
+import { PedagogicalAudioTransport } from './components/pedagogical/PedagogicalAudioTransport';
 import { NoteHead } from './components/NoteHead';
 import { NoteSymbol } from './notation/NoteSymbols';
 import {
@@ -1856,7 +1857,8 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   const [pianoStripVisible, setPianoStripVisible] = useState(false); // klaviatuuri riba all – nähtav ka siis, kui avatud on Rütm vms
   const [timelinePanelVisible, setTimelinePanelVisible] = useState(false); // timeline panel alumises ribas
   const [videoTimelineClips, setVideoTimelineClips] = useState([]); // [{ id, name, url, durationSec, createdAt, mimeType }]
-  const [videoRulerToolbarHeight, setVideoRulerToolbarHeight] = useState(132);
+  /** Pedagoogilise alumise meedia-toolbar’i kõrgus (MP3 + animatsioon + noodijoon + video). */
+  const [pedagogicalBottomToolbarHeight, setPedagogicalBottomToolbarHeight] = useState(320);
   const videoRulerResizeDragRef = useRef(null); // { startY, startHeight }
   const N_MODE_PRIMARY_TOOL_IDS = useMemo(() => ['rhythm', 'pitchInput', 'pianoKeyboard', 'chords'], []);
   const PIANO_RANGE_PRESETS = useMemo(() => [
@@ -1925,8 +1927,8 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       const drag = videoRulerResizeDragRef.current;
       if (!drag) return;
       const deltaY = drag.startY - e.clientY;
-      const nextHeight = Math.max(88, Math.min(380, drag.startHeight + deltaY));
-      setVideoRulerToolbarHeight(nextHeight);
+      const nextHeight = Math.max(200, Math.min(520, drag.startHeight + deltaY));
+      setPedagogicalBottomToolbarHeight(nextHeight);
     };
     const handleMouseUp = () => {
       if (!videoRulerResizeDragRef.current) return;
@@ -1941,6 +1943,92 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       window.removeEventListener('mouseup', handleMouseUp);
     };
   }, []);
+  useEffect(() => {
+    const normalizeRect = (rect) => {
+      if (!rect) return null;
+      const minSize = 0.01;
+      const x = clampNumber(Number(rect.x) || 0, 0, 1 - minSize);
+      const y = clampNumber(Number(rect.y) || 0, 0, 1 - minSize);
+      const wRaw = clampNumber(Number(rect.w) || minSize, minSize, 1);
+      const hRaw = clampNumber(Number(rect.h) || minSize, minSize, 1);
+      const w = clampNumber(wRaw, minSize, 1 - x);
+      const h = clampNumber(hRaw, minSize, 1 - y);
+      return { x, y, w, h };
+    };
+    const toAreaRect = (drag, clientX, clientY) => {
+      if (!drag?.containerRect) return null;
+      const rect = drag.containerRect;
+      const x1 = clampNumber((drag.startX - rect.left) / Math.max(1, rect.width), 0, 1);
+      const y1 = clampNumber((drag.startY - rect.top) / Math.max(1, rect.height), 0, 1);
+      const x2 = clampNumber((clientX - rect.left) / Math.max(1, rect.width), 0, 1);
+      const y2 = clampNumber((clientY - rect.top) / Math.max(1, rect.height), 0, 1);
+      const left = Math.min(x1, x2);
+      const top = Math.min(y1, y2);
+      const width = Math.max(0.01, Math.abs(x2 - x1));
+      const height = Math.max(0.01, Math.abs(y2 - y1));
+      return normalizeRect({ x: left, y: top, w: width, h: height });
+    };
+    const resizeAreaRect = (drag, clientX, clientY) => {
+      const rect = drag?.containerRect;
+      const startRect = drag?.startRect;
+      const handle = String(drag?.handle || '');
+      if (!rect || !startRect || !handle) return null;
+      const dx = (clientX - drag.startX) / Math.max(1, rect.width);
+      const dy = (clientY - drag.startY) / Math.max(1, rect.height);
+      const minSize = 0.01;
+      let left = startRect.x;
+      let right = startRect.x + startRect.w;
+      let top = startRect.y;
+      let bottom = startRect.y + startRect.h;
+      if (handle.includes('e')) right += dx;
+      if (handle.includes('w')) left += dx;
+      if (handle.includes('s')) bottom += dy;
+      if (handle.includes('n')) top += dy;
+      left = clampNumber(left, 0, 1 - minSize);
+      right = clampNumber(right, minSize, 1);
+      top = clampNumber(top, 0, 1 - minSize);
+      bottom = clampNumber(bottom, minSize, 1);
+      if (right - left < minSize) {
+        if (handle.includes('w')) left = right - minSize;
+        else right = left + minSize;
+      }
+      if (bottom - top < minSize) {
+        if (handle.includes('n')) top = bottom - minSize;
+        else bottom = top + minSize;
+      }
+      return normalizeRect({ x: left, y: top, w: right - left, h: bottom - top });
+    };
+    const handleMouseMove = (e) => {
+      const drag = pedagogicalSceneAreaDragRef.current;
+      if (!drag) return;
+      const next = drag.mode === 'resize'
+        ? resizeAreaRect(drag, e.clientX, e.clientY)
+        : toAreaRect(drag, e.clientX, e.clientY);
+      if (next) setPedagogicalSceneAreaDraft(next);
+    };
+    const handleMouseUp = (e) => {
+      const drag = pedagogicalSceneAreaDragRef.current;
+      if (!drag) return;
+      pedagogicalSceneAreaDragRef.current = null;
+      const next = drag.mode === 'resize'
+        ? resizeAreaRect(drag, e.clientX, e.clientY)
+        : toAreaRect(drag, e.clientX, e.clientY);
+      if (next) setPedagogicalSceneAreaDraft(next);
+      setIsPedagogicalSceneAreaPicking(false);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, []);
+  useEffect(() => {
+    if (pedagogicalLivePreviewEnabled) return;
+    setIsPedagogicalSceneAreaPicking(false);
+  }, [pedagogicalLivePreviewEnabled]);
 
   // Stage V: Time signature display mode
   const [timeSignatureMode, setTimeSignatureMode] = useState('pedagogical'); // 'classic' or 'pedagogical'
@@ -2592,6 +2680,15 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   const [pedagogicalCueTextDraft, setPedagogicalCueTextDraft] = useState('');
   const [pedagogicalCueMediaUrlDraft, setPedagogicalCueMediaUrlDraft] = useState('');
   const [pedagogicalCueHideScoreDraft, setPedagogicalCueHideScoreDraft] = useState(true);
+  const [pedagogicalSceneAreaDraft, setPedagogicalSceneAreaDraft] = useState(null); // { x,y,w,h } normalized 0..1
+  const [pedagogicalLivePreviewEnabled, setPedagogicalLivePreviewEnabled] = useState(false);
+  const [isPedagogicalSceneAreaPicking, setIsPedagogicalSceneAreaPicking] = useState(false);
+  /** Animation Record / video eksport: nõuab live preview režiimi ja joonistatud stseeniala (sama tingimus mis kärbe). */
+  const canUseAnimationRecord = useMemo(() => {
+    if (!pedagogicalLivePreviewEnabled) return false;
+    const d = pedagogicalSceneAreaDraft;
+    return !!(d && Number(d.w) > 0.001 && Number(d.h) > 0.001);
+  }, [pedagogicalLivePreviewEnabled, pedagogicalSceneAreaDraft]);
   const [pedagogicalRhythmStep, setPedagogicalRhythmStep] = useState(1); // beat-grid cursor read step
   // Animeeritud notatsioon: nooti lugeva kursori kuju (püstine joon, emoji)
   const [pedagogicalPlayheadStyle, setPedagogicalPlayheadStyle] = useState('line'); // 'line' | 'violin' | 'smiley' | 'custom'
@@ -2606,6 +2703,8 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   const [rhythmCursorWidthMultiplier, setRhythmCursorWidthMultiplier] = useState(1);
   const [rhythmCursorHighContrast, setRhythmCursorHighContrast] = useState(false);
   const [isExportingAnimation, setIsExportingAnimation] = useState(false);
+  const [recordHintToastVisible, setRecordHintToastVisible] = useState(false);
+  const recordHintToastTimeoutRef = useRef(null);
   const [isExportingPdf, setIsExportingPdf] = useState(false);
   const [showPdfExportPreview, setShowPdfExportPreview] = useState(false);
   /** Inline SVG (mitte data: img) — brauserid ei lae SVG @font-face’e pildi kontekstis; SMuFL taktimõõt jääb nähtavaks. */
@@ -2670,6 +2769,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   const pedagogicalAudioUrlRef = useRef(null); // object URL (revoke vahetusel)
   const pedagogicalAudioInputRef = useRef(null);
   const pedagogicalAudioImportInputRef = useRef(null);
+  const pedagogicalSceneAreaDragRef = useRef(null); // { startX, startY, containerRect }
   const pedagogicalCueMediaInputRef = useRef(null);
   const musicXmlInputRef = useRef(null);
   const pageDesignInputRef = useRef(null);
@@ -2767,6 +2867,25 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       isDark,
     };
   }, [themeMode]);
+  /** Animation Record nupu taust, kui stseeniala on valmis (kasutaja põhivärv). */
+  const animationRecordThemeFill = useMemo(() => {
+    if (themePrimaryColor === 'blue') return '#dbeafe';
+    if (themePrimaryColor === 'green') return '#dcfce7';
+    return '#ffedd5';
+  }, [themePrimaryColor]);
+  const showRecordPreviewAreaHint = useCallback(() => {
+    const msg = t('file.exportAnimationNeedPreviewArea');
+    setSaveFeedback(msg);
+    setRecordHintToastVisible(true);
+    if (recordHintToastTimeoutRef.current) clearTimeout(recordHintToastTimeoutRef.current);
+    recordHintToastTimeoutRef.current = setTimeout(() => {
+      setRecordHintToastVisible(false);
+      setSaveFeedback((prev) => (prev === msg ? '' : prev));
+    }, 3600);
+  }, [t]);
+  useEffect(() => () => {
+    if (recordHintToastTimeoutRef.current) clearTimeout(recordHintToastTimeoutRef.current);
+  }, []);
   /** Noodilehe paber: ei sõltu teemast ega põhivärvist; vaikimisi valge. Kasutaja lehe kujundus (pilt/SVG) renderdatakse eraldi kihina peale. */
   const scorePagePaperBackground = '#ffffff';
   // Rippmenüüd tööriistaribal: 'file' | 'view' | null
@@ -3836,6 +3955,16 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       setTimeout(() => setSaveFeedback(''), 3000);
       return;
     }
+    const exportAreaReady =
+      pedagogicalLivePreviewEnabled &&
+      pedagogicalSceneAreaDraft &&
+      Number(pedagogicalSceneAreaDraft.w) > 0.001 &&
+      Number(pedagogicalSceneAreaDraft.h) > 0.001;
+    if (!exportAreaReady) {
+      setSaveFeedback(t('file.exportAnimationNeedPreviewArea'));
+      setTimeout(() => setSaveFeedback(''), 4000);
+      return;
+    }
     const totalBeats = notes.reduce((acc, n) => acc + n.duration, 0);
     const bpm = Math.max(20, Math.min(300, pedagogicalAudioBpm));
     const durationSec = pedagogicalAudioUrl && pedagogicalAudioDuration > 0
@@ -3861,9 +3990,23 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       return;
     }
 
+    const draft = pedagogicalSceneAreaDraft;
+    const hasSceneCrop =
+      draft &&
+      Number(draft.w) > 0.001 &&
+      Number(draft.h) > 0.001;
+    const nx = hasSceneCrop ? clampNumber(Number(draft.x) || 0, 0, 1) : 0;
+    const ny = hasSceneCrop ? clampNumber(Number(draft.y) || 0, 0, 1) : 0;
+    const nw = hasSceneCrop ? clampNumber(Number(draft.w) || 0.01, 0.01, 1) : 1;
+    const nh = hasSceneCrop ? clampNumber(Number(draft.h) || 0.01, 0.01, 1) : 1;
+    const x0 = nx * w;
+    const y0 = ny * h;
+    const cwCrop = nw * w;
+    const chCrop = nh * h;
+
     const canvas = document.createElement('canvas');
-    canvas.width = w;
-    canvas.height = h;
+    canvas.width = hasSceneCrop ? Math.max(1, Math.round(nw * w)) : w;
+    canvas.height = hasSceneCrop ? Math.max(1, Math.round(nh * h)) : h;
     const ctx = canvas.getContext('2d');
     const fps = 15;
     const stream = canvas.captureStream(fps);
@@ -3908,14 +4051,52 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       setCursorPosition(Math.max(0, Math.min(totalBeatsNow, beat)));
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
-          html2canvas(container, { scale: 1, useCORS: true, logging: false }).then((captureCanvas) => {
-            ctx.drawImage(captureCanvas, 0, 0, w, h);
+          html2canvas(container, {
+            scale: 1,
+            useCORS: true,
+            logging: false,
+            ignoreElements: (el) =>
+              typeof el?.hasAttribute === 'function' && el.hasAttribute('data-export-ignore'),
+          }).then((captureCanvas) => {
+            let sx = 0;
+            let sy = 0;
+            let sw = captureCanvas.width;
+            let sh = captureCanvas.height;
+            if (hasSceneCrop) {
+              const scaleX = captureCanvas.width / Math.max(1, w);
+              const scaleY = captureCanvas.height / Math.max(1, h);
+              sx = Math.round(nx * w * scaleX);
+              sy = Math.round(ny * h * scaleY);
+              sw = Math.max(1, Math.round(nw * w * scaleX));
+              sh = Math.max(1, Math.round(nh * h * scaleY));
+              sx = Math.max(0, Math.min(sx, captureCanvas.width - 1));
+              sy = Math.max(0, Math.min(sy, captureCanvas.height - 1));
+              sw = Math.min(sw, captureCanvas.width - sx);
+              sh = Math.min(sh, captureCanvas.height - sy);
+            }
+            ctx.drawImage(
+              captureCanvas,
+              sx,
+              sy,
+              sw,
+              sh,
+              0,
+              0,
+              canvas.width,
+              canvas.height
+            );
             const cur = exportCursorRef.current;
             if (cur && cur.emoji) {
               ctx.font = `${cur.size}px sans-serif`;
               ctx.textAlign = 'center';
               ctx.textBaseline = 'middle';
-              ctx.fillText(cur.emoji, cur.x, cur.y);
+              let ex = cur.x;
+              let ey = cur.y;
+              if (hasSceneCrop) {
+                ex = ((cur.x - x0) / Math.max(1e-6, cwCrop)) * canvas.width;
+                ey = ((cur.y - y0) / Math.max(1e-6, chCrop)) * canvas.height;
+              }
+              ctx.fillText(cur.emoji, ex, ey);
             }
           }).catch(() => {});
         });
@@ -3984,7 +4165,19 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         recorder.stop();
       }
     }, durationSec * 1000 + 1500);
-  }, [isPedagogicalProject, notes, pedagogicalAudioUrl, pedagogicalAudioDuration, pedagogicalAudioBpm, songTitle, stopPedagogicalPlayback, t, getPedagogicalBeatFromAudioSeconds]);
+  }, [
+    isPedagogicalProject,
+    notes,
+    pedagogicalAudioUrl,
+    pedagogicalAudioDuration,
+    pedagogicalAudioBpm,
+    pedagogicalLivePreviewEnabled,
+    pedagogicalSceneAreaDraft,
+    songTitle,
+    stopPedagogicalPlayback,
+    t,
+    getPedagogicalBeatFromAudioSeconds,
+  ]);
 
   const printOptionsRef = useRef({ paperSize: 'a4', pageOrientation: 'portrait' });
   const pdfExportOptionsRef = useRef({ pageFlowDirection: 'vertical', pageWidth: LAYOUT.PAGE_WIDTH_PX });
@@ -4734,6 +4927,14 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
           text: String(cue?.text || ''),
           mediaUrl: String(cue?.mediaUrl || ''),
           mediaAsset: cue?.mediaAsset && typeof cue.mediaAsset === 'object' ? cue.mediaAsset : undefined,
+          captureRect: cue?.captureRect && typeof cue.captureRect === 'object'
+            ? {
+              x: clampNumber(Number(cue.captureRect.x) || 0, 0, 1),
+              y: clampNumber(Number(cue.captureRect.y) || 0, 0, 1),
+              w: clampNumber(Number(cue.captureRect.w) || 0.01, 0.01, 1),
+              h: clampNumber(Number(cue.captureRect.h) || 0.01, 0.01, 1),
+            }
+            : undefined,
           hideScore: cue?.hideScore !== false,
         })));
       }
@@ -7038,21 +7239,49 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     const endSec = Math.max(startSec + 0.1, Number(pedagogicalCueEndSecDraft) || (startSec + 2));
     const text = String(pedagogicalCueTextDraft || '').trim();
     const mediaUrl = String(pedagogicalCueMediaUrlDraft || '').trim();
-    if (!text && !mediaUrl) return;
+    if (!text && !mediaUrl && !pedagogicalSceneAreaDraft) return;
     setPedagogicalCues((prev) => [...(Array.isArray(prev) ? prev : []), {
       id: makeId('cue'),
       startSec,
       endSec,
       text,
       mediaUrl,
+      captureRect: pedagogicalSceneAreaDraft ? { ...pedagogicalSceneAreaDraft } : undefined,
       hideScore: !!pedagogicalCueHideScoreDraft,
     }]);
     if (!text) setPedagogicalCueTextDraft('');
     if (!mediaUrl) setPedagogicalCueMediaUrlDraft('');
-  }, [pedagogicalCueStartSecDraft, pedagogicalCueEndSecDraft, pedagogicalCueTextDraft, pedagogicalCueMediaUrlDraft, pedagogicalCueHideScoreDraft]);
+  }, [pedagogicalCueStartSecDraft, pedagogicalCueEndSecDraft, pedagogicalCueTextDraft, pedagogicalCueMediaUrlDraft, pedagogicalCueHideScoreDraft, pedagogicalSceneAreaDraft]);
   const removePedagogicalCue = useCallback((cueId) => {
     setPedagogicalCues((prev) => (Array.isArray(prev) ? prev.filter((cue) => cue?.id !== cueId) : prev));
   }, []);
+  const beginPedagogicalSceneAreaResize = useCallback((handle, e) => {
+    if (!pedagogicalSceneAreaDraft || !scoreContainerRef.current) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const rect = scoreContainerRef.current.getBoundingClientRect();
+    pedagogicalSceneAreaDragRef.current = {
+      mode: 'resize',
+      handle,
+      startX: e.clientX,
+      startY: e.clientY,
+      startRect: { ...pedagogicalSceneAreaDraft },
+      containerRect: rect,
+    };
+    const cursorByHandle = {
+      n: 'ns-resize',
+      s: 'ns-resize',
+      e: 'ew-resize',
+      w: 'ew-resize',
+      ne: 'nesw-resize',
+      sw: 'nesw-resize',
+      nw: 'nwse-resize',
+      se: 'nwse-resize',
+    };
+    document.body.style.cursor = cursorByHandle[String(handle)] || 'crosshair';
+    document.body.style.userSelect = 'none';
+    setIsPedagogicalSceneAreaPicking(false);
+  }, [pedagogicalSceneAreaDraft]);
   const removeVideoTimelineClip = useCallback((clipId) => {
     setVideoTimelineClips((prev) => {
       if (!Array.isArray(prev)) return prev;
@@ -13549,12 +13778,27 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                     <div className="my-1 border-t border-slate-600" />
                     {/* Animatsiooni eksport (video) – ainult pedagoogilise projekti puhul */}
                     {isPedagogicalProject && (
-                      <div className="relative" onMouseEnter={() => setFileSubmenuOpen('exportAnimation')} onMouseLeave={() => setFileSubmenuOpen(null)}>
+                      <div
+                        className="relative"
+                        onMouseEnter={() => {
+                          if (isExportingAnimation || !canUseAnimationRecord) return;
+                          setFileSubmenuOpen('exportAnimation');
+                        }}
+                        onMouseLeave={() => setFileSubmenuOpen(null)}
+                      >
                         <button
                           type="button"
                           disabled={isExportingAnimation}
-                          className="w-full flex items-center justify-between gap-2 px-3 py-2 text-left text-sm text-amber-50 hover:bg-slate-600 disabled:opacity-60"
-                          title={t('file.exportAnimation')}
+                          aria-disabled={!canUseAnimationRecord}
+                          onClick={() => {
+                            if (!canUseAnimationRecord) {
+                              showRecordPreviewAreaHint();
+                              return;
+                            }
+                            setFileSubmenuOpen((prev) => (prev === 'exportAnimation' ? null : 'exportAnimation'));
+                          }}
+                          className="w-full flex items-center justify-between gap-2 px-3 py-2 text-left text-sm text-amber-50 hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                          title={canUseAnimationRecord ? t('file.exportAnimation') : t('file.exportAnimationNeedPreviewArea')}
                         >
                           <span className="flex items-center gap-2">
                             {icons?.Video && <icons.Video className="w-4 h-4" />}
@@ -13567,7 +13811,16 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                             <button
                               type="button"
                               disabled={isExportingAnimation}
-                              onClick={() => { exportAnimationAsVideo({ download: true }); setHeaderMenuOpen(null); setFileSubmenuOpen(null); }}
+                              aria-disabled={!canUseAnimationRecord}
+                              onClick={() => {
+                                if (!canUseAnimationRecord) {
+                                  showRecordPreviewAreaHint();
+                                  return;
+                                }
+                                exportAnimationAsVideo({ download: true });
+                                setHeaderMenuOpen(null);
+                                setFileSubmenuOpen(null);
+                              }}
                               className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-amber-50 hover:bg-slate-600 disabled:opacity-60"
                             >
                               {t('file.exportAnimationDownload')}
@@ -13575,7 +13828,16 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                             <button
                               type="button"
                               disabled={isExportingAnimation}
-                              onClick={() => { exportAnimationAsVideo({ saveToDrive: true }); setHeaderMenuOpen(null); setFileSubmenuOpen(null); }}
+                              aria-disabled={!canUseAnimationRecord}
+                              onClick={() => {
+                                if (!canUseAnimationRecord) {
+                                  showRecordPreviewAreaHint();
+                                  return;
+                                }
+                                exportAnimationAsVideo({ saveToDrive: true });
+                                setHeaderMenuOpen(null);
+                                setFileSubmenuOpen(null);
+                              }}
                               className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-amber-50 hover:bg-slate-600 disabled:opacity-60"
                             >
                               <CloudUpload className="w-4 h-4" /> {t('file.exportAnimationDrive')}
@@ -13731,9 +13993,9 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                         type="button"
                         onClick={() => { dirtyRef.current = true; setShowPedagogicalVideoRuler((prev) => !prev); }}
                         className="w-full flex items-center justify-between gap-2 px-3 py-2 text-left text-sm text-amber-50 hover:bg-slate-600"
-                        title="Näita/peida stseenide timeline noodigraafika all"
+                        title="Näita/peida stseenide (cue) rida pedagoogilises alumises meedia-toolbar'is"
                       >
-                        <span>Video editor ruler (pedagoogiline)</span>
+                        <span>Video editor ruler (stseenid alumisel ribal)</span>
                         {showPedagogicalVideoRuler && <Check className="w-4 h-4 text-amber-400" />}
                       </button>
                     )}
@@ -15530,9 +15792,9 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       <div
         className="flex flex-1"
         style={{
-          paddingBottom: (pianoStripVisible || timelinePanelVisible)
+          paddingBottom: (pianoStripVisible || (timelinePanelVisible && !isPedagogicalProject))
             ? 144
-            : (isPedagogicalProject && showPedagogicalVideoRuler ? videoRulerToolbarHeight + 28 : 0),
+            : (isPedagogicalProject && !pianoStripVisible ? pedagogicalBottomToolbarHeight + 12 : 0),
         }}
       >
         {/* Left Sidebar - Main Control Center (saab peita X-ga või Vaade → Tööriistakast) */}
@@ -15691,194 +15953,10 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
             <div className="flex-shrink-0 mb-4 mx-auto w-full" style={{ maxWidth: 1000 }}>
               <div className="bg-gradient-to-b from-violet-100 to-violet-50 border-2 border-violet-300 rounded-xl shadow-lg p-3">
                 <h3 className="text-sm font-bold text-violet-900 uppercase tracking-wider mb-2">{t('pedagogical.audio')}</h3>
-                <p className="text-xs text-violet-800 mb-3">{t('pedagogical.audioHint')}</p>
-                <div className="flex flex-wrap items-center gap-3">
-                  <input
-                    ref={pedagogicalAudioInputRef}
-                    type="file"
-                    accept="audio/*"
-                    className="hidden"
-                    onChange={handlePedagogicalAudioFile}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => pedagogicalAudioInputRef.current?.click()}
-                    className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-violet-600 text-white text-sm font-semibold hover:bg-violet-500"
-                  >
-                    {t('pedagogical.chooseAudio')}
-                  </button>
-                  <label className="flex items-center gap-2 text-sm text-violet-900">
-                    <span className="font-medium">{t('pedagogical.bpm')}</span>
-                    <input
-                      type="number"
-                      min={20}
-                      max={300}
-                      value={pedagogicalAudioBpm}
-                      onChange={(e) => setPedagogicalAudioBpm(Math.max(20, Math.min(300, parseInt(e.target.value, 10) || 120)))}
-                      className="w-16 px-2 py-1.5 rounded border-2 border-violet-200 bg-white text-violet-900 font-medium"
-                    />
-                  </label>
-                  <label className="flex items-center gap-2 text-sm text-violet-900">
-                    <span className="font-medium">Cursor step</span>
-                    <select
-                      value={String(pedagogicalRhythmStep)}
-                      onChange={(e) => setPedagogicalRhythmStep(clampNumber(Number(e.target.value) || 1, 0.125, 4))}
-                      className="px-2 py-1.5 rounded border-2 border-violet-200 bg-white text-violet-900 font-medium"
-                    >
-                      <option value="1">Beat (1/4)</option>
-                      <option value="0.5">1/8</option>
-                      <option value="0.25">1/16</option>
-                    </select>
-                  </label>
-                  <label className="flex items-center gap-2 text-sm text-violet-900">
-                    <span className="font-medium">Sync</span>
-                    <select
-                      value={pedagogicalSyncMode}
-                      onChange={(e) => setPedagogicalSyncMode(e.target.value === 'anchors' ? 'anchors' : 'bpm')}
-                      className="px-2 py-1.5 rounded border-2 border-violet-200 bg-white text-violet-900 font-medium"
-                    >
-                      <option value="bpm">BPM only</option>
-                      <option value="anchors">2 anchors</option>
-                    </select>
-                  </label>
-                  <label className="flex items-center gap-2 text-sm text-violet-900">
-                    <input
-                      type="checkbox"
-                      checked={pedagogicalLoopEnabled}
-                      onChange={(e) => setPedagogicalLoopEnabled(!!e.target.checked)}
-                    />
-                    <span className="font-medium">Loop</span>
-                  </label>
-                  <label className="flex items-center gap-2 text-sm text-violet-900">
-                    <span className="font-medium">Kordi</span>
-                    <select
-                      value={String(pedagogicalLoopCount)}
-                      onChange={(e) => setPedagogicalLoopCount(Math.max(0, Math.min(99, Number(e.target.value) || 0)))}
-                      className="px-2 py-1.5 rounded border-2 border-violet-200 bg-white text-violet-900 font-medium"
-                      disabled={!pedagogicalLoopEnabled}
-                    >
-                      <option value="1">1x</option>
-                      <option value="2">2x</option>
-                      <option value="4">4x</option>
-                      <option value="8">8x</option>
-                      <option value="0">∞</option>
-                    </select>
-                  </label>
-                  <span className="text-xs text-violet-700" title={t('pedagogical.bpmHint')}>{t('pedagogical.bpmHint')}</span>
-                  {pedagogicalSyncMode === 'anchors' && (
-                    <div className="flex flex-wrap items-center gap-2 text-xs text-violet-900 bg-violet-100/70 px-2 py-1 rounded-lg border border-violet-200">
-                      <span className="font-semibold">A</span>
-                      <input type="number" min={0} step="0.01" value={pedagogicalSyncStartTimeSec} onChange={(e) => setPedagogicalSyncStartTimeSec(Math.max(0, Number(e.target.value) || 0))} className="w-16 px-1.5 py-1 rounded border border-violet-300 bg-white" title="Audio sec" />
-                      <span>s</span>
-                      <input type="number" min={0} step="0.25" value={pedagogicalSyncStartBeat} onChange={(e) => setPedagogicalSyncStartBeat(Math.max(0, Number(e.target.value) || 0))} className="w-16 px-1.5 py-1 rounded border border-violet-300 bg-white" title="Score beat" />
-                      <span>beat</span>
-                      <span className="font-semibold ml-2">B</span>
-                      <input type="number" min={0} step="0.01" value={pedagogicalSyncEndTimeSec} onChange={(e) => setPedagogicalSyncEndTimeSec(Math.max(0, Number(e.target.value) || 0))} className="w-16 px-1.5 py-1 rounded border border-violet-300 bg-white" title="Audio sec" />
-                      <span>s</span>
-                      <input type="number" min={0} step="0.25" value={pedagogicalSyncEndBeat} onChange={(e) => setPedagogicalSyncEndBeat(Math.max(0, Number(e.target.value) || 0))} className="w-16 px-1.5 py-1 rounded border border-violet-300 bg-white" title="Score beat" />
-                      <span>beat</span>
-                    </div>
-                  )}
-                  {pedagogicalAudioUrl ? (
-                    <>
-                      <button
-                        type="button"
-                        onClick={isPedagogicalAudioPlaying ? pausePedagogicalPlayback : startPedagogicalPlayback}
-                        className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-500"
-                      >
-                        {icons?.Play && !isPedagogicalAudioPlaying && <icons.Play className="w-4 h-4" />}
-                        {icons?.Pause && isPedagogicalAudioPlaying && <icons.Pause className="w-4 h-4" />}
-                        {isPedagogicalAudioPlaying ? t('pedagogical.pause') : t('pedagogical.play')}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => stopPedagogicalPlayback()}
-                        className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-200 text-slate-900 text-sm font-semibold hover:bg-slate-300 border border-slate-300"
-                      >
-                        Stop
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => seekPedagogicalAudio(-5)}
-                        className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-violet-100 text-violet-900 text-sm font-semibold hover:bg-violet-200 border border-violet-300"
-                      >
-                        Rewind
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => seekPedagogicalAudio(5)}
-                        className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-violet-100 text-violet-900 text-sm font-semibold hover:bg-violet-200 border border-violet-300"
-                      >
-                        Forward
-                      </button>
-                      <button
-                        type="button"
-                        disabled={isExportingAnimation}
-                        onClick={() => {
-                          setTimelinePanelVisible(true);
-                          exportAnimationAsVideo({ addToTimeline: true, download: false, saveToDrive: false });
-                        }}
-                        className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-rose-600 text-white text-sm font-semibold hover:bg-rose-500 disabled:opacity-60"
-                        title="Salvesta animatsioon ja lisa video timeline'i"
-                      >
-                        {icons?.Video && <icons.Video className="w-4 h-4" />}
-                        {isExportingAnimation ? 'Recording…' : 'Animation Record'}
-                      </button>
-                      <span className="text-sm text-violet-800">
-                        {t('pedagogical.duration')} {pedagogicalAudioDuration > 0 ? `${Math.floor(pedagogicalAudioDuration / 60)}:${String(Math.floor(pedagogicalAudioDuration % 60)).padStart(2, '0')}` : '—'}
-                      </span>
-                      <div className="w-full mt-2 rounded-lg border border-violet-200 bg-white/90 px-2 py-2">
-                        <div className="mb-1 flex items-center justify-between text-[11px] text-violet-900 font-medium">
-                          <span>MP3 timeline ruler</span>
-                          <span>
-                            {`${Math.floor(Math.max(0, pedagogicalAudioCurrentTime) / 60)}:${String(Math.floor(Math.max(0, pedagogicalAudioCurrentTime) % 60)).padStart(2, '0')}`}
-                            {' / '}
-                            {pedagogicalAudioDuration > 0 ? `${Math.floor(pedagogicalAudioDuration / 60)}:${String(Math.floor(pedagogicalAudioDuration % 60)).padStart(2, '0')}` : '0:00'}
-                          </span>
-                        </div>
-                        <div
-                          className="relative h-12 rounded border border-violet-200 bg-violet-50 cursor-pointer overflow-hidden"
-                          onClick={(e) => {
-                            const rect = e.currentTarget.getBoundingClientRect();
-                            const ratio = clampNumber((e.clientX - rect.left) / Math.max(1, rect.width), 0, 1);
-                            seekPedagogicalAudioTo((Number(pedagogicalAudioDuration) || 0) * ratio);
-                          }}
-                          title="Klõpsa timeline'il, et liikuda ajas"
-                        >
-                          {(() => {
-                            const bpmSafe = Math.max(20, Math.min(300, Number(pedagogicalAudioBpm) || 120));
-                            const totalBeatsFromAudio = Math.max(1, ((Number(pedagogicalAudioDuration) || 0) * bpmSafe) / 60);
-                            const beatsPerMeasure = Math.max(1, Number(timeSignature?.beats) || 4);
-                            const minorStepBeats = Math.max(1, Math.ceil(totalBeatsFromAudio / 96));
-                            const tickCount = Math.floor(totalBeatsFromAudio / minorStepBeats) + 1;
-                            return Array.from({ length: tickCount }, (_, idx) => {
-                              const beat = idx * minorStepBeats;
-                              const ratio = beat / Math.max(1, totalBeatsFromAudio);
-                              const isMeasure = Math.abs((beat / beatsPerMeasure) - Math.round(beat / beatsPerMeasure)) < 1e-6;
-                              return (
-                                <div
-                                  key={`ped-audio-tick-${idx}`}
-                                  className={`absolute top-0 bottom-0 ${isMeasure ? 'w-[2px] bg-violet-300' : 'w-px bg-violet-200'}`}
-                                  style={{ left: `${ratio * 100}%` }}
-                                  aria-hidden="true"
-                                />
-                              );
-                            });
-                          })()}
-                          <div
-                            className="absolute top-0 bottom-0 w-[2px] bg-violet-700"
-                            style={{
-                              left: `${((Math.max(0, Math.min(Number(pedagogicalAudioDuration) || 0, Number(pedagogicalAudioCurrentTime) || 0)) / Math.max(1, Number(pedagogicalAudioDuration) || 1)) * 100)}%`,
-                            }}
-                            aria-hidden="true"
-                          />
-                        </div>
-                      </div>
-                    </>
-                  ) : (
-                    <span className="text-sm text-violet-600 italic">{t('pedagogical.noAudio')}</span>
-                  )}
-                </div>
+                <p className="text-xs text-violet-800 mb-2">{t('pedagogical.audioHint')}</p>
+                <p className="text-xs text-violet-800 mb-3">
+                  Taustheli import, BPM, sünk, taasesitus, MP3 ajajoon, <strong>Animation Record</strong>, noodipõhine ajajoon ja videoklipid on <strong>lehe all fikseeritud meedia-toolbar&apos;il</strong> (kõrgust saab riba ülaservast lohistada). Stseenide (cue) ajajoon: <strong>Vaade → Video editor ruler (pedagoogiline)</strong>.
+                </p>
                 <div className="mt-3 rounded border border-violet-200 bg-white/70 px-2 py-2">
                   <h4 className="text-[11px] font-bold text-violet-900 uppercase mb-1">Assets selles projektis</h4>
                   <div className="text-[11px] text-violet-800 space-y-0.5">
@@ -16017,6 +16095,18 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                     </button>
                     <button
                       type="button"
+                      onClick={() => setPedagogicalSceneAreaDraft(null)}
+                      className="px-3 py-1.5 rounded border border-violet-300 bg-white text-violet-900 hover:bg-violet-50"
+                    >
+                      Tühjenda ala
+                    </button>
+                    {pedagogicalSceneAreaDraft && (
+                      <span className="text-violet-800">
+                        Ala valitud: {(pedagogicalSceneAreaDraft.w * 100).toFixed(0)}% × {(pedagogicalSceneAreaDraft.h * 100).toFixed(0)}%
+                      </span>
+                    )}
+                    <button
+                      type="button"
                       onClick={addPedagogicalCue}
                       className="px-3 py-1.5 rounded bg-violet-600 text-white font-semibold hover:bg-violet-500"
                     >
@@ -16032,6 +16122,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                             {cue.hideScore ? ' | peida score' : ''}
                             {cue.text ? ` | ${cue.text}` : ''}
                             {(cue.mediaUrl || cue.mediaAsset?.fileId) ? ' | media' : ''}
+                            {cue.captureRect ? ' | area' : ''}
                           </span>
                           <button type="button" onClick={() => removePedagogicalCue(cue.id)} className="px-2 py-0.5 rounded border border-rose-300 text-rose-700 hover:bg-rose-50">Eemalda</button>
                         </div>
@@ -16204,6 +16295,23 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
               if (!Number.isNaN(optionIndex) && toolboxes.rhythm?.options?.[optionIndex]) handleToolboxSelection(optionIndex);
             }}
             onMouseDown={(e) => {
+              if (isPedagogicalProject && pedagogicalLivePreviewEnabled && isPedagogicalSceneAreaPicking && e.button === 0) {
+                e.preventDefault();
+                e.stopPropagation();
+                const rect = e.currentTarget.getBoundingClientRect();
+                pedagogicalSceneAreaDragRef.current = {
+                  mode: 'create',
+                  startX: e.clientX,
+                  startY: e.clientY,
+                  containerRect: rect,
+                };
+                document.body.style.cursor = 'crosshair';
+                document.body.style.userSelect = 'none';
+                const x = clampNumber((e.clientX - rect.left) / Math.max(1, rect.width), 0, 1);
+                const y = clampNumber((e.clientY - rect.top) / Math.max(1, rect.height), 0, 1);
+                setPedagogicalSceneAreaDraft({ x, y, w: 0.01, h: 0.01 });
+                return;
+              }
               if (activeToolbox !== 'textBox' || e.button !== 0) return;
               const t = e.target;
               if (typeof t?.closest === 'function') {
@@ -16235,6 +16343,34 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                       <div className="text-xl font-semibold text-violet-800">Paus</div>
                     ) : null}
                   </div>
+                </div>
+              )}
+              {isPedagogicalProject && pedagogicalLivePreviewEnabled && pedagogicalSceneAreaDraft && (
+                <div
+                  data-export-ignore
+                  className={`absolute z-[92] border-2 border-dashed ${isExportingAnimation ? 'border-red-600 bg-red-200/25 shadow-[0_0_0_2px_rgba(220,38,38,0.25)]' : 'border-violet-500 bg-violet-200/20'}`}
+                  style={{
+                    left: `${clampNumber(Number(pedagogicalSceneAreaDraft.x) || 0, 0, 1) * 100}%`,
+                    top: `${clampNumber(Number(pedagogicalSceneAreaDraft.y) || 0, 0, 1) * 100}%`,
+                    width: `${clampNumber(Number(pedagogicalSceneAreaDraft.w) || 0.01, 0.01, 1) * 100}%`,
+                    height: `${clampNumber(Number(pedagogicalSceneAreaDraft.h) || 0.01, 0.01, 1) * 100}%`,
+                  }}
+                >
+                  <span className={`absolute -top-5 left-0 rounded px-1.5 py-0.5 text-[10px] font-semibold text-white pointer-events-none ${isExportingAnimation ? 'bg-red-600' : 'bg-violet-600'}`}>
+                    {isExportingAnimation ? 'REC — live preview ala' : 'Live preview ala'}
+                  </span>
+                  {[{ id: 'n', cls: '-top-1.5 left-1/2 -translate-x-1/2 cursor-ns-resize' }, { id: 's', cls: '-bottom-1.5 left-1/2 -translate-x-1/2 cursor-ns-resize' }, { id: 'e', cls: 'top-1/2 -right-1.5 -translate-y-1/2 cursor-ew-resize' }, { id: 'w', cls: 'top-1/2 -left-1.5 -translate-y-1/2 cursor-ew-resize' }, { id: 'ne', cls: '-top-1.5 -right-1.5 cursor-nesw-resize' }, { id: 'nw', cls: '-top-1.5 -left-1.5 cursor-nwse-resize' }, { id: 'se', cls: '-bottom-1.5 -right-1.5 cursor-nwse-resize' }, { id: 'sw', cls: '-bottom-1.5 -left-1.5 cursor-nesw-resize' }].map((handle) => (
+                    <button
+                      key={`scene-handle-${handle.id}`}
+                      type="button"
+                      data-export-ignore
+                      disabled={isExportingAnimation}
+                      onMouseDown={(e) => beginPedagogicalSceneAreaResize(handle.id, e)}
+                      className={`absolute h-3 w-3 rounded border bg-white shadow-sm disabled:cursor-not-allowed disabled:opacity-40 ${isExportingAnimation ? 'border-red-700' : 'border-violet-700'} ${handle.cls}`}
+                      title="Muuda live preview ala suurust"
+                      aria-label={`Resize ${handle.id}`}
+                    />
+                  ))}
                 </div>
               )}
               <PageSeparatorsOverlay
@@ -16425,27 +16561,23 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                   <button type="button" onClick={() => { clearAllNoteLabels(); }} className="px-2 py-1 rounded text-sm bg-amber-200 text-amber-900 hover:bg-amber-300 border border-amber-300">
                     {t('teacher.clearAllAnnotations')}
                   </button>
-                  {pedagogicalAudioUrl && (
+                  {pedagogicalAudioUrl && !isPedagogicalProject && (
                     <div className="flex flex-wrap items-center gap-2 border-l border-amber-300 pl-3">
                       <span className="text-xs font-semibold text-amber-800">{t('pedagogical.audio')}:</span>
-                      <button
-                        type="button"
-                        onClick={isPedagogicalAudioPlaying ? pausePedagogicalPlayback : startPedagogicalPlayback}
-                        className="px-2 py-1 rounded text-sm bg-violet-600 text-white hover:bg-violet-500"
-                      >
-                        {icons?.Play && !isPedagogicalAudioPlaying && <icons.Play className="w-4 h-4 inline-block mr-1" />}
-                        {icons?.Pause && isPedagogicalAudioPlaying && <icons.Pause className="w-4 h-4 inline-block mr-1" />}
-                        {isPedagogicalAudioPlaying ? t('pedagogical.pause') : t('pedagogical.play')}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => stopPedagogicalPlayback()}
-                        className="px-2 py-1 rounded text-sm bg-slate-200 text-slate-900 hover:bg-slate-300 border border-slate-300"
-                      >
-                        Stop
-                      </button>
-                      <button type="button" onClick={() => seekPedagogicalAudio(-5)} className="px-2 py-1 rounded text-sm bg-slate-100 text-slate-800 hover:bg-slate-200 border border-slate-200">-5s</button>
-                      <button type="button" onClick={() => seekPedagogicalAudio(5)} className="px-2 py-1 rounded text-sm bg-slate-100 text-slate-800 hover:bg-slate-200 border border-slate-200">+5s</button>
+                      <PedagogicalAudioTransport
+                        variant="teacher"
+                        isPlaying={isPedagogicalAudioPlaying}
+                        playLabel={t('pedagogical.play')}
+                        pauseLabel={t('pedagogical.pause')}
+                        rewindLabel="-5s"
+                        forwardLabel="+5s"
+                        onPlayPause={isPedagogicalAudioPlaying ? pausePedagogicalPlayback : startPedagogicalPlayback}
+                        onStop={() => stopPedagogicalPlayback()}
+                        onSeekBack={() => seekPedagogicalAudio(-5)}
+                        onSeekForward={() => seekPedagogicalAudio(5)}
+                        PlayIcon={icons?.Play}
+                        PauseIcon={icons?.Pause}
+                      />
                       <label className="flex items-center gap-2">
                         <span className="text-xs text-amber-800">Tempo</span>
                         <input
@@ -17417,7 +17549,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
           })(),
           document.body
         )}
-        {isPedagogicalProject && showPedagogicalVideoRuler && !pianoStripVisible && !timelinePanelVisible && typeof document !== 'undefined' && createPortal(
+        {isPedagogicalProject && !pianoStripVisible && typeof document !== 'undefined' && createPortal(
           (() => {
             const cuesSorted = Array.isArray(pedagogicalCues)
               ? [...pedagogicalCues].sort((a, b) => (Number(a?.startSec) || 0) - (Number(b?.startSec) || 0))
@@ -17426,93 +17558,334 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
             const durationSec = Math.max(1, Number(pedagogicalAudioDuration) || maxCueEnd || 1);
             const playheadSec = Math.max(0, Math.min(durationSec, Number(pedagogicalAudioCurrentTime) || 0));
             const playheadLeftPct = (playheadSec / durationSec) * 100;
-            const laneHeight = Math.max(56, Math.round(videoRulerToolbarHeight - 54));
+            const cueLaneHeight = showPedagogicalVideoRuler ? Math.max(52, Math.min(140, Math.round(pedagogicalBottomToolbarHeight * 0.28))) : 0;
             return (
-              <div className="fixed bottom-0 left-0 right-0 z-[100] bg-gradient-to-t from-violet-100 to-violet-50 border-t-2 border-violet-300 shadow-[0_-4px_12px_rgba(0,0,0,0.12)] px-4 pb-3 pt-2" style={{ isolation: 'isolate' }}>
-                <div
-                  className="mx-auto w-full max-w-[1000px]"
-                  style={{ minHeight: 88, height: Math.max(88, Math.round(videoRulerToolbarHeight)) }}
-                >
-                  <button
-                    type="button"
-                    className="mb-1 h-2 w-full cursor-ns-resize rounded bg-violet-300/80 hover:bg-violet-400/80"
-                    title="Muuda video ruleri kõrgust (lohista üles/alla)"
-                    aria-label="Muuda video ruleri kõrgust"
-                    onMouseDown={(e) => {
-                      e.preventDefault();
-                      videoRulerResizeDragRef.current = { startY: e.clientY, startHeight: videoRulerToolbarHeight };
-                      document.body.style.cursor = 'ns-resize';
-                      document.body.style.userSelect = 'none';
-                    }}
-                  />
-                  <div className="mb-1 flex items-center justify-between gap-2 text-[11px] font-semibold text-violet-900">
-                    <span>Video editor toolbar</span>
-                    <div className="flex items-center gap-2">
-                      <span>{playheadSec.toFixed(2)}s / {durationSec.toFixed(2)}s</span>
+              <div
+                className="fixed bottom-0 left-0 right-0 z-[100] flex flex-col border-t-2 border-violet-300 bg-gradient-to-t from-violet-100 to-violet-50 shadow-[0_-4px_12px_rgba(0,0,0,0.12)]"
+                style={{ isolation: 'isolate', height: pedagogicalBottomToolbarHeight, maxHeight: '55vh' }}
+              >
+                <button
+                  type="button"
+                  className="mx-3 mt-1 h-2 w-auto shrink-0 cursor-ns-resize rounded bg-violet-300/80 hover:bg-violet-400/80"
+                  title="Muuda alumise meedia-toolbar’i kõrgust (lohista üles/alla)"
+                  aria-label="Muuda alumise meedia-toolbar’i kõrgust"
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    videoRulerResizeDragRef.current = { startY: e.clientY, startHeight: pedagogicalBottomToolbarHeight };
+                    document.body.style.cursor = 'ns-resize';
+                    document.body.style.userSelect = 'none';
+                  }}
+                />
+                <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-3 pb-2 pt-1">
+                  <div className="mx-auto min-h-0 w-full max-w-[1000px] flex-1 overflow-y-auto space-y-2 pr-1">
+                    <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] font-semibold text-violet-900">
+                      <span>Pedagoogiline meedia (MP3 · animatsioon · noodijoon · video)</span>
+                      <span className="tabular-nums text-violet-800">{playheadSec.toFixed(2)}s / {durationSec.toFixed(2)}s · beat {Math.round((Number(cursorPosition) || 0) * 100) / 100}</span>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2 border-b border-violet-200/80 pb-2">
+                      <input ref={pedagogicalAudioInputRef} type="file" accept="audio/*" className="hidden" onChange={handlePedagogicalAudioFile} />
                       <button
                         type="button"
-                        onClick={() => setShowPedagogicalVideoRuler(false)}
-                        className="inline-flex items-center justify-center w-6 h-6 rounded border border-violet-300 bg-violet-100 text-violet-900 hover:bg-violet-200"
-                        title="Sulge video editor toolbar"
-                        aria-label="Sulge video editor toolbar"
+                        onClick={() => pedagogicalAudioInputRef.current?.click()}
+                        className="rounded-lg bg-violet-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-violet-500"
                       >
-                        ×
+                        {t('pedagogical.chooseAudio')}
+                      </button>
+                      <label className="flex items-center gap-1 text-xs text-violet-900">
+                        <span className="font-medium">{t('pedagogical.bpm')}</span>
+                        <input
+                          type="number"
+                          min={20}
+                          max={300}
+                          value={pedagogicalAudioBpm}
+                          onChange={(e) => setPedagogicalAudioBpm(Math.max(20, Math.min(300, parseInt(e.target.value, 10) || 120)))}
+                          className="w-14 rounded border border-violet-300 bg-white px-1 py-0.5 font-medium"
+                        />
+                      </label>
+                      <label className="flex items-center gap-1 text-xs text-violet-900">
+                        <span>Step</span>
+                        <select
+                          value={String(pedagogicalRhythmStep)}
+                          onChange={(e) => setPedagogicalRhythmStep(clampNumber(Number(e.target.value) || 1, 0.125, 4))}
+                          className="rounded border border-violet-300 bg-white px-1 py-0.5"
+                        >
+                          <option value="1">1/4</option>
+                          <option value="0.5">1/8</option>
+                          <option value="0.25">1/16</option>
+                        </select>
+                      </label>
+                      <label className="flex items-center gap-1 text-xs text-violet-900">
+                        <span>Sync</span>
+                        <select
+                          value={pedagogicalSyncMode}
+                          onChange={(e) => setPedagogicalSyncMode(e.target.value === 'anchors' ? 'anchors' : 'bpm')}
+                          className="rounded border border-violet-300 bg-white px-1 py-0.5"
+                        >
+                          <option value="bpm">BPM</option>
+                          <option value="anchors">2A</option>
+                        </select>
+                      </label>
+                      <label className="flex items-center gap-1 text-xs text-violet-900">
+                        <input type="checkbox" checked={pedagogicalLoopEnabled} onChange={(e) => setPedagogicalLoopEnabled(!!e.target.checked)} />
+                        Loop
+                      </label>
+                      <label className="flex items-center gap-1 text-xs text-violet-900">
+                        <span>Kordi</span>
+                        <select
+                          value={String(pedagogicalLoopCount)}
+                          onChange={(e) => setPedagogicalLoopCount(Math.max(0, Math.min(99, Number(e.target.value) || 0)))}
+                          className="rounded border border-violet-300 bg-white px-1 py-0.5"
+                          disabled={!pedagogicalLoopEnabled}
+                        >
+                          <option value="1">1x</option>
+                          <option value="2">2x</option>
+                          <option value="4">4x</option>
+                          <option value="8">8x</option>
+                          <option value="0">∞</option>
+                        </select>
+                      </label>
+                      <label className="flex items-center gap-2 text-xs text-violet-900">
+                        <span>Tempo</span>
+                        <input
+                          type="range"
+                          min={0.5}
+                          max={2}
+                          step={0.05}
+                          value={pedagogicalAudioPlaybackRate}
+                          onChange={(e) => {
+                            const v = clampNumber(Number(e.target.value) || 1, 0.5, 2);
+                            setPedagogicalAudioPlaybackRate(v);
+                            dirtyRef.current = true;
+                            if (pedagogicalAudioRef.current) pedagogicalAudioRef.current.playbackRate = v;
+                          }}
+                          className="w-20"
+                        />
+                        <span className="w-9 tabular-nums">{Math.round(pedagogicalAudioPlaybackRate * 100)}%</span>
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPedagogicalLivePreviewEnabled((prev) => {
+                            const next = !prev;
+                            if (next) setIsPedagogicalSceneAreaPicking(true);
+                            else setIsPedagogicalSceneAreaPicking(false);
+                            return next;
+                          });
+                        }}
+                        className={`rounded border px-2 py-1 text-xs font-semibold ${pedagogicalLivePreviewEnabled ? 'border-violet-700 bg-violet-600 text-white' : 'border-violet-300 bg-white text-violet-900 hover:bg-violet-50'}`}
+                        title="Lülita live preview ala sisse/välja"
+                      >
+                        {pedagogicalLivePreviewEnabled ? 'Live preview ala: ON' : 'Live preview ala: OFF'}
                       </button>
                     </div>
-                  </div>
-                  <div className="mb-1 flex items-center gap-1.5">
-                    <button
-                      type="button"
-                        onClick={isPedagogicalAudioPlaying ? pausePedagogicalPlayback : startPedagogicalPlayback}
-                      className="px-2 py-1 rounded text-xs bg-violet-600 text-white hover:bg-violet-500"
-                    >
-                      {isPedagogicalAudioPlaying ? 'Pause' : 'Play'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => stopPedagogicalPlayback()}
-                      className="px-2 py-1 rounded text-xs bg-slate-200 text-slate-900 hover:bg-slate-300 border border-slate-300"
-                    >
-                      Stop
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => seekPedagogicalAudio(-5)}
-                      className="px-2 py-1 rounded text-xs bg-violet-100 text-violet-900 hover:bg-violet-200 border border-violet-300"
-                    >
-                      Rewind
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => seekPedagogicalAudio(5)}
-                      className="px-2 py-1 rounded text-xs bg-violet-100 text-violet-900 hover:bg-violet-200 border border-violet-300"
-                    >
-                      Forward
-                    </button>
-                  </div>
-                  <div className="relative rounded bg-white border border-violet-200 overflow-hidden" style={{ height: laneHeight }}>
-                    <div
-                      className="absolute top-0 bottom-0 w-[2px] bg-violet-700 z-20"
-                      style={{ left: `${playheadLeftPct}%` }}
-                      aria-hidden="true"
-                    />
-                    {cuesSorted.map((cue) => {
-                      const start = Math.max(0, Number(cue?.startSec) || 0);
-                      const end = Math.max(start + 0.05, Number(cue?.endSec) || start + 0.05);
-                      const left = (start / durationSec) * 100;
-                      const width = Math.max(0.6, ((end - start) / durationSec) * 100);
-                      const active = pedagogicalActiveCue?.id === cue?.id;
-                      return (
-                        <div
-                          key={cue.id}
-                          className={`absolute top-1 bottom-1 rounded border px-1 py-0.5 text-[10px] leading-tight overflow-hidden ${active ? 'bg-violet-300 border-violet-700 text-violet-900' : 'bg-violet-200 border-violet-400 text-violet-900'}`}
-                          style={{ left: `${left}%`, width: `${width}%` }}
-                          title={`${Number(start).toFixed(2)}s - ${Number(end).toFixed(2)}s ${cue?.text || ''}`.trim()}
-                        >
-                          {cue?.text || 'Cue'}
+                    {pedagogicalSyncMode === 'anchors' && (
+                      <div className="flex flex-wrap items-center gap-2 rounded border border-violet-200 bg-violet-100/60 px-2 py-1 text-xs text-violet-900">
+                        <span className="font-semibold">A</span>
+                        <input type="number" min={0} step="0.01" value={pedagogicalSyncStartTimeSec} onChange={(e) => setPedagogicalSyncStartTimeSec(Math.max(0, Number(e.target.value) || 0))} className="w-16 rounded border border-violet-300 bg-white px-1 py-0.5" title="Audio sec" />
+                        <span>s</span>
+                        <input type="number" min={0} step="0.25" value={pedagogicalSyncStartBeat} onChange={(e) => setPedagogicalSyncStartBeat(Math.max(0, Number(e.target.value) || 0))} className="w-16 rounded border border-violet-300 bg-white px-1 py-0.5" title="Score beat" />
+                        <span>beat</span>
+                        <span className="ml-1 font-semibold">B</span>
+                        <input type="number" min={0} step="0.01" value={pedagogicalSyncEndTimeSec} onChange={(e) => setPedagogicalSyncEndTimeSec(Math.max(0, Number(e.target.value) || 0))} className="w-16 rounded border border-violet-300 bg-white px-1 py-0.5" title="Audio sec" />
+                        <span>s</span>
+                        <input type="number" min={0} step="0.25" value={pedagogicalSyncEndBeat} onChange={(e) => setPedagogicalSyncEndBeat(Math.max(0, Number(e.target.value) || 0))} className="w-16 rounded border border-violet-300 bg-white px-1 py-0.5" title="Score beat" />
+                        <span>beat</span>
+                      </div>
+                    )}
+                    {pedagogicalAudioUrl ? (
+                      <>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <PedagogicalAudioTransport
+                            variant="panel"
+                            isPlaying={isPedagogicalAudioPlaying}
+                            playLabel={t('pedagogical.play')}
+                            pauseLabel={t('pedagogical.pause')}
+                            rewindLabel="Rewind"
+                            forwardLabel="Forward"
+                            onPlayPause={isPedagogicalAudioPlaying ? pausePedagogicalPlayback : startPedagogicalPlayback}
+                            onStop={() => stopPedagogicalPlayback()}
+                            onSeekBack={() => seekPedagogicalAudio(-5)}
+                            onSeekForward={() => seekPedagogicalAudio(5)}
+                            PlayIcon={icons?.Play}
+                            PauseIcon={icons?.Pause}
+                          />
+                          <button
+                            type="button"
+                            disabled={isExportingAnimation}
+                            aria-disabled={!canUseAnimationRecord}
+                            onClick={() => {
+                              if (!canUseAnimationRecord) {
+                                showRecordPreviewAreaHint();
+                                return;
+                              }
+                              exportAnimationAsVideo({ addToTimeline: true, download: false, saveToDrive: false });
+                            }}
+                            title={
+                              canUseAnimationRecord
+                                ? "Salvesta animatsioon ja lisa video timeline'i"
+                                : t('file.exportAnimationNeedPreviewArea')
+                            }
+                            className={[
+                              'inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition-colors',
+                              !canUseAnimationRecord
+                                ? 'cursor-not-allowed border border-slate-300 bg-slate-200 text-slate-500'
+                                : isExportingAnimation
+                                  ? 'border-2 border-red-800 bg-red-600 text-white'
+                                  : 'border-2 border-red-600 text-slate-900 shadow-sm',
+                            ].join(' ')}
+                            style={
+                              canUseAnimationRecord && !isExportingAnimation
+                                ? { backgroundColor: animationRecordThemeFill }
+                                : undefined
+                            }
+                          >
+                            <span
+                              className={[
+                                'inline-block h-2.5 w-2.5 shrink-0 rounded-full',
+                                !canUseAnimationRecord
+                                  ? 'bg-slate-400'
+                                  : isExportingAnimation
+                                    ? 'bg-red-950'
+                                    : 'bg-red-600',
+                              ].join(' ')}
+                              aria-hidden
+                            />
+                            {icons?.Video && (
+                              <icons.Video
+                                className={`h-4 w-4 shrink-0 ${!canUseAnimationRecord ? 'opacity-70' : isExportingAnimation ? 'text-white' : 'text-slate-800'}`}
+                              />
+                            )}
+                            {isExportingAnimation ? 'Recording…' : 'Animation Record'}
+                          </button>
+                          <span className="text-xs text-violet-800">
+                            {t('pedagogical.duration')}{' '}
+                            {pedagogicalAudioDuration > 0 ? `${Math.floor(pedagogicalAudioDuration / 60)}:${String(Math.floor(pedagogicalAudioDuration % 60)).padStart(2, '0')}` : '—'}
+                          </span>
                         </div>
-                      );
-                    })}
+                        <div className="rounded-lg border border-violet-200 bg-white/90 px-2 py-2">
+                          <div className="mb-1 flex items-center justify-between text-[11px] font-medium text-violet-900">
+                            <span>MP3 timeline ruler</span>
+                            <span>
+                              {`${Math.floor(Math.max(0, pedagogicalAudioCurrentTime) / 60)}:${String(Math.floor(Math.max(0, pedagogicalAudioCurrentTime) % 60)).padStart(2, '0')}`}
+                              {' / '}
+                              {pedagogicalAudioDuration > 0 ? `${Math.floor(pedagogicalAudioDuration / 60)}:${String(Math.floor(pedagogicalAudioDuration % 60)).padStart(2, '0')}` : '0:00'}
+                            </span>
+                          </div>
+                          <div
+                            className="relative h-12 cursor-pointer overflow-hidden rounded border border-violet-200 bg-violet-50"
+                            onClick={(e) => {
+                              const rect = e.currentTarget.getBoundingClientRect();
+                              const ratio = clampNumber((e.clientX - rect.left) / Math.max(1, rect.width), 0, 1);
+                              seekPedagogicalAudioTo((Number(pedagogicalAudioDuration) || 0) * ratio);
+                            }}
+                            title="Klõpsa timeline'il, et liikuda ajas"
+                          >
+                            {(() => {
+                              const bpmSafe = Math.max(20, Math.min(300, Number(pedagogicalAudioBpm) || 120));
+                              const totalBeatsFromAudio = Math.max(1, ((Number(pedagogicalAudioDuration) || 0) * bpmSafe) / 60);
+                              const beatsPerMeasure = Math.max(1, Number(timeSignature?.beats) || 4);
+                              const minorStepBeats = Math.max(1, Math.ceil(totalBeatsFromAudio / 96));
+                              const tickCount = Math.floor(totalBeatsFromAudio / minorStepBeats) + 1;
+                              return Array.from({ length: tickCount }, (_, idx) => {
+                                const beat = idx * minorStepBeats;
+                                const ratio = beat / Math.max(1, totalBeatsFromAudio);
+                                const isMeasure = Math.abs((beat / beatsPerMeasure) - Math.round(beat / beatsPerMeasure)) < 1e-6;
+                                return (
+                                  <div
+                                    key={`ped-bottom-audio-tick-${idx}`}
+                                    className={`absolute top-0 bottom-0 ${isMeasure ? 'w-[2px] bg-violet-300' : 'w-px bg-violet-200'}`}
+                                    style={{ left: `${ratio * 100}%` }}
+                                    aria-hidden="true"
+                                  />
+                                );
+                              });
+                            })()}
+                            <div
+                              className="absolute top-0 bottom-0 w-[2px] bg-violet-700"
+                              style={{
+                                left: `${((Math.max(0, Math.min(Number(pedagogicalAudioDuration) || 0, Number(pedagogicalAudioCurrentTime) || 0)) / Math.max(1, Number(pedagogicalAudioDuration) || 1)) * 100)}%`,
+                              }}
+                              aria-hidden="true"
+                            />
+                          </div>
+                        </div>
+                      </>
+                    ) : (
+                      <p className="text-xs italic text-violet-700">{t('pedagogical.noAudio')}</p>
+                    )}
+                    <div className="rounded-lg border border-slate-300 bg-white p-2">
+                      <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-700">{t('toolbox.timelinePanel') || 'Timeline'} — noodijoon</div>
+                      <div className="relative h-14 overflow-hidden">
+                        <div className="absolute inset-0">
+                          {Array.from({ length: Math.ceil(totalBeatsForTimeline) + 1 }, (_, beat) => {
+                            const left = `${(beat / Math.max(1, totalBeatsForTimeline)) * 100}%`;
+                            const isMeasure = beat % Math.max(1, Number(timeSignature?.beats) || 4) === 0;
+                            return (
+                              <div key={`ped-tl-grid-${beat}`} className={`absolute top-0 bottom-0 ${isMeasure ? 'w-[2px] bg-slate-400' : 'w-px bg-slate-200'}`} style={{ left }} />
+                            );
+                          })}
+                        </div>
+                        <div
+                          className="absolute top-0 bottom-0 w-[2px] bg-violet-600"
+                          style={{ left: `${(Math.max(0, Math.min(totalBeatsForTimeline, Number(cursorPosition) || 0)) / Math.max(1, totalBeatsForTimeline)) * 100}%` }}
+                        />
+                        <div className="absolute bottom-0 left-0 right-0 flex justify-between text-[10px] text-slate-500">
+                          <span>0</span>
+                          <span>{Math.round(totalBeatsForTimeline * 100) / 100} beat</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="rounded-lg border border-slate-300 bg-white p-2">
+                      <div className="mb-1 flex items-center justify-between">
+                        <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-800">Video editor — salvestatud klipid</span>
+                        <span className="text-[10px] text-slate-600">{videoTimelineClips.length} clip</span>
+                      </div>
+                      {videoTimelineClips.length === 0 ? (
+                        <p className="text-xs text-slate-600">Animation Record lisab siia salvestatud klipid.</p>
+                      ) : (
+                        <div className="max-h-28 space-y-1 overflow-y-auto">
+                          {videoTimelineClips.map((clip) => (
+                            <div key={clip.id} className="flex items-center justify-between gap-2 rounded border border-slate-200 bg-slate-50 px-2 py-1">
+                              <div className="min-w-0">
+                                <div className="truncate text-xs font-medium text-slate-800">{clip.name}</div>
+                                <div className="text-[11px] text-slate-600">{Number(clip.durationSec || 0).toFixed(2)}s</div>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <a href={clip.url} download={clip.name} className="rounded border border-slate-300 bg-white px-2 py-1 text-[11px] text-slate-700 hover:bg-slate-100">Download</a>
+                                <button type="button" onClick={() => removeVideoTimelineClip(clip.id)} className="rounded border border-rose-300 bg-white px-2 py-1 text-[11px] text-rose-700 hover:bg-rose-50">Remove</button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    {showPedagogicalVideoRuler ? (
+                      <div>
+                        <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-violet-900">Stseenid (video editor ruler)</div>
+                        <div className="relative overflow-hidden rounded border border-violet-200 bg-white" style={{ height: cueLaneHeight }}>
+                          <div className="absolute top-0 bottom-0 z-20 w-[2px] bg-violet-700" style={{ left: `${playheadLeftPct}%` }} aria-hidden="true" />
+                          {cuesSorted.map((cue) => {
+                            const start = Math.max(0, Number(cue?.startSec) || 0);
+                            const end = Math.max(start + 0.05, Number(cue?.endSec) || start + 0.05);
+                            const left = (start / durationSec) * 100;
+                            const width = Math.max(0.6, ((end - start) / durationSec) * 100);
+                            const active = pedagogicalActiveCue?.id === cue?.id;
+                            return (
+                              <div
+                                key={cue.id}
+                                className={`absolute top-1 bottom-1 rounded border px-1 py-0.5 text-[10px] leading-tight overflow-hidden ${active ? 'border-violet-700 bg-violet-300 text-violet-900' : 'border-violet-400 bg-violet-200 text-violet-900'}`}
+                                style={{ left: `${left}%`, width: `${width}%` }}
+                                title={`${Number(start).toFixed(2)}s - ${Number(end).toFixed(2)}s ${cue?.text || ''}`.trim()}
+                              >
+                                {cue?.text || 'Cue'}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-[10px] text-violet-800">Stseenide ajajoon: lülita sisse menüüst Vaade → Video editor ruler (pedagoogiline).</p>
+                    )}
                   </div>
                 </div>
               </div>
@@ -17520,7 +17893,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
           })(),
           document.body
         )}
-        {timelinePanelVisible && typeof document !== 'undefined' && createPortal(
+        {timelinePanelVisible && !isPedagogicalProject && typeof document !== 'undefined' && createPortal(
           <div className="fixed bottom-0 left-0 right-0 z-[100] min-h-[140px] bg-gradient-to-t from-slate-100 to-slate-50 border-t-2 border-slate-300 shadow-[0_-4px_12px_rgba(0,0,0,0.12)] py-3 px-4" style={{ isolation: 'isolate' }}>
             <div className="mx-auto max-w-5xl" style={{ minHeight: 120 }}>
               <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
@@ -17563,35 +17936,16 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                   </div>
                 </div>
               </div>
-              {isPedagogicalProject && (
-                <div className="mt-2 rounded-lg border border-slate-300 bg-white p-3">
-                  <div className="mb-2 flex items-center justify-between">
-                    <span className="text-xs font-semibold uppercase tracking-wider text-slate-800">Video editor timeline</span>
-                    <span className="text-xs text-slate-600">{videoTimelineClips.length} clip</span>
-                  </div>
-                  {videoTimelineClips.length === 0 ? (
-                    <p className="text-xs text-slate-600">Animation Record lisab siia salvestatud klipid.</p>
-                  ) : (
-                    <div className="space-y-1.5">
-                      {videoTimelineClips.map((clip) => (
-                        <div key={clip.id} className="flex items-center justify-between gap-2 rounded border border-slate-200 bg-slate-50 px-2 py-1">
-                          <div className="min-w-0">
-                            <div className="truncate text-xs font-medium text-slate-800">{clip.name}</div>
-                            <div className="text-[11px] text-slate-600">{Number(clip.durationSec || 0).toFixed(2)}s</div>
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <a href={clip.url} download={clip.name} className="px-2 py-1 text-[11px] rounded border border-slate-300 bg-white hover:bg-slate-100 text-slate-700">Download</a>
-                            <button type="button" onClick={() => removeVideoTimelineClip(clip.id)} className="px-2 py-1 text-[11px] rounded border border-rose-300 bg-white hover:bg-rose-50 text-rose-700">Remove</button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
             </div>
           </div>,
           document.body
+        )}
+        {recordHintToastVisible && (
+          <div className="pointer-events-none fixed bottom-6 left-1/2 z-[220] -translate-x-1/2">
+            <div className="max-w-[92vw] rounded-xl border border-amber-300 bg-amber-50/95 px-3 py-2 text-xs font-semibold text-amber-900 shadow-xl backdrop-blur-sm">
+              {t('file.exportAnimationNeedPreviewArea')}
+            </div>
+          </div>
         )}
       </div>
     </div>
