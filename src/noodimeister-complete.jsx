@@ -3677,20 +3677,26 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     };
   };
 
-  const stopPedagogicalPlayback = useCallback(() => {
+  const pausePedagogicalPlayback = useCallback(() => {
     if (pedagogicalPlaybackIntervalRef.current) {
       clearInterval(pedagogicalPlaybackIntervalRef.current);
       pedagogicalPlaybackIntervalRef.current = null;
     }
     if (pedagogicalAudioRef.current) {
       pedagogicalAudioRef.current.pause();
-      pedagogicalAudioRef.current.currentTime = 0;
-      pedagogicalAudioRef.current = null;
+      setPedagogicalAudioCurrentTime(Math.max(0, Number(pedagogicalAudioRef.current.currentTime) || 0));
     }
     setIsPedagogicalAudioPlaying(false);
-    setPedagogicalAudioCurrentTime(0);
-    pedagogicalLoopIterationRef.current = 0;
   }, []);
+
+  const stopPedagogicalPlayback = useCallback(() => {
+    pausePedagogicalPlayback();
+    if (pedagogicalAudioRef.current) pedagogicalAudioRef.current.currentTime = 0;
+    setPedagogicalAudioCurrentTime(0);
+    setCursorPosition(0);
+    pedagogicalLastSnappedBeatRef.current = 0;
+    pedagogicalLoopIterationRef.current = 0;
+  }, [pausePedagogicalPlayback, setCursorPosition]);
 
   const applyParsedMusicXml = useCallback((parsed) => {
     stopPedagogicalPlayback();
@@ -6977,12 +6983,13 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   const startPedagogicalPlayback = useCallback(() => {
     if (!pedagogicalAudioUrl) return;
     if (pedagogicalPlaybackIntervalRef.current) return;
-    const audio = new Audio(pedagogicalAudioUrl);
+    const hasReusableAudio = pedagogicalAudioRef.current && String(pedagogicalAudioRef.current.src || '') === String(pedagogicalAudioUrl);
+    const audio = hasReusableAudio ? pedagogicalAudioRef.current : new Audio(pedagogicalAudioUrl);
     audio.playbackRate = clampNumber(Number(pedagogicalAudioPlaybackRate) || 1, 0.5, 2);
     pedagogicalAudioRef.current = audio;
     const rhythmStep = Math.max(0.125, Number(pedagogicalRhythmStep) || 1);
-    pedagogicalLastSnappedBeatRef.current = 0;
-    pedagogicalLoopIterationRef.current = 0;
+    pedagogicalLastSnappedBeatRef.current = Math.max(0, getPedagogicalBeatFromAudioSeconds(audio.currentTime || 0));
+    if (!hasReusableAudio || (audio.currentTime || 0) < 0.001) pedagogicalLoopIterationRef.current = 0;
     audio.play().then(() => {
       setIsPedagogicalAudioPlaying(true);
       pedagogicalPlaybackIntervalRef.current = setInterval(() => {
@@ -15776,7 +15783,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                     <>
                       <button
                         type="button"
-                        onClick={isPedagogicalAudioPlaying ? stopPedagogicalPlayback : startPedagogicalPlayback}
+                        onClick={isPedagogicalAudioPlaying ? pausePedagogicalPlayback : startPedagogicalPlayback}
                         className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-500"
                       >
                         {icons?.Play && !isPedagogicalAudioPlaying && <icons.Play className="w-4 h-4" />}
@@ -15838,17 +15845,26 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                           }}
                           title="Klõpsa timeline'il, et liikuda ajas"
                         >
-                          {Array.from({ length: 17 }, (_, idx) => {
-                            const ratio = idx / 16;
-                            return (
-                              <div
-                                key={`ped-audio-tick-${idx}`}
-                                className={`absolute top-0 bottom-0 ${idx % 4 === 0 ? 'w-[2px] bg-violet-300' : 'w-px bg-violet-200'}`}
-                                style={{ left: `${ratio * 100}%` }}
-                                aria-hidden="true"
-                              />
-                            );
-                          })}
+                          {(() => {
+                            const bpmSafe = Math.max(20, Math.min(300, Number(pedagogicalAudioBpm) || 120));
+                            const totalBeatsFromAudio = Math.max(1, ((Number(pedagogicalAudioDuration) || 0) * bpmSafe) / 60);
+                            const beatsPerMeasure = Math.max(1, Number(timeSignature?.beats) || 4);
+                            const minorStepBeats = Math.max(1, Math.ceil(totalBeatsFromAudio / 96));
+                            const tickCount = Math.floor(totalBeatsFromAudio / minorStepBeats) + 1;
+                            return Array.from({ length: tickCount }, (_, idx) => {
+                              const beat = idx * minorStepBeats;
+                              const ratio = beat / Math.max(1, totalBeatsFromAudio);
+                              const isMeasure = Math.abs((beat / beatsPerMeasure) - Math.round(beat / beatsPerMeasure)) < 1e-6;
+                              return (
+                                <div
+                                  key={`ped-audio-tick-${idx}`}
+                                  className={`absolute top-0 bottom-0 ${isMeasure ? 'w-[2px] bg-violet-300' : 'w-px bg-violet-200'}`}
+                                  style={{ left: `${ratio * 100}%` }}
+                                  aria-hidden="true"
+                                />
+                              );
+                            });
+                          })()}
                           <div
                             className="absolute top-0 bottom-0 w-[2px] bg-violet-700"
                             style={{
@@ -16414,7 +16430,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                       <span className="text-xs font-semibold text-amber-800">{t('pedagogical.audio')}:</span>
                       <button
                         type="button"
-                        onClick={isPedagogicalAudioPlaying ? stopPedagogicalPlayback : startPedagogicalPlayback}
+                        onClick={isPedagogicalAudioPlaying ? pausePedagogicalPlayback : startPedagogicalPlayback}
                         className="px-2 py-1 rounded text-sm bg-violet-600 text-white hover:bg-violet-500"
                       >
                         {icons?.Play && !isPedagogicalAudioPlaying && <icons.Play className="w-4 h-4 inline-block mr-1" />}
@@ -17447,7 +17463,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                   <div className="mb-1 flex items-center gap-1.5">
                     <button
                       type="button"
-                      onClick={isPedagogicalAudioPlaying ? stopPedagogicalPlayback : startPedagogicalPlayback}
+                        onClick={isPedagogicalAudioPlaying ? pausePedagogicalPlayback : startPedagogicalPlayback}
                       className="px-2 py-1 rounded text-xs bg-violet-600 text-white hover:bg-violet-500"
                     >
                       {isPedagogicalAudioPlaying ? 'Pause' : 'Play'}
