@@ -17199,7 +17199,7 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
           figurenotesCombinedRowStepPx={timelineHeight + (layoutPartsGap ?? 0)}
           figurenotesCombinedActiveStaffRowIndex={combinedActiveStaffRowIndex}
           pickupEnabled={pickupEnabled}
-          isStaticPreview={showPdfExportPreview || isExportingPdf}
+          isStaticPreview={hideCursorOverlay}
         />
       ) : (
         <TraditionalNotationView
