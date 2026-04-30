@@ -2660,6 +2660,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   const [pedagogicalAudioDuration, setPedagogicalAudioDuration] = useState(0); // sekundites
   const [isPedagogicalAudioPlaying, setIsPedagogicalAudioPlaying] = useState(false);
   const [isScorePlaybackPlaying, setIsScorePlaybackPlaying] = useState(false);
+  const [scorePlayerPopupOpen, setScorePlayerPopupOpen] = useState(false);
   const [pedagogicalAudioPlaybackRate, setPedagogicalAudioPlaybackRate] = useState(1.0); // 0.5–2.0
   const [pedagogicalAudioCurrentTime, setPedagogicalAudioCurrentTime] = useState(0);
   const [pedagogicalSyncMode, setPedagogicalSyncMode] = useState('bpm'); // 'bpm' | 'anchors'
@@ -7182,6 +7183,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
 
   const startPedagogicalPlayback = useCallback(() => {
     if (!pedagogicalAudioUrl) return;
+    if (scorePlaybackIntervalRef.current) stopScorePlayback(false);
     if (pedagogicalPlaybackIntervalRef.current) return;
     const hasReusableAudio = pedagogicalAudioRef.current && String(pedagogicalAudioRef.current.src || '') === String(pedagogicalAudioUrl);
     const audio = hasReusableAudio ? pedagogicalAudioRef.current : new Audio(pedagogicalAudioUrl);
@@ -7232,7 +7234,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         }
       }, 50);
     }).catch(() => setIsPedagogicalAudioPlaying(false));
-  }, [pedagogicalAudioUrl, notes, pedagogicalAudioPlaybackRate, playPianoNote, getPedagogicalBeatFromAudioSeconds, pedagogicalRhythmStep, pedagogicalLoopEnabled, pedagogicalLoopCount]);
+  }, [pedagogicalAudioUrl, notes, pedagogicalAudioPlaybackRate, playPianoNote, getPedagogicalBeatFromAudioSeconds, pedagogicalRhythmStep, pedagogicalLoopEnabled, pedagogicalLoopCount, stopScorePlayback]);
   const addPedagogicalCue = useCallback(() => {
     const startSec = Math.max(0, Number(pedagogicalCueStartSecDraft) || 0);
     const endSec = Math.max(startSec + 0.1, Number(pedagogicalCueEndSecDraft) || (startSec + 2));
@@ -7370,6 +7372,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
 
   const startScorePlayback = useCallback(() => {
     if (scorePlaybackIntervalRef.current) return;
+    pausePedagogicalPlayback();
     const withBeats = buildOrchestrationPlaybackNotes();
     if (!withBeats.length) return;
     const { events: playbackEvents, totalBeats } = buildPlaybackNoteEvents(withBeats, playbackMeasuresWithMarks);
@@ -7399,7 +7402,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       setCursorPosition(Math.min(totalBeats, beatNow));
       if (beatNow >= totalBeats) stopScorePlayback(false);
     }, 25);
-  }, [buildOrchestrationPlaybackNotes, playbackMeasuresWithMarks, getEffectivePlaybackBpm, cursorPosition, playPianoNote, stopScorePlayback]);
+  }, [buildOrchestrationPlaybackNotes, playbackMeasuresWithMarks, getEffectivePlaybackBpm, cursorPosition, playPianoNote, stopScorePlayback, pausePedagogicalPlayback]);
 
   const seekPedagogicalAudio = useCallback((deltaSeconds) => {
     if (!pedagogicalAudioUrl) return;
@@ -13560,6 +13563,105 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
           </div>
         </div>
       )}
+      {scorePlayerPopupOpen && (
+        <div
+          className="fixed inset-0 z-[125] flex items-center justify-center bg-black/45 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Noodigraafika mängija"
+          tabIndex={-1}
+          onClick={() => setScorePlayerPopupOpen(false)}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') setScorePlayerPopupOpen(false);
+          }}
+        >
+          <div
+            className="w-full max-w-xl rounded-xl border border-indigo-300 bg-white shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-indigo-200 bg-indigo-700 px-4 py-3 text-white">
+              <div>
+                <h3 className="text-sm font-bold uppercase tracking-wide">Noodigraafika mängija</h3>
+                <p className="text-xs text-indigo-100">Kursori lugemine ilma MP3 failita</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setScorePlayerPopupOpen(false)}
+                className="rounded bg-indigo-600 px-2 py-1 text-xs font-semibold hover:bg-indigo-500"
+              >
+                Sulge
+              </button>
+            </div>
+            <div className="space-y-3 p-4">
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (isScorePlaybackPlaying) stopScorePlayback(false);
+                    else startScorePlayback();
+                  }}
+                  className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-white ${isScorePlaybackPlaying ? 'bg-amber-600 hover:bg-amber-500' : 'bg-emerald-600 hover:bg-emerald-500'}`}
+                >
+                  {isScorePlaybackPlaying
+                    ? (icons?.Pause ? <icons.Pause className="h-4 w-4" /> : null)
+                    : (icons?.Play ? <icons.Play className="h-4 w-4" /> : null)}
+                  {isScorePlaybackPlaying ? 'Paus' : 'Play'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => stopScorePlayback(true)}
+                  className="inline-flex items-center gap-2 rounded-lg bg-slate-700 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-600"
+                >
+                  {icons?.X ? <icons.X className="h-4 w-4" /> : null}
+                  Stop
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCursorPosition((prev) => Math.max(0, (Number(prev) || 0) - Math.max(0.125, Number(pedagogicalRhythmStep) || 1)))}
+                  className="rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-200"
+                >
+                  - Step
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCursorPosition((prev) => Math.max(0, (Number(prev) || 0) + Math.max(0.125, Number(pedagogicalRhythmStep) || 1)))}
+                  className="rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-200"
+                >
+                  + Step
+                </button>
+              </div>
+              <div className="flex flex-wrap items-center gap-3 text-xs text-slate-700">
+                <label className="flex items-center gap-2">
+                  <span className="font-semibold">BPM</span>
+                  <input
+                    type="number"
+                    min={20}
+                    max={300}
+                    value={pedagogicalAudioBpm}
+                    onChange={(e) => setPedagogicalAudioBpm(Math.max(20, Math.min(300, parseInt(e.target.value, 10) || 120)))}
+                    className="w-16 rounded border border-slate-300 px-2 py-1"
+                  />
+                </label>
+                <label className="flex items-center gap-2">
+                  <span className="font-semibold">Step</span>
+                  <select
+                    value={String(pedagogicalRhythmStep)}
+                    onChange={(e) => setPedagogicalRhythmStep(clampNumber(Number(e.target.value) || 1, 0.125, 4))}
+                    className="rounded border border-slate-300 px-2 py-1"
+                  >
+                    <option value="1">1/4</option>
+                    <option value="0.5">1/8</option>
+                    <option value="0.25">1/16</option>
+                  </select>
+                </label>
+              </div>
+              <div className="rounded border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">
+                Beat: <strong>{Math.round((Number(cursorPosition) || 0) * 100) / 100}</strong>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Seadete riba + tööriistavalikud magneetiliselt all – sticky üleval */}
       <div className="sticky top-0 z-30 flex flex-col flex-shrink-0 shadow-lg">
@@ -13623,6 +13725,15 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
               >
                 {icons?.X ? <icons.X className="w-4 h-4" /> : null}
                 Stop
+              </button>
+              <button
+                type="button"
+                onClick={() => setScorePlayerPopupOpen(true)}
+                className="inline-flex items-center gap-2 px-3 py-2 rounded-lg font-semibold text-sm bg-indigo-600 text-white shadow-md hover:bg-indigo-500 border border-indigo-700/50"
+                title="Ava noodigraafika mängija aken"
+              >
+                {icons?.Play ? <icons.Play className="w-4 h-4" /> : null}
+                Noodigraafika mängija
               </button>
               <button
                 type="button"
