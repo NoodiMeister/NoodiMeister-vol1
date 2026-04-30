@@ -2620,6 +2620,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   const pedagogicalAudioRef = useRef(null); // HTMLAudioElement
   const pedagogicalPlaybackIntervalRef = useRef(null);
   const pedagogicalLoopIterationRef = useRef(0);
+  const pedagogicalLastSnappedBeatRef = useRef(0);
   const scorePlaybackIntervalRef = useRef(null);
   const scorePlaybackLastBeatRef = useRef(0);
   const scorePlaybackStartedAtRef = useRef(0);
