@@ -2025,11 +2025,6 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       window.removeEventListener('mouseup', handleMouseUp);
     };
   }, []);
-  useEffect(() => {
-    if (pedagogicalLivePreviewEnabled) return;
-    setIsPedagogicalSceneAreaPicking(false);
-  }, [pedagogicalLivePreviewEnabled]);
-
   // Stage V: Time signature display mode
   const [timeSignatureMode, setTimeSignatureMode] = useState('pedagogical'); // 'classic' or 'pedagogical'
   const [timeSignatureEditField, setTimeSignatureEditField] = useState('numerator'); // 'numerator' or 'denominator'
@@ -2689,6 +2684,10 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     const d = pedagogicalSceneAreaDraft;
     return !!(d && Number(d.w) > 0.001 && Number(d.h) > 0.001);
   }, [pedagogicalLivePreviewEnabled, pedagogicalSceneAreaDraft]);
+  useEffect(() => {
+    if (pedagogicalLivePreviewEnabled) return;
+    setIsPedagogicalSceneAreaPicking(false);
+  }, [pedagogicalLivePreviewEnabled]);
   const [pedagogicalRhythmStep, setPedagogicalRhythmStep] = useState(1); // beat-grid cursor read step
   // Animeeritud notatsioon: nooti lugeva kursori kuju (püstine joon, emoji)
   const [pedagogicalPlayheadStyle, setPedagogicalPlayheadStyle] = useState('line'); // 'line' | 'violin' | 'smiley' | 'custom'
