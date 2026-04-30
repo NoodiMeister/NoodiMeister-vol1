@@ -1897,13 +1897,6 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [pianoStripVisible]);
   const togglePianoStripExclusive = useCallback(() => {
-    const currentInstId = staves?.[activeStaffIndex]?.instrumentId;
-    const currentCfg = INSTRUMENT_CONFIG_BASE?.[currentInstId];
-    if (isSingleLineUnpitchedPercussion(currentInstId, currentCfg)) {
-      setPianoStripVisible(false);
-      if (activeToolbox === 'pianoKeyboard') setActiveToolbox(null);
-      return;
-    }
     setPianoStripVisible((prev) => {
       if (!prev) {
         setTimelinePanelVisible(false);
@@ -1914,7 +1907,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       return false;
     });
     setSelectedOptionIndex(0);
-  }, [staves, activeStaffIndex, activeToolbox]);
+  }, []);
   const toggleTimelinePanelExclusive = useCallback(() => {
     setTimelinePanelVisible((prev) => {
       if (!prev) {
