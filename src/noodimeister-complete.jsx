@@ -6326,12 +6326,16 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   }, [noteInputMode, maxCursorAllowed, hasFullAccess, demoMaxCursor, getScoreEndBeatForLayout]);
 
   useEffect(() => {
-    setCursorPosition(prev => {
-      if (prev < 0) return 0;
-      if (prev > maxCursor) return maxCursor;
-      return prev;
-    });
-  }, [maxCursor]);
+    // Cursor invariant: keep one unified cursor always inside valid timeline bounds
+    // and recover immediately from invalid transient values.
+    if (!Number.isFinite(cursorPosition)) {
+      setCursorPosition(0);
+      return;
+    }
+    if (cursorPosition < 0 || cursorPosition > maxCursor) {
+      setCursorPosition(Math.max(0, Math.min(maxCursor, cursorPosition)));
+    }
+  }, [cursorPosition, maxCursor]);
 
   useEffect(() => {
     const clear = () => { tabStaffCycleHeldRef.current = false; };
@@ -7911,6 +7915,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         || active?.closest?.('[contenteditable]:not([contenteditable="false"])')
       );
       const isTypingInInput = tag === 'input' || tag === 'textarea' || isContentEditableNode;
+      const isCursorNavKey = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(e.code);
 
       // Stage 1: preflight guards (modal, playback, mode swallowing)
       if (isInstrumentManagerOpen) {
@@ -7934,10 +7939,15 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       // N-mode: kursor loeb ainult noodi / laulusõnade / akordi ridu; kõik klahvid blokeeritakse – keskendutakse noodi sisestusele, parandamisele, kustutamisele.
       if (noteInputMode) {
         // But allow normal typing when focus is in a text field.
-        if (!isTypingInInput) {
+        if (!isTypingInInput && notationFrameFocusedRef.current) {
           e.preventDefault();
           e.stopPropagation();
         }
+      }
+      // Cursor navigation keys only act while notation frame is focused.
+      // Clicking outside score deactivates cursor control (MuseScore/Sibelius-like intent focus).
+      if (isCursorNavKey && !isTypingInInput && !notationFrameFocusedRef.current) {
+        return;
       }
 
       // Stage 2: shared edit command helpers (selection/cursor delete/replace)
@@ -8637,7 +8647,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         }
       }
 
-      // N key toggles note input mode. When entering N mode, keep rhythm+pitch workflow visible.
+      // N key toggles note input mode. Preserve current SEL cursor anchor when entering N mode.
       if (matchesShortcutPref(e, effectiveShortcutPrefs['app.noteInputToggle'])) {
         e.preventDefault();
         setNoteInputMode(prev => {
@@ -8661,12 +8671,9 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
               setPianoStripVisible(true);
               setTimelinePanelVisible(false);
             }
-            // Noodisisestuse alguspunkt on alati 1. takt, 1. löök.
-            // Hoidke ghost kõrgus vaikimisi C4, et käivitumine oleks deterministlik
-            // ega sõltuks varasemast valikust/noodiajaloost.
+            // Keep ghost pitch deterministic, but do not reset cursor to bar 1.
             setGhostPitch('C');
             setGhostOctave(4);
-            setCursorPosition(0);
           }
           return !prev;
         });
@@ -9266,8 +9273,9 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         }
       }
 
-      // Toolbox navigation
-      if (activeToolbox) {
+      // Toolbox navigation (N-mode only). When score cursor is active, cursor-nav keys
+      // (arrows/home/end) must move the cursor instead of toolbox focus.
+      if (activeToolbox && noteInputMode && !(notationFrameFocusedRef.current && isCursorNavKey)) {
         const toolbox = toolboxes[activeToolbox];
         if (!toolbox) return;
         // Special handling for time signature editing
@@ -9402,8 +9410,8 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         }
       }
 
-      // Stage V: Selection mode (kui N-režiim on VÄLJAS).
-      if (!activeToolbox && !noteInputMode) {
+      // Stage V: Selection mode (kui N-režiim on VÄLJAS) — works also when a toolbox palette is open.
+      if (!noteInputMode) {
         // Vasak/parem: takt-haaval (MuseScore-stiilis); Shift + nool laiendab taktivalikut (Cmd+Backspace kustutab).
         if (e.code === 'ArrowRight' || e.code === 'ArrowLeft') {
           const ms = measuresRef.current;
@@ -15628,7 +15636,8 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                         return;
                       }
                       const noteList = staves[activeStaffIndex]?.notes ?? [];
-                      const beat = getBeatAtNoteIndex(noteList, index);
+                      const rawBeat = getBeatAtNoteIndex(noteList, index);
+                      const beat = Number.isFinite(rawBeat) ? Math.max(0, rawBeat) : Math.max(0, Number(cursorPosition) || 0);
                       lastBeatClickForLyricRef.current = { beat, at: Date.now() };
                       if (noteInputMode && cursorTool !== 'select') {
                         applySelectionModel({ kind: 'note', index });
@@ -15671,6 +15680,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                       }
                       setCursorSubRow(0);
                       setCursorPosition(beat);
+                      playNoteAtBeatIfEnabled(beat);
                       if (e?.__nmLyricClick) {
                         setActiveTextLineType('lyrics');
                         setSelectedTextboxId(null);
@@ -15688,7 +15698,8 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                     }
                     : (staffIdx === activeStaffIndex ? (index, e) => {
                       if (Date.now() < suppressSelectionClickUntilRef.current) return;
-                      const beat = getBeatAtNoteIndex(notes, index);
+                      const rawBeat = getBeatAtNoteIndex(notes, index);
+                      const beat = Number.isFinite(rawBeat) ? Math.max(0, rawBeat) : Math.max(0, Number(cursorPosition) || 0);
                       lastBeatClickForLyricRef.current = { beat, at: Date.now() }; // Cmd+L kasutab seda enne Reacti cursorPosition uuendust
                       if (noteInputMode && cursorTool !== 'select') {
                         applySelectionModel({ kind: 'note', index });
@@ -15731,6 +15742,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                       }
                       setCursorSubRow(0); // Laulusõnade režiim: kursor alati meloodiareal
                       setCursorPosition(beat); // Üks kursor: kursor joondatud klõpsatud noodi algusega
+                      playNoteAtBeatIfEnabled(beat);
                       if (e?.__nmLyricClick) {
                         setActiveTextLineType('lyrics');
                         setSelectedTextboxId(null);
@@ -15827,8 +15839,8 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                         setMouseInsertDraft(null);
                       }
                     : undefined}
-                  onChordLineMouseMove={notationStyle === 'FIGURENOTES' && figurenotesChordBlocks && (staffIdx === activeStaffIndex || renderFigurenotesAsCombinedSystem) ? (beat) => { setCursorPosition(beat); setCursorSubRow(1); } : undefined}
-                  onChordLineClick={notationStyle === 'FIGURENOTES' && figurenotesChordBlocks && (staffIdx === activeStaffIndex || renderFigurenotesAsCombinedSystem) ? (beat) => { const b = Math.max(0, beat); setCursorPosition(b); setCursorSubRow(1); playNoteAtBeatIfEnabled(b); } : undefined}
+                  onChordLineMouseMove={notationStyle === 'FIGURENOTES' && figurenotesChordBlocks && (staffIdx === activeStaffIndex || renderFigurenotesAsCombinedSystem) ? (beat) => { const safe = Number.isFinite(beat) ? Math.max(0, beat) : Math.max(0, Number(cursorPosition) || 0); setCursorPosition(safe); setCursorSubRow(1); } : undefined}
+                  onChordLineClick={notationStyle === 'FIGURENOTES' && figurenotesChordBlocks && (staffIdx === activeStaffIndex || renderFigurenotesAsCombinedSystem) ? (beat) => { const b = Number.isFinite(beat) ? Math.max(0, beat) : Math.max(0, Number(cursorPosition) || 0); setCursorPosition(b); setCursorSubRow(1); playNoteAtBeatIfEnabled(b); } : undefined}
                   activeLyricNoteIndex={staffIdx === activeStaffIndex ? lyricActiveNoteIndex : null}
                   notationStyle={notationStyle}
                   layoutMeasuresPerLine={effectiveLayoutMeasuresPerLine}
@@ -17298,7 +17310,7 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
 
   {/* Cursor + Ghost note / kleepimise kursor: nähtav noodisisestusrežiimis,
           pedagoogilisel taasesitusel/ekspordil ning SEL-režiimis (ka ilma valitud noodita). */}
-      {(noteInputMode || isPedagogicalAudioPlaying || isExportingAnimation || !noteInputMode) && cursorInfo && (!isFigurenotesMode || isActiveStaff) && (() => {
+      {(noteInputMode || isPedagogicalAudioPlaying || isExportingAnimation || !noteInputMode) && cursorInfo && isActiveStaff && (() => {
         const cursorX = (cursorSlotCenterX != null && Number.isFinite(cursorSlotCenterX)) ? cursorSlotCenterX : (marginLeft + 40);
         const cursorChar = (pedagogicalPlayheadEmoji || '').trim();
         const isSelectionCursor = !noteInputMode && !isPedagogicalAudioPlaying && !isExportingAnimation;
