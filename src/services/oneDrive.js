@@ -328,7 +328,11 @@ export async function uploadFileToFolder(token, folderId, fileName, content, con
       Authorization: `Bearer ${token}`,
       'Content-Type': contentType,
     },
-    body: typeof content === 'string' ? content : JSON.stringify(content),
+    body: (typeof Blob !== 'undefined' && content instanceof Blob)
+      ? content
+      : (content instanceof ArrayBuffer)
+        ? content
+        : (typeof content === 'string' ? content : JSON.stringify(content)),
   });
   const body = await res.json().catch(() => ({}));
   if (!res.ok) {
@@ -416,6 +420,20 @@ export async function getFileContent(token, fileId) {
     throw new Error(msg);
   }
   return res.text();
+}
+
+/** Loe OneDrive'i faili sisu binaarina (Blob). */
+export async function getFileBlob(token, fileId) {
+  if (!token) throw new Error('Microsofti token puudub.');
+  const res = await fetch(`${GRAPH_ROOT}/me/drive/items/${encodeURIComponent(fileId)}/content`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    const msg = body?.error?.message || body?.message || `HTTP ${res.status}`;
+    throw new Error(msg);
+  }
+  return res.blob();
 }
 
 export async function getFileMetadata(token, fileId) {

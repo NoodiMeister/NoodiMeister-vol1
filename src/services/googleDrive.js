@@ -273,6 +273,23 @@ export async function getFileContent(accessToken, fileId) {
 }
 
 /**
+ * Laadi faili sisu binaarina (Blob), nt meedia asset.
+ * @param {string} accessToken
+ * @param {string} fileId
+ * @returns {Promise<Blob>}
+ */
+export async function getFileBlob(accessToken, fileId) {
+  const res = await fetch(`${DRIVE_API_URL}/${fileId}?alt=media`, {
+    headers: { Authorization: `Bearer ${accessToken}` }
+  });
+  if (!res.ok) {
+    if (res.status === 401) throw new Error('Token aegunud. Logi uuesti sisse.');
+    throw new Error('Meedia faili laadimine ebaõnnestus');
+  }
+  return res.blob();
+}
+
+/**
  * Loe Google Drive faili metadata, et tuvastada konfliktid ja säilitada sama faili identiteet eri seadmetes.
  * @param {string} accessToken
  * @param {string} fileId

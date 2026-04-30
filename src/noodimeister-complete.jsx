@@ -1842,6 +1842,8 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   const [pianoStripVisible, setPianoStripVisible] = useState(false); // klaviatuuri riba all – nähtav ka siis, kui avatud on Rütm vms
   const [timelinePanelVisible, setTimelinePanelVisible] = useState(false); // timeline panel alumises ribas
   const [videoTimelineClips, setVideoTimelineClips] = useState([]); // [{ id, name, url, durationSec, createdAt, mimeType }]
+  const [videoRulerToolbarHeight, setVideoRulerToolbarHeight] = useState(132);
+  const videoRulerResizeDragRef = useRef(null); // { startY, startHeight }
   const N_MODE_PRIMARY_TOOL_IDS = useMemo(() => ['rhythm', 'pitchInput', 'pianoKeyboard', 'chords'], []);
   const PIANO_RANGE_PRESETS = useMemo(() => [
     { id: 'C3-C5', label: 'C3-C5', first: 48, last: 72 },
@@ -1903,6 +1905,27 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       return false;
     });
     setSelectedOptionIndex(0);
+  }, []);
+  useEffect(() => {
+    const handleMouseMove = (e) => {
+      const drag = videoRulerResizeDragRef.current;
+      if (!drag) return;
+      const deltaY = drag.startY - e.clientY;
+      const nextHeight = Math.max(88, Math.min(380, drag.startHeight + deltaY));
+      setVideoRulerToolbarHeight(nextHeight);
+    };
+    const handleMouseUp = () => {
+      if (!videoRulerResizeDragRef.current) return;
+      videoRulerResizeDragRef.current = null;
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
   }, []);
 
   // Stage V: Time signature display mode
@@ -2601,9 +2624,17 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   const scorePlaybackLastBeatRef = useRef(0);
   const scorePlaybackStartedAtRef = useRef(0);
   const pedagogicalAudioDataRef = useRef(null); // base64 string (salvestamiseks)
+  const pedagogicalAudioMimeTypeRef = useRef('audio/mpeg');
+  const pedagogicalAudioFileNameRef = useRef('');
+  const pedagogicalAudioSizeBytesRef = useRef(0);
+  const pedagogicalAudioAssetRef = useRef(null); // { provider, fileId, folderId, mimeType, fileName, sizeBytes }
+  const pedagogicalAudioAssetDirtyRef = useRef(false);
+  const pageDesignAssetRef = useRef(null); // { provider, fileId, folderId, mimeType, fileName, sizeBytes, linkedProjectFileId? }
+  const pageDesignAssetDirtyRef = useRef(false);
   const pedagogicalAudioUrlRef = useRef(null); // object URL (revoke vahetusel)
   const pedagogicalAudioInputRef = useRef(null);
   const pedagogicalAudioImportInputRef = useRef(null);
+  const pedagogicalCueMediaInputRef = useRef(null);
   const musicXmlInputRef = useRef(null);
   const pageDesignInputRef = useRef(null);
 
@@ -2987,6 +3018,8 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     setTextBoxes([]);
     setMeasureRepeatMarks({});
     setPageDesignDataUrl(null);
+    pageDesignAssetRef.current = null;
+    pageDesignAssetDirtyRef.current = false;
     setPageDesignOpacity(0.25);
     setPageDesignFit('cover');
     setPageDesignPositionX(50);
@@ -3073,19 +3106,24 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   const handlePedagogicalAudioFile = useCallback((e) => {
     const file = e.target?.files?.[0];
     if (!file || !file.type.startsWith('audio/')) return;
-    if (pedagogicalAudioUrlRef.current) {
+    if (pedagogicalAudioUrlRef.current && String(pedagogicalAudioUrlRef.current).startsWith('blob:')) {
       URL.revokeObjectURL(pedagogicalAudioUrlRef.current);
       pedagogicalAudioUrlRef.current = null;
     }
-    const url = URL.createObjectURL(file);
     const reader = new FileReader();
     reader.onload = () => {
-      const b64 = typeof reader.result === 'string' ? reader.result.split(',')[1] : null;
+      const dataUrl = typeof reader.result === 'string' ? reader.result : null;
+      const b64 = dataUrl ? dataUrl.split(',')[1] : null;
       if (b64) pedagogicalAudioDataRef.current = b64;
-      const audio = new Audio(url);
+      pedagogicalAudioMimeTypeRef.current = String(file.type || 'audio/mpeg');
+      pedagogicalAudioFileNameRef.current = String(file.name || '');
+      pedagogicalAudioSizeBytesRef.current = Math.max(0, Number(file.size) || 0);
+      pedagogicalAudioAssetRef.current = null;
+      pedagogicalAudioAssetDirtyRef.current = true;
+      const audio = new Audio(dataUrl || '');
       audio.onloadedmetadata = () => setPedagogicalAudioDuration(audio.duration);
-      pedagogicalAudioUrlRef.current = url;
-      setPedagogicalAudioUrl(url);
+      pedagogicalAudioUrlRef.current = dataUrl;
+      setPedagogicalAudioUrl(dataUrl);
       dirtyRef.current = true;
     };
     reader.readAsDataURL(file);
@@ -3138,6 +3176,8 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       const dataUrl = typeof reader.result === 'string' ? reader.result : null;
       if (dataUrl) {
         setPageDesignDataUrl(dataUrl);
+        pageDesignAssetRef.current = null;
+        pageDesignAssetDirtyRef.current = true;
         // Imporditud lehe disain: A4 täislehe vaade, vertikaalne voog. Lehe suunda EI muuda –
         // portrait/landscape jääb nii nagu kasutaja valis (faili/Canva ekspordi suund ei mõjuta).
         setPaperSize('a4');
@@ -3146,6 +3186,21 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         setViewFitPage(true);
         dirtyRef.current = true;
       }
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  }, []);
+  const handlePedagogicalCueMediaFile = useCallback((e) => {
+    const file = e.target?.files?.[0];
+    if (!file || !String(file.type || '').startsWith('image/')) {
+      e.target.value = '';
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = typeof reader.result === 'string' ? reader.result : '';
+      if (!dataUrl) return;
+      setPedagogicalCueMediaUrlDraft(dataUrl);
     };
     reader.readAsDataURL(file);
     e.target.value = '';
@@ -4369,6 +4424,11 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     pedagogicalCues,
     pedagogicalRhythmStep,
     pedagogicalAudioData: pedagogicalAudioDataRef.current || undefined,
+    pedagogicalAudioMimeType: pedagogicalAudioMimeTypeRef.current || undefined,
+    pedagogicalAudioFileName: pedagogicalAudioFileNameRef.current || undefined,
+    pedagogicalAudioSizeBytes: pedagogicalAudioSizeBytesRef.current || undefined,
+    pedagogicalAudioAsset: pedagogicalAudioAssetRef.current || undefined,
+    pageDesignAsset: pageDesignAssetRef.current || undefined,
     pedagogicalPlayheadStyle,
     pedagogicalPlayheadEmoji,
     pedagogicalPlayheadEmojiSize,
@@ -4631,6 +4691,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
           endSec: Math.max(0, Number(cue?.endSec) || 0),
           text: String(cue?.text || ''),
           mediaUrl: String(cue?.mediaUrl || ''),
+          mediaAsset: cue?.mediaAsset && typeof cue.mediaAsset === 'object' ? cue.mediaAsset : undefined,
           hideScore: cue?.hideScore !== false,
         })));
       }
@@ -4648,18 +4709,66 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       if (data.rhythmCursorHighContrast != null) setRhythmCursorHighContrast(!!data.rhythmCursorHighContrast);
       if (data.pedagogicalAudioData) {
         try {
-          const binary = atob(data.pedagogicalAudioData);
-          const bytes = new Uint8Array(binary.length);
-          for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-          const blob = new Blob([bytes], { type: 'audio/mpeg' });
-          const url = URL.createObjectURL(blob);
-          if (pedagogicalAudioUrlRef.current) URL.revokeObjectURL(pedagogicalAudioUrlRef.current);
+          const mimeType = String(data.pedagogicalAudioMimeType || 'audio/mpeg');
+          const url = `data:${mimeType};base64,${data.pedagogicalAudioData}`;
+          if (pedagogicalAudioUrlRef.current && String(pedagogicalAudioUrlRef.current).startsWith('blob:')) URL.revokeObjectURL(pedagogicalAudioUrlRef.current);
           pedagogicalAudioUrlRef.current = url;
           pedagogicalAudioDataRef.current = data.pedagogicalAudioData;
+          pedagogicalAudioAssetRef.current = null;
+          pedagogicalAudioAssetDirtyRef.current = true;
+          pedagogicalAudioMimeTypeRef.current = mimeType;
+          pedagogicalAudioFileNameRef.current = String(data.pedagogicalAudioFileName || '');
+          pedagogicalAudioSizeBytesRef.current = Math.max(0, Number(data.pedagogicalAudioSizeBytes) || 0);
           setPedagogicalAudioUrl(url);
           const audio = new Audio(url);
           audio.onloadedmetadata = () => setPedagogicalAudioDuration(audio.duration);
           audio.onerror = () => {};
+        } catch (_) { /* ignore */ }
+      } else if (data.pedagogicalAudioAsset?.fileId) {
+        try {
+          const asset = data.pedagogicalAudioAsset;
+          const currentFileId = String(searchParams?.get?.('fileId') || '');
+          const linkedFileId = String(asset.linkedProjectFileId || '');
+          if (linkedFileId && currentFileId && linkedFileId !== currentFileId) {
+            pedagogicalAudioAssetRef.current = null;
+            pedagogicalAudioAssetDirtyRef.current = false;
+          } else {
+            pedagogicalAudioAssetRef.current = {
+            provider: String(asset.provider || ''),
+            fileId: String(asset.fileId || ''),
+            folderId: String(asset.folderId || ''),
+            mimeType: String(asset.mimeType || 'audio/mpeg'),
+            fileName: String(asset.fileName || ''),
+            sizeBytes: Math.max(0, Number(asset.sizeBytes) || 0),
+            linkedProjectFileId: linkedFileId,
+            };
+            pedagogicalAudioAssetDirtyRef.current = false;
+            pedagogicalAudioMimeTypeRef.current = String(asset.mimeType || 'audio/mpeg');
+            pedagogicalAudioFileNameRef.current = String(asset.fileName || '');
+            pedagogicalAudioSizeBytesRef.current = Math.max(0, Number(asset.sizeBytes) || 0);
+            const provider = String(asset.provider || '');
+            const fileId = String(asset.fileId || '');
+            Promise.resolve().then(async () => {
+              if (!provider || !fileId) return;
+              let blob = null;
+              if (provider === 'google') {
+                const token = googleDrive.getStoredToken?.();
+                if (!token) return;
+                blob = await googleDrive.getFileBlob(token, fileId);
+              } else if (provider === 'onedrive') {
+                const token = authStorage.getStoredMicrosoftTokenFromAuth?.();
+                if (!token) return;
+                blob = await oneDrive.getFileBlob(token, fileId);
+              }
+              if (!blob) return;
+              if (pedagogicalAudioUrlRef.current && String(pedagogicalAudioUrlRef.current).startsWith('blob:')) URL.revokeObjectURL(pedagogicalAudioUrlRef.current);
+              const url = URL.createObjectURL(blob);
+              pedagogicalAudioUrlRef.current = url;
+              setPedagogicalAudioUrl(url);
+              const audio = new Audio(url);
+              audio.onloadedmetadata = () => setPedagogicalAudioDuration(audio.duration);
+            }).catch(() => {});
+          }
         } catch (_) { /* ignore */ }
       }
       if (data.instrumentNotationVariant) setInstrumentNotationVariant(data.instrumentNotationVariant);
@@ -4765,8 +4874,56 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       if (data.relativeNotationShowTraditionalClef != null) setRelativeNotationShowTraditionalClef(data.relativeNotationShowTraditionalClef);
       if (data.isPedagogicalProject != null) setIsPedagogicalProject(!!data.isPedagogicalProject);
       if (Array.isArray(data.chords)) setChords(normalizeLoadedChords(data.chords));
-      if ('pageDesignDataUrl' in data) setPageDesignDataUrl(data.pageDesignDataUrl || null);
-      else setPageDesignDataUrl(null);
+      if ('pageDesignDataUrl' in data) {
+        setPageDesignDataUrl(data.pageDesignDataUrl || null);
+        pageDesignAssetRef.current = null;
+      } else setPageDesignDataUrl(null);
+      if (data.pageDesignAsset?.fileId) {
+        try {
+          const asset = data.pageDesignAsset;
+          const currentFileId = String(searchParams?.get?.('fileId') || '');
+          const linkedFileId = String(asset.linkedProjectFileId || '');
+          // Hard isolation: never auto-load an asset linked to another project file.
+          if (linkedFileId && currentFileId && linkedFileId !== currentFileId) {
+            pageDesignAssetRef.current = null;
+          } else {
+            pageDesignAssetRef.current = {
+              provider: String(asset.provider || ''),
+              fileId: String(asset.fileId || ''),
+              folderId: String(asset.folderId || ''),
+              mimeType: String(asset.mimeType || 'image/png'),
+              fileName: String(asset.fileName || ''),
+              sizeBytes: Math.max(0, Number(asset.sizeBytes) || 0),
+              linkedProjectFileId: linkedFileId,
+            };
+            pageDesignAssetDirtyRef.current = false;
+            const provider = String(asset.provider || '');
+            const fileId = String(asset.fileId || '');
+            Promise.resolve().then(async () => {
+              if (!provider || !fileId) return;
+              let blob = null;
+              if (provider === 'google') {
+                const token = googleDrive.getStoredToken?.();
+                if (!token) return;
+                blob = await googleDrive.getFileBlob(token, fileId);
+              } else if (provider === 'onedrive') {
+                const token = authStorage.getStoredMicrosoftTokenFromAuth?.();
+                if (!token) return;
+                blob = await oneDrive.getFileBlob(token, fileId);
+              }
+              if (!blob) return;
+              const url = URL.createObjectURL(blob);
+              const reader = new FileReader();
+              reader.onload = () => {
+                const nextDataUrl = typeof reader.result === 'string' ? reader.result : null;
+                if (nextDataUrl) setPageDesignDataUrl(nextDataUrl);
+                URL.revokeObjectURL(url);
+              };
+              reader.readAsDataURL(blob);
+            }).catch(() => {});
+          }
+        } catch (_) { /* ignore */ }
+      }
       if ('pageDesignOpacity' in data) setPageDesignOpacity(clampNumber(Number(data.pageDesignOpacity) || 0.25, 0, 1));
       else setPageDesignOpacity(0.25);
       if (data.pageDesignFit === 'cover' || data.pageDesignFit === 'contain') setPageDesignFit(data.pageDesignFit);
@@ -5074,6 +5231,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
             endSec: Math.max(0, Number(cue?.endSec) || 0),
             text: String(cue?.text || ''),
             mediaUrl: String(cue?.mediaUrl || ''),
+            mediaAsset: cue?.mediaAsset && typeof cue.mediaAsset === 'object' ? cue.mediaAsset : undefined,
             hideScore: cue?.hideScore !== false,
           })));
         }
@@ -5093,24 +5251,117 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         if (data.rhythmCursorHighContrast != null) setRhythmCursorHighContrast(!!data.rhythmCursorHighContrast);
         if (data.pedagogicalAudioData) {
           try {
-            const binary = atob(data.pedagogicalAudioData);
-            const bytes = new Uint8Array(binary.length);
-            for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-            const blob = new Blob([bytes], { type: 'audio/mpeg' });
-            const url = URL.createObjectURL(blob);
-            if (pedagogicalAudioUrlRef.current) URL.revokeObjectURL(pedagogicalAudioUrlRef.current);
+            const mimeType = String(data.pedagogicalAudioMimeType || 'audio/mpeg');
+            const url = `data:${mimeType};base64,${data.pedagogicalAudioData}`;
+            if (pedagogicalAudioUrlRef.current && String(pedagogicalAudioUrlRef.current).startsWith('blob:')) URL.revokeObjectURL(pedagogicalAudioUrlRef.current);
             pedagogicalAudioUrlRef.current = url;
             pedagogicalAudioDataRef.current = data.pedagogicalAudioData;
+            pedagogicalAudioAssetRef.current = null;
+            pedagogicalAudioAssetDirtyRef.current = true;
+            pedagogicalAudioMimeTypeRef.current = mimeType;
+            pedagogicalAudioFileNameRef.current = String(data.pedagogicalAudioFileName || '');
+            pedagogicalAudioSizeBytesRef.current = Math.max(0, Number(data.pedagogicalAudioSizeBytes) || 0);
             setPedagogicalAudioUrl(url);
             const audio = new Audio(url);
             audio.onloadedmetadata = () => setPedagogicalAudioDuration(audio.duration);
             audio.onerror = () => {};
           } catch (_) { /* ignore */ }
+        } else if (data.pedagogicalAudioAsset?.fileId) {
+          try {
+            const asset = data.pedagogicalAudioAsset;
+            const currentFileId = String(searchParams?.get?.('fileId') || '');
+            const linkedFileId = String(asset.linkedProjectFileId || '');
+            if (linkedFileId && currentFileId && linkedFileId !== currentFileId) {
+              pedagogicalAudioAssetRef.current = null;
+              pedagogicalAudioAssetDirtyRef.current = false;
+            } else {
+              pedagogicalAudioAssetRef.current = {
+              provider: String(asset.provider || ''),
+              fileId: String(asset.fileId || ''),
+              folderId: String(asset.folderId || ''),
+              mimeType: String(asset.mimeType || 'audio/mpeg'),
+              fileName: String(asset.fileName || ''),
+              sizeBytes: Math.max(0, Number(asset.sizeBytes) || 0),
+              linkedProjectFileId: linkedFileId,
+              };
+              pedagogicalAudioAssetDirtyRef.current = false;
+              pedagogicalAudioMimeTypeRef.current = String(asset.mimeType || 'audio/mpeg');
+              pedagogicalAudioFileNameRef.current = String(asset.fileName || '');
+              pedagogicalAudioSizeBytesRef.current = Math.max(0, Number(asset.sizeBytes) || 0);
+              const provider = String(asset.provider || '');
+              const fileId = String(asset.fileId || '');
+              Promise.resolve().then(async () => {
+                if (!provider || !fileId) return;
+                let blob = null;
+                if (provider === 'google') {
+                  const token = googleDrive.getStoredToken?.();
+                  if (!token) return;
+                  blob = await googleDrive.getFileBlob(token, fileId);
+                } else if (provider === 'onedrive') {
+                  const token = authStorage.getStoredMicrosoftTokenFromAuth?.();
+                  if (!token) return;
+                  blob = await oneDrive.getFileBlob(token, fileId);
+                }
+                if (!blob) return;
+                if (pedagogicalAudioUrlRef.current && String(pedagogicalAudioUrlRef.current).startsWith('blob:')) URL.revokeObjectURL(pedagogicalAudioUrlRef.current);
+                const url = URL.createObjectURL(blob);
+                pedagogicalAudioUrlRef.current = url;
+                setPedagogicalAudioUrl(url);
+                const audio = new Audio(url);
+                audio.onloadedmetadata = () => setPedagogicalAudioDuration(audio.duration);
+              }).catch(() => {});
+            }
+          } catch (_) { /* ignore */ }
         }
         if (Array.isArray(data.chords)) setChords(normalizeLoadedChords(data.chords));
         if (Array.isArray(data.textBoxes)) setTextBoxes(data.textBoxes);
-        if ('pageDesignDataUrl' in data) setPageDesignDataUrl(data.pageDesignDataUrl || null);
-        else setPageDesignDataUrl(null);
+        if ('pageDesignDataUrl' in data) {
+          setPageDesignDataUrl(data.pageDesignDataUrl || null);
+          pageDesignAssetRef.current = null;
+        } else setPageDesignDataUrl(null);
+        if (data.pageDesignAsset?.fileId) {
+          try {
+            const asset = data.pageDesignAsset;
+            const currentFileId = String(searchParams?.get?.('fileId') || '');
+            const linkedFileId = String(asset.linkedProjectFileId || '');
+            if (!(linkedFileId && currentFileId && linkedFileId !== currentFileId)) {
+              pageDesignAssetRef.current = {
+                provider: String(asset.provider || ''),
+                fileId: String(asset.fileId || ''),
+                folderId: String(asset.folderId || ''),
+                mimeType: String(asset.mimeType || 'image/png'),
+                fileName: String(asset.fileName || ''),
+                sizeBytes: Math.max(0, Number(asset.sizeBytes) || 0),
+                linkedProjectFileId: linkedFileId,
+              };
+              pageDesignAssetDirtyRef.current = false;
+              const provider = String(asset.provider || '');
+              const fileId = String(asset.fileId || '');
+              Promise.resolve().then(async () => {
+                if (!provider || !fileId) return;
+                let blob = null;
+                if (provider === 'google') {
+                  const token = googleDrive.getStoredToken?.();
+                  if (!token) return;
+                  blob = await googleDrive.getFileBlob(token, fileId);
+                } else if (provider === 'onedrive') {
+                  const token = authStorage.getStoredMicrosoftTokenFromAuth?.();
+                  if (!token) return;
+                  blob = await oneDrive.getFileBlob(token, fileId);
+                }
+                if (!blob) return;
+                const url = URL.createObjectURL(blob);
+                const reader = new FileReader();
+                reader.onload = () => {
+                  const nextDataUrl = typeof reader.result === 'string' ? reader.result : null;
+                  if (nextDataUrl) setPageDesignDataUrl(nextDataUrl);
+                  URL.revokeObjectURL(url);
+                };
+                reader.readAsDataURL(blob);
+              }).catch(() => {});
+            }
+          } catch (_) { /* ignore */ }
+        }
         if ('pageDesignOpacity' in data) setPageDesignOpacity(clampNumber(Number(data.pageDesignOpacity) || 0.25, 0, 1));
         else setPageDesignOpacity(0.25);
         if (data.pageDesignFit === 'cover' || data.pageDesignFit === 'contain') setPageDesignFit(data.pageDesignFit);
@@ -5181,6 +5432,147 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       || msg.includes('aegunud');
   }, []);
 
+  const dataUrlToBlob = useCallback(async (dataUrl, fallbackMimeType = 'application/octet-stream') => {
+    if (!dataUrl || typeof dataUrl !== 'string') return null;
+    const match = dataUrl.match(/^data:([^;,]+)?(;base64)?,/i);
+    const mime = (match?.[1] || fallbackMimeType || 'application/octet-stream').trim();
+    const base64 = dataUrl.split(',')[1] || '';
+    if (!base64) return null;
+    const binary = atob(base64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    return new Blob([bytes], { type: mime });
+  }, []);
+
+  const prepareProjectDataForCloudSave = useCallback(async ({ provider, token, folderId }) => {
+    const data = exportScoreToJSON();
+    if (!isPedagogicalProject) return data;
+    const hasAudioData = !!pedagogicalAudioDataRef.current;
+    const existingAsset = pedagogicalAudioAssetRef.current;
+    const shouldUploadAsset = hasAudioData && (
+      pedagogicalAudioAssetDirtyRef.current
+      || !existingAsset?.fileId
+      || existingAsset?.provider !== provider
+    );
+    if (shouldUploadAsset) {
+      const mimeType = String(pedagogicalAudioMimeTypeRef.current || 'audio/mpeg');
+      const fileName = String(pedagogicalAudioFileNameRef.current || `${makeSafeFileStem(songTitle || t('common.untitled'), t('common.untitled'))}-pedagogical-audio.mp3`);
+      const sourceDataUrl = String(pedagogicalAudioUrlRef.current || `data:${mimeType};base64,${pedagogicalAudioDataRef.current || ''}`);
+      const blob = await dataUrlToBlob(sourceDataUrl, mimeType);
+      if (blob) {
+        let fileId = '';
+        if (provider === 'google') {
+          fileId = await googleDrive.uploadBinaryFileInFolder(token, folderId || 'root', fileName, blob, mimeType);
+        } else if (provider === 'onedrive') {
+          const uploaded = await oneDrive.uploadFileToFolder(token, folderId || 'root', fileName, blob, mimeType);
+          fileId = String(uploaded?.id || '');
+        }
+        if (fileId) {
+          const nextAsset = {
+            provider,
+            fileId,
+            folderId: folderId || 'root',
+            mimeType,
+            fileName,
+            sizeBytes: Math.max(0, Number(pedagogicalAudioSizeBytesRef.current) || blob.size || 0),
+            linkedProjectFileId: String(openedCloudFile?.fileId || ''),
+          };
+          pedagogicalAudioAssetRef.current = nextAsset;
+          pedagogicalAudioAssetDirtyRef.current = false;
+        }
+      }
+    }
+    data.pedagogicalAudioAsset = pedagogicalAudioAssetRef.current || undefined;
+    if (data.pedagogicalAudioAsset?.fileId) {
+      data.pedagogicalAudioData = undefined;
+      data.pedagogicalAudioMimeType = data.pedagogicalAudioAsset.mimeType || data.pedagogicalAudioMimeType;
+      data.pedagogicalAudioFileName = data.pedagogicalAudioAsset.fileName || data.pedagogicalAudioFileName;
+      data.pedagogicalAudioSizeBytes = data.pedagogicalAudioAsset.sizeBytes || data.pedagogicalAudioSizeBytes;
+    }
+    if (Array.isArray(data.pedagogicalCues) && data.pedagogicalCues.length > 0) {
+      const currentProjectFileId = String(openedCloudFile?.fileId || '');
+      const cuesNext = [];
+      for (const cue of data.pedagogicalCues) {
+        const mediaUrl = String(cue?.mediaUrl || '');
+        let mediaAsset = cue?.mediaAsset && typeof cue.mediaAsset === 'object' ? { ...cue.mediaAsset } : null;
+        const shouldUploadCueMedia = mediaUrl.startsWith('data:image/');
+        if (shouldUploadCueMedia) {
+          const match = mediaUrl.match(/^data:([^;,]+)?(;base64)?,/i);
+          const mimeType = String(match?.[1] || 'image/png');
+          const ext = mimeType.includes('svg') ? 'svg' : 'png';
+          const fileName = `cue-media-${cue?.id || Date.now()}.${ext}`;
+          const blob = await dataUrlToBlob(mediaUrl, mimeType);
+          if (blob) {
+            let fileId = '';
+            if (provider === 'google') {
+              fileId = await googleDrive.uploadBinaryFileInFolder(token, folderId || 'root', fileName, blob, mimeType);
+            } else if (provider === 'onedrive') {
+              const uploaded = await oneDrive.uploadFileToFolder(token, folderId || 'root', fileName, blob, mimeType);
+              fileId = String(uploaded?.id || '');
+            }
+            if (fileId) {
+              mediaAsset = {
+                provider,
+                fileId,
+                folderId: folderId || 'root',
+                mimeType,
+                fileName,
+                sizeBytes: Math.max(0, Number(blob.size) || 0),
+                linkedProjectFileId: currentProjectFileId,
+              };
+            }
+          }
+        }
+        cuesNext.push({
+          ...cue,
+          mediaUrl: mediaAsset?.fileId ? '' : mediaUrl,
+          mediaAsset: mediaAsset || undefined,
+        });
+      }
+      data.pedagogicalCues = cuesNext;
+    }
+    const hasPageDesignDataUrl = typeof pageDesignDataUrl === 'string' && pageDesignDataUrl.startsWith('data:');
+    const existingPageAsset = pageDesignAssetRef.current;
+    const shouldUploadPageDesign = hasPageDesignDataUrl && (
+      pageDesignAssetDirtyRef.current
+      || !existingPageAsset?.fileId
+      || existingPageAsset?.provider !== provider
+    );
+    if (shouldUploadPageDesign) {
+      const match = pageDesignDataUrl.match(/^data:([^;,]+)?(;base64)?,/i);
+      const mimeType = String(match?.[1] || 'image/png');
+      const ext = mimeType.includes('svg') ? 'svg' : 'png';
+      const fileName = `page-design-${Date.now()}.${ext}`;
+      const blob = await dataUrlToBlob(pageDesignDataUrl, mimeType);
+      if (blob) {
+        let fileId = '';
+        if (provider === 'google') {
+          fileId = await googleDrive.uploadBinaryFileInFolder(token, folderId || 'root', fileName, blob, mimeType);
+        } else if (provider === 'onedrive') {
+          const uploaded = await oneDrive.uploadFileToFolder(token, folderId || 'root', fileName, blob, mimeType);
+          fileId = String(uploaded?.id || '');
+        }
+        if (fileId) {
+          pageDesignAssetRef.current = {
+            provider,
+            fileId,
+            folderId: folderId || 'root',
+            mimeType,
+            fileName,
+            sizeBytes: Math.max(0, Number(blob.size) || 0),
+            linkedProjectFileId: String(openedCloudFile?.fileId || ''),
+          };
+          pageDesignAssetDirtyRef.current = false;
+        }
+      }
+    }
+    data.pageDesignAsset = pageDesignAssetRef.current || undefined;
+    if (data.pageDesignAsset?.fileId) {
+      data.pageDesignDataUrl = undefined;
+    }
+    return data;
+  }, [exportScoreToJSON, isPedagogicalProject, dataUrlToBlob, songTitle, t, pageDesignDataUrl, openedCloudFile?.fileId]);
+
   // Salvesta pilve: kui on salvestuskaust seadistatud, salvesta otse sinna; vastasel juhul ava dialoog.
   const saveToCloud = useCallback(async () => {
     const access = authStorage.assertCloudAccess('google', 'Google Drive salvestamine');
@@ -5215,7 +5607,10 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         setTimeout(() => setSaveFeedback(''), 3000);
         return;
       }
-    const data = exportScoreToJSON();
+    const candidateFolderId = (sessionSaveFolderId?.cloud === 'google' ? sessionSaveFolderId.folderId : null)
+      || authStorage.getGoogleSaveFolderId()
+      || 'root';
+    const data = await prepareProjectDataForCloudSave({ provider: 'google', token, folderId: candidateFolderId });
     const json = JSON.stringify(data, null, 2);
     // Ära salvesta tühja või vigast sisu (vältib faili tühjendamist Drive'is).
     if (!json || json.length < 50 || !Array.isArray(data?.staves) || data.staves.length === 0) {
@@ -5298,7 +5693,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     setSaveCloudDialogOpen(true);
     };
     return run(true);
-  }, [exportScoreToJSON, sessionSaveFolderId, openedCloudFile, t, refreshGoogleTokenSilently, isAuthTokenError, clearDirty]);
+  }, [sessionSaveFolderId, openedCloudFile, t, refreshGoogleTokenSilently, isAuthTokenError, clearDirty, prepareProjectDataForCloudSave]);
 
   // Vali olemasolev kaust (Picker) ja salvesta sinna. Lisa kaust nimekirja, et järgmine salvestamine kasutaks sama kausta.
   const saveToCloudPickExisting = useCallback(async () => {
@@ -5313,7 +5708,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         return;
       }
       setSaveFeedback('Salvestan…');
-      const data = exportScoreToJSON();
+      const data = await prepareProjectDataForCloudSave({ provider: 'google', token, folderId });
       const json = JSON.stringify(data, null, 2);
       const fileName = `${makeSafeFileStem(data.songTitle || t('common.untitled'), t('common.untitled'))}.nm`;
       const fileId = await googleDrive.createFileInFolder(token, folderId, fileName, json);
@@ -5330,7 +5725,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       setSaveFeedback(e?.message || 'Pilve salvestamine ebaõnnestus');
       setTimeout(() => setSaveFeedback(''), 3000);
     }
-  }, [exportScoreToJSON, clearDirty, t]);
+  }, [clearDirty, t, prepareProjectDataForCloudSave]);
 
   // Loo uus kaust juurkaustas ja salvesta sinna. Lisa kaust nimekirja, et järgmine salvestamine kasutaks sama kausta (vältib topeltkaustu).
   const saveToCloudCreateFolder = useCallback(async () => {
@@ -5346,7 +5741,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       setSaveFeedback('Loon kausta…');
       const folderId = await googleDrive.createFolder(token, 'root', name);
       setSaveFeedback('Salvestan…');
-      const data = exportScoreToJSON();
+      const data = await prepareProjectDataForCloudSave({ provider: 'google', token, folderId });
       const json = JSON.stringify(data, null, 2);
       const fileName = `${makeSafeFileStem(data.songTitle || t('common.untitled'), t('common.untitled'))}.nm`;
       const fileId = await googleDrive.createFileInFolder(token, folderId, fileName, json);
@@ -5364,7 +5759,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       setSaveFeedback(e?.message || 'Pilve salvestamine ebaõnnestus');
       setTimeout(() => setSaveFeedback(''), 3000);
     }
-  }, [exportScoreToJSON, saveCloudNewFolderName, t]);
+  }, [saveCloudNewFolderName, t, prepareProjectDataForCloudSave]);
 
   // Salvesta OneDrive'i (Microsoft): kui fail on avatud pilvest, kirjuta sama fileId üle; muidu uus fail kausta/juurkausta.
   const saveToOneDrive = useCallback(async () => {
@@ -5401,7 +5796,10 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         setTimeout(() => setSaveFeedback(''), 3000);
         return;
       }
-    const data = exportScoreToJSON();
+    const candidateFolderId = (sessionSaveFolderId?.cloud === 'onedrive' ? sessionSaveFolderId.folderId : null)
+      || authStorage.getOneDriveSaveFolderId()
+      || 'root';
+    const data = await prepareProjectDataForCloudSave({ provider: 'onedrive', token, folderId: candidateFolderId });
     const json = JSON.stringify(data, null, 2);
     if (!json || json.length < 50 || !Array.isArray(data?.staves) || data.staves.length === 0) {
       setSaveFeedback('Projektisisu puudub või on vigane – salvestamine peatatud');
@@ -5478,7 +5876,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     }
     };
     return run(true);
-  }, [exportScoreToJSON, sessionSaveFolderId, openedCloudFile, t, refreshMicrosoftTokenSilently, isAuthTokenError, clearDirty]);
+  }, [sessionSaveFolderId, openedCloudFile, t, refreshMicrosoftTokenSilently, isAuthTokenError, clearDirty, prepareProjectDataForCloudSave]);
 
   const setDocumentNotationMode = useCallback((nextMode) => {
     if (nextMode === 'figurenotes') {
@@ -6622,6 +7020,48 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       return prev.filter((it) => it?.id !== clipId);
     });
   }, []);
+  useEffect(() => {
+    let cancelled = false;
+    const hydrateCueAssets = async () => {
+      const cues = Array.isArray(pedagogicalCues) ? pedagogicalCues : [];
+      if (!cues.some((cue) => !cue?.mediaUrl && cue?.mediaAsset?.fileId)) return;
+      const currentFileId = String(searchParams?.get?.('fileId') || '');
+      for (const cue of cues) {
+        if (cancelled) return;
+        if (cue?.mediaUrl || !cue?.mediaAsset?.fileId) continue;
+        const linked = String(cue.mediaAsset.linkedProjectFileId || '');
+        if (linked && currentFileId && linked !== currentFileId) continue;
+        try {
+          let blob = null;
+          const provider = String(cue.mediaAsset.provider || '');
+          const fileId = String(cue.mediaAsset.fileId || '');
+          if (provider === 'google') {
+            const token = googleDrive.getStoredToken?.();
+            if (!token) continue;
+            blob = await googleDrive.getFileBlob(token, fileId);
+          } else if (provider === 'onedrive') {
+            const token = authStorage.getStoredMicrosoftTokenFromAuth?.();
+            if (!token) continue;
+            blob = await oneDrive.getFileBlob(token, fileId);
+          }
+          if (!blob) continue;
+          const url = URL.createObjectURL(blob);
+          const dataUrl = await new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '');
+            reader.readAsDataURL(blob);
+          });
+          URL.revokeObjectURL(url);
+          if (!dataUrl || cancelled) continue;
+          setPedagogicalCues((prev) => (Array.isArray(prev)
+            ? prev.map((it) => (it?.id === cue.id ? { ...it, mediaUrl: dataUrl } : it))
+            : prev));
+        } catch (_) { /* ignore */ }
+      }
+    };
+    hydrateCueAssets();
+    return () => { cancelled = true; };
+  }, [pedagogicalCues, searchParams]);
 
   const stopScorePlayback = useCallback((resetCursor = false) => {
     if (scorePlaybackIntervalRef.current) {
@@ -6700,6 +7140,17 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     audio.currentTime = nextTime;
     setPedagogicalAudioCurrentTime(nextTime);
   }, [pedagogicalAudioUrl, pedagogicalAudioDuration, pedagogicalAudioPlaybackRate]);
+  const seekPedagogicalAudioTo = useCallback((targetSeconds) => {
+    if (!pedagogicalAudioUrl) return;
+    const audio = pedagogicalAudioRef.current || new Audio(pedagogicalAudioUrl);
+    audio.playbackRate = clampNumber(Number(pedagogicalAudioPlaybackRate) || 1, 0.5, 2);
+    pedagogicalAudioRef.current = audio;
+    const dur = Number.isFinite(audio.duration) && audio.duration > 0 ? audio.duration : (pedagogicalAudioDuration || 0);
+    const safeDur = dur > 0 ? dur : 0;
+    const nextTime = clampNumber(Number(targetSeconds) || 0, 0, safeDur > 0 ? safeDur : 1e9);
+    audio.currentTime = nextTime;
+    setPedagogicalAudioCurrentTime(nextTime);
+  }, [pedagogicalAudioUrl, pedagogicalAudioDuration, pedagogicalAudioPlaybackRate]);
   useEffect(() => {
     return () => {
       if (pedagogicalPlaybackIntervalRef.current) clearInterval(pedagogicalPlaybackIntervalRef.current);
@@ -6709,7 +7160,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         pedagogicalAudioRef.current = null;
       }
       stopPreviewNote();
-      if (pedagogicalAudioUrlRef.current) URL.revokeObjectURL(pedagogicalAudioUrlRef.current);
+      if (pedagogicalAudioUrlRef.current && String(pedagogicalAudioUrlRef.current).startsWith('blob:')) URL.revokeObjectURL(pedagogicalAudioUrlRef.current);
       if (Array.isArray(videoTimelineClips)) {
         videoTimelineClips.forEach((clip) => {
           if (clip?.url) {
@@ -13005,7 +13456,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                     {pageDesignDataUrl && (
                       <button
                         type="button"
-                        onClick={() => { dirtyRef.current = true; setPageDesignDataUrl(null); setHeaderMenuOpen(null); }}
+                        onClick={() => { dirtyRef.current = true; setPageDesignDataUrl(null); pageDesignAssetRef.current = null; pageDesignAssetDirtyRef.current = true; setHeaderMenuOpen(null); }}
                         className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-amber-50 hover:bg-slate-600"
                         title={t('layout.pageDesignRemoveHint')}
                       >
@@ -14702,7 +15153,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                           <h4 className="text-xs font-bold text-amber-900 uppercase mb-2">{t('layout.pageDesignTitle')}</h4>
                           <div className="flex flex-col gap-2">
                             <button type="button" title={t('layout.pageDesignReplaceHint')} onClick={() => { pageDesignInputRef.current?.click(); }} className="w-full py-1.5 px-2 rounded text-sm font-medium bg-amber-100 text-amber-800 hover:bg-amber-200">{t('layout.pageDesignReplace')}</button>
-                            <button type="button" title={t('layout.pageDesignRemoveHint')} onClick={() => { dirtyRef.current = true; setPageDesignDataUrl(null); }} className="w-full py-1.5 px-2 rounded text-sm font-medium bg-slate-100 text-slate-800 hover:bg-slate-200">{t('layout.pageDesignRemove')}</button>
+                            <button type="button" title={t('layout.pageDesignRemoveHint')} onClick={() => { dirtyRef.current = true; setPageDesignDataUrl(null); pageDesignAssetRef.current = null; pageDesignAssetDirtyRef.current = true; }} className="w-full py-1.5 px-2 rounded text-sm font-medium bg-slate-100 text-slate-800 hover:bg-slate-200">{t('layout.pageDesignRemove')}</button>
                           </div>
                         </div>
                         <div className="mt-4 pt-4 border-t-2 border-amber-200">
@@ -15004,7 +15455,14 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         </div>
       )}
 
-      <div className={`flex flex-1 ${(pianoStripVisible || timelinePanelVisible) ? 'pb-36' : ''}`}>
+      <div
+        className="flex flex-1"
+        style={{
+          paddingBottom: (pianoStripVisible || timelinePanelVisible)
+            ? 144
+            : (isPedagogicalProject && showPedagogicalVideoRuler ? videoRulerToolbarHeight + 28 : 0),
+        }}
+      >
         {/* Left Sidebar - Main Control Center (saab peita X-ga või Vaade → Tööriistakast) */}
         {toolboxPaletteVisible && (
         <aside className="flex-shrink-0 w-72 bg-white dark:bg-black border-r-2 border-amber-200 dark:border-white/20 shadow-xl p-6 overflow-auto">
@@ -15260,6 +15718,27 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                       </button>
                       <button
                         type="button"
+                        onClick={() => stopPedagogicalPlayback()}
+                        className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-200 text-slate-900 text-sm font-semibold hover:bg-slate-300 border border-slate-300"
+                      >
+                        Stop
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => seekPedagogicalAudio(-5)}
+                        className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-violet-100 text-violet-900 text-sm font-semibold hover:bg-violet-200 border border-violet-300"
+                      >
+                        Rewind
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => seekPedagogicalAudio(5)}
+                        className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-violet-100 text-violet-900 text-sm font-semibold hover:bg-violet-200 border border-violet-300"
+                      >
+                        Forward
+                      </button>
+                      <button
+                        type="button"
                         disabled={isExportingAnimation}
                         onClick={() => {
                           setTimelinePanelVisible(true);
@@ -15274,10 +15753,145 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                       <span className="text-sm text-violet-800">
                         {t('pedagogical.duration')} {pedagogicalAudioDuration > 0 ? `${Math.floor(pedagogicalAudioDuration / 60)}:${String(Math.floor(pedagogicalAudioDuration % 60)).padStart(2, '0')}` : '—'}
                       </span>
+                      <div className="w-full mt-2 rounded-lg border border-violet-200 bg-white/90 px-2 py-2">
+                        <div className="mb-1 flex items-center justify-between text-[11px] text-violet-900 font-medium">
+                          <span>MP3 timeline ruler</span>
+                          <span>
+                            {`${Math.floor(Math.max(0, pedagogicalAudioCurrentTime) / 60)}:${String(Math.floor(Math.max(0, pedagogicalAudioCurrentTime) % 60)).padStart(2, '0')}`}
+                            {' / '}
+                            {pedagogicalAudioDuration > 0 ? `${Math.floor(pedagogicalAudioDuration / 60)}:${String(Math.floor(pedagogicalAudioDuration % 60)).padStart(2, '0')}` : '0:00'}
+                          </span>
+                        </div>
+                        <div
+                          className="relative h-12 rounded border border-violet-200 bg-violet-50 cursor-pointer overflow-hidden"
+                          onClick={(e) => {
+                            const rect = e.currentTarget.getBoundingClientRect();
+                            const ratio = clampNumber((e.clientX - rect.left) / Math.max(1, rect.width), 0, 1);
+                            seekPedagogicalAudioTo((Number(pedagogicalAudioDuration) || 0) * ratio);
+                          }}
+                          title="Klõpsa timeline'il, et liikuda ajas"
+                        >
+                          {Array.from({ length: 17 }, (_, idx) => {
+                            const ratio = idx / 16;
+                            return (
+                              <div
+                                key={`ped-audio-tick-${idx}`}
+                                className={`absolute top-0 bottom-0 ${idx % 4 === 0 ? 'w-[2px] bg-violet-300' : 'w-px bg-violet-200'}`}
+                                style={{ left: `${ratio * 100}%` }}
+                                aria-hidden="true"
+                              />
+                            );
+                          })}
+                          <div
+                            className="absolute top-0 bottom-0 w-[2px] bg-violet-700"
+                            style={{
+                              left: `${((Math.max(0, Math.min(Number(pedagogicalAudioDuration) || 0, Number(pedagogicalAudioCurrentTime) || 0)) / Math.max(1, Number(pedagogicalAudioDuration) || 1)) * 100)}%`,
+                            }}
+                            aria-hidden="true"
+                          />
+                        </div>
+                      </div>
                     </>
                   ) : (
                     <span className="text-sm text-violet-600 italic">{t('pedagogical.noAudio')}</span>
                   )}
+                </div>
+                <div className="mt-3 rounded border border-violet-200 bg-white/70 px-2 py-2">
+                  <h4 className="text-[11px] font-bold text-violet-900 uppercase mb-1">Assets selles projektis</h4>
+                  <div className="text-[11px] text-violet-800 space-y-0.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <span>Audio: {pedagogicalAudioAssetRef.current?.fileId ? `${pedagogicalAudioAssetRef.current.provider}:${pedagogicalAudioAssetRef.current.fileName || pedagogicalAudioAssetRef.current.fileId}` : 'kohalik / inline'}</span>
+                      <div className="flex items-center gap-1">
+                        <button type="button" onClick={() => pedagogicalAudioInputRef.current?.click()} className="px-1.5 py-0.5 rounded border border-violet-300 bg-violet-100 hover:bg-violet-200">Replace</button>
+                        <button type="button" onClick={() => { setPedagogicalAudioUrl(null); pedagogicalAudioDataRef.current = null; pedagogicalAudioAssetRef.current = null; pedagogicalAudioAssetDirtyRef.current = true; dirtyRef.current = true; }} className="px-1.5 py-0.5 rounded border border-violet-300 bg-white hover:bg-violet-50">Unlink</button>
+                        <button type="button" onClick={async () => {
+                          const asset = pedagogicalAudioAssetRef.current;
+                          if (asset?.fileId) {
+                            const ok = typeof window === 'undefined' ? true : window.confirm('Kustutan audio asseti ka pilvest. Jätkan?');
+                            if (!ok) return;
+                          }
+                          if (asset?.fileId) {
+                            try {
+                              if (asset.provider === 'google') {
+                                const token = googleDrive.getStoredToken?.();
+                                if (token) await googleDrive.deleteFile(token, asset.fileId);
+                              } else if (asset.provider === 'onedrive') {
+                                const token = authStorage.getStoredMicrosoftTokenFromAuth?.();
+                                if (token) await oneDrive.deleteFile(token, asset.fileId);
+                              }
+                            } catch (_) { /* ignore delete failure */ }
+                          }
+                          setPedagogicalAudioUrl(null);
+                          pedagogicalAudioDataRef.current = null;
+                          pedagogicalAudioAssetRef.current = null;
+                          pedagogicalAudioAssetDirtyRef.current = true;
+                          dirtyRef.current = true;
+                        }} className="px-1.5 py-0.5 rounded border border-rose-300 bg-rose-50 text-rose-700 hover:bg-rose-100">Remove</button>
+                        <button type="button" onClick={() => { if (pedagogicalAudioAssetRef.current) { pedagogicalAudioAssetRef.current = { ...pedagogicalAudioAssetRef.current, linkedProjectFileId: String(openedCloudFile?.fileId || '') }; dirtyRef.current = true; } }} className="px-1.5 py-0.5 rounded border border-violet-300 bg-white hover:bg-violet-50">Re-link</button>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between gap-2">
+                      <span>Lehetaust: {pageDesignAssetRef.current?.fileId ? `${pageDesignAssetRef.current.provider}:${pageDesignAssetRef.current.fileName || pageDesignAssetRef.current.fileId}` : (pageDesignDataUrl ? 'kohalik / inline' : 'puudub')}</span>
+                      <div className="flex items-center gap-1">
+                        <button type="button" onClick={() => pageDesignInputRef.current?.click()} className="px-1.5 py-0.5 rounded border border-violet-300 bg-violet-100 hover:bg-violet-200">Replace</button>
+                        <button type="button" onClick={() => { setPageDesignDataUrl(null); pageDesignAssetRef.current = null; pageDesignAssetDirtyRef.current = true; dirtyRef.current = true; }} className="px-1.5 py-0.5 rounded border border-violet-300 bg-white hover:bg-violet-50">Unlink</button>
+                        <button type="button" onClick={async () => {
+                          const asset = pageDesignAssetRef.current;
+                          if (asset?.fileId) {
+                            const ok = typeof window === 'undefined' ? true : window.confirm('Kustutan lehetausta asseti ka pilvest. Jätkan?');
+                            if (!ok) return;
+                          }
+                          if (asset?.fileId) {
+                            try {
+                              if (asset.provider === 'google') {
+                                const token = googleDrive.getStoredToken?.();
+                                if (token) await googleDrive.deleteFile(token, asset.fileId);
+                              } else if (asset.provider === 'onedrive') {
+                                const token = authStorage.getStoredMicrosoftTokenFromAuth?.();
+                                if (token) await oneDrive.deleteFile(token, asset.fileId);
+                              }
+                            } catch (_) { /* ignore delete failure */ }
+                          }
+                          setPageDesignDataUrl(null);
+                          pageDesignAssetRef.current = null;
+                          pageDesignAssetDirtyRef.current = true;
+                          dirtyRef.current = true;
+                        }} className="px-1.5 py-0.5 rounded border border-rose-300 bg-rose-50 text-rose-700 hover:bg-rose-100">Remove</button>
+                        <button type="button" onClick={() => { if (pageDesignAssetRef.current) { pageDesignAssetRef.current = { ...pageDesignAssetRef.current, linkedProjectFileId: String(openedCloudFile?.fileId || '') }; dirtyRef.current = true; } }} className="px-1.5 py-0.5 rounded border border-violet-300 bg-white hover:bg-violet-50">Re-link</button>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between gap-2">
+                      <span>Cue meedia: {Array.isArray(pedagogicalCues) ? pedagogicalCues.filter((cue) => cue?.mediaAsset?.fileId).length : 0} cloud asset</span>
+                      <div className="flex items-center gap-1">
+                        <button type="button" onClick={() => pedagogicalCueMediaInputRef.current?.click()} className="px-1.5 py-0.5 rounded border border-violet-300 bg-violet-100 hover:bg-violet-200">Replace</button>
+                        <button type="button" onClick={() => { setPedagogicalCues((prev) => (Array.isArray(prev) ? prev.map((cue) => ({ ...cue, mediaUrl: '', mediaAsset: undefined })) : prev)); dirtyRef.current = true; }} className="px-1.5 py-0.5 rounded border border-violet-300 bg-white hover:bg-violet-50">Unlink</button>
+                        <button type="button" onClick={async () => {
+                          const cues = Array.isArray(pedagogicalCues) ? pedagogicalCues : [];
+                          const cloudCount = cues.filter((cue) => cue?.mediaAsset?.fileId).length;
+                          if (cloudCount > 0) {
+                            const ok = typeof window === 'undefined' ? true : window.confirm(`Kustutan ${cloudCount} cue meedia asseti ka pilvest. Jätkan?`);
+                            if (!ok) return;
+                          }
+                          for (const cue of cues) {
+                            const asset = cue?.mediaAsset;
+                            if (!asset?.fileId) continue;
+                            try {
+                              if (asset.provider === 'google') {
+                                const token = googleDrive.getStoredToken?.();
+                                if (token) await googleDrive.deleteFile(token, asset.fileId);
+                              } else if (asset.provider === 'onedrive') {
+                                const token = authStorage.getStoredMicrosoftTokenFromAuth?.();
+                                if (token) await oneDrive.deleteFile(token, asset.fileId);
+                              }
+                            } catch (_) { /* ignore delete failure */ }
+                          }
+                          setPedagogicalCues((prev) => (Array.isArray(prev) ? prev.map((cue) => ({ ...cue, mediaUrl: '', mediaAsset: undefined })) : prev));
+                          dirtyRef.current = true;
+                        }} className="px-1.5 py-0.5 rounded border border-rose-300 bg-rose-50 text-rose-700 hover:bg-rose-100">Remove</button>
+                        <button type="button" onClick={() => { setPedagogicalCues((prev) => (Array.isArray(prev) ? prev.map((cue) => cue?.mediaAsset?.fileId ? ({ ...cue, mediaAsset: { ...cue.mediaAsset, linkedProjectFileId: String(openedCloudFile?.fileId || '') } }) : cue) : prev)); dirtyRef.current = true; }} className="px-1.5 py-0.5 rounded border border-violet-300 bg-white hover:bg-violet-50">Re-link</button>
+                      </div>
+                    </div>
+                  </div>
                 </div>
                 <div className="mt-3 pt-3 border-t border-violet-200">
                   <h4 className="text-xs font-bold text-violet-900 uppercase mb-2">Pedagoogilised stseenid (cue)</h4>
@@ -15310,6 +15924,14 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                       placeholder="Pildi/GIF URL (valikuline)"
                       className="min-w-[220px] px-2 py-1 rounded border border-violet-300 bg-white text-violet-900"
                     />
+                    <input ref={pedagogicalCueMediaInputRef} type="file" accept="image/*" className="hidden" onChange={handlePedagogicalCueMediaFile} />
+                    <button
+                      type="button"
+                      onClick={() => pedagogicalCueMediaInputRef.current?.click()}
+                      className="px-3 py-1.5 rounded bg-violet-200 text-violet-900 font-semibold hover:bg-violet-300"
+                    >
+                      Impordi pilt
+                    </button>
                     <button
                       type="button"
                       onClick={addPedagogicalCue}
@@ -15326,7 +15948,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                             {Number(cue.startSec || 0).toFixed(2)}s - {Number(cue.endSec || 0).toFixed(2)}s
                             {cue.hideScore ? ' | peida score' : ''}
                             {cue.text ? ` | ${cue.text}` : ''}
-                            {cue.mediaUrl ? ' | media' : ''}
+                            {(cue.mediaUrl || cue.mediaAsset?.fileId) ? ' | media' : ''}
                           </span>
                           <button type="button" onClick={() => removePedagogicalCue(cue.id)} className="px-2 py-0.5 rounded border border-rose-300 text-rose-700 hover:bg-rose-50">Eemalda</button>
                         </div>
@@ -16385,51 +17007,6 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
             });
           })()}
           </div>
-          {isPedagogicalProject && showPedagogicalVideoRuler && (
-            <div className="relative z-[3] mx-auto mt-2 mb-2 w-full max-w-[1000px] rounded border border-violet-300 bg-violet-50 px-3 py-2">
-              {(() => {
-                const cuesSorted = Array.isArray(pedagogicalCues)
-                  ? [...pedagogicalCues].sort((a, b) => (Number(a?.startSec) || 0) - (Number(b?.startSec) || 0))
-                  : [];
-                const maxCueEnd = cuesSorted.reduce((acc, cue) => Math.max(acc, Number(cue?.endSec) || 0), 0);
-                const durationSec = Math.max(1, Number(pedagogicalAudioDuration) || maxCueEnd || 1);
-                const playheadSec = Math.max(0, Math.min(durationSec, Number(pedagogicalAudioCurrentTime) || 0));
-                const playheadLeftPct = (playheadSec / durationSec) * 100;
-                return (
-                  <>
-                    <div className="mb-1 flex items-center justify-between text-[11px] font-semibold text-violet-900">
-                      <span>Video editor ruler</span>
-                      <span>{playheadSec.toFixed(2)}s / {durationSec.toFixed(2)}s</span>
-                    </div>
-                    <div className="relative h-14 rounded bg-white border border-violet-200 overflow-hidden">
-                      <div
-                        className="absolute top-0 bottom-0 w-[2px] bg-violet-700 z-20"
-                        style={{ left: `${playheadLeftPct}%` }}
-                        aria-hidden="true"
-                      />
-                      {cuesSorted.map((cue) => {
-                        const start = Math.max(0, Number(cue?.startSec) || 0);
-                        const end = Math.max(start + 0.05, Number(cue?.endSec) || start + 0.05);
-                        const left = (start / durationSec) * 100;
-                        const width = Math.max(0.6, ((end - start) / durationSec) * 100);
-                        const active = pedagogicalActiveCue?.id === cue?.id;
-                        return (
-                          <div
-                            key={cue.id}
-                            className={`absolute top-1 bottom-1 rounded border px-1 py-0.5 text-[10px] leading-tight overflow-hidden ${active ? 'bg-violet-300 border-violet-700 text-violet-900' : 'bg-violet-200 border-violet-400 text-violet-900'}`}
-                            style={{ left: `${left}%`, width: `${width}%` }}
-                            title={`${Number(start).toFixed(2)}s - ${Number(end).toFixed(2)}s ${cue?.text || ''}`.trim()}
-                          >
-                            {cue?.text || 'Cue'}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </>
-                );
-              })()}
-            </div>
-          )}
           {/* Puhkehetkede sildid: täislehe overlay ainult taasesitusel/animatsioonil — mitte tavalises redigeerimises (muidu katab noodid; pointer-events-none laseb klikid läbi → “nähtamatu aga töötav”). */}
           {intermissionLabels.some((lab) => cursorPosition >= lab.startBeat && cursorPosition < lab.endBeat) && (isPedagogicalAudioPlaying || isExportingAnimation) && !showPdfExportPreview && !isExportingPdf && (
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none bg-amber-50/95 z-10" aria-hidden="true">
@@ -16750,6 +17327,109 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                       blockedShortcuts={[effectiveShortcutPrefs['app.noteInputToggle']]}
                       ignoreKeyboardWhenModalOpen={newWorkSetupOpen || saveCloudDialogOpen || googleLoadPickerOpen || settingsOpen || shortcutsOpen || showPdfExportPreview || isInstrumentManagerOpen}
                     />
+                  </div>
+                </div>
+              </div>
+            );
+          })(),
+          document.body
+        )}
+        {isPedagogicalProject && showPedagogicalVideoRuler && !pianoStripVisible && !timelinePanelVisible && typeof document !== 'undefined' && createPortal(
+          (() => {
+            const cuesSorted = Array.isArray(pedagogicalCues)
+              ? [...pedagogicalCues].sort((a, b) => (Number(a?.startSec) || 0) - (Number(b?.startSec) || 0))
+              : [];
+            const maxCueEnd = cuesSorted.reduce((acc, cue) => Math.max(acc, Number(cue?.endSec) || 0), 0);
+            const durationSec = Math.max(1, Number(pedagogicalAudioDuration) || maxCueEnd || 1);
+            const playheadSec = Math.max(0, Math.min(durationSec, Number(pedagogicalAudioCurrentTime) || 0));
+            const playheadLeftPct = (playheadSec / durationSec) * 100;
+            const laneHeight = Math.max(56, Math.round(videoRulerToolbarHeight - 54));
+            return (
+              <div className="fixed bottom-0 left-0 right-0 z-[100] bg-gradient-to-t from-violet-100 to-violet-50 border-t-2 border-violet-300 shadow-[0_-4px_12px_rgba(0,0,0,0.12)] px-4 pb-3 pt-2" style={{ isolation: 'isolate' }}>
+                <div
+                  className="mx-auto w-full max-w-[1000px]"
+                  style={{ minHeight: 88, height: Math.max(88, Math.round(videoRulerToolbarHeight)) }}
+                >
+                  <button
+                    type="button"
+                    className="mb-1 h-2 w-full cursor-ns-resize rounded bg-violet-300/80 hover:bg-violet-400/80"
+                    title="Muuda video ruleri kõrgust (lohista üles/alla)"
+                    aria-label="Muuda video ruleri kõrgust"
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      videoRulerResizeDragRef.current = { startY: e.clientY, startHeight: videoRulerToolbarHeight };
+                      document.body.style.cursor = 'ns-resize';
+                      document.body.style.userSelect = 'none';
+                    }}
+                  />
+                  <div className="mb-1 flex items-center justify-between gap-2 text-[11px] font-semibold text-violet-900">
+                    <span>Video editor toolbar</span>
+                    <div className="flex items-center gap-2">
+                      <span>{playheadSec.toFixed(2)}s / {durationSec.toFixed(2)}s</span>
+                      <button
+                        type="button"
+                        onClick={() => setShowPedagogicalVideoRuler(false)}
+                        className="inline-flex items-center justify-center w-6 h-6 rounded border border-violet-300 bg-violet-100 text-violet-900 hover:bg-violet-200"
+                        title="Sulge video editor toolbar"
+                        aria-label="Sulge video editor toolbar"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  </div>
+                  <div className="mb-1 flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={isPedagogicalAudioPlaying ? stopPedagogicalPlayback : startPedagogicalPlayback}
+                      className="px-2 py-1 rounded text-xs bg-violet-600 text-white hover:bg-violet-500"
+                    >
+                      {isPedagogicalAudioPlaying ? 'Pause' : 'Play'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => stopPedagogicalPlayback()}
+                      className="px-2 py-1 rounded text-xs bg-slate-200 text-slate-900 hover:bg-slate-300 border border-slate-300"
+                    >
+                      Stop
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => seekPedagogicalAudio(-5)}
+                      className="px-2 py-1 rounded text-xs bg-violet-100 text-violet-900 hover:bg-violet-200 border border-violet-300"
+                    >
+                      Rewind
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => seekPedagogicalAudio(5)}
+                      className="px-2 py-1 rounded text-xs bg-violet-100 text-violet-900 hover:bg-violet-200 border border-violet-300"
+                    >
+                      Forward
+                    </button>
+                  </div>
+                  <div className="relative rounded bg-white border border-violet-200 overflow-hidden" style={{ height: laneHeight }}>
+                    <div
+                      className="absolute top-0 bottom-0 w-[2px] bg-violet-700 z-20"
+                      style={{ left: `${playheadLeftPct}%` }}
+                      aria-hidden="true"
+                    />
+                    {cuesSorted.map((cue) => {
+                      const start = Math.max(0, Number(cue?.startSec) || 0);
+                      const end = Math.max(start + 0.05, Number(cue?.endSec) || start + 0.05);
+                      const left = (start / durationSec) * 100;
+                      const width = Math.max(0.6, ((end - start) / durationSec) * 100);
+                      const active = pedagogicalActiveCue?.id === cue?.id;
+                      return (
+                        <div
+                          key={cue.id}
+                          className={`absolute top-1 bottom-1 rounded border px-1 py-0.5 text-[10px] leading-tight overflow-hidden ${active ? 'bg-violet-300 border-violet-700 text-violet-900' : 'bg-violet-200 border-violet-400 text-violet-900'}`}
+                          style={{ left: `${left}%`, width: `${width}%` }}
+                          title={`${Number(start).toFixed(2)}s - ${Number(end).toFixed(2)}s ${cue?.text || ''}`.trim()}
+                        >
+                          {cue?.text || 'Cue'}
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               </div>
