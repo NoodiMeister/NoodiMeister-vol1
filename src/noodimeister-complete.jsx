@@ -8854,6 +8854,8 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
             setTimelinePanelVisible(false);
             setActiveToolbox(null);
           } else {
+            // Entering N-mode activates notation intent focus so arrow navigation works immediately.
+            setNotationFrameFocused(true);
             setSelectedNoteIndex(-1);
             setSelectionStart(-1);
             setSelectionEnd(-1);
@@ -16009,6 +16011,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                   onStaffAddNote={staffIdx === activeStaffIndex && mousePitchInputEnabled ? addNoteAtCursor : undefined}
                   onNoteClick={renderFigurenotesAsCombinedSystem
                     ? (index, e, row) => {
+                      setNotationFrameFocused(true);
                       if (Date.now() < suppressSelectionClickUntilRef.current) return;
                       const r = staffEntries[row];
                       if (r && r.staffIdx !== activeStaffIndex) {
@@ -16078,6 +16081,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                       }
                     }
                     : (staffIdx === activeStaffIndex ? (index, e) => {
+                      setNotationFrameFocused(true);
                       if (Date.now() < suppressSelectionClickUntilRef.current) return;
                       const rawBeat = getBeatAtNoteIndex(notes, index);
                       const beat = Number.isFinite(rawBeat) ? Math.max(0, rawBeat) : Math.max(0, Number(cursorPosition) || 0);
