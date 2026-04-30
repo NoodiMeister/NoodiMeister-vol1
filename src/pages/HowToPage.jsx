@@ -56,6 +56,16 @@ const CONTENT = {
             ],
           },
           {
+            q: 'Kuidas sisestada helitute percussion-pillide rütme (pedagogical)?',
+            steps: [
+              'Vali instrument Orff rütmipillide hulgast (unpitched percussion).',
+              'Vali rütm tööriistakastist (nt 1/4, 1/8, 1/16).',
+              'Mac/PC puhul sisesta noot füüsilise klaviatuuri tähtedega A-G.',
+              'iPad/tahvel seadmes kasuta nuppu “Sisesta rütm”, mis lisab valitud kestusega noodi kursori asukohta.',
+              'Varred kuvatakse nende pillide puhul vaikimisi üles suunas.',
+            ],
+          },
+          {
             q: 'Kuidas paigutust muuta?',
             steps: [
               'Ava paigutuse seaded.',
@@ -235,6 +245,10 @@ const CONTENT = {
             a: 'Choose input duration first (for example 1-5), then enter notes with A-G. The cursor advances in time.',
           },
           {
+            q: 'How do I enter unpitched percussion rhythms in pedagogical mode?',
+            a: 'Select an unpitched Orff percussion instrument and rhythm value first. On Mac/PC use physical keyboard letters A-G; on touch devices use the “Insert rhythm” button.',
+          },
+          {
             q: 'How do I switch notation mode?',
             a: 'Use the tools to choose traditional, figurenotes, or pedagogical. Modes use separate notation rules.',
           },
@@ -333,6 +347,10 @@ const CONTENT = {
           {
             q: 'Miten syötän nuotteja näppäimistöllä?',
             a: 'Valitse ensin kesto (esim. 1-5) ja syötä sävelet kirjaimilla A-G. Kursori etenee ajassa.',
+          },
+          {
+            q: 'Miten syötän virittämättömien lyömäsoittimien rytmit pedagogisessa tilassa?',
+            a: 'Valitse ensin Orffin virittämätön lyömäsoitin ja rytmiarvo. Mac/PC:llä syötä kirjaimilla A-G, kosketuslaitteella käytä “Lisää rytmi” -painiketta.',
           },
           {
             q: 'Miten vaihdan nuotinnustilaa?',

@@ -9923,7 +9923,8 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
           }
         }
         const noteLetter = e.key?.toLowerCase();
-        if (!e.defaultPrevented && !modKey && !e.altKey && ['c', 'd', 'e', 'f', 'g', 'a', 'b'].includes(noteLetter)) {
+        const keyboardDrivenPianoInsertActive = pianoStripVisible && (notationStyle === 'FIGURENOTES' || notationMode === 'vabanotatsioon');
+        if (!(keyboardDrivenPianoInsertActive && e.defaultPrevented) && !modKey && !e.altKey && ['c', 'd', 'e', 'f', 'g', 'a', 'b'].includes(noteLetter)) {
           e.preventDefault();
           // Kursori asukoht loeb: akordireal (cursorSubRow === 1) → akord; meloodiareal → figuurnoot. Akorditööriistakast avatud → akord.
           // Kasuta cursorSubRow prioriteedina (kui kasutaja on akordirea valinud, ei tohi sisestus minna meloodianoodiks).
@@ -10412,7 +10413,8 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
 
         // Note input (C-G) – sama loogika mis addNoteAtCursor (kursori löök, mitte järjekorra lõppu kleebimine).
         const noteLetter = e.key.toLowerCase();
-        if (!e.defaultPrevented && ['c', 'd', 'e', 'f', 'g', 'a', 'b'].includes(noteLetter)) {
+        const keyboardDrivenPianoInsertActive = pianoStripVisible && (notationStyle === 'FIGURENOTES' || notationMode === 'vabanotatsioon');
+        if (!(keyboardDrivenPianoInsertActive && e.defaultPrevented) && ['c', 'd', 'e', 'f', 'g', 'a', 'b'].includes(noteLetter)) {
           restNextRef.current = false;
           setGhostAccidentalIsExplicit(false);
           e.preventDefault();
@@ -13825,6 +13827,15 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                       <span>About / Teave</span>
                       <ExternalLink className="w-3.5 h-3.5" />
                     </Link>
+                    <Link
+                      to="/kuidas"
+                      onClick={() => setHeaderMenuOpen(null)}
+                      className="mx-2 mt-1 flex items-center justify-between rounded px-2.5 py-2 text-xs font-medium text-amber-50 hover:bg-slate-600 transition-colors"
+                      title="How to? / Kuidas?"
+                    >
+                      <span>How to? / Kuidas?</span>
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </Link>
                   </div>
                 )}
               </div>
@@ -14280,6 +14291,11 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                 <p className="text-[10px] text-amber-700 text-center">{t('rhythm.restShortcut')}</p>
                 {(notationMode === 'traditional' || notationMode === 'vabanotatsioon') && (
                   <p className="text-[10px] text-amber-600 text-center mt-0.5">{t('noteInput.chordHint')}</p>
+                )}
+                {noteInputMode && notationMode === 'vabanotatsioon' && isActiveUnpitchedPercussion && (
+                  <p className="text-[10px] text-amber-700 text-center mt-0.5">
+                    Unpitched percussion: Mac/PC sisestus klahvidega A-G, puuteseadmes kasuta nuppu "Sisesta rütm".
+                  </p>
                 )}
                 {showPercussionRhythmInsertButton && (
                   <div className="pt-1.5 border-t border-amber-200 flex items-center justify-center">
