@@ -506,6 +506,8 @@ export function TraditionalNotationView({
   pedagogicalTimeSigDenominatorEmoji = '🥁',
   staffLines = 5,
   staffSpace: staffSpaceProp,
+  singleLineBarlineHalfSpanPx = 20,
+  singleLineBarlineThicknessPx = 2,
   clefType = 'treble',
   keySignature = 'C',
   notationMode, // 'traditional' | 'vabanotatsioon'
@@ -625,6 +627,15 @@ export function TraditionalNotationView({
   const staffLeft = (isFirstInBraceGroup && braceGroupSize >= 2) ? STAFF_LEFT_WITH_BRACE : STAFF_LEFT_WITHOUT_BRACE;
   const clefX = staffLeft + GAP_BEFORE_CLEF_PX;
   const timeSigWidthPx = 28;
+  const isSingleLineRhythmStaff = staffLines === 1;
+  const singleLineBarHalfSpanSetting = Math.max(1, Math.min(500, Math.round(Number(singleLineBarlineHalfSpanPx) || 20)));
+  const singleLineBarThicknessSetting = Math.max(1, Math.min(500, Math.round(Number(singleLineBarlineThicknessPx) || 2)));
+  const getStaffBarlineWidth = React.useCallback((sp) => {
+    if (staffLines === 1) return singleLineBarThicknessSetting;
+    return Math.max(1, getThinBarlineThickness(sp));
+  }, [staffLines, singleLineBarThicknessSetting]);
+  const singleLineTimeSigBoxWidth = Math.max(30, Math.round(spacing * 3.2));
+  const singleLineTimeSigGapPx = Math.max(8, Math.round(spacing * 0.8));
   const ksFontForLayout = getGlyphFontSize(spacing);
   const keySigStepPx = getKeySignatureStepPx(ksFontForLayout);
   const actualTraditionalKeySigCount = isVabanotatsioon ? 0 : keySignatureInfo.count;
@@ -637,12 +648,20 @@ export function TraditionalNotationView({
     LAYOUT.CLEF_WIDTH +
     keySigWidthWorstCase +
     (keySigWidthWorstCase > 0 ? TIME_SIG_SPACING.GAP_AFTER_KEY_SIG_BEFORE_TIME_SIG_PX : 0);
-  const minContentStart =
-    staffLeft +
-    1 +
-    (isVabanotatsioon ? pedagogicalLeftPrefixWorstCase : traditionalLeftPrefixWorstCase) +
-    timeSigWidthPx +
-    2;
+  const minContentStart = isSingleLineRhythmStaff
+    ? (
+      staffLeft +
+      1 +
+      singleLineTimeSigBoxWidth +
+      singleLineTimeSigGapPx
+    )
+    : (
+      staffLeft +
+      1 +
+      (isVabanotatsioon ? pedagogicalLeftPrefixWorstCase : traditionalLeftPrefixWorstCase) +
+      timeSigWidthPx +
+      2
+    );
   const effectiveMarginLeft = Math.max(marginLeft, minContentStart);
   useEffect(() => {
     if (typeof onMeasureStartXChange !== 'function') return;
@@ -771,8 +790,8 @@ export function TraditionalNotationView({
       const bottom = Number(bottomY);
       const span = Math.max(1, bottom - top);
       const staffStep = span / 4;
-      const thinW = Math.max(1, getThinBarlineThickness(sp));
-      const thickW = Math.max(2, getThickBarlineThickness(sp));
+      const thinW = getStaffBarlineWidth(sp);
+      const thickW = staffLines === 1 ? Math.max(thinW + 1, singleLineBarThicknessSetting + 1) : Math.max(2, getThickBarlineThickness(sp));
       const gap = Math.max(1.2, BARLINE_SEPARATION * sp);
       const dotR = Math.max(1.2, sp * 0.16) + 1;
       // Traditional invariant: dots centered in 2nd and 3rd staff spaces (from bottom).
@@ -821,7 +840,7 @@ export function TraditionalNotationView({
       }
       return null;
     },
-    [],
+    [getStaffBarlineWidth, singleLineBarThicknessSetting, staffLines],
   );
   const staffLinePositions = getStaffLinePositions(centerY, staffLines, spacing);
   // Leland: Treble on B line (traditional-method placement). Bass: F line (index 1).
@@ -1024,6 +1043,10 @@ export function TraditionalNotationView({
               const staffCenterY = timelineHeight / 2;
               const staffFirstLineY = staffLinePositions[0];
               const staffLastLineY = staffLinePositions[staffLinePositions.length - 1];
+              // 1-line percussion staff needs visible barline span for orientation.
+              const singleLineBarHalfSpan = singleLineBarHalfSpanSetting;
+              const staffBarTopY = staffLines === 1 ? (staffCenterY - singleLineBarHalfSpan) : staffFirstLineY;
+              const staffBarBottomY = staffLines === 1 ? (staffCenterY + singleLineBarHalfSpan) : staffLastLineY;
               const instClef = inst.clef ?? clefType;
               const instMeasures = multiStaff ? (effectiveMeasuresPerInstrument[inst.id] ?? []) : effectiveMeasures;
               const staffResolvePitchY = multiStaff
@@ -1224,7 +1247,9 @@ export function TraditionalNotationView({
                     (() => {
                       const keySigCount = shouldDrawAnyKeySignature ? keySignatureInfo.count : 0;
                       const ksFont = getGlyphFontSize(spacing);
-                      const timeSigX = isVabanotatsioon
+                      const timeSigX = isSingleLineRhythmStaff
+                        ? (effectiveMarginLeft - singleLineTimeSigGapPx - singleLineTimeSigBoxWidth / 2)
+                        : isVabanotatsioon
                         ? getPedagogicalTimeSignatureX({
                             clefX,
                             clefColumnWidth: LAYOUT.CLEF_WIDTH,
@@ -1258,6 +1283,18 @@ export function TraditionalNotationView({
                             : undefined}
                           style={canHandDragNotes ? { cursor: 'grab' } : undefined}
                         >
+                          {isSingleLineRhythmStaff && (
+                            <rect
+                              x={-singleLineTimeSigBoxWidth / 2}
+                              y={centerY - Math.max(spacing * 2.35, 18)}
+                              width={singleLineTimeSigBoxWidth}
+                              height={Math.max(spacing * 4.7, 36)}
+                              fill="#ffffff"
+                              stroke="#cbd5e1"
+                              strokeWidth={1}
+                              rx={4}
+                            />
+                          )}
                           {renderTimeSignature(timeSignature, timeSignatureMode, centerY, timeSigTextColor, timeSigNoteFill, 0, { denominatorType: pedagogicalTimeSigDenominatorType, denominatorColor: pedagogicalTimeSigDenominatorColor, denominatorInstrument: pedagogicalTimeSigDenominatorInstrument, denominatorEmoji: pedagogicalTimeSigDenominatorEmoji }, spacing)}
                         </g>
                       );
@@ -1402,14 +1439,14 @@ export function TraditionalNotationView({
                 const connectedY1 = systemTopStaffLineY;
                 const connectedY2 = systemBottomStaffLineY;
                 const barY1 =
-                  connectedBarlines && staffIndexInScore === 0 ? connectedY1 : staffY + firstLineY;
+                  connectedBarlines && staffIndexInScore === 0 ? connectedY1 : staffY + staffBarTopY;
                 const barY2 =
-                  connectedBarlines && staffIndexInScore === 0 ? connectedY2 : staffY + lastLineY;
+                  connectedBarlines && staffIndexInScore === 0 ? connectedY2 : staffY + staffBarBottomY;
                 const measureRightX = measureX + measureWidth;
                 const rowBarFrame = getBarlineFrame({
                   barlineX: measureX,
-                  barTopY: staffY + firstLineY,
-                  barBottomY: staffY + lastLineY,
+                  barTopY: staffY + staffBarTopY,
+                  barBottomY: staffY + staffBarBottomY,
                   staffSpace: spacing,
                 });
                 const rightBarFrame = getBarlineFrame({
@@ -1429,7 +1466,7 @@ export function TraditionalNotationView({
                 return (
                   <g key={measureIdx}>
                     {measureWidth < (LAYOUT.MEASURE_MIN_WIDTH || 28) && (
-                      <rect x={measureX - 1} y={staffY + firstLineY - 2} width={measureWidth + 2} height={lastLineY - firstLineY + 4} fill="none" stroke="#dc2626" strokeWidth={2} strokeDasharray="4 2" rx={2} />
+                      <rect x={measureX - 1} y={staffY + staffBarTopY - 2} width={measureWidth + 2} height={staffBarBottomY - staffBarTopY + 4} fill="none" stroke="#dc2626" strokeWidth={2} strokeDasharray="4 2" rx={2} />
                     )}
                     {showLayoutBreakIcons && typeof onToggleLineBreakAfter === 'function' && (
                       <g className="cursor-pointer" onClick={(e) => { e.stopPropagation(); onToggleLineBreakAfter(measureIdx); }} style={{ pointerEvents: 'auto' }} title={translateLabel ? translateLabel('layout.lineBreakAfter') : 'Reavahetus'}>
@@ -1457,10 +1494,10 @@ export function TraditionalNotationView({
                               type: 'both',
                             })}
                             {isRepeatMarkSelected(measureIdx, 'repeatStart') && (
-                              <rect x={measureX - spacing * 2.4} y={staffY + firstLineY - spacing * 1.1} width={spacing * 4.8} height={lastLineY - firstLineY + spacing * 2.2} fill="#93c5fd" opacity="0.32" rx={3} />
+                              <rect x={measureX - spacing * 2.4} y={staffY + staffBarTopY - spacing * 1.1} width={spacing * 4.8} height={staffBarBottomY - staffBarTopY + spacing * 2.2} fill="#93c5fd" opacity="0.32" rx={3} />
                             )}
                             {onSelectRepeatMark && (
-                              <rect x={measureX - spacing * 2} y={staffY + firstLineY - spacing} width={spacing * 4} height={lastLineY - firstLineY + spacing * 2} fill="transparent" />
+                              <rect x={measureX - spacing * 2} y={staffY + staffBarTopY - spacing} width={spacing * 4} height={staffBarBottomY - staffBarTopY + spacing * 2} fill="transparent" />
                             )}
                           </g>
                         ) : leftBarlineRepeat.variant === 'start' ? (
@@ -1477,10 +1514,10 @@ export function TraditionalNotationView({
                               type: 'start',
                             })}
                             {isRepeatMarkSelected(measureIdx, 'repeatStart') && (
-                              <rect x={measureX - spacing * 2.4} y={staffY + firstLineY - spacing * 1.1} width={spacing * 4.8} height={lastLineY - firstLineY + spacing * 2.2} fill="#93c5fd" opacity="0.32" rx={3} />
+                              <rect x={measureX - spacing * 2.4} y={staffY + staffBarTopY - spacing * 1.1} width={spacing * 4.8} height={staffBarBottomY - staffBarTopY + spacing * 2.2} fill="#93c5fd" opacity="0.32" rx={3} />
                             )}
                             {onSelectRepeatMark && (
-                              <rect x={measureX - spacing * 2} y={staffY + firstLineY - spacing} width={spacing * 2} height={lastLineY - firstLineY + spacing * 2} fill="transparent" />
+                              <rect x={measureX - spacing * 2} y={staffY + staffBarTopY - spacing} width={spacing * 2} height={staffBarBottomY - staffBarTopY + spacing * 2} fill="transparent" />
                             )}
                           </g>
                         ) : leftBarlineRepeat.variant === 'barline' && drawConnectedBarlinesHere ? (
@@ -1490,7 +1527,7 @@ export function TraditionalNotationView({
                             x2={measureX}
                             y2={barY2}
                             stroke="#1a1a1a"
-                            strokeWidth={getThinBarlineThickness(spacing)}
+                            strokeWidth={getStaffBarlineWidth(spacing)}
                           />
                         ) : null}
                         {/* Right barline: E041 kui pole ühendatud E042-ga järgmise takti vasakul */}
@@ -1510,9 +1547,9 @@ export function TraditionalNotationView({
                             {isRepeatMarkSelected(measureIdx, 'repeatEnd') && (
                               <rect
                                 x={Math.min(repeatRightAnchorX, measureRightX) - spacing * 2.4}
-                                y={staffY + firstLineY - spacing * 1.1}
+                                y={staffY + staffBarTopY - spacing * 1.1}
                                 width={Math.abs(measureRightX - repeatRightAnchorX) + spacing * 4.8}
-                                height={lastLineY - firstLineY + spacing * 2.2}
+                                height={staffBarBottomY - staffBarTopY + spacing * 2.2}
                                 fill="#93c5fd"
                                 opacity="0.32"
                                 rx={3}
@@ -1521,9 +1558,9 @@ export function TraditionalNotationView({
                             {onSelectRepeatMark && (
                               <rect
                                 x={Math.min(repeatRightAnchorX, measureRightX) - spacing * 2}
-                                y={staffY + firstLineY - spacing}
+                                y={staffY + staffBarTopY - spacing}
                                 width={Math.abs(measureRightX - repeatRightAnchorX) + spacing * 4}
-                                height={lastLineY - firstLineY + spacing * 2}
+                                height={staffBarBottomY - staffBarTopY + spacing * 2}
                                 fill="transparent"
                               />
                             )}
@@ -1532,6 +1569,8 @@ export function TraditionalNotationView({
                           (measureIdx === instMeasures.length - 1 || measure.barlineFinal) ? (
                             (() => {
                               const { thinCx, thickCx, thinW, thickW } = getFinalDoubleBarlineCentersX(measureX + measureWidth, spacing);
+                              const resolvedThinW = getStaffBarlineWidth(spacing);
+                              const resolvedThickW = staffLines === 1 ? Math.max(resolvedThinW + 1, singleLineBarThicknessSetting + 1) : thickW;
                               const y1b = barY1;
                               const y2b = barY2;
                               return (
@@ -1542,7 +1581,7 @@ export function TraditionalNotationView({
                                 x2={thinCx}
                                 y2={y2b}
                                 stroke="#1a1a1a"
-                                strokeWidth={thinW}
+                                strokeWidth={staffLines === 1 ? resolvedThinW : thinW}
                               />
                               <line
                                 x1={thickCx}
@@ -1550,7 +1589,7 @@ export function TraditionalNotationView({
                                 x2={thickCx}
                                 y2={y2b}
                                 stroke="#1a1a1a"
-                                strokeWidth={thickW}
+                                strokeWidth={resolvedThickW}
                               />
                             </g>
                               );
@@ -1562,12 +1601,14 @@ export function TraditionalNotationView({
                               x2={measureX + measureWidth}
                               y2={barY2}
                               stroke="#1a1a1a"
-                              strokeWidth={getThinBarlineThickness(spacing)}
+                              strokeWidth={getStaffBarlineWidth(spacing)}
                             />
                           )
                         ) : drawConnectedBarlinesHere && measure.barlineFinal ? (
                           (() => {
                             const { thinCx, thickCx, thinW, thickW } = getFinalDoubleBarlineCentersX(measureX + measureWidth, spacing);
+                            const resolvedThinW = getStaffBarlineWidth(spacing);
+                            const resolvedThickW = staffLines === 1 ? Math.max(resolvedThinW + 1, singleLineBarThicknessSetting + 1) : thickW;
                             const y1b = barY1;
                             const y2b = barY2;
                             return (
@@ -1578,7 +1619,7 @@ export function TraditionalNotationView({
                               x2={thinCx}
                               y2={y2b}
                               stroke="#1a1a1a"
-                              strokeWidth={thinW}
+                              strokeWidth={staffLines === 1 ? resolvedThinW : thinW}
                             />
                             <line
                               x1={thickCx}
@@ -1586,7 +1627,7 @@ export function TraditionalNotationView({
                               x2={thickCx}
                               y2={y2b}
                               stroke="#1a1a1a"
-                              strokeWidth={thickW}
+                              strokeWidth={resolvedThickW}
                             />
                           </g>
                             );
