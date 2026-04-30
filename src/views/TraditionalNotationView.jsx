@@ -1027,7 +1027,9 @@ export function TraditionalNotationView({
               const instClef = inst.clef ?? clefType;
               const instMeasures = multiStaff ? (effectiveMeasuresPerInstrument[inst.id] ?? []) : effectiveMeasures;
               const staffResolvePitchY = multiStaff
-                ? (pitch, octave) => getVerticalPosition(pitch, octave, instClef, { centerY: staffCenterY, staffSpace: spacing, keySignature })
+                ? (pitch, octave) => (staffLines === 1
+                  ? staffCenterY
+                  : getVerticalPosition(pitch, octave, instClef, { centerY: staffCenterY, staffSpace: spacing, keySignature }))
                 : resolvePitchY;
 
               return (

@@ -650,6 +650,25 @@ var INSTRUMENT_CONFIG_BASE = {
   'synth-pad': { value: 'synth-pad', range: 'C2-C7', type: 'standard', defaultClef: 'treble' },
   voice:      { value: 'voice', range: 'C3-C6', type: 'standard', defaultClef: 'treble' }
 };
+var SINGLE_LINE_UNPITCHED_PERCUSSION_IDS = new Set([
+  'triangle', 'claves', 'woodblock', 'temple-blocks', 'castanets', 'shakers', 'maracas', 'guiro',
+  'agogo', 'cowbell', 'cymbals', 'sleighbells', 'djembe', 'cajon', 'snare-drum', 'bass-drum',
+  'kick-drum', 'side-drum'
+]);
+function isSingleLineUnpitchedPercussion(instId, cfg) {
+  if (!instId) return false;
+  if (cfg?.family === 'orff-percussion') return true;
+  return SINGLE_LINE_UNPITCHED_PERCUSSION_IDS.has(String(instId));
+}
+function getSingleLineStaffPitch(instId, cfg) {
+  var rangeText = String(cfg?.range || '');
+  var m = rangeText.match(/([A-G])([#b]?)(\d)/);
+  if (m) return { pitch: `${m[1]}${m[2] || ''}`, octave: Number(m[3]) };
+  if (cfg?.defaultClef === 'bass' || instId === 'djembe' || instId === 'cajon' || instId === 'bass-drum' || instId === 'kick-drum') {
+    return { pitch: 'C', octave: 4 };
+  }
+  return { pitch: 'C', octave: 5 };
+}
 var INSTRUMENT_I18N_KEYS = {
   'single-staff-treble': 'inst.singleStaffTreble', 'single-staff-bass': 'inst.singleStaffBass',
   boomwhackers: 'inst.boomwhackers',
@@ -1822,6 +1841,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   const [pianoRangeNumbers, setPianoRangeNumbers] = useState({ first: 48, last: 72 }); // klaviatuuri vahemik MIDI (first, last); piirang 21–108
   const [pianoStripVisible, setPianoStripVisible] = useState(false); // klaviatuuri riba all – nähtav ka siis, kui avatud on Rütm vms
   const [timelinePanelVisible, setTimelinePanelVisible] = useState(false); // timeline panel alumises ribas
+  const [videoTimelineClips, setVideoTimelineClips] = useState([]); // [{ id, name, url, durationSec, createdAt, mimeType }]
   const N_MODE_PRIMARY_TOOL_IDS = useMemo(() => ['rhythm', 'pitchInput', 'pianoKeyboard', 'chords'], []);
   const PIANO_RANGE_PRESETS = useMemo(() => [
     { id: 'C3-C5', label: 'C3-C5', first: 48, last: 72 },
@@ -2023,6 +2043,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   const [partLayoutPageBreakBefore, setPartLayoutPageBreakBefore] = useState([]);
   const [partLayoutExtraPages, setPartLayoutExtraPages] = useState(0);
   const [showPageNavigator, setShowPageNavigator] = useState(false);
+  const [showPedagogicalVideoRuler, setShowPedagogicalVideoRuler] = useState(false);
   /** When true, scale the score so one A4 page fits in the visible area (whole page layout on screen). */
   const [viewFitPage, setViewFitPage] = useState(true);
   /** When true (and viewFitPage on), scale to fit only the notated area instead of full A4 page. */
@@ -2503,6 +2524,14 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   const [pedagogicalSyncStartTimeSec, setPedagogicalSyncStartTimeSec] = useState(0);
   const [pedagogicalSyncEndBeat, setPedagogicalSyncEndBeat] = useState(16);
   const [pedagogicalSyncEndTimeSec, setPedagogicalSyncEndTimeSec] = useState(8);
+  const [pedagogicalLoopEnabled, setPedagogicalLoopEnabled] = useState(false);
+  const [pedagogicalLoopCount, setPedagogicalLoopCount] = useState(2); // 0 = infinite
+  const [pedagogicalCues, setPedagogicalCues] = useState([]);
+  const [pedagogicalCueStartSecDraft, setPedagogicalCueStartSecDraft] = useState(0);
+  const [pedagogicalCueEndSecDraft, setPedagogicalCueEndSecDraft] = useState(2);
+  const [pedagogicalCueTextDraft, setPedagogicalCueTextDraft] = useState('');
+  const [pedagogicalCueMediaUrlDraft, setPedagogicalCueMediaUrlDraft] = useState('');
+  const [pedagogicalCueHideScoreDraft, setPedagogicalCueHideScoreDraft] = useState(true);
   const [pedagogicalRhythmStep, setPedagogicalRhythmStep] = useState(1); // beat-grid cursor read step
   // Animeeritud notatsioon: nooti lugeva kursori kuju (püstine joon, emoji)
   const [pedagogicalPlayheadStyle, setPedagogicalPlayheadStyle] = useState('line'); // 'line' | 'violin' | 'smiley' | 'custom'
@@ -2512,6 +2541,10 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   const [cursorSizePx, setCursorSizePx] = useState(30); // User setting: cursor/playhead size 1–500 px (used in Settings ruler)
   const [cursorLineStrokeWidth, setCursorLineStrokeWidth] = useState(4); // N-mode / reading cursor line thickness (1–8 px)
   const [pedagogicalPlayheadMovement, setPedagogicalPlayheadMovement] = useState('arch'); // 'arch' (distance-dependent) | 'horizontal'
+  const [rhythmCursorColor, setRhythmCursorColor] = useState('#0ea5e9');
+  const [rhythmCursorOpacity, setRhythmCursorOpacity] = useState(0.55);
+  const [rhythmCursorWidthMultiplier, setRhythmCursorWidthMultiplier] = useState(1);
+  const [rhythmCursorHighContrast, setRhythmCursorHighContrast] = useState(false);
   const [isExportingAnimation, setIsExportingAnimation] = useState(false);
   const [isExportingPdf, setIsExportingPdf] = useState(false);
   const [showPdfExportPreview, setShowPdfExportPreview] = useState(false);
@@ -2561,6 +2594,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   const [projectChosenPath, setProjectChosenPath] = useState('');
   const pedagogicalAudioRef = useRef(null); // HTMLAudioElement
   const pedagogicalPlaybackIntervalRef = useRef(null);
+  const pedagogicalLoopIterationRef = useRef(0);
   const scorePlaybackIntervalRef = useRef(null);
   const scorePlaybackLastBeatRef = useRef(0);
   const scorePlaybackStartedAtRef = useRef(0);
@@ -3074,6 +3108,17 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     const bpm = Math.max(20, Math.min(300, Number(pedagogicalAudioBpm) || 120));
     return (safeSeconds * bpm) / 60;
   }, [pedagogicalSyncMode, pedagogicalSyncStartTimeSec, pedagogicalSyncEndTimeSec, pedagogicalSyncStartBeat, pedagogicalSyncEndBeat, pedagogicalAudioBpm]);
+  const pedagogicalActiveCue = useMemo(() => {
+    const tSec = Math.max(0, Number(pedagogicalAudioCurrentTime) || 0);
+    const ordered = Array.isArray(pedagogicalCues) ? [...pedagogicalCues].sort((a, b) => (Number(a?.startSec) || 0) - (Number(b?.startSec) || 0)) : [];
+    return ordered.find((cue) => {
+      const start = Math.max(0, Number(cue?.startSec) || 0);
+      const endRaw = Number(cue?.endSec);
+      const end = Number.isFinite(endRaw) && endRaw > start ? endRaw : start + 0.01;
+      return tSec >= start && tSec < end;
+    }) || null;
+  }, [pedagogicalAudioCurrentTime, pedagogicalCues]);
+  const pedagogicalCueShouldHideScore = !!(isPedagogicalProject && pedagogicalActiveCue?.hideScore);
 
   const handleImportPageDesignFile = useCallback((e) => {
     const file = e.target?.files?.[0];
@@ -3551,6 +3596,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     }
     setIsPedagogicalAudioPlaying(false);
     setPedagogicalAudioCurrentTime(0);
+    pedagogicalLoopIterationRef.current = 0;
   }, []);
 
   const applyParsedMusicXml = useCallback((parsed) => {
@@ -3685,7 +3731,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   }, [applyParsedMusicXml, beginImportTimeline, advanceImportTimeline, finishImportTimeline]);
 
   // Animatsiooni eksport video failina (MP4 või WebM) – alla laadimine või Google Drive
-  const exportAnimationAsVideo = useCallback(async ({ download = false, saveToDrive = false } = {}) => {
+  const exportAnimationAsVideo = useCallback(async ({ download = false, saveToDrive = false, addToTimeline = true } = {}) => {
     if (!isPedagogicalProject || !scoreContainerRef.current) {
       setSaveFeedback(t('file.exportAnimationNoProject'));
       setTimeout(() => setSaveFeedback(''), 3000);
@@ -3784,6 +3830,21 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       exportAudio?.pause();
       const blob = new Blob(chunks, { type: mimeType });
       const filename = `${makeSafeFileStem(songTitle || t('common.untitled'), 'animation')}.${ext}`;
+      if (addToTimeline) {
+        const clipUrl = URL.createObjectURL(blob);
+        setVideoTimelineClips((prev) => {
+          const next = Array.isArray(prev) ? [...prev] : [];
+          next.push({
+            id: makeId('video-clip'),
+            name: filename,
+            url: clipUrl,
+            durationSec,
+            createdAt: Date.now(),
+            mimeType,
+          });
+          return next;
+        });
+      }
       if (download) {
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -4262,6 +4323,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     partLayoutPageBreakBefore,
     partLayoutExtraPages,
     showPageNavigator,
+    showPedagogicalVideoRuler,
     pageFlowDirection,
     viewFitPage,
     viewSmartPage,
@@ -4298,6 +4360,9 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     pedagogicalSyncStartTimeSec,
     pedagogicalSyncEndBeat,
     pedagogicalSyncEndTimeSec,
+    pedagogicalLoopEnabled,
+    pedagogicalLoopCount,
+    pedagogicalCues,
     pedagogicalRhythmStep,
     pedagogicalAudioData: pedagogicalAudioDataRef.current || undefined,
     pedagogicalPlayheadStyle,
@@ -4306,6 +4371,10 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     cursorSizePx,
     cursorLineStrokeWidth,
     pedagogicalPlayheadMovement,
+    rhythmCursorColor,
+    rhythmCursorOpacity,
+    rhythmCursorWidthMultiplier,
+    rhythmCursorHighContrast,
     chords,
     textBoxes,
     documentFontFamily,
@@ -4347,7 +4416,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     lyricFontSize,
     noteheadShape,
     noteheadEmoji
-  }), [staves, activeStaffIndex, staffYOffsets, measureStretchFactors, systemYOffsets, systemXOffsets, visibleStaves, instrumentPartGroups, intermissionLabels, timeSignature, timeSignatureMode, keySignature, staffLines, notationStyle, pixelsPerBeat, notationMode, instrumentNotationVariant, linkedNotationByStaffId, tinWhistleLinkedFingeringScalePercent, cursorPosition, addedMeasures, measureRepeatMarks, setupCompleted, songTitle, author, pickupEnabled, pickupQuantity, pickupDuration, pageOrientation, paperSize, layoutMeasuresPerLine, layoutStrictMeasuresPerLine, layoutLineBreakBefore, layoutPageBreakBefore, layoutExtraPages, layoutSystemGap, layoutPartsGap, layoutPartsGapMm, layoutSizeUnit, layoutConnectedBarlines, layoutGlobalSpacingMultiplier, notationCtx?.globalSpacingMultiplier, notationCtx?.staffSpacing, notationCtx?.measureWidthMultiplier, viewMode, partLayoutMeasuresPerLine, partLayoutStrictMeasuresPerLine, partLayoutLineBreakBefore, partLayoutPageBreakBefore, partLayoutExtraPages, showPageNavigator, pageFlowDirection, viewFitPage, viewSmartPage, visibleToolIds, tuningReferenceNote, tuningReferenceOctave, tuningReferenceHz, playNoteOnInsert, figurenotesSize, figurenotesStems, figurenotesChordLineGap, figurenotesChordBlocks, figurenotesChordBlocksShowTones, figurenotesMelodyShowNoteNames, timeSignatureSize, pedagogicalTimeSigDenominatorType, pedagogicalTimeSigDenominatorColor, pedagogicalTimeSigDenominatorInstrument, pedagogicalTimeSigDenominatorEmoji, showBarNumbers, barNumberSize, voltaNumberSize, showRhythmSyllables, showAllNoteLabels, enableEmojiOverlays, joClefStaffPosition, relativeNotationShowKeySignature, relativeNotationShowTraditionalClef, isPedagogicalProject, pedagogicalAudioBpm, pedagogicalAudioPlaybackRate, pedagogicalSyncMode, pedagogicalSyncStartBeat, pedagogicalSyncStartTimeSec, pedagogicalSyncEndBeat, pedagogicalSyncEndTimeSec, pedagogicalRhythmStep, pedagogicalPlayheadStyle, pedagogicalPlayheadEmoji, pedagogicalPlayheadEmojiSize, cursorLineStrokeWidth, pedagogicalPlayheadMovement, chords, textBoxes, documentFontFamily, lyricFontFamily, lyricBold, lyricItalic, lyricUnderline, lyricWeight, titleFontSize, authorFontSize, titleFontFamily, authorFontFamily, titleColor, authorColor, titleBold, titleItalic, titleUnderline, titleWeight, authorBold, authorItalic, authorUnderline, authorWeight, titleAlignment, authorAlignment, staffRowAlignment, pageDesignDataUrl, pageDesignOpacity, pageDesignFit, pageDesignPositionX, pageDesignPositionY, pageDesignCrop, timeSignatureOffset, lyricLineIndex, lyricLineYOffset, lyricFontSize, noteheadShape, noteheadEmoji]);
+  }), [staves, activeStaffIndex, staffYOffsets, measureStretchFactors, systemYOffsets, systemXOffsets, visibleStaves, instrumentPartGroups, intermissionLabels, timeSignature, timeSignatureMode, keySignature, staffLines, notationStyle, pixelsPerBeat, notationMode, instrumentNotationVariant, linkedNotationByStaffId, tinWhistleLinkedFingeringScalePercent, cursorPosition, addedMeasures, measureRepeatMarks, setupCompleted, songTitle, author, pickupEnabled, pickupQuantity, pickupDuration, pageOrientation, paperSize, layoutMeasuresPerLine, layoutStrictMeasuresPerLine, layoutLineBreakBefore, layoutPageBreakBefore, layoutExtraPages, layoutSystemGap, layoutPartsGap, layoutPartsGapMm, layoutSizeUnit, layoutConnectedBarlines, layoutGlobalSpacingMultiplier, notationCtx?.globalSpacingMultiplier, notationCtx?.staffSpacing, notationCtx?.measureWidthMultiplier, viewMode, partLayoutMeasuresPerLine, partLayoutStrictMeasuresPerLine, partLayoutLineBreakBefore, partLayoutPageBreakBefore, partLayoutExtraPages, showPageNavigator, showPedagogicalVideoRuler, pageFlowDirection, viewFitPage, viewSmartPage, visibleToolIds, tuningReferenceNote, tuningReferenceOctave, tuningReferenceHz, playNoteOnInsert, figurenotesSize, figurenotesStems, figurenotesChordLineGap, figurenotesChordBlocks, figurenotesChordBlocksShowTones, figurenotesMelodyShowNoteNames, timeSignatureSize, pedagogicalTimeSigDenominatorType, pedagogicalTimeSigDenominatorColor, pedagogicalTimeSigDenominatorInstrument, pedagogicalTimeSigDenominatorEmoji, showBarNumbers, barNumberSize, voltaNumberSize, showRhythmSyllables, showAllNoteLabels, enableEmojiOverlays, joClefStaffPosition, relativeNotationShowKeySignature, relativeNotationShowTraditionalClef, isPedagogicalProject, pedagogicalAudioBpm, pedagogicalAudioPlaybackRate, pedagogicalSyncMode, pedagogicalSyncStartBeat, pedagogicalSyncStartTimeSec, pedagogicalSyncEndBeat, pedagogicalSyncEndTimeSec, pedagogicalLoopEnabled, pedagogicalLoopCount, pedagogicalCues, pedagogicalRhythmStep, pedagogicalPlayheadStyle, pedagogicalPlayheadEmoji, pedagogicalPlayheadEmojiSize, cursorLineStrokeWidth, pedagogicalPlayheadMovement, rhythmCursorColor, rhythmCursorOpacity, rhythmCursorWidthMultiplier, rhythmCursorHighContrast, chords, textBoxes, documentFontFamily, lyricFontFamily, lyricBold, lyricItalic, lyricUnderline, lyricWeight, titleFontSize, authorFontSize, titleFontFamily, authorFontFamily, titleColor, authorColor, titleBold, titleItalic, titleUnderline, titleWeight, authorBold, authorItalic, authorUnderline, authorWeight, titleAlignment, authorAlignment, staffRowAlignment, pageDesignDataUrl, pageDesignOpacity, pageDesignFit, pageDesignPositionX, pageDesignPositionY, pageDesignCrop, timeSignatureOffset, lyricLineIndex, lyricLineYOffset, lyricFontSize, noteheadShape, noteheadEmoji]);
 
   const saveToStorageSync = useCallback(() => {
     try {
@@ -4547,6 +4616,18 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       if (data.pedagogicalSyncStartTimeSec != null) setPedagogicalSyncStartTimeSec(Math.max(0, Number(data.pedagogicalSyncStartTimeSec) || 0));
       if (data.pedagogicalSyncEndBeat != null) setPedagogicalSyncEndBeat(Math.max(0, Number(data.pedagogicalSyncEndBeat) || 0));
       if (data.pedagogicalSyncEndTimeSec != null) setPedagogicalSyncEndTimeSec(Math.max(0, Number(data.pedagogicalSyncEndTimeSec) || 0));
+      if (data.pedagogicalLoopEnabled != null) setPedagogicalLoopEnabled(!!data.pedagogicalLoopEnabled);
+      if (data.pedagogicalLoopCount != null) setPedagogicalLoopCount(Math.max(0, Math.min(99, Math.round(Number(data.pedagogicalLoopCount) || 0))));
+      if (Array.isArray(data.pedagogicalCues)) {
+        setPedagogicalCues(data.pedagogicalCues.map((cue, idx) => ({
+          id: String(cue?.id || makeId(`cue-${idx}`)),
+          startSec: Math.max(0, Number(cue?.startSec) || 0),
+          endSec: Math.max(0, Number(cue?.endSec) || 0),
+          text: String(cue?.text || ''),
+          mediaUrl: String(cue?.mediaUrl || ''),
+          hideScore: cue?.hideScore !== false,
+        })));
+      }
       if (data.pedagogicalRhythmStep != null) setPedagogicalRhythmStep(clampNumber(Number(data.pedagogicalRhythmStep) || 1, 0.125, 4));
       if (data.pedagogicalPlayheadStyle) setPedagogicalPlayheadStyle(data.pedagogicalPlayheadStyle);
       if (data.pedagogicalPlayheadEmoji != null) setPedagogicalPlayheadEmoji(data.pedagogicalPlayheadEmoji);
@@ -4555,6 +4636,10 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       else if (data.pedagogicalPlayheadEmojiSize != null) setCursorSizePx(Math.max(1, Math.min(500, data.pedagogicalPlayheadEmojiSize)));
       if (data.pedagogicalPlayheadMovement === 'arch' || data.pedagogicalPlayheadMovement === 'horizontal') setPedagogicalPlayheadMovement(data.pedagogicalPlayheadMovement);
       if (data.cursorLineStrokeWidth != null) setCursorLineStrokeWidth(Math.max(1, Math.min(8, data.cursorLineStrokeWidth)));
+      if (data.rhythmCursorColor != null) setRhythmCursorColor(String(data.rhythmCursorColor || '#0ea5e9'));
+      if (data.rhythmCursorOpacity != null) setRhythmCursorOpacity(clampNumber(Number(data.rhythmCursorOpacity) || 0.55, 0.2, 1));
+      if (data.rhythmCursorWidthMultiplier != null) setRhythmCursorWidthMultiplier(clampNumber(Number(data.rhythmCursorWidthMultiplier) || 1, 0.5, 3));
+      if (data.rhythmCursorHighContrast != null) setRhythmCursorHighContrast(!!data.rhythmCursorHighContrast);
       if (data.pedagogicalAudioData) {
         try {
           const binary = atob(data.pedagogicalAudioData);
@@ -4649,6 +4734,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       if (Array.isArray(data.partLayoutPageBreakBefore)) setPartLayoutPageBreakBefore(data.partLayoutPageBreakBefore);
       if (data.partLayoutExtraPages != null) setPartLayoutExtraPages(Math.max(0, Math.round(Number(data.partLayoutExtraPages) || 0)));
       if (data.showPageNavigator != null) setShowPageNavigator(!!data.showPageNavigator);
+      if (data.showPedagogicalVideoRuler != null) setShowPedagogicalVideoRuler(!!data.showPedagogicalVideoRuler);
       if (data.pageFlowDirection === 'vertical' || data.pageFlowDirection === 'horizontal') setPageFlowDirection(data.pageFlowDirection);
       if (data.viewFitPage != null) setViewFitPage(!!data.viewFitPage);
       if (data.viewSmartPage != null) {
@@ -4943,6 +5029,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         if (Array.isArray(data.partLayoutPageBreakBefore)) setPartLayoutPageBreakBefore(data.partLayoutPageBreakBefore);
         if (data.partLayoutExtraPages != null) setPartLayoutExtraPages(Math.max(0, Math.round(Number(data.partLayoutExtraPages) || 0)));
         if (data.showPageNavigator != null) setShowPageNavigator(!!data.showPageNavigator);
+        if (data.showPedagogicalVideoRuler != null) setShowPedagogicalVideoRuler(!!data.showPedagogicalVideoRuler);
         if (data.pageFlowDirection === 'vertical' || data.pageFlowDirection === 'horizontal') setPageFlowDirection(data.pageFlowDirection);
         if (data.viewFitPage != null) setViewFitPage(!!data.viewFitPage);
         if (data.viewSmartPage != null) {
@@ -4972,6 +5059,18 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         if (data.pedagogicalSyncStartTimeSec != null) setPedagogicalSyncStartTimeSec(Math.max(0, Number(data.pedagogicalSyncStartTimeSec) || 0));
         if (data.pedagogicalSyncEndBeat != null) setPedagogicalSyncEndBeat(Math.max(0, Number(data.pedagogicalSyncEndBeat) || 0));
         if (data.pedagogicalSyncEndTimeSec != null) setPedagogicalSyncEndTimeSec(Math.max(0, Number(data.pedagogicalSyncEndTimeSec) || 0));
+        if (data.pedagogicalLoopEnabled != null) setPedagogicalLoopEnabled(!!data.pedagogicalLoopEnabled);
+        if (data.pedagogicalLoopCount != null) setPedagogicalLoopCount(Math.max(0, Math.min(99, Math.round(Number(data.pedagogicalLoopCount) || 0))));
+        if (Array.isArray(data.pedagogicalCues)) {
+          setPedagogicalCues(data.pedagogicalCues.map((cue, idx) => ({
+            id: String(cue?.id || makeId(`cue-${idx}`)),
+            startSec: Math.max(0, Number(cue?.startSec) || 0),
+            endSec: Math.max(0, Number(cue?.endSec) || 0),
+            text: String(cue?.text || ''),
+            mediaUrl: String(cue?.mediaUrl || ''),
+            hideScore: cue?.hideScore !== false,
+          })));
+        }
         if (data.pedagogicalRhythmStep != null) setPedagogicalRhythmStep(clampNumber(Number(data.pedagogicalRhythmStep) || 1, 0.125, 4));
         if (data.pedagogicalPlayheadStyle) setPedagogicalPlayheadStyle(data.pedagogicalPlayheadStyle);
         if (data.pedagogicalPlayheadEmoji != null) setPedagogicalPlayheadEmoji(data.pedagogicalPlayheadEmoji);
@@ -4980,6 +5079,10 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         else if (data.pedagogicalPlayheadEmojiSize != null) setCursorSizePx(Math.max(1, Math.min(500, data.pedagogicalPlayheadEmojiSize)));
         if (data.pedagogicalPlayheadMovement === 'arch' || data.pedagogicalPlayheadMovement === 'horizontal') setPedagogicalPlayheadMovement(data.pedagogicalPlayheadMovement);
         if (data.cursorLineStrokeWidth != null) setCursorLineStrokeWidth(Math.max(1, Math.min(8, data.cursorLineStrokeWidth)));
+        if (data.rhythmCursorColor != null) setRhythmCursorColor(String(data.rhythmCursorColor || '#0ea5e9'));
+        if (data.rhythmCursorOpacity != null) setRhythmCursorOpacity(clampNumber(Number(data.rhythmCursorOpacity) || 0.55, 0.2, 1));
+        if (data.rhythmCursorWidthMultiplier != null) setRhythmCursorWidthMultiplier(clampNumber(Number(data.rhythmCursorWidthMultiplier) || 1, 0.5, 3));
+        if (data.rhythmCursorHighContrast != null) setRhythmCursorHighContrast(!!data.rhythmCursorHighContrast);
         if (data.pedagogicalAudioData) {
           try {
             const binary = atob(data.pedagogicalAudioData);
@@ -6437,6 +6540,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     pedagogicalAudioRef.current = audio;
     const rhythmStep = Math.max(0.125, Number(pedagogicalRhythmStep) || 1);
     pedagogicalLastSnappedBeatRef.current = 0;
+    pedagogicalLoopIterationRef.current = 0;
     audio.play().then(() => {
       setIsPedagogicalAudioPlaying(true);
       pedagogicalPlaybackIntervalRef.current = setInterval(() => {
@@ -6459,19 +6563,57 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         setPedagogicalAudioCurrentTime(audio.currentTime || 0);
         setCursorPosition(Math.max(0, Math.min(totalBeats, snapped)));
         if (audio.ended || audio.currentTime >= audio.duration) {
+          const nextIteration = pedagogicalLoopIterationRef.current + 1;
+          const hasRemainingLoop = pedagogicalLoopEnabled && (pedagogicalLoopCount === 0 || nextIteration < pedagogicalLoopCount);
+          if (hasRemainingLoop) {
+            pedagogicalLoopIterationRef.current = nextIteration;
+            pedagogicalLastSnappedBeatRef.current = 0;
+            audio.currentTime = 0;
+            setPedagogicalAudioCurrentTime(0);
+            setCursorPosition(0);
+            audio.play().catch(() => {});
+            return;
+          }
           clearInterval(pedagogicalPlaybackIntervalRef.current);
           pedagogicalPlaybackIntervalRef.current = null;
           setIsPedagogicalAudioPlaying(false);
           setCursorPosition(0);
           setPedagogicalAudioCurrentTime(0);
+          pedagogicalLoopIterationRef.current = 0;
         }
       }, 50);
     }).catch(() => setIsPedagogicalAudioPlaying(false));
-    audio.onended = () => {
-      stopPedagogicalPlayback();
-      setCursorPosition(0);
-    };
-  }, [pedagogicalAudioUrl, notes, stopPedagogicalPlayback, pedagogicalAudioPlaybackRate, playPianoNote, getPedagogicalBeatFromAudioSeconds, pedagogicalRhythmStep]);
+  }, [pedagogicalAudioUrl, notes, pedagogicalAudioPlaybackRate, playPianoNote, getPedagogicalBeatFromAudioSeconds, pedagogicalRhythmStep, pedagogicalLoopEnabled, pedagogicalLoopCount]);
+  const addPedagogicalCue = useCallback(() => {
+    const startSec = Math.max(0, Number(pedagogicalCueStartSecDraft) || 0);
+    const endSec = Math.max(startSec + 0.1, Number(pedagogicalCueEndSecDraft) || (startSec + 2));
+    const text = String(pedagogicalCueTextDraft || '').trim();
+    const mediaUrl = String(pedagogicalCueMediaUrlDraft || '').trim();
+    if (!text && !mediaUrl) return;
+    setPedagogicalCues((prev) => [...(Array.isArray(prev) ? prev : []), {
+      id: makeId('cue'),
+      startSec,
+      endSec,
+      text,
+      mediaUrl,
+      hideScore: !!pedagogicalCueHideScoreDraft,
+    }]);
+    if (!text) setPedagogicalCueTextDraft('');
+    if (!mediaUrl) setPedagogicalCueMediaUrlDraft('');
+  }, [pedagogicalCueStartSecDraft, pedagogicalCueEndSecDraft, pedagogicalCueTextDraft, pedagogicalCueMediaUrlDraft, pedagogicalCueHideScoreDraft]);
+  const removePedagogicalCue = useCallback((cueId) => {
+    setPedagogicalCues((prev) => (Array.isArray(prev) ? prev.filter((cue) => cue?.id !== cueId) : prev));
+  }, []);
+  const removeVideoTimelineClip = useCallback((clipId) => {
+    setVideoTimelineClips((prev) => {
+      if (!Array.isArray(prev)) return prev;
+      const clip = prev.find((it) => it?.id === clipId);
+      if (clip?.url) {
+        try { URL.revokeObjectURL(clip.url); } catch (_) {}
+      }
+      return prev.filter((it) => it?.id !== clipId);
+    });
+  }, []);
 
   const stopScorePlayback = useCallback((resetCursor = false) => {
     if (scorePlaybackIntervalRef.current) {
@@ -6560,8 +6702,15 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       }
       stopPreviewNote();
       if (pedagogicalAudioUrlRef.current) URL.revokeObjectURL(pedagogicalAudioUrlRef.current);
+      if (Array.isArray(videoTimelineClips)) {
+        videoTimelineClips.forEach((clip) => {
+          if (clip?.url) {
+            try { URL.revokeObjectURL(clip.url); } catch (_) {}
+          }
+        });
+      }
     };
-  }, [stopPreviewNote]);
+  }, [stopPreviewNote, videoTimelineClips]);
 
   // Lisa uus noodirida valitud instrumendiga (noodivõti instrumendi konfiguratsioonist). Igal real oma notationMode (T/F/P).
   const addStaff = useCallback((instId) => {
@@ -6715,18 +6864,23 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   const addNoteAtCursor = useCallback((pitch, octave, accidental, options = {}) => {
     const insertBeat = typeof options.insertAtBeat === 'number' ? options.insertAtBeat : cursorPosition;
     const EPS = 1e-6;
-    const oct = octave ?? ghostOctave;
+    const currentInstrumentId = staves?.[activeStaffIndex]?.instrumentId ?? instrument;
+    const currentInstrumentCfg = INSTRUMENT_CONFIG_BASE?.[currentInstrumentId];
+    const isUnpitchedSingleLineInstrument = isSingleLineUnpitchedPercussion(currentInstrumentId, currentInstrumentCfg);
+    const singleLinePitch = isUnpitchedSingleLineInstrument ? getSingleLineStaffPitch(currentInstrumentId, currentInstrumentCfg) : null;
+    const effectivePitch = singleLinePitch?.pitch ?? pitch;
+    const oct = singleLinePitch?.octave ?? (octave ?? ghostOctave);
     // Figuurnotatsioonis kasutaja ei näe võtmemärke – kui accidental pole ette antud, võta helistikust (nt G-duur → F#).
-    const keyAccForPitch = getAccidentalForPitchInKey(pitch, keySignature);
-    const accResolved = accidental !== undefined
+    const keyAccForPitch = getAccidentalForPitchInKey(effectivePitch, keySignature);
+    const accResolvedRaw = accidental !== undefined
       ? accidental
       : (notationStyle === 'FIGURENOTES'
-        ? getAccidentalForPitchInKey(pitch, keySignature)
+        ? getAccidentalForPitchInKey(effectivePitch, keySignature)
         : (ghostAccidentalIsExplicit ? ghostAccidental : keyAccForPitch));
-    const currentInstrumentId = staves?.[activeStaffIndex]?.instrumentId ?? instrument;
-    const currentInstrumentRange = INSTRUMENT_CONFIG_BASE?.[currentInstrumentId]?.range;
+    const accResolved = isUnpitchedSingleLineInstrument ? 0 : accResolvedRaw;
+    const currentInstrumentRange = currentInstrumentCfg?.range;
     const currentRangeMidi = resolveInstrumentRangeMidi(currentInstrumentId, keySignature, currentInstrumentRange);
-    const currentNoteMidi = toNoteMidi(pitch, oct, accResolved);
+    const currentNoteMidi = toNoteMidi(effectivePitch, oct, accResolved);
     const isOutOfRangeInsert = isMidiOutOfInstrumentRange(currentNoteMidi, currentRangeMidi);
     if (isOutOfRangeInsert) {
       const rangeLabel = resolveInstrumentRange(currentInstrumentId, keySignature, currentInstrumentRange);
@@ -6759,12 +6913,14 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         return;
       }
     }
-    const accidentalPayload = notationStyle === 'FIGURENOTES'
+    const accidentalPayload = isUnpitchedSingleLineInstrument
+      ? {}
+      : notationStyle === 'FIGURENOTES'
       ? (accResolved !== 0 ? { accidental: accResolved } : {})
       : (accResolved === keyAccForPitch ? {} : { accidental: accResolved });
     const newNote = {
       id: Date.now(),
-      pitch,
+      pitch: effectivePitch,
       octave: oct,
       duration: effectiveDuration,
       durationLabel,
@@ -6775,7 +6931,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       ...accidentalPayload,
       ...(tupletPayload && { tuplet: tupletPayload })
     };
-    const midiForStaff = (oct + 1) * 12 + (PITCH_TO_SEMI[pitch] ?? 0);
+    const midiForStaff = (oct + 1) * 12 + (PITCH_TO_SEMI[effectivePitch] ?? 0);
     const isGrandStaff = staves.length >= 2 && staves[0].braceGroupId && staves[0].braceGroupId === staves[1]?.braceGroupId;
     // Tavaklaver: noot läheb automaatselt bassi/treblisse MIDI järgi. Figuurnotatsioonis valib kasutaja aktiivse rea
     // (klõps, Cmd/Ctrl+↑↓) — MIDI-jaotus ignoreeriks seda ja paneks nt C4 alati ülemisele reale kuigi kursor on bassil.
@@ -13035,6 +13191,17 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                       <span>{t('view.pageNavigator')}</span>
                       {showPageNavigator && <Check className="w-4 h-4 text-amber-400" />}
                     </button>
+                    {isPedagogicalProject && (
+                      <button
+                        type="button"
+                        onClick={() => { dirtyRef.current = true; setShowPedagogicalVideoRuler((prev) => !prev); }}
+                        className="w-full flex items-center justify-between gap-2 px-3 py-2 text-left text-sm text-amber-50 hover:bg-slate-600"
+                        title="Näita/peida stseenide timeline noodigraafika all"
+                      >
+                        <span>Video editor ruler (pedagoogiline)</span>
+                        {showPedagogicalVideoRuler && <Check className="w-4 h-4 text-amber-400" />}
+                      </button>
+                    )}
                     {/* Tööriistakast (palett) – linnuke näitab/peidab külgriba */}
                     <button
                       type="button"
@@ -14965,6 +15132,29 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                       <option value="anchors">2 anchors</option>
                     </select>
                   </label>
+                  <label className="flex items-center gap-2 text-sm text-violet-900">
+                    <input
+                      type="checkbox"
+                      checked={pedagogicalLoopEnabled}
+                      onChange={(e) => setPedagogicalLoopEnabled(!!e.target.checked)}
+                    />
+                    <span className="font-medium">Loop</span>
+                  </label>
+                  <label className="flex items-center gap-2 text-sm text-violet-900">
+                    <span className="font-medium">Kordi</span>
+                    <select
+                      value={String(pedagogicalLoopCount)}
+                      onChange={(e) => setPedagogicalLoopCount(Math.max(0, Math.min(99, Number(e.target.value) || 0)))}
+                      className="px-2 py-1.5 rounded border-2 border-violet-200 bg-white text-violet-900 font-medium"
+                      disabled={!pedagogicalLoopEnabled}
+                    >
+                      <option value="1">1x</option>
+                      <option value="2">2x</option>
+                      <option value="4">4x</option>
+                      <option value="8">8x</option>
+                      <option value="0">∞</option>
+                    </select>
+                  </label>
                   <span className="text-xs text-violet-700" title={t('pedagogical.bpmHint')}>{t('pedagogical.bpmHint')}</span>
                   {pedagogicalSyncMode === 'anchors' && (
                     <div className="flex flex-wrap items-center gap-2 text-xs text-violet-900 bg-violet-100/70 px-2 py-1 rounded-lg border border-violet-200">
@@ -14991,12 +15181,80 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                         {icons?.Pause && isPedagogicalAudioPlaying && <icons.Pause className="w-4 h-4" />}
                         {isPedagogicalAudioPlaying ? t('pedagogical.pause') : t('pedagogical.play')}
                       </button>
+                      <button
+                        type="button"
+                        disabled={isExportingAnimation}
+                        onClick={() => {
+                          setTimelinePanelVisible(true);
+                          exportAnimationAsVideo({ addToTimeline: true, download: false, saveToDrive: false });
+                        }}
+                        className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-rose-600 text-white text-sm font-semibold hover:bg-rose-500 disabled:opacity-60"
+                        title="Salvesta animatsioon ja lisa video timeline'i"
+                      >
+                        {icons?.Video && <icons.Video className="w-4 h-4" />}
+                        {isExportingAnimation ? 'Recording…' : 'Animation Record'}
+                      </button>
                       <span className="text-sm text-violet-800">
                         {t('pedagogical.duration')} {pedagogicalAudioDuration > 0 ? `${Math.floor(pedagogicalAudioDuration / 60)}:${String(Math.floor(pedagogicalAudioDuration % 60)).padStart(2, '0')}` : '—'}
                       </span>
                     </>
                   ) : (
                     <span className="text-sm text-violet-600 italic">{t('pedagogical.noAudio')}</span>
+                  )}
+                </div>
+                <div className="mt-3 pt-3 border-t border-violet-200">
+                  <h4 className="text-xs font-bold text-violet-900 uppercase mb-2">Pedagoogilised stseenid (cue)</h4>
+                  <div className="flex flex-wrap items-center gap-2 text-xs">
+                    <label className="flex items-center gap-1 text-violet-900">
+                      <span>Algus</span>
+                      <input type="number" min={0} step="0.01" value={pedagogicalCueStartSecDraft} onChange={(e) => setPedagogicalCueStartSecDraft(Math.max(0, Number(e.target.value) || 0))} className="w-16 px-1.5 py-1 rounded border border-violet-300 bg-white" />
+                      <span>s</span>
+                    </label>
+                    <label className="flex items-center gap-1 text-violet-900">
+                      <span>Lõpp</span>
+                      <input type="number" min={0} step="0.01" value={pedagogicalCueEndSecDraft} onChange={(e) => setPedagogicalCueEndSecDraft(Math.max(0, Number(e.target.value) || 0))} className="w-16 px-1.5 py-1 rounded border border-violet-300 bg-white" />
+                      <span>s</span>
+                    </label>
+                    <label className="flex items-center gap-1 text-violet-900">
+                      <input type="checkbox" checked={pedagogicalCueHideScoreDraft} onChange={(e) => setPedagogicalCueHideScoreDraft(!!e.target.checked)} />
+                      <span>Peida noodileht</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={pedagogicalCueTextDraft}
+                      onChange={(e) => setPedagogicalCueTextDraft(e.target.value)}
+                      placeholder="Tekst (nt Pilli vahetus)"
+                      className="min-w-[180px] px-2 py-1 rounded border border-violet-300 bg-white text-violet-900"
+                    />
+                    <input
+                      type="url"
+                      value={pedagogicalCueMediaUrlDraft}
+                      onChange={(e) => setPedagogicalCueMediaUrlDraft(e.target.value)}
+                      placeholder="Pildi/GIF URL (valikuline)"
+                      className="min-w-[220px] px-2 py-1 rounded border border-violet-300 bg-white text-violet-900"
+                    />
+                    <button
+                      type="button"
+                      onClick={addPedagogicalCue}
+                      className="px-3 py-1.5 rounded bg-violet-600 text-white font-semibold hover:bg-violet-500"
+                    >
+                      Lisa stseen
+                    </button>
+                  </div>
+                  {Array.isArray(pedagogicalCues) && pedagogicalCues.length > 0 && (
+                    <div className="mt-2 space-y-1">
+                      {[...pedagogicalCues].sort((a, b) => (Number(a?.startSec) || 0) - (Number(b?.startSec) || 0)).map((cue) => (
+                        <div key={cue.id} className={`flex items-center justify-between gap-2 rounded border px-2 py-1 text-xs ${pedagogicalActiveCue?.id === cue.id ? 'border-violet-500 bg-violet-100' : 'border-violet-200 bg-white/80'}`}>
+                          <span className="text-violet-900">
+                            {Number(cue.startSec || 0).toFixed(2)}s - {Number(cue.endSec || 0).toFixed(2)}s
+                            {cue.hideScore ? ' | peida score' : ''}
+                            {cue.text ? ` | ${cue.text}` : ''}
+                            {cue.mediaUrl ? ' | media' : ''}
+                          </span>
+                          <button type="button" onClick={() => removePedagogicalCue(cue.id)} className="px-2 py-0.5 rounded border border-rose-300 text-rose-700 hover:bg-rose-50">Eemalda</button>
+                        </div>
+                      ))}
+                    </div>
                   )}
                 </div>
                 <div className="mt-3 pt-3 border-t border-violet-200">
@@ -15056,6 +15314,29 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                         {label}
                       </button>
                     ))}
+                  </div>
+                </div>
+                <div className="mt-3 pt-3 border-t border-violet-200">
+                  <h4 className="text-xs font-bold text-violet-900 uppercase mb-2">Rhythm cursor visual support</h4>
+                  <div className="flex flex-wrap items-center gap-3 text-xs text-violet-900">
+                    <label className="flex items-center gap-2">
+                      <span className="font-medium">Värv</span>
+                      <input type="color" value={rhythmCursorColor} onChange={(e) => setRhythmCursorColor(e.target.value)} className="h-8 w-10 rounded border border-violet-300 bg-white p-0.5" />
+                    </label>
+                    <label className="flex items-center gap-2">
+                      <span className="font-medium">Paistvus</span>
+                      <input type="range" min={0.2} max={1} step={0.05} value={rhythmCursorOpacity} onChange={(e) => setRhythmCursorOpacity(clampNumber(Number(e.target.value) || 0.55, 0.2, 1))} />
+                      <span>{Math.round(rhythmCursorOpacity * 100)}%</span>
+                    </label>
+                    <label className="flex items-center gap-2">
+                      <span className="font-medium">Laius</span>
+                      <input type="range" min={0.5} max={3} step={0.1} value={rhythmCursorWidthMultiplier} onChange={(e) => setRhythmCursorWidthMultiplier(clampNumber(Number(e.target.value) || 1, 0.5, 3))} />
+                      <span>{rhythmCursorWidthMultiplier.toFixed(1)}x</span>
+                    </label>
+                    <label className="flex items-center gap-2">
+                      <input type="checkbox" checked={rhythmCursorHighContrast} onChange={(e) => setRhythmCursorHighContrast(!!e.target.checked)} />
+                      <span className="font-medium">High contrast</span>
+                    </label>
                   </div>
                 </div>
               </div>
@@ -15153,6 +15434,27 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
               handleScoreContentClick(e);
             }}
           >
+              {pedagogicalCueShouldHideScore && (
+                <div className="absolute inset-0 z-[90] flex items-center justify-center bg-violet-50/95 backdrop-blur-[1px]">
+                  <div className="max-w-[80%] text-center space-y-3">
+                    {pedagogicalActiveCue?.mediaUrl ? (
+                      <img
+                        src={pedagogicalActiveCue.mediaUrl}
+                        alt="Pedagogical cue visual"
+                        className="mx-auto max-h-[55vh] rounded-lg border border-violet-200 shadow"
+                      />
+                    ) : null}
+                    {pedagogicalActiveCue?.text ? (
+                      <div className="text-2xl font-bold text-violet-900 whitespace-pre-wrap">
+                        {pedagogicalActiveCue.text}
+                      </div>
+                    ) : null}
+                    {!pedagogicalActiveCue?.text && !pedagogicalActiveCue?.mediaUrl ? (
+                      <div className="text-xl font-semibold text-violet-800">Paus</div>
+                    ) : null}
+                  </div>
+                </div>
+              )}
               <PageSeparatorsOverlay
                 totalPages={totalPagesVal}
                 pageWidth={pw}
@@ -15567,6 +15869,10 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
               const staffSupportsLinkedNotation = staffCfg?.type === 'tab' || (staffCfg?.type === 'wind' && staffCfg?.fingering);
               const shouldLinkNotationRow = staffSupportsLinkedNotation && !!linkedNotationByStaffId?.[staff.id];
               const staffNotationVariant = shouldLinkNotationRow ? (staffCfg?.type === 'tab' ? 'tab' : 'fingering') : 'standard';
+              const isTraditionalOrPedagogical = notationStyle !== 'FIGURENOTES';
+              const staffLinesForRow = (isTraditionalOrPedagogical && isSingleLineUnpitchedPercussion(staff.instrumentId, staffCfg))
+                ? 1
+                : staffLines;
               return (
                 <Timeline
                   key={`${staff.id}-${pageFlowDirection}-${pageOrientation}-${effectiveLayoutPageWidth}`}
@@ -15581,7 +15887,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                   pixelsPerBeat={pixelsPerBeat}
                   cursorPosition={cursorPosition}
                   notationMode={notationMode}
-                  staffLines={staffLines}
+                  staffLines={staffLinesForRow}
                   clefType={staff.clefType}
                   keySignature={keySignature}
                   isFirstInBraceGroup={isFirstInBraceGroup}
@@ -15972,6 +16278,10 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                   cursorLineStrokeWidth={cursorLineStrokeWidth}
                   cursorSubRow={cursorSubRow}
                   pedagogicalPlayheadMovement={pedagogicalPlayheadMovement}
+                  rhythmCursorColor={rhythmCursorColor}
+                  rhythmCursorOpacity={rhythmCursorOpacity}
+                  rhythmCursorWidthMultiplier={rhythmCursorWidthMultiplier}
+                  rhythmCursorHighContrast={rhythmCursorHighContrast}
                   isPedagogicalAudioPlaying={isPedagogicalAudioPlaying}
                   isExportingAnimation={isExportingAnimation}
                   exportCursorRef={isFirstVisible ? exportCursorRef : undefined}
@@ -15994,6 +16304,51 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
             });
           })()}
           </div>
+          {isPedagogicalProject && showPedagogicalVideoRuler && (
+            <div className="relative z-[3] mx-auto mt-2 mb-2 w-full max-w-[1000px] rounded border border-violet-300 bg-violet-50 px-3 py-2">
+              {(() => {
+                const cuesSorted = Array.isArray(pedagogicalCues)
+                  ? [...pedagogicalCues].sort((a, b) => (Number(a?.startSec) || 0) - (Number(b?.startSec) || 0))
+                  : [];
+                const maxCueEnd = cuesSorted.reduce((acc, cue) => Math.max(acc, Number(cue?.endSec) || 0), 0);
+                const durationSec = Math.max(1, Number(pedagogicalAudioDuration) || maxCueEnd || 1);
+                const playheadSec = Math.max(0, Math.min(durationSec, Number(pedagogicalAudioCurrentTime) || 0));
+                const playheadLeftPct = (playheadSec / durationSec) * 100;
+                return (
+                  <>
+                    <div className="mb-1 flex items-center justify-between text-[11px] font-semibold text-violet-900">
+                      <span>Video editor ruler</span>
+                      <span>{playheadSec.toFixed(2)}s / {durationSec.toFixed(2)}s</span>
+                    </div>
+                    <div className="relative h-14 rounded bg-white border border-violet-200 overflow-hidden">
+                      <div
+                        className="absolute top-0 bottom-0 w-[2px] bg-violet-700 z-20"
+                        style={{ left: `${playheadLeftPct}%` }}
+                        aria-hidden="true"
+                      />
+                      {cuesSorted.map((cue) => {
+                        const start = Math.max(0, Number(cue?.startSec) || 0);
+                        const end = Math.max(start + 0.05, Number(cue?.endSec) || start + 0.05);
+                        const left = (start / durationSec) * 100;
+                        const width = Math.max(0.6, ((end - start) / durationSec) * 100);
+                        const active = pedagogicalActiveCue?.id === cue?.id;
+                        return (
+                          <div
+                            key={cue.id}
+                            className={`absolute top-1 bottom-1 rounded border px-1 py-0.5 text-[10px] leading-tight overflow-hidden ${active ? 'bg-violet-300 border-violet-700 text-violet-900' : 'bg-violet-200 border-violet-400 text-violet-900'}`}
+                            style={{ left: `${left}%`, width: `${width}%` }}
+                            title={`${Number(start).toFixed(2)}s - ${Number(end).toFixed(2)}s ${cue?.text || ''}`.trim()}
+                          >
+                            {cue?.text || 'Cue'}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </>
+                );
+              })()}
+            </div>
+          )}
           {/* Puhkehetkede sildid: täislehe overlay ainult taasesitusel/animatsioonil — mitte tavalises redigeerimises (muidu katab noodid; pointer-events-none laseb klikid läbi → “nähtamatu aga töötav”). */}
           {intermissionLabels.some((lab) => cursorPosition >= lab.startBeat && cursorPosition < lab.endBeat) && (isPedagogicalAudioPlaying || isExportingAnimation) && !showPdfExportPreview && !isExportingPdf && (
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none bg-amber-50/95 z-10" aria-hidden="true">
@@ -16364,6 +16719,32 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                   </div>
                 </div>
               </div>
+              {isPedagogicalProject && (
+                <div className="mt-2 rounded-lg border border-slate-300 bg-white p-3">
+                  <div className="mb-2 flex items-center justify-between">
+                    <span className="text-xs font-semibold uppercase tracking-wider text-slate-800">Video editor timeline</span>
+                    <span className="text-xs text-slate-600">{videoTimelineClips.length} clip</span>
+                  </div>
+                  {videoTimelineClips.length === 0 ? (
+                    <p className="text-xs text-slate-600">Animation Record lisab siia salvestatud klipid.</p>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {videoTimelineClips.map((clip) => (
+                        <div key={clip.id} className="flex items-center justify-between gap-2 rounded border border-slate-200 bg-slate-50 px-2 py-1">
+                          <div className="min-w-0">
+                            <div className="truncate text-xs font-medium text-slate-800">{clip.name}</div>
+                            <div className="text-[11px] text-slate-600">{Number(clip.durationSec || 0).toFixed(2)}s</div>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <a href={clip.url} download={clip.name} className="px-2 py-1 text-[11px] rounded border border-slate-300 bg-white hover:bg-slate-100 text-slate-700">Download</a>
+                            <button type="button" onClick={() => removeVideoTimelineClip(clip.id)} className="px-2 py-1 text-[11px] rounded border border-rose-300 bg-white hover:bg-rose-50 text-rose-700">Remove</button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>,
           document.body
@@ -16449,7 +16830,7 @@ function getFingeringForNote(pitch, octave, instrumentId) {
 }
 
 // Timeline Component – multi-system layout (VexFlow loogika). (PAGE_BREAK_GAP on defineeritud üleval.)
-function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, pageWidth, cursorPosition, notationMode, staffLines, clefType, keySignature = 'C', relativeNotationShowKeySignature = false, relativeNotationShowTraditionalClef = false, onJoClefPositionChange, joClefFocused = false, onJoClefFocus, instrument = 'single-staff-treble', instrumentNotationVariant = 'standard', instrumentConfig = {}, showBarNumbers = true, barNumberSize = 11, voltaNumberSize = 16, showRhythmSyllables = false, joClefStaffPosition: joClefStaffPositionProp, showAllNoteLabels = false, enableEmojiOverlays = true, noteheadShape = 'oval', noteheadEmoji = '♪', onNoteTeacherLabelChange, onNoteLabelClick, chords = [], isDotted, isRest, selectedDuration, noteInputMode, selectedNoteIndex, isNoteSelected, notes: allNotes, onStaffAddNote, onNoteClick, onNoteMouseDown, onNoteMouseEnter, onNotePitchChange, onNoteBeatChange, canHandDragNotes = false, timeSignatureOffset = { x: 0, y: 0 }, onTimeSignatureOffsetChange, ghostPitch, ghostOctave, ghostAccidental = 0, ghostAccidentalIsExplicit = false, onFigureBeatClick, onChordLineMouseMove, onChordLineClick, notationStyle, layoutMeasuresPerLine = 4, layoutLineBreakBefore = [], layoutPageBreakBefore = [], layoutSystemGap = 120, layoutPartsGap, layoutConnectedBarlines = false, staffRowAlignment = 'center', staffIndexInScore = 0, systemTotalHeight, layoutGlobalSpacingMultiplier = 1, systems: systemsProp, baseYOffset = 0, isActiveStaff = true, staffCount = 1, staffHeight: staffHeightProp, figurenotesSize = 16, figurenotesStems = false, figurenotesChordLineGap = 6, figurenotesChordBlocks = false, figurenotesChordBlocksShowTones = true, figurenotesMelodyShowNoteNames = true, figurenotesRowHeight: figurenotesRowHeightProp, figurenotesChordLineHeight: figurenotesChordLineHeightProp, figurenotesLyricReserveHeight = 0, timeSignatureSize = 16, pedagogicalTimeSigDenominatorType = 'rhythm', pedagogicalTimeSigDenominatorColor = '#1a1a1a', pedagogicalTimeSigDenominatorInstrument = 'handbell', pedagogicalTimeSigDenominatorEmoji = '🥁', themeColors: themeColorsProp, pedagogicalPlayheadStyle = 'line', pedagogicalPlayheadEmoji = '🎵', pedagogicalPlayheadEmojiSize = 32, cursorSizePx, cursorLineStrokeWidth = 4, cursorSubRow = 0, pedagogicalPlayheadMovement = 'arch', isPedagogicalAudioPlaying = false, isExportingAnimation = false, exportCursorRef, scoreContainerRef, pageFlowDirection = 'vertical', pageOrientation = 'portrait', isFirstInBraceGroup = false, braceGroupSize = 0, lyricFontFamily = 'sans-serif', lyricFontSize = 12, lyricBold = false, lyricItalic = false, lyricUnderline = false, lyricWeight = 400, lyricLineYOffset = 0, translateLabel, showLayoutBreakIcons = false, showStaffSpacerHandles = false, showLyricSpacerHandles = false, onSystemYOffsetChange, onSystemXOffsetChange, systemXOffsets = [], onLyricLineYOffsetChange, onToggleLineBreakAfter, onRemoveRepeatMark, selectedRepeatMark = null, selectedRepeatMarks = [], onSelectRepeatMark, activeLyricNoteIndex = null, physicalPageGapPx = 3, disablePhysicalPageGaps = false, hideCursorOverlay = false, exportNotationSvgRef = null, multiStaffInstruments = null, multiStaffMeasuresByInstrument = null, combinedCursorRowOffsetPx = 0, combinedActiveStaffRowIndex = 0, cursorStaffClefType = null, tinWhistleLinkedFingeringScale = 1, linkedNotationByStaffId = null, notationStaffSpace, activeLegatoSlurPair = null, onLegatoPathClick = undefined, onMeasureStartXChange = undefined, pickupEnabled = false }) {
+function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, pageWidth, cursorPosition, notationMode, staffLines, clefType, keySignature = 'C', relativeNotationShowKeySignature = false, relativeNotationShowTraditionalClef = false, onJoClefPositionChange, joClefFocused = false, onJoClefFocus, instrument = 'single-staff-treble', instrumentNotationVariant = 'standard', instrumentConfig = {}, showBarNumbers = true, barNumberSize = 11, voltaNumberSize = 16, showRhythmSyllables = false, joClefStaffPosition: joClefStaffPositionProp, showAllNoteLabels = false, enableEmojiOverlays = true, noteheadShape = 'oval', noteheadEmoji = '♪', onNoteTeacherLabelChange, onNoteLabelClick, chords = [], isDotted, isRest, selectedDuration, noteInputMode, selectedNoteIndex, isNoteSelected, notes: allNotes, onStaffAddNote, onNoteClick, onNoteMouseDown, onNoteMouseEnter, onNotePitchChange, onNoteBeatChange, canHandDragNotes = false, timeSignatureOffset = { x: 0, y: 0 }, onTimeSignatureOffsetChange, ghostPitch, ghostOctave, ghostAccidental = 0, ghostAccidentalIsExplicit = false, onFigureBeatClick, onChordLineMouseMove, onChordLineClick, notationStyle, layoutMeasuresPerLine = 4, layoutLineBreakBefore = [], layoutPageBreakBefore = [], layoutSystemGap = 120, layoutPartsGap, layoutConnectedBarlines = false, staffRowAlignment = 'center', staffIndexInScore = 0, systemTotalHeight, layoutGlobalSpacingMultiplier = 1, systems: systemsProp, baseYOffset = 0, isActiveStaff = true, staffCount = 1, staffHeight: staffHeightProp, figurenotesSize = 16, figurenotesStems = false, figurenotesChordLineGap = 6, figurenotesChordBlocks = false, figurenotesChordBlocksShowTones = true, figurenotesMelodyShowNoteNames = true, figurenotesRowHeight: figurenotesRowHeightProp, figurenotesChordLineHeight: figurenotesChordLineHeightProp, figurenotesLyricReserveHeight = 0, timeSignatureSize = 16, pedagogicalTimeSigDenominatorType = 'rhythm', pedagogicalTimeSigDenominatorColor = '#1a1a1a', pedagogicalTimeSigDenominatorInstrument = 'handbell', pedagogicalTimeSigDenominatorEmoji = '🥁', themeColors: themeColorsProp, pedagogicalPlayheadStyle = 'line', pedagogicalPlayheadEmoji = '🎵', pedagogicalPlayheadEmojiSize = 32, cursorSizePx, cursorLineStrokeWidth = 4, cursorSubRow = 0, pedagogicalPlayheadMovement = 'arch', rhythmCursorColor = '#0ea5e9', rhythmCursorOpacity = 0.55, rhythmCursorWidthMultiplier = 1, rhythmCursorHighContrast = false, isPedagogicalAudioPlaying = false, isExportingAnimation = false, exportCursorRef, scoreContainerRef, pageFlowDirection = 'vertical', pageOrientation = 'portrait', isFirstInBraceGroup = false, braceGroupSize = 0, lyricFontFamily = 'sans-serif', lyricFontSize = 12, lyricBold = false, lyricItalic = false, lyricUnderline = false, lyricWeight = 400, lyricLineYOffset = 0, translateLabel, showLayoutBreakIcons = false, showStaffSpacerHandles = false, showLyricSpacerHandles = false, onSystemYOffsetChange, onSystemXOffsetChange, systemXOffsets = [], onLyricLineYOffsetChange, onToggleLineBreakAfter, onRemoveRepeatMark, selectedRepeatMark = null, selectedRepeatMarks = [], onSelectRepeatMark, activeLyricNoteIndex = null, physicalPageGapPx = 3, disablePhysicalPageGaps = false, hideCursorOverlay = false, exportNotationSvgRef = null, multiStaffInstruments = null, multiStaffMeasuresByInstrument = null, combinedCursorRowOffsetPx = 0, combinedActiveStaffRowIndex = 0, cursorStaffClefType = null, tinWhistleLinkedFingeringScale = 1, linkedNotationByStaffId = null, notationStaffSpace, activeLegatoSlurPair = null, onLegatoPathClick = undefined, onMeasureStartXChange = undefined, pickupEnabled = false }) {
   const themeColors = themeColorsProp || { staffLineColor: '#000', noteFill: '#1a1a1a', textColor: '#1a1a1a', isDark: false };
   const safeKey = keySignature ?? 'C';
   // Alati lõplik number (mitte NaN) — varajane `return null` enne hookide kasutamist rikkus Reacti hookide reeglid ja võis jätta noodiala tühjaks.
@@ -16662,7 +17043,11 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
 
   // Map staff Y position to pitch (pöördväärtus getPitchY-st). JO-režiimis: getPitchFromJoClick(joKeyY ankur).
   const getPitchFromY = (clickY, clefOverride = null) => {
-    if (staffLines !== 5 || !onStaffAddNote) return null;
+    if (!onStaffAddNote) return null;
+    if (staffLines === 1) {
+      return getSingleLineStaffPitch(instrument, instCfg);
+    }
+    if (staffLines !== 5) return null;
     if (notationMode === 'vabanotatsioon') {
       return getPitchFromJoClick(clickY, joKeyY, keySignature, spacing);
     }
@@ -16988,16 +17373,20 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
 
   const beatsPerMeasure = measureLengthInQuarterBeats(timeSignature);
   const getSystemTotalBeats = (sys) => sys.measureIndices.reduce((sum, i) => sum + (effectiveMeasures[i]?.beatCount ?? beatsPerMeasure), 0);
-  const findCursorSystem = () => {
+  const findSystemAtBeat = (targetBeat) => {
     let beatAcc = 0;
     for (let s = 0; s < systems.length; s++) {
       const sys = systems[s];
       const beatsInSys = getSystemTotalBeats(sys);
-      if (cursorPosition >= beatAcc && cursorPosition < beatAcc + beatsInSys)
-        return { system: sys, localBeat: cursorPosition - beatAcc };
+      if (targetBeat >= beatAcc && targetBeat < beatAcc + beatsInSys) {
+        return { system: sys, localBeat: targetBeat - beatAcc };
+      }
       beatAcc += beatsInSys;
     }
-    return systems.length > 0 ? { system: systems[0], localBeat: cursorPosition } : null;
+    return systems.length > 0 ? { system: systems[0], localBeat: targetBeat } : null;
+  };
+  const findCursorSystem = () => {
+    return findSystemAtBeat(cursorPosition);
   };
   const cursorInfo = findCursorSystem();
   const selectedDurationBeatsForCursor = (() => {
@@ -17006,8 +17395,9 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
     const base = baseMap[dur] ?? 1;
     return isDotted ? base * 1.5 : base;
   })();
-  const cursorSlotCenterX = cursorInfo ? (() => {
-    const sys = cursorInfo.system;
+  const getCursorXForInfo = (info, centerOffsetBeats = selectedDurationBeatsForCursor * 0.5) => {
+    if (!info) return null;
+    const sys = info.system;
     const widths = sys.measureWidths ?? sys.measureIndices.map(() => sys.measureWidth ?? beatsPerMeasure * 80);
     const safeTraditionalMeasureStartX = (typeof traditionalMeasureStartX !== 'undefined' && Number.isFinite(traditionalMeasureStartX))
       ? traditionalMeasureStartX
@@ -17015,15 +17405,13 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
     const notationStartX = isFigurenotesMode
       ? marginLeft
       : safeTraditionalMeasureStartX;
-    let beatLeft = cursorInfo.localBeat;
+    let beatLeft = info.localBeat;
     for (let j = 0; j < sys.measureIndices.length; j++) {
       const m = effectiveMeasures[sys.measureIndices[j]];
       const beatCount = m?.beatCount ?? beatsPerMeasure;
       const mw = widths[j] ?? 80 * beatCount;
       const beatWidth = mw / beatCount;
       if (beatLeft < beatCount) {
-        // Show cursor over the center of the currently selected input duration.
-        const centerOffsetBeats = selectedDurationBeatsForCursor * 0.5;
         return notationStartX + widths.slice(0, j).reduce((a, b) => a + b, 0) + (beatLeft + centerOffsetBeats) * beatWidth;
       }
       beatLeft -= beatCount;
@@ -17031,7 +17419,8 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
     const j = Math.max(0, sys.measureIndices.length - 1);
     const x = notationStartX + widths.slice(0, j + 1).reduce((a, b) => a + b, 0) - (widths[j] ?? 0) * 0.5;
     return Number.isFinite(x) ? x : notationStartX + 50;
-  })() : null;
+  };
+  const cursorSlotCenterX = getCursorXForInfo(cursorInfo);
   const cursorSlotCenterXValid = cursorSlotCenterX != null && Number.isFinite(cursorSlotCenterX);
 
   // Ühtne valikukast (esimese kuni viimase valitud löögi vahel) – ainult siis, kui ajajoon on aktiivne staff.
@@ -17314,6 +17703,7 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
         const cursorX = (cursorSlotCenterX != null && Number.isFinite(cursorSlotCenterX)) ? cursorSlotCenterX : (marginLeft + 40);
         const cursorChar = (pedagogicalPlayheadEmoji || '').trim();
         const isSelectionCursor = !noteInputMode && !isPedagogicalAudioPlaying && !isExportingAnimation;
+        const showDualPedagogicalCursors = !isSelectionCursor && (isPedagogicalAudioPlaying || isExportingAnimation);
         const showLine = isSelectionCursor || cursorChar === '';
         const displayEmoji = isSelectionCursor ? '' : (cursorChar || '🎵');
         const emojiSizePx = Math.max(1, Math.min(500, cursorSizePx ?? pedagogicalPlayheadEmojiSize));
@@ -17337,14 +17727,22 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
         const baseY = centerY + crOff - emojiSizePx / 2;
         const emojiCenterY = baseY - jumpAmplitude * Math.abs(Math.sin(Math.PI * beatProgress));
         const cursorEmojiY = cursorInfo.system.yOffset + emojiCenterY;
+        const beatCursorBeat = Math.max(0, Math.floor(Number(cursorPosition) || 0));
+        const beatCursorInfo = findSystemAtBeat(beatCursorBeat);
+        const beatCursorX = showDualPedagogicalCursors
+          ? (getCursorXForInfo(beatCursorInfo, 0.5) ?? cursorX)
+          : cursorX;
+        const beatCursorEmojiY = showDualPedagogicalCursors
+          ? (beatCursorInfo ? (beatCursorInfo.system.yOffset + emojiCenterY) : cursorEmojiY)
+          : cursorEmojiY;
         if (exportCursorRef) {
           if (showLine) exportCursorRef.current = null;
           else if (scoreContainerRef?.current && timelineSvgRef?.current) {
             const svgR = timelineSvgRef.current.getBoundingClientRect();
             const containerR = scoreContainerRef.current.getBoundingClientRect();
             exportCursorRef.current = {
-              x: cursorX + svgR.left - containerR.left,
-              y: cursorInfo.system.yOffset + emojiCenterY + svgR.top - containerR.top,
+              x: beatCursorX + svgR.left - containerR.left,
+              y: beatCursorEmojiY + svgR.top - containerR.top,
               emoji: displayEmoji,
               size: emojiSizePx
             };
@@ -17367,18 +17765,56 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
             </line>
           ) : (
             <>
-              <line
-                x1={cursorX}
-                y1={cursorInfo.system.yOffset + cursorY1 + crOff}
-                x2={cursorX}
-                y2={cursorInfo.system.yOffset + cursorY2 + crOff}
-                stroke="#2563eb"
-                strokeWidth={Math.max(1, Math.round(cursorLineStrokeWidth * 0.6))}
-                opacity="0.4"
-              />
+              {showDualPedagogicalCursors && (
+                <>
+                  {(() => {
+                    const rhythmRectWidth = Math.max(10, cursorLineStrokeWidth * 3.6 * rhythmCursorWidthMultiplier);
+                    const rhythmRectX = cursorX - rhythmRectWidth / 2;
+                    const rhythmFill = rhythmCursorHighContrast ? '#ffffff' : rhythmCursorColor;
+                    const rhythmStroke = rhythmCursorHighContrast ? '#000000' : rhythmCursorColor;
+                    const rhythmLineStroke = rhythmCursorHighContrast ? '#000000' : rhythmCursorColor;
+                    const rhythmFillOpacity = rhythmCursorHighContrast ? 0.9 : rhythmCursorOpacity;
+                    return (
+                      <>
+                  <rect
+                    x={rhythmRectX}
+                    y={cursorInfo.system.yOffset + cursorY1 + crOff}
+                    width={rhythmRectWidth}
+                    height={Math.max(1, cursorY2 - cursorY1)}
+                    fill={rhythmFill}
+                    opacity={rhythmFillOpacity}
+                    stroke={rhythmStroke}
+                    strokeWidth={rhythmCursorHighContrast ? 1.4 : 0}
+                    rx="3"
+                  />
+                  <line
+                    x1={cursorX}
+                    y1={cursorInfo.system.yOffset + cursorY1 + crOff}
+                    x2={cursorX}
+                    y2={cursorInfo.system.yOffset + cursorY2 + crOff}
+                    stroke={rhythmLineStroke}
+                    strokeWidth={Math.max(1, Math.round(cursorLineStrokeWidth * 0.9))}
+                    opacity={rhythmCursorHighContrast ? 1 : Math.max(0.65, rhythmCursorOpacity)}
+                  />
+                      </>
+                    );
+                  })()}
+                </>
+              )}
+              {!showDualPedagogicalCursors && (
+                <line
+                  x1={cursorX}
+                  y1={cursorInfo.system.yOffset + cursorY1 + crOff}
+                  x2={cursorX}
+                  y2={cursorInfo.system.yOffset + cursorY2 + crOff}
+                  stroke="#2563eb"
+                  strokeWidth={Math.max(1, Math.round(cursorLineStrokeWidth * 0.6))}
+                  opacity="0.4"
+                />
+              )}
               <text
-                x={cursorX}
-                y={cursorEmojiY}
+                x={beatCursorX}
+                y={beatCursorEmojiY}
                 textAnchor="middle"
                 dominantBaseline="middle"
                 fontSize={emojiSizePx}
