@@ -5,6 +5,7 @@ import { getStorageForLogin, getStorageForRead, getLoggedInUser, isLoggedIn, set
 import { formatAuthError } from '../utils/authError';
 import { getMsalPublicClientApplication } from '../services/msalBrowser';
 import { LOCALE_STORAGE_KEY, DEFAULT_LOCALE, getTranslations } from '../i18n';
+import { getGoogleRedirectUri } from '../utils/googleRedirectUri';
 
 function getT() {
   try {
@@ -46,18 +47,6 @@ function isMobileOrTablet() {
   }
 }
 
-/** Google OAuth redirect URI: current page (so we can return to the same view). */
-function getGoogleRedirectUri() {
-  try {
-    const origin = window.location.origin;
-    const path = window.location.pathname || '/';
-    const search = window.location.search || '';
-    return origin + path + search;
-  } catch {
-    return (typeof window !== 'undefined' ? window.location.origin : '') + '/';
-  }
-}
-
 /** Save and restore return URL across Google redirect. */
 const KEY_GOOGLE_RETURN_URL = 'noodimeister-google-return-url';
 
@@ -93,12 +82,14 @@ function parseGoogleHashResponse() {
     const error = params.get('error');
     const errorDescription = params.get('error_description');
     const expiresIn = params.get('expires_in');
+    const scope = params.get('scope');
     if (!accessToken && !error) return null;
     return {
       access_token: accessToken || null,
       error: error || null,
       error_description: errorDescription || null,
       expires_in: expiresIn ? Number(expiresIn) : null,
+      scope: scope || null,
       rawParams: params,
     };
   } catch {
@@ -434,6 +425,7 @@ function useCloudLoginWithProvider(mode = 'login', stayLoggedIn = false, onError
       handleGoogleToken({
         access_token: parsed.access_token,
         expires_in: parsed.expires_in,
+        scope: parsed.scope || undefined,
       });
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
