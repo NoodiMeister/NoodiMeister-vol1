@@ -7181,6 +7181,16 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     }
   }, [tuningReferenceNote, tuningReferenceOctave, tuningReferenceHz, instrument, stopPreviewNote]);
 
+  const stopScorePlayback = useCallback((resetCursor = false) => {
+    if (scorePlaybackIntervalRef.current) {
+      clearInterval(scorePlaybackIntervalRef.current);
+      scorePlaybackIntervalRef.current = null;
+    }
+    setIsScorePlaybackPlaying(false);
+    stopPreviewNote();
+    if (resetCursor) setCursorPosition(0);
+  }, [stopPreviewNote]);
+
   const startPedagogicalPlayback = useCallback(() => {
     if (!pedagogicalAudioUrl) return;
     if (scorePlaybackIntervalRef.current) stopScorePlayback(false);
@@ -7335,16 +7345,6 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     hydrateCueAssets();
     return () => { cancelled = true; };
   }, [pedagogicalCues, searchParams]);
-
-  const stopScorePlayback = useCallback((resetCursor = false) => {
-    if (scorePlaybackIntervalRef.current) {
-      clearInterval(scorePlaybackIntervalRef.current);
-      scorePlaybackIntervalRef.current = null;
-    }
-    setIsScorePlaybackPlaying(false);
-    stopPreviewNote();
-    if (resetCursor) setCursorPosition(0);
-  }, [stopPreviewNote]);
 
   // Playback vajab repeat-markidega takte enne allpool olevat üldist measuresWithMarks deklaratsiooni.
   // Hoiame eraldi memo, et vältida TDZ (Cannot access 'measuresWithMarks' before initialization).
