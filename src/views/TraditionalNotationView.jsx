@@ -587,6 +587,11 @@ export function TraditionalNotationView({
   selectedRepeatMark = null, // { measureIndex, markType } | null
   selectedRepeatMarks = [], // [{ measureIndex, markType }]
   onSelectRepeatMark, // (measureIndex, markType) => void
+  onJumpMarkPointerDown, // (measureIndex, markType, event) => void
+  jumpMarkLayoutOverrides = {}, // key `${measureIndex}:${markType}` => { dx, dy, sizePx }
+  clefHandOffset = { x: 0, y: 0 },
+  clefHandSizePx = null,
+  onClefPointerDown,
   /** { startId, endId } | null — valitud legato kaar (kaare ots) → sinine joon + nool. */
   activeLegatoSlurPair = null,
   /** (endGlobalNoteIndex) => void — klõps valitud (sinisel) legato kaarel: vali lõppnoot. */
@@ -630,7 +635,7 @@ export function TraditionalNotationView({
 
   // Layout: must be before measureLayout useMemo (which uses effectiveMarginLeft)
   const staffLeft = (isFirstInBraceGroup && braceGroupSize >= 2) ? STAFF_LEFT_WITH_BRACE : STAFF_LEFT_WITHOUT_BRACE;
-  const clefX = staffLeft + GAP_BEFORE_CLEF_PX;
+  const clefX = staffLeft + GAP_BEFORE_CLEF_PX + (Number(clefHandOffset?.x) || 0);
   const timeSigWidthPx = 28;
   const isSingleLineRhythmStaff = staffLines === 1;
   const singleLineBarHalfSpanSetting = Math.max(1, Math.min(500, Math.round(Number(singleLineBarlineHalfSpanPx) || 20)));
@@ -856,7 +861,7 @@ export function TraditionalNotationView({
   const cClefAltoLine = staffLinePositions[2];
   const cClefTenorLine = staffLinePositions[1];
   const resolvePitchY = (pitch, octave) => (typeof getPitchY === 'function' ? getPitchY(pitch, octave) : centerY);
-  const clefFontSize = spacing * 4; // Leland: 4× staff-space
+  const clefFontSize = Math.max(8, Math.min(700, Number(clefHandSizePx) || spacing * 4)); // Leland: 4× staff-space
   const firstLineY = staffLinePositions[0];
   const lastLineY = staffLinePositions[staffLinePositions.length - 1];
 
@@ -903,6 +908,10 @@ export function TraditionalNotationView({
     (selectedRepeatMark?.measureIndex === measureIndex && selectedRepeatMark?.markType === markType)
     || (Array.isArray(selectedRepeatMarks) && selectedRepeatMarks.some((m) => m?.measureIndex === measureIndex && m?.markType === markType))
   );
+  const getJumpMarkOverride = (measureIndex, markType) => {
+    const key = `${Number(measureIndex)}:${String(markType)}`;
+    return jumpMarkLayoutOverrides?.[key] || { dx: 0, dy: 0, sizePx: null };
+  };
 
   return (
     <g className="traditional-notation">
@@ -1079,18 +1088,23 @@ export function TraditionalNotationView({
                   {staffLines === 5 && (
                     (() => {
                       if (multiStaff) {
-                        const clefY = instClef === 'treble' ? staffY + trebleGLine : instClef === 'bass' ? staffY + bassFLine : instClef === 'tenor' ? staffY + cClefTenorLine : staffY + cClefAltoLine;
+                        const clefY = (instClef === 'treble' ? staffY + trebleGLine : instClef === 'bass' ? staffY + bassFLine : instClef === 'tenor' ? staffY + cClefTenorLine : staffY + cClefAltoLine) + (Number(clefHandOffset?.y) || 0);
                         const symbols = [
                           (
-                            <StaffClefSymbol
+                            <g
                               key={`clef-${sys.systemIndex}-${staffIndex}-${instClef}`}
-                              x={clefX}
-                              y={clefY}
-                              height={clefFontSize}
-                              clefType={instClef}
-                              fill="#000"
-                              staffSpace={spacing}
-                            />
+                              onMouseDown={typeof onClefPointerDown === 'function' ? (e) => onClefPointerDown(e) : undefined}
+                              style={typeof onClefPointerDown === 'function' ? { cursor: 'grab' } : undefined}
+                            >
+                              <StaffClefSymbol
+                                x={clefX}
+                                y={clefY}
+                                height={clefFontSize}
+                                clefType={instClef}
+                                fill="#000"
+                                staffSpace={spacing}
+                              />
+                            </g>
                           ),
                         ];
                         if (showTraditionalKeySignature && keySignatureInfo.count > 0 && keySignatureInfo.kind) {
@@ -1121,7 +1135,7 @@ export function TraditionalNotationView({
                       let g = [];
                       if (isVabanotatsioon) {
                         let currentX = clefX;
-                        const joClefCenterY = staffY + joKeyY;
+                        const joClefCenterY = staffY + joKeyY + (Number(clefHandOffset?.y) || 0);
                         const { above: ledgerAbove, below: ledgerBelow } = getLedgerLineCountExact(joKeyY, firstLineY, lastLineY, spacing);
                         const joClefWidthPx = getJoClefPixelWidth(spacing);
                         /* Järjekord: trad. võti (kui lubatud) → võtmemärk (kui lubatud) → JO-võti → taktimõõt (eraldi kiht). */
@@ -1187,18 +1201,23 @@ export function TraditionalNotationView({
                         );
                         return <g>{g}</g>;
                       }
-                      const clefY = clefType === 'treble' ? staffY + trebleGLine : clefType === 'bass' ? staffY + bassFLine : clefType === 'tenor' ? staffY + cClefTenorLine : staffY + cClefAltoLine;
+                      const clefY = (clefType === 'treble' ? staffY + trebleGLine : clefType === 'bass' ? staffY + bassFLine : clefType === 'tenor' ? staffY + cClefTenorLine : staffY + cClefAltoLine) + (Number(clefHandOffset?.y) || 0);
                       const symbols = [];
                       symbols.push(
-                        <StaffClefSymbol
+                        <g
                           key={`clef-${sys.systemIndex}-${staffIndex}-${clefType}`}
-                          x={clefX}
-                          y={clefY}
-                          height={clefFontSize}
-                          clefType={clefType}
-                          fill="#000"
-                          staffSpace={spacing}
-                        />
+                          onMouseDown={typeof onClefPointerDown === 'function' ? (e) => onClefPointerDown(e) : undefined}
+                          style={typeof onClefPointerDown === 'function' ? { cursor: 'grab' } : undefined}
+                        >
+                          <StaffClefSymbol
+                            x={clefX}
+                            y={clefY}
+                            height={clefFontSize}
+                            clefType={clefType}
+                            fill="#000"
+                            staffSpace={spacing}
+                          />
+                        </g>
                       );
                       if (showTraditionalKeySignature && keySignatureInfo.count > 0 && keySignatureInfo.kind) {
                         const keySigStartX = clefX + LAYOUT.CLEF_WIDTH + TIME_SIG_SPACING.KEY_SIG_FIRST_CENTER_OFFSET_PX;
@@ -1654,50 +1673,63 @@ export function TraditionalNotationView({
                       const placement = getRepeatMarkPlacement({ measureX, staffY, firstLineY, spacing });
                       const parts = [];
                       if (measure.segno) {
+                        const ov = getJumpMarkOverride(measureIdx, 'segno');
+                        const gx = measureX + spacing * 0.5 + (Number(ov.dx) || 0);
+                        const gy = placement.segnoCodaY + (Number(ov.dy) || 0);
+                        const gSize = Math.max(10, Math.min(700, Number(ov.sizePx) || placement.fontSize));
                         parts.push(
                           <g
                             key="segno"
-                            onClick={typeof onSelectRepeatMark === 'function' ? (e) => { e.stopPropagation(); onSelectRepeatMark(measureIdx, 'segno', { toggle: !!(e.metaKey || e.ctrlKey) }); } : undefined}
+                            onMouseDown={typeof onJumpMarkPointerDown === 'function' ? (e) => onJumpMarkPointerDown(measureIdx, 'segno', e) : undefined}
+                            onClick={typeof onSelectRepeatMark === 'function' ? (e) => { e.stopPropagation(); onSelectRepeatMark(measureIdx, 'segno', { toggle: !!(e.metaKey || e.ctrlKey), clientX: e.clientX, clientY: e.clientY }); } : undefined}
                             style={{ cursor: onSelectRepeatMark ? 'pointer' : undefined }}
                             pointerEvents={onSelectRepeatMark ? 'auto' : 'none'}
                           >
                             {isRepeatMarkSelected(measureIdx, 'segno') && (
-                              <rect x={measureX - 2} y={placement.segnoCodaY - placement.hitH / 2} width={placement.hitW + 2} height={placement.hitH} fill="#93c5fd" opacity="0.32" rx={3} />
+                              <rect x={gx - placement.hitW / 2 - 2} y={gy - placement.hitH / 2} width={placement.hitW + 2} height={placement.hitH} fill="#93c5fd" opacity="0.32" rx={3} />
                             )}
-                            <SmuflGlyph glyph={SMUFL_GLYPH.segno} x={measureX + spacing * 0.5} y={placement.segnoCodaY} fontSize={placement.fontSize} fill="#1a1a1a" />
-                            {onSelectRepeatMark && <rect x={measureX} y={placement.segnoCodaY - placement.hitH / 2} width={placement.hitW} height={placement.hitH} fill="transparent" />}
+                            <SmuflGlyph glyph={SMUFL_GLYPH.segno} x={gx} y={gy} fontSize={gSize} fill="#1a1a1a" />
+                            {onSelectRepeatMark && <rect x={gx - placement.hitW / 2} y={gy - placement.hitH / 2} width={placement.hitW} height={placement.hitH} fill="transparent" />}
                           </g>
                         );
                       }
                       if (measure.coda) {
+                        const ov = getJumpMarkOverride(measureIdx, 'coda');
+                        const gx = measureX + spacing * 0.5 + (Number(ov.dx) || 0);
+                        const gy = placement.segnoCodaY + (Number(ov.dy) || 0);
+                        const gSize = Math.max(10, Math.min(700, Number(ov.sizePx) || placement.fontSize));
                         parts.push(
                           <g
                             key="coda"
-                            onClick={typeof onSelectRepeatMark === 'function' ? (e) => { e.stopPropagation(); onSelectRepeatMark(measureIdx, 'coda', { toggle: !!(e.metaKey || e.ctrlKey) }); } : undefined}
+                            onMouseDown={typeof onJumpMarkPointerDown === 'function' ? (e) => onJumpMarkPointerDown(measureIdx, 'coda', e) : undefined}
+                            onClick={typeof onSelectRepeatMark === 'function' ? (e) => { e.stopPropagation(); onSelectRepeatMark(measureIdx, 'coda', { toggle: !!(e.metaKey || e.ctrlKey), clientX: e.clientX, clientY: e.clientY }); } : undefined}
                             style={{ cursor: onSelectRepeatMark ? 'pointer' : undefined }}
                             pointerEvents={onSelectRepeatMark ? 'auto' : 'none'}
                           >
                             {isRepeatMarkSelected(measureIdx, 'coda') && (
-                              <rect x={measureX - 2} y={placement.segnoCodaY - placement.hitH / 2} width={placement.hitW + 2} height={placement.hitH} fill="#93c5fd" opacity="0.32" rx={3} />
+                              <rect x={gx - placement.hitW / 2 - 2} y={gy - placement.hitH / 2} width={placement.hitW + 2} height={placement.hitH} fill="#93c5fd" opacity="0.32" rx={3} />
                             )}
-                            <SmuflGlyph glyph={SMUFL_GLYPH.coda} x={measureX + spacing * 0.5} y={placement.segnoCodaY} fontSize={placement.fontSize} fill="#1a1a1a" />
-                            {onSelectRepeatMark && <rect x={measureX} y={placement.segnoCodaY - placement.hitH / 2} width={placement.hitW} height={placement.hitH} fill="transparent" />}
+                            <SmuflGlyph glyph={SMUFL_GLYPH.coda} x={gx} y={gy} fontSize={gSize} fill="#1a1a1a" />
+                            {onSelectRepeatMark && <rect x={gx - placement.hitW / 2} y={gy - placement.hitH / 2} width={placement.hitW} height={placement.hitH} fill="transparent" />}
                           </g>
                         );
                       }
                       if (measure.volta1 || measure.volta2) {
                         const key = measure.volta2 ? 'volta2' : 'volta1';
+                        const ov = getJumpMarkOverride(measureIdx, key);
                         const num = measure.volta2 ? '2' : '1';
-                        const voltaFontPx = Math.max(10, Number(voltaNumberSize) || 16);
+                        const voltaFontPx = Math.max(10, Math.min(700, Number(ov.sizePx) || Number(voltaNumberSize) || 16));
+                        const ovx = Number(ov.dx) || 0;
+                        const ovy = Number(ov.dy) || 0;
                         const strokeW = Math.max(1, spacing * 0.08);
                         const boxInnerPadX = Math.max(spacing * 0.16, voltaFontPx * 0.16);
                         const boxInnerPadTop = Math.max(spacing * 0.14, voltaFontPx * 0.1);
                         const boxInnerPadBottom = Math.max(spacing * 0.16, voltaFontPx * 0.14);
                         const boxHeight = Math.max(spacing * 1.18, voltaFontPx + boxInnerPadTop + boxInnerPadBottom);
-                        const boxTopY = placement.voltaTextY - (voltaFontPx + boxInnerPadTop);
+                        const boxTopY = placement.voltaTextY + ovy - (voltaFontPx + boxInnerPadTop);
                         const boxBottomY = boxTopY + boxHeight;
-                        const bracketStartX = measureX + spacing * 0.08;
-                        const bracketEndX = measureX + measureWidth - spacing * 0.08;
+                        const bracketStartX = measureX + ovx + spacing * 0.08;
+                        const bracketEndX = measureX + ovx + measureWidth - spacing * 0.08;
                         const labelX = bracketStartX + boxInnerPadX;
                         const labelY = boxTopY + boxInnerPadTop + voltaFontPx;
                         const overlayPadY = Math.max(spacing * 0.18, voltaFontPx * 0.18);
@@ -1705,7 +1737,8 @@ export function TraditionalNotationView({
                         parts.push(
                           <g
                             key="volta"
-                            onClick={typeof onSelectRepeatMark === 'function' ? (e) => { e.stopPropagation(); onSelectRepeatMark(measureIdx, key, { toggle: !!(e.metaKey || e.ctrlKey) }); } : undefined}
+                            onMouseDown={typeof onJumpMarkPointerDown === 'function' ? (e) => onJumpMarkPointerDown(measureIdx, key, e) : undefined}
+                            onClick={typeof onSelectRepeatMark === 'function' ? (e) => { e.stopPropagation(); onSelectRepeatMark(measureIdx, key, { toggle: !!(e.metaKey || e.ctrlKey), clientX: e.clientX, clientY: e.clientY }); } : undefined}
                             style={{ cursor: onSelectRepeatMark ? 'pointer' : undefined }}
                             pointerEvents={onSelectRepeatMark ? 'auto' : 'none'}
                           >

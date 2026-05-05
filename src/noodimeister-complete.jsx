@@ -1728,6 +1728,59 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     return () => clearTimeout(t);
   }, []);
 
+  useEffect(() => {
+    const onMouseMove = (e) => {
+      const drag = handtoolDragRef.current;
+      if (!drag?.armed) return;
+      const dx = e.clientX - drag.startX;
+      const dy = e.clientY - drag.startY;
+      if (drag.type === 'jumpMark') {
+        setJumpMarkLayoutOverrides((prev) => {
+          const next = { ...(prev || {}) };
+          const current = next[drag.key] || { dx: 0, dy: 0, sizePx: null };
+          next[drag.key] = {
+            ...current,
+            dx: Math.round(drag.startDx + dx),
+            dy: Math.round(drag.startDy + dy),
+          };
+          return next;
+        });
+      } else if (drag.type === 'clef') {
+        setClefHandOffset((prev) => ({
+          ...prev,
+          x: Math.round(drag.startDx + dx),
+          y: Math.round(drag.startDy + dy),
+        }));
+      }
+      dirtyRef.current = true;
+    };
+    const onMouseUp = () => {
+      if (repeatMarkLongPressTimerRef.current) {
+        clearTimeout(repeatMarkLongPressTimerRef.current);
+        repeatMarkLongPressTimerRef.current = null;
+      }
+      handtoolDragRef.current = null;
+      repeatMarkLongPressTargetRef.current = null;
+    };
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+    return () => {
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+    };
+  }, []);
+
+  useEffect(() => {
+    const onMouseDown = (e) => {
+      if (!handtoolResizePopup || !handtoolResizePopupRef.current) return;
+      if (!handtoolResizePopupRef.current.contains(e.target)) {
+        setHandtoolResizePopup(null);
+      }
+    };
+    document.addEventListener('mousedown', onMouseDown);
+    return () => document.removeEventListener('mousedown', onMouseDown);
+  }, [handtoolResizePopup]);
+
   const t = useMemo(() => createT(locale), [locale]);
   const instrumentConfig = useMemo(() => getInstrumentConfig(t), [t]);
   const notationCtx = useNotationOptional();
@@ -2043,6 +2096,13 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   const [selectionEnd, setSelectionEnd] = useState(-1);
   const [selectedRepeatMark, setSelectedRepeatMark] = useState(null); // { measureIndex, markType } | null
   const [selectedRepeatMarks, setSelectedRepeatMarks] = useState([]); // [{ measureIndex, markType }]
+  const [jumpMarkLayoutOverrides, setJumpMarkLayoutOverrides] = useState({}); // key: `${measureIndex}:${markType}` -> { dx, dy, sizePx }
+  const [clefHandOffset, setClefHandOffset] = useState({ x: 0, y: 0, sizePx: null });
+  const [handtoolResizePopup, setHandtoolResizePopup] = useState(null); // { type: 'jumpMark'|'clef', measureIndex?, markType?, x, y }
+  const repeatMarkLongPressTimerRef = useRef(null);
+  const repeatMarkLongPressTargetRef = useRef(null);
+  const handtoolDragRef = useRef(null); // { type, key, startX, startY, startDx, startDy, armed }
+  const handtoolResizePopupRef = useRef(null);
   /** SEL: Shift+nool laiendab taktivalikut; Cmd+Backspace kustutab valitud taktid. */
   const [measureSelection, setMeasureSelection] = useState(null); // { start: number, end: number } | null
   const [cursorSelection, dispatchCursorSelection] = useReducer(
@@ -9222,6 +9282,12 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         setSelectedTextboxId(null);
         setSelectedRepeatMark(null);
         setSelectedRepeatMarks([]);
+        setHandtoolResizePopup(null);
+        if (repeatMarkLongPressTimerRef.current) {
+          clearTimeout(repeatMarkLongPressTimerRef.current);
+          repeatMarkLongPressTimerRef.current = null;
+        }
+        repeatMarkLongPressTargetRef.current = null;
       }
 
       if (isDeleteKey && (
@@ -10853,6 +10919,10 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   const suppressSelectionClickUntilRef = useRef(0);
   const handPanRef = useRef({ active: false, startX: 0, startY: 0, startScrollLeft: 0, startScrollTop: 0 });
   const [isHandPanning, setIsHandPanning] = useState(false);
+  const isJumpMarkType = useCallback((markType) => (
+    markType === 'segno' || markType === 'coda' || markType === 'volta1' || markType === 'volta2'
+  ), []);
+  const getJumpMarkOverrideKey = useCallback((measureIndex, markType) => `${Number(measureIndex)}:${String(markType)}`, []);
   const systemsForScoreRef = useRef([]);
   const exportContentBoundsRef = useRef({ width: 0, height: 0 });
   const exportCursorRef = useRef(null); // { x, y, emoji, size } container-relative, for MP4 fillText
@@ -11396,6 +11466,60 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     if (!isTempo) setTextBoxDraftText('');
     if (isTempo && textBoxTempoBpm) setTextBoxTempoBpm('');
   }, [activeToolbox, selectedOptionIndex, textBoxDraftText, textBoxTempoBpm, toolboxes.textBox?.options]);
+
+  const startHandtoolObjectPress = useCallback((objectInfo, e) => {
+    if (cursorTool !== 'hand') return;
+    if (e?.button != null && e.button !== 0) return;
+    e?.preventDefault?.();
+    e?.stopPropagation?.();
+    if (repeatMarkLongPressTimerRef.current) {
+      clearTimeout(repeatMarkLongPressTimerRef.current);
+      repeatMarkLongPressTimerRef.current = null;
+    }
+    const startDx = objectInfo.type === 'jumpMark'
+      ? (jumpMarkLayoutOverrides?.[objectInfo.key]?.dx || 0)
+      : (clefHandOffset?.x || 0);
+    const startDy = objectInfo.type === 'jumpMark'
+      ? (jumpMarkLayoutOverrides?.[objectInfo.key]?.dy || 0)
+      : (clefHandOffset?.y || 0);
+    handtoolDragRef.current = {
+      type: objectInfo.type,
+      key: objectInfo.key,
+      startX: e.clientX,
+      startY: e.clientY,
+      startDx,
+      startDy,
+      armed: false,
+    };
+    repeatMarkLongPressTargetRef.current = objectInfo;
+    repeatMarkLongPressTimerRef.current = setTimeout(() => {
+      if (handtoolDragRef.current && repeatMarkLongPressTargetRef.current?.key === objectInfo.key) {
+        handtoolDragRef.current.armed = true;
+      }
+      repeatMarkLongPressTimerRef.current = null;
+    }, 1000);
+  }, [cursorTool, jumpMarkLayoutOverrides, clefHandOffset]);
+
+  const openHandtoolResizePopup = useCallback((popup) => {
+    if (cursorTool !== 'hand') return;
+    setHandtoolResizePopup({
+      type: popup.type,
+      key: popup.key,
+      measureIndex: popup.measureIndex,
+      markType: popup.markType,
+      x: Math.round(popup.x || 0),
+      y: Math.round(popup.y || 0),
+    });
+  }, [cursorTool]);
+
+  const getActiveResizeSize = useCallback(() => {
+    if (!handtoolResizePopup) return 16;
+    if (handtoolResizePopup.type === 'jumpMark') {
+      const current = jumpMarkLayoutOverrides?.[handtoolResizePopup.key]?.sizePx;
+      return Math.max(1, Math.min(700, Math.round(Number(current) || Number(voltaNumberSize) || 16)));
+    }
+    return Math.max(1, Math.min(700, Math.round(Number(clefHandOffset?.sizePx) || 40)));
+  }, [handtoolResizePopup, jumpMarkLayoutOverrides, voltaNumberSize, clefHandOffset]);
 
   useEffect(() => {
     pageDesignDimensionsRef.current = { pw: effectiveLayoutPageWidth, a4: a4PageHeightVal };
@@ -12765,6 +12889,50 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                 {isExportingPdf ? 'Exporting…' : t('file.exportPdf')}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {handtoolResizePopup && (
+        <div className="fixed inset-0 z-[112] flex items-start justify-center pt-24 bg-black/20" role="dialog" aria-modal="true">
+          <div
+            ref={handtoolResizePopupRef}
+            className="w-full max-w-sm rounded-xl border border-amber-200 dark:border-white/20 bg-white dark:bg-zinc-900 shadow-2xl p-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold text-amber-900 dark:text-white">
+                {handtoolResizePopup.type === 'jumpMark' ? 'Jump mark size' : 'Clef size'}
+              </h3>
+              <button
+                type="button"
+                className="text-xl leading-none text-amber-900 dark:text-white"
+                onClick={() => setHandtoolResizePopup(null)}
+              >
+                &times;
+              </button>
+            </div>
+            <label className="block text-xs text-amber-700 dark:text-zinc-300 mb-1">Size (px)</label>
+            <input
+              type="number"
+              min={1}
+              max={700}
+              step={1}
+              defaultValue={getActiveResizeSize()}
+              className="w-full rounded border border-amber-300 dark:border-white/20 px-3 py-2 text-sm bg-white dark:bg-zinc-800 text-amber-900 dark:text-white"
+              onChange={(e) => {
+                const next = Math.max(1, Math.min(700, Math.round(Number(e.target.value) || getActiveResizeSize())));
+                if (handtoolResizePopup.type === 'jumpMark') {
+                  setJumpMarkLayoutOverrides((prev) => {
+                    const cur = (prev || {})[handtoolResizePopup.key] || { dx: 0, dy: 0, sizePx: null };
+                    return { ...(prev || {}), [handtoolResizePopup.key]: { ...cur, sizePx: next } };
+                  });
+                } else {
+                  setClefHandOffset((prev) => ({ ...(prev || {}), sizePx: next }));
+                }
+                dirtyRef.current = true;
+              }}
+            />
           </div>
         </div>
       )}
@@ -17287,6 +17455,10 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                   selectedRepeatMark={selectedRepeatMark}
                   selectedRepeatMarks={selectedRepeatMarks}
                   onSelectRepeatMark={(measureIndex, markType, options = {}) => {
+                    if (repeatMarkLongPressTimerRef.current) {
+                      clearTimeout(repeatMarkLongPressTimerRef.current);
+                      repeatMarkLongPressTimerRef.current = null;
+                    }
                     applySelectionModel(CURSOR_SELECTION_NONE);
                     const target = { measureIndex, markType };
                     if (options?.toggle) {
@@ -17303,6 +17475,30 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                     }
                     setSelectedRepeatMark(target);
                     setSelectedRepeatMarks([target]);
+                    if (cursorTool === 'hand' && isJumpMarkType(markType) && !options?.fromLongPressDrag) {
+                      const popupX = Number.isFinite(options?.clientX) ? options.clientX : 320;
+                      const popupY = Number.isFinite(options?.clientY) ? options.clientY : 220;
+                      const key = getJumpMarkOverrideKey(measureIndex, markType);
+                      openHandtoolResizePopup({
+                        type: 'jumpMark',
+                        key,
+                        measureIndex,
+                        markType,
+                        x: popupX,
+                        y: popupY,
+                      });
+                    }
+                  }}
+                  onJumpMarkPointerDown={(measureIndex, markType, e) => {
+                    if (!isJumpMarkType(markType)) return;
+                    const key = getJumpMarkOverrideKey(measureIndex, markType);
+                    startHandtoolObjectPress({ type: 'jumpMark', key, measureIndex, markType }, e);
+                  }}
+                  jumpMarkLayoutOverrides={jumpMarkLayoutOverrides}
+                  clefHandOffset={clefHandOffset}
+                  clefHandSizePx={clefHandOffset?.sizePx ?? null}
+                  onClefPointerDown={(e) => {
+                    startHandtoolObjectPress({ type: 'clef', key: 'global-clef' }, e);
                   }}
                   activeLegatoSlurPair={staffIdx === activeStaffIndex ? activeLegatoSlurPair : null}
                   onLegatoPathClick={staffIdx === activeStaffIndex ? (endGlobal) => { applySelectionModel({ kind: 'note', index: endGlobal }); } : undefined}
@@ -18192,7 +18388,7 @@ function getFingeringForNote(pitch, octave, instrumentId) {
 }
 
 // Timeline Component – multi-system layout (VexFlow loogika). (PAGE_BREAK_GAP on defineeritud üleval.)
-function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, pageWidth, cursorPosition, notationMode, staffLines, clefType, keySignature = 'C', relativeNotationShowKeySignature = false, relativeNotationShowTraditionalClef = false, onJoClefPositionChange, joClefFocused = false, onJoClefFocus, instrument = 'single-staff-treble', instrumentNotationVariant = 'standard', instrumentConfig = {}, showBarNumbers = true, barNumberSize = 11, voltaNumberSize = 16, showRhythmSyllables = false, joClefStaffPosition: joClefStaffPositionProp, showAllNoteLabels = false, enableEmojiOverlays = true, noteheadShape = 'oval', noteheadEmoji = '♪', onNoteTeacherLabelChange, onNoteLabelClick, chords = [], isDotted, isRest, selectedDuration, noteInputMode, selectedNoteIndex, isNoteSelected, notes: allNotes, onStaffAddNote, onNoteClick, onNoteMouseDown, onNoteMouseEnter, onNotePitchChange, onNoteBeatChange, canHandDragNotes = false, timeSignatureOffset = { x: 0, y: 0 }, onTimeSignatureOffsetChange, ghostPitch, ghostOctave, ghostAccidental = 0, ghostAccidentalIsExplicit = false, onFigureBeatClick, onChordLineMouseMove, onChordLineClick, notationStyle, layoutMeasuresPerLine = 4, layoutLineBreakBefore = [], layoutPageBreakBefore = [], layoutSystemGap = 120, layoutPartsGap, layoutConnectedBarlines = false, staffRowAlignment = 'center', staffIndexInScore = 0, systemTotalHeight, layoutGlobalSpacingMultiplier = 1, systems: systemsProp, baseYOffset = 0, isActiveStaff = true, staffCount = 1, staffHeight: staffHeightProp, figurenotesSize = 16, figurenotesStems = false, figurenotesChordLineGap = 6, figurenotesChordBlocks = false, figurenotesChordBlocksShowTones = true, figurenotesMelodyShowNoteNames = true, figurenotesRowHeight: figurenotesRowHeightProp, figurenotesChordLineHeight: figurenotesChordLineHeightProp, figurenotesLyricReserveHeight = 0, timeSignatureSize = 16, pedagogicalTimeSigDenominatorType = 'rhythm', pedagogicalTimeSigDenominatorColor = '#1a1a1a', pedagogicalTimeSigDenominatorInstrument = 'handbell', pedagogicalTimeSigDenominatorEmoji = '🥁', singleLineBarlineHalfSpanPx = 20, singleLineBarlineThicknessPx = 2, themeColors: themeColorsProp, pedagogicalPlayheadStyle = 'line', pedagogicalPlayheadEmoji = '🎵', pedagogicalPlayheadEmojiSize = 32, cursorSizePx, cursorLineStrokeWidth = 4, cursorSubRow = 0, pedagogicalPlayheadMovement = 'arch', rhythmCursorColor = '#0ea5e9', rhythmCursorOpacity = 0.55, rhythmCursorWidthMultiplier = 1, rhythmCursorHighContrast = false, isPedagogicalAudioPlaying = false, isExportingAnimation = false, exportCursorRef, scoreContainerRef, pageFlowDirection = 'vertical', pageOrientation = 'portrait', isFirstInBraceGroup = false, braceGroupSize = 0, lyricFontFamily = 'sans-serif', lyricFontSize = 12, lyricBold = false, lyricItalic = false, lyricUnderline = false, lyricWeight = 400, lyricLineYOffset = 0, translateLabel, showLayoutBreakIcons = false, showStaffSpacerHandles = false, showLyricSpacerHandles = false, onSystemYOffsetChange, onSystemXOffsetChange, systemXOffsets = [], onLyricLineYOffsetChange, onToggleLineBreakAfter, onRemoveRepeatMark, selectedRepeatMark = null, selectedRepeatMarks = [], onSelectRepeatMark, activeLyricNoteIndex = null, physicalPageGapPx = 3, disablePhysicalPageGaps = false, hideCursorOverlay = false, exportNotationSvgRef = null, multiStaffInstruments = null, multiStaffMeasuresByInstrument = null, combinedCursorRowOffsetPx = 0, combinedActiveStaffRowIndex = 0, cursorStaffClefType = null, tinWhistleLinkedFingeringScale = 1, linkedNotationByStaffId = null, notationStaffSpace, activeLegatoSlurPair = null, onLegatoPathClick = undefined, onMeasureStartXChange = undefined, pickupEnabled = false }) {
+function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, pageWidth, cursorPosition, notationMode, staffLines, clefType, keySignature = 'C', relativeNotationShowKeySignature = false, relativeNotationShowTraditionalClef = false, onJoClefPositionChange, joClefFocused = false, onJoClefFocus, instrument = 'single-staff-treble', instrumentNotationVariant = 'standard', instrumentConfig = {}, showBarNumbers = true, barNumberSize = 11, voltaNumberSize = 16, showRhythmSyllables = false, joClefStaffPosition: joClefStaffPositionProp, showAllNoteLabels = false, enableEmojiOverlays = true, noteheadShape = 'oval', noteheadEmoji = '♪', onNoteTeacherLabelChange, onNoteLabelClick, chords = [], isDotted, isRest, selectedDuration, noteInputMode, selectedNoteIndex, isNoteSelected, notes: allNotes, onStaffAddNote, onNoteClick, onNoteMouseDown, onNoteMouseEnter, onNotePitchChange, onNoteBeatChange, canHandDragNotes = false, timeSignatureOffset = { x: 0, y: 0 }, onTimeSignatureOffsetChange, ghostPitch, ghostOctave, ghostAccidental = 0, ghostAccidentalIsExplicit = false, onFigureBeatClick, onChordLineMouseMove, onChordLineClick, notationStyle, layoutMeasuresPerLine = 4, layoutLineBreakBefore = [], layoutPageBreakBefore = [], layoutSystemGap = 120, layoutPartsGap, layoutConnectedBarlines = false, staffRowAlignment = 'center', staffIndexInScore = 0, systemTotalHeight, layoutGlobalSpacingMultiplier = 1, systems: systemsProp, baseYOffset = 0, isActiveStaff = true, staffCount = 1, staffHeight: staffHeightProp, figurenotesSize = 16, figurenotesStems = false, figurenotesChordLineGap = 6, figurenotesChordBlocks = false, figurenotesChordBlocksShowTones = true, figurenotesMelodyShowNoteNames = true, figurenotesRowHeight: figurenotesRowHeightProp, figurenotesChordLineHeight: figurenotesChordLineHeightProp, figurenotesLyricReserveHeight = 0, timeSignatureSize = 16, pedagogicalTimeSigDenominatorType = 'rhythm', pedagogicalTimeSigDenominatorColor = '#1a1a1a', pedagogicalTimeSigDenominatorInstrument = 'handbell', pedagogicalTimeSigDenominatorEmoji = '🥁', singleLineBarlineHalfSpanPx = 20, singleLineBarlineThicknessPx = 2, themeColors: themeColorsProp, pedagogicalPlayheadStyle = 'line', pedagogicalPlayheadEmoji = '🎵', pedagogicalPlayheadEmojiSize = 32, cursorSizePx, cursorLineStrokeWidth = 4, cursorSubRow = 0, pedagogicalPlayheadMovement = 'arch', rhythmCursorColor = '#0ea5e9', rhythmCursorOpacity = 0.55, rhythmCursorWidthMultiplier = 1, rhythmCursorHighContrast = false, isPedagogicalAudioPlaying = false, isExportingAnimation = false, exportCursorRef, scoreContainerRef, pageFlowDirection = 'vertical', pageOrientation = 'portrait', isFirstInBraceGroup = false, braceGroupSize = 0, lyricFontFamily = 'sans-serif', lyricFontSize = 12, lyricBold = false, lyricItalic = false, lyricUnderline = false, lyricWeight = 400, lyricLineYOffset = 0, translateLabel, showLayoutBreakIcons = false, showStaffSpacerHandles = false, showLyricSpacerHandles = false, onSystemYOffsetChange, onSystemXOffsetChange, systemXOffsets = [], onLyricLineYOffsetChange, onToggleLineBreakAfter, onRemoveRepeatMark, selectedRepeatMark = null, selectedRepeatMarks = [], onSelectRepeatMark, onJumpMarkPointerDown, jumpMarkLayoutOverrides = {}, clefHandOffset = { x: 0, y: 0 }, clefHandSizePx = null, onClefPointerDown, activeLyricNoteIndex = null, physicalPageGapPx = 3, disablePhysicalPageGaps = false, hideCursorOverlay = false, exportNotationSvgRef = null, multiStaffInstruments = null, multiStaffMeasuresByInstrument = null, combinedCursorRowOffsetPx = 0, combinedActiveStaffRowIndex = 0, cursorStaffClefType = null, tinWhistleLinkedFingeringScale = 1, linkedNotationByStaffId = null, notationStaffSpace, activeLegatoSlurPair = null, onLegatoPathClick = undefined, onMeasureStartXChange = undefined, pickupEnabled = false }) {
   const themeColors = themeColorsProp || { staffLineColor: '#000', noteFill: '#1a1a1a', textColor: '#1a1a1a', isDark: false };
   const safeKey = keySignature ?? 'C';
   // Alati lõplik number (mitte NaN) — varajane `return null` enne hookide kasutamist rikkus Reacti hookide reeglid ja võis jätta noodiala tühjaks.
@@ -18960,6 +19156,8 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
           selectedRepeatMark={selectedRepeatMark}
           selectedRepeatMarks={selectedRepeatMarks}
           onSelectRepeatMark={onSelectRepeatMark}
+          onJumpMarkPointerDown={onJumpMarkPointerDown}
+          jumpMarkLayoutOverrides={jumpMarkLayoutOverrides}
           figurenotesCombinedRowStepPx={timelineHeight + (layoutPartsGap ?? 0)}
           figurenotesCombinedActiveStaffRowIndex={combinedActiveStaffRowIndex}
           pickupEnabled={pickupEnabled}
@@ -19054,6 +19252,11 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
           selectedRepeatMark={selectedRepeatMark}
           selectedRepeatMarks={selectedRepeatMarks}
           onSelectRepeatMark={onSelectRepeatMark}
+          onJumpMarkPointerDown={onJumpMarkPointerDown}
+          jumpMarkLayoutOverrides={jumpMarkLayoutOverrides}
+          clefHandOffset={clefHandOffset}
+          clefHandSizePx={clefHandSizePx}
+          onClefPointerDown={onClefPointerDown}
           activeLegatoSlurPair={activeLegatoSlurPair}
           onLegatoPathClick={onLegatoPathClick}
           onMeasureStartXChange={onMeasureStartXChange}

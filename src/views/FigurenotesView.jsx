@@ -518,6 +518,8 @@ export function FigurenotesView({
   selectedRepeatMark = null, // { measureIndex, markType } | null
   selectedRepeatMarks = [], // [{ measureIndex, markType }]
   onSelectRepeatMark, // (measureIndex, markType) => void
+  onJumpMarkPointerDown,
+  jumpMarkLayoutOverrides = {},
   /** Mitme rea ühendatud figuurisüsteem (orchestration): instrumentide read + taktid iga rea jaoks. */
   instruments = [],
   effectiveMeasuresPerInstrument = {},
@@ -558,6 +560,10 @@ export function FigurenotesView({
       selectedRepeatMarks.some(
         (m) => m?.measureIndex === measureIndex && m?.markType === markType,
       ));
+  const getJumpMarkOverride = (measureIndex, markType) => {
+    const key = `${Number(measureIndex)}:${String(markType)}`;
+    return jumpMarkLayoutOverrides?.[key] || { dx: 0, dy: 0, sizePx: null };
+  };
   const debugRepeatOverlay = useMemo(() => {
     if (typeof window === "undefined") return false;
     const p = new URLSearchParams(window.location.search);
@@ -2074,17 +2080,25 @@ export function FigurenotesView({
                                   if (mBar.volta2) markers.push({ key: "volta2", label: "2." });
                                   if (markers.length === 0) return null;
                                   const step = Math.max(20, 20 * notationScale);
-                                  const fontSize = Math.max(10, Number(voltaNumberSize) || 16);
+                                  const baseFontSize = Math.max(10, Number(voltaNumberSize) || 16);
                                   return markers.map((mk, idx) => {
-                                    const x = measureX + 6 + idx * step;
+                                    const ov = getJumpMarkOverride(measureIdx, mk.key);
+                                    const x = measureX + 6 + idx * step + (Number(ov.dx) || 0);
+                                    const markerYOffset = Number(ov.dy) || 0;
+                                    const fontSize = Math.max(10, Math.min(700, Number(ov.sizePx) || baseFontSize));
                                     const selected = isRepeatMarkSelected(measureIdx, mk.key);
                                     return (
                                       <g
                                         key={`fig-marker-${measureIdx}-${mk.key}`}
+                                        onMouseDown={typeof onJumpMarkPointerDown === "function" ? (e) => {
+                                          onJumpMarkPointerDown(measureIdx, mk.key, e);
+                                        } : undefined}
                                         onClick={typeof onSelectRepeatMark === "function" ? (e) => {
                                           e.stopPropagation();
                                           onSelectRepeatMark(measureIdx, mk.key, {
                                             toggle: !!(e.metaKey || e.ctrlKey),
+                                            clientX: e.clientX,
+                                            clientY: e.clientY,
                                           });
                                         } : undefined}
                                         style={{ cursor: onSelectRepeatMark ? "pointer" : undefined }}
@@ -2095,7 +2109,7 @@ export function FigurenotesView({
                                           const boxInnerPadTop = Math.max(fontSize * 0.1, 1.5);
                                           const boxInnerPadBottom = Math.max(fontSize * 0.14, 1.8);
                                           const boxHeight = Math.max(fontSize * 1.12, fontSize + boxInnerPadTop + boxInnerPadBottom);
-                                          const boxTopY = markerY - (fontSize + boxInnerPadTop);
+                                          const boxTopY = markerY + markerYOffset - (fontSize + boxInnerPadTop);
                                           const boxBottomY = boxTopY + boxHeight;
                                           const bracketStartX = measureX + 2;
                                           const bracketEndX = xRight - 2;
@@ -2136,7 +2150,7 @@ export function FigurenotesView({
                                         {mk.glyph ? (
                                           <SmuflGlyph
                                             x={x}
-                                            y={markerY}
+                                            y={markerY + markerYOffset}
                                             glyph={mk.glyph}
                                             fontSize={fontSize}
                                             fill="#1a1a1a"
@@ -2144,7 +2158,7 @@ export function FigurenotesView({
                                         ) : (mk.key !== "volta1" && mk.key !== "volta2") ? (
                                           <text
                                             x={x}
-                                            y={markerY}
+                                            y={markerY + markerYOffset}
                                             textAnchor="middle"
                                             dominantBaseline="middle"
                                             fontSize={fontSize * 0.85}
@@ -3355,17 +3369,25 @@ export function FigurenotesView({
                             if (measureBar.volta2) markers.push({ key: "volta2", label: "2." });
                             if (markers.length === 0) return null;
                             const step = Math.max(20, 20 * notationScale);
-                            const fontSize = Math.max(10, Number(voltaNumberSize) || 16);
+                            const baseFontSize = Math.max(10, Number(voltaNumberSize) || 16);
                             return markers.map((mk, idx) => {
-                              const x = measureX + 6 + idx * step;
+                              const ov = getJumpMarkOverride(measureIdx, mk.key);
+                              const x = measureX + 6 + idx * step + (Number(ov.dx) || 0);
+                              const markerYOffset = Number(ov.dy) || 0;
+                              const fontSize = Math.max(10, Math.min(700, Number(ov.sizePx) || baseFontSize));
                               const selected = isRepeatMarkSelected(measureIdx, mk.key);
                               return (
                                 <g
                                   key={`fig-marker-combined-${measureIdx}-${mk.key}`}
+                                  onMouseDown={typeof onJumpMarkPointerDown === "function" ? (e) => {
+                                    onJumpMarkPointerDown(measureIdx, mk.key, e);
+                                  } : undefined}
                                   onClick={typeof onSelectRepeatMark === "function" ? (e) => {
                                     e.stopPropagation();
                                     onSelectRepeatMark(measureIdx, mk.key, {
                                       toggle: !!(e.metaKey || e.ctrlKey),
+                                      clientX: e.clientX,
+                                      clientY: e.clientY,
                                     });
                                   } : undefined}
                                   style={{ cursor: onSelectRepeatMark ? "pointer" : undefined }}
@@ -3376,7 +3398,7 @@ export function FigurenotesView({
                                     const boxInnerPadTop = Math.max(fontSize * 0.1, 1.5);
                                     const boxInnerPadBottom = Math.max(fontSize * 0.14, 1.8);
                                     const boxHeight = Math.max(fontSize * 1.12, fontSize + boxInnerPadTop + boxInnerPadBottom);
-                                    const boxTopY = markerY - (fontSize + boxInnerPadTop);
+                                    const boxTopY = markerY + markerYOffset - (fontSize + boxInnerPadTop);
                                     const boxBottomY = boxTopY + boxHeight;
                                     const bracketStartX = measureX + 2;
                                     const bracketEndX = xRight - 2;
@@ -3406,7 +3428,7 @@ export function FigurenotesView({
                                   {selected && (
                                     <rect
                                       x={x - fontSize * 0.6}
-                                      y={markerY - fontSize * 0.7}
+                                      y={markerY + markerYOffset - fontSize * 0.7}
                                       width={fontSize * 1.2}
                                       height={fontSize * 1.2}
                                       fill="#93c5fd"
@@ -3417,7 +3439,7 @@ export function FigurenotesView({
                                   {mk.glyph ? (
                                     <SmuflGlyph
                                       x={x}
-                                      y={markerY}
+                                      y={markerY + markerYOffset}
                                       glyph={mk.glyph}
                                       fontSize={fontSize}
                                       fill="#1a1a1a"
@@ -3425,7 +3447,7 @@ export function FigurenotesView({
                                   ) : (mk.key !== "volta1" && mk.key !== "volta2") ? (
                                     <text
                                       x={x}
-                                      y={markerY}
+                                      y={markerY + markerYOffset}
                                       textAnchor="middle"
                                       dominantBaseline="middle"
                                       fontSize={fontSize * 0.85}
@@ -3438,7 +3460,7 @@ export function FigurenotesView({
                                   {onSelectRepeatMark && (
                                     <rect
                                       x={x - fontSize * 0.6}
-                                      y={markerY - fontSize * 0.7}
+                                      y={markerY + markerYOffset - fontSize * 0.7}
                                       width={fontSize * 1.2}
                                       height={fontSize * 1.2}
                                       fill="transparent"
