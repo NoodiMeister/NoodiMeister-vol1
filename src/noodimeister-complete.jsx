@@ -1770,17 +1770,6 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     };
   }, []);
 
-  useEffect(() => {
-    const onMouseDown = (e) => {
-      if (!handtoolResizePopup || !handtoolResizePopupRef.current) return;
-      if (!handtoolResizePopupRef.current.contains(e.target)) {
-        setHandtoolResizePopup(null);
-      }
-    };
-    document.addEventListener('mousedown', onMouseDown);
-    return () => document.removeEventListener('mousedown', onMouseDown);
-  }, [handtoolResizePopup]);
-
   const t = useMemo(() => createT(locale), [locale]);
   const instrumentConfig = useMemo(() => getInstrumentConfig(t), [t]);
   const notationCtx = useNotationOptional();
@@ -2103,6 +2092,16 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   const repeatMarkLongPressTargetRef = useRef(null);
   const handtoolDragRef = useRef(null); // { type, key, startX, startY, startDx, startDy, armed }
   const handtoolResizePopupRef = useRef(null);
+  useEffect(() => {
+    const onMouseDown = (e) => {
+      if (!handtoolResizePopup || !handtoolResizePopupRef.current) return;
+      if (!handtoolResizePopupRef.current.contains(e.target)) {
+        setHandtoolResizePopup(null);
+      }
+    };
+    document.addEventListener('mousedown', onMouseDown);
+    return () => document.removeEventListener('mousedown', onMouseDown);
+  }, [handtoolResizePopup]);
   /** SEL: Shift+nool laiendab taktivalikut; Cmd+Backspace kustutab valitud taktid. */
   const [measureSelection, setMeasureSelection] = useState(null); // { start: number, end: number } | null
   const [cursorSelection, dispatchCursorSelection] = useReducer(
@@ -7435,15 +7434,70 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     pausePedagogicalPlayback();
     const withBeats = buildOrchestrationPlaybackNotes();
     if (!withBeats.length) return;
-    const { events: playbackEvents, totalBeats } = buildPlaybackNoteEvents(withBeats, playbackMeasuresWithMarks);
+    const {
+      events: playbackEvents,
+      totalBeats,
+      measureSequence,
+    } = buildPlaybackNoteEvents(withBeats, playbackMeasuresWithMarks);
     if (!playbackEvents.length || totalBeats <= 0) return;
+    const measureTimeline = [];
+    let timelineCursor = 0;
+    (Array.isArray(measureSequence) ? measureSequence : []).forEach((measureIndex) => {
+      const m = playbackMeasuresWithMarks?.[measureIndex];
+      if (!m) return;
+      const scoreStartBeat = Number(m.startBeat) || 0;
+      const scoreEndBeat = Number(m.endBeat) || (scoreStartBeat + (Number(m.beatCount) || 4));
+      const measureLength = Math.max(0, scoreEndBeat - scoreStartBeat);
+      if (measureLength <= 0) return;
+      measureTimeline.push({
+        timelineStartBeat: timelineCursor,
+        timelineEndBeat: timelineCursor + measureLength,
+        scoreStartBeat,
+        scoreEndBeat,
+      });
+      timelineCursor += measureLength;
+    });
+
+    const mapPlaybackBeatToScoreBeat = (timelineBeat) => {
+      const safeBeat = Math.max(0, Number(timelineBeat) || 0);
+      if (!measureTimeline.length) return safeBeat;
+      const segment = measureTimeline.find((entry) => (
+        safeBeat >= entry.timelineStartBeat && safeBeat < entry.timelineEndBeat
+      ));
+      if (!segment) {
+        const last = measureTimeline[measureTimeline.length - 1];
+        return Number.isFinite(last?.scoreEndBeat) ? last.scoreEndBeat : safeBeat;
+      }
+      const localBeat = safeBeat - segment.timelineStartBeat;
+      const mapped = segment.scoreStartBeat + localBeat;
+      return Math.min(segment.scoreEndBeat, Math.max(segment.scoreStartBeat, mapped));
+    };
+    const mapScoreBeatToPlaybackBeat = (scoreBeat) => {
+      const safeBeat = Math.max(0, Number(scoreBeat) || 0);
+      if (!measureTimeline.length) return safeBeat;
+      const matchingSegments = measureTimeline.filter((entry) => (
+        safeBeat >= entry.scoreStartBeat && safeBeat < entry.scoreEndBeat
+      ));
+      if (matchingSegments.length > 0) {
+        // Deterministic start behavior: pick earliest playback occurrence of this score position.
+        const segment = matchingSegments[0];
+        const localBeat = safeBeat - segment.scoreStartBeat;
+        return Math.min(segment.timelineEndBeat, Math.max(segment.timelineStartBeat, segment.timelineStartBeat + localBeat));
+      }
+      const first = measureTimeline[0];
+      const last = measureTimeline[measureTimeline.length - 1];
+      if (safeBeat <= first.scoreStartBeat) return first.timelineStartBeat;
+      if (safeBeat >= last.scoreEndBeat) return last.timelineEndBeat;
+      return safeBeat;
+    };
 
     const bpm = getEffectivePlaybackBpm();
     const beatMs = 60000 / bpm;
-    const startBeat = Math.max(0, Math.min(totalBeats, Number(cursorPosition) || 0));
+    const startBeat = Math.max(0, Math.min(totalBeats, mapScoreBeatToPlaybackBeat(cursorPosition)));
     scorePlaybackStartedAtRef.current = performance.now() - startBeat * beatMs;
     scorePlaybackLastBeatRef.current = startBeat;
     setIsScorePlaybackPlaying(true);
+    setCursorPosition(mapPlaybackBeatToScoreBeat(startBeat));
 
     scorePlaybackIntervalRef.current = setInterval(() => {
       const now = performance.now();
@@ -7459,7 +7513,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         }
       }
       scorePlaybackLastBeatRef.current = beatNow;
-      setCursorPosition(Math.min(totalBeats, beatNow));
+      setCursorPosition(mapPlaybackBeatToScoreBeat(Math.min(totalBeats, beatNow)));
       if (beatNow >= totalBeats) stopScorePlayback(false);
     }, 25);
   }, [buildOrchestrationPlaybackNotes, playbackMeasuresWithMarks, getEffectivePlaybackBpm, cursorPosition, playPianoNote, stopScorePlayback, pausePedagogicalPlayback]);
