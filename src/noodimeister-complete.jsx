@@ -2720,6 +2720,9 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   const [isPedagogicalAudioPlaying, setIsPedagogicalAudioPlaying] = useState(false);
   const [isScorePlaybackPlaying, setIsScorePlaybackPlaying] = useState(false);
   const [scorePlayerPopupOpen, setScorePlayerPopupOpen] = useState(false);
+  const scorePlayerPopupRef = useRef(null);
+  const scorePlayerPopupDragRef = useRef(null); // { startX, startY, startTop, startLeft }
+  const [scorePlayerPopupPosition, setScorePlayerPopupPosition] = useState(null); // { top, left } | null
   const [pedagogicalAudioPlaybackRate, setPedagogicalAudioPlaybackRate] = useState(1.0); // 0.5–2.0
   const [pedagogicalAudioCurrentTime, setPedagogicalAudioCurrentTime] = useState(0);
   const [pedagogicalSyncMode, setPedagogicalSyncMode] = useState('bpm'); // 'bpm' | 'anchors'
@@ -9311,6 +9314,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
             lyric: '',
           };
         });
+        if (replacedIndices.length === 0) return false;
         assertDeleteReplacementInvariant('replaceSelectedNotesWithRests', notes, nextNotes, replacedIndices);
         saveToHistory(notes);
         setNotes(nextNotes);
@@ -9722,14 +9726,6 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       // N-mode Backspace/Delete: kui kursor asub taktis akordireal, võimaldame Backspace/Delete kustutada selle akordi; muul juhul noot või (ainult Backspace) tühi takt / taktikordus
       if (noteInputMode && (e.key === 'Backspace' || e.code === 'Backspace' || e.key === 'Delete' || e.code === 'Delete')) {
         e.preventDefault();
-        if (hasChordRow && cursorSubRow === 1) {
-          const chordAtCursor = getChordAtCursor();
-          if (chordAtCursor) {
-            setChords((prev) => prev.filter((c) => c.id !== chordAtCursor.id));
-            dirtyRef.current = true;
-          }
-          return;
-        }
         const hasSelectedNotes = selectedNoteIndex >= 0 || (selectionStart >= 0 && selectionEnd >= 0);
         if (hasSelectedNotes) {
           const selStart = selectionStart >= 0 && selectionEnd >= 0 ? Math.min(selectionStart, selectionEnd) : selectedNoteIndex;
@@ -9747,6 +9743,14 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
             }
           }
           if (replaceSelectedNotesWithRests({ cursorBeat: beatAtSelectionStart, clearSelection: true })) return;
+        }
+        if (hasChordRow && cursorSubRow === 1) {
+          const chordAtCursor = getChordAtCursor();
+          if (chordAtCursor) {
+            setChords((prev) => prev.filter((c) => c.id !== chordAtCursor.id));
+            dirtyRef.current = true;
+            return;
+          }
         }
         const indexAtCursor = getNoteIndexAtCursor();
         if (indexAtCursor >= 0 && notes.length > 0) {
@@ -11828,6 +11832,83 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     }
   }, [activeTextLineType, selectedTextboxId]);
 
+  const clampScorePlayerPopupPosition = useCallback((candidate) => {
+    const viewportMargin = 8;
+    const popupRect = scorePlayerPopupRef.current?.getBoundingClientRect?.();
+    const popupWidth = Math.max(260, Math.round(popupRect?.width || 640));
+    const popupHeight = Math.max(120, Math.round(popupRect?.height || 320));
+    const viewportWidth = typeof window !== 'undefined' ? window.innerWidth : 1920;
+    const viewportHeight = typeof window !== 'undefined' ? window.innerHeight : 1080;
+    const top = Math.max(viewportMargin, Math.min(Number(candidate?.top) || viewportMargin, viewportHeight - popupHeight - viewportMargin));
+    const left = Math.max(viewportMargin, Math.min(Number(candidate?.left) || viewportMargin, viewportWidth - popupWidth - viewportMargin));
+    return { top, left };
+  }, []);
+
+  const centerScorePlayerPopup = useCallback(() => {
+    const viewportWidth = typeof window !== 'undefined' ? window.innerWidth : 1920;
+    const viewportHeight = typeof window !== 'undefined' ? window.innerHeight : 1080;
+    const popupRect = scorePlayerPopupRef.current?.getBoundingClientRect?.();
+    const popupWidth = Math.max(260, Math.round(popupRect?.width || 640));
+    const popupHeight = Math.max(120, Math.round(popupRect?.height || 320));
+    const centered = {
+      top: Math.round((viewportHeight - popupHeight) / 2),
+      left: Math.round((viewportWidth - popupWidth) / 2),
+    };
+    setScorePlayerPopupPosition(clampScorePlayerPopupPosition(centered));
+  }, [clampScorePlayerPopupPosition]);
+
+  const handleScorePlayerPopupDragStart = useCallback((e) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const current = scorePlayerPopupPosition || clampScorePlayerPopupPosition({ top: e.clientY, left: e.clientX });
+    scorePlayerPopupDragRef.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      startTop: current.top,
+      startLeft: current.left,
+    };
+  }, [scorePlayerPopupPosition, clampScorePlayerPopupPosition]);
+
+  useEffect(() => {
+    const onMouseMove = (e) => {
+      const drag = scorePlayerPopupDragRef.current;
+      if (!drag) return;
+      const next = {
+        top: drag.startTop + (e.clientY - drag.startY),
+        left: drag.startLeft + (e.clientX - drag.startX),
+      };
+      setScorePlayerPopupPosition(clampScorePlayerPopupPosition(next));
+    };
+    const onMouseUp = () => {
+      if (!scorePlayerPopupDragRef.current) return;
+      scorePlayerPopupDragRef.current = null;
+    };
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+    return () => {
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+    };
+  }, [clampScorePlayerPopupPosition]);
+
+  useEffect(() => {
+    if (!scorePlayerPopupOpen) {
+      scorePlayerPopupDragRef.current = null;
+      return;
+    }
+    centerScorePlayerPopup();
+  }, [scorePlayerPopupOpen, centerScorePlayerPopup]);
+
+  useEffect(() => {
+    if (!scorePlayerPopupOpen) return;
+    const onResize = () => {
+      setScorePlayerPopupPosition((prev) => clampScorePlayerPopupPosition(prev || { top: 16, left: 16 }));
+    };
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, [scorePlayerPopupOpen, clampScorePlayerPopupPosition]);
+
   useLayoutEffect(() => {
     if (!activeTextLineType && !selectedTextboxId) return;
     updateTextToolPosition();
@@ -13798,10 +13879,16 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
           }}
         >
           <div
+            ref={scorePlayerPopupRef}
             className="w-full max-w-xl rounded-xl border border-indigo-300 bg-white shadow-2xl"
+            style={scorePlayerPopupPosition ? { position: 'fixed', top: scorePlayerPopupPosition.top, left: scorePlayerPopupPosition.left } : undefined}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between border-b border-indigo-200 bg-indigo-700 px-4 py-3 text-white">
+            <div
+              className="flex items-center justify-between border-b border-indigo-200 bg-indigo-700 px-4 py-3 text-white cursor-grab active:cursor-grabbing select-none"
+              onMouseDown={handleScorePlayerPopupDragStart}
+              title="Lohista, et mängijat liigutada"
+            >
               <div>
                 <h3 className="text-sm font-bold uppercase tracking-wide">Noodigraafika mängija</h3>
                 <p className="text-xs text-indigo-100">Kursori lugemine ilma MP3 failita</p>
