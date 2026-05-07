@@ -15,6 +15,7 @@ import {
   SMUFL_GLYPH,
   SMUFL_MUSIC_FONT_FAMILY,
 } from "../notation/smufl/glyphs";
+import { smuflArticulationGlyph } from "../notation/articulationCatalog";
 import { SmuflStemFlags } from "../notation/smufl/SmuflStemFlags";
 import {
   getShapePathsByOctave,
@@ -3019,6 +3020,23 @@ export function FigurenotesView({
                                   longRectEndX,
                                   beamInfoByNoteIndex.get(noteIdx) ?? null,
                                 )}
+                                {note.articulation && (() => {
+                                  const ag = smuflArticulationGlyph(note.articulation, true);
+                                  if (!ag) return null;
+                                  const afs = Math.max(10, figureSize * 0.55);
+                                  const ady = -figureSize * 0.58;
+                                  return (
+                                    <SmuflGlyph
+                                      key="artic"
+                                      x={figureCenterX}
+                                      y={noteY + ady}
+                                      glyph={ag}
+                                      fontSize={afs}
+                                      fill="var(--note-fill, #1a1a1a)"
+                                      dominantBaseline="central"
+                                    />
+                                  );
+                                })()}
                                 {Array.from({ length: 10 }, (_, lyricIdx) => {
                                   const lyricKey = lyricIdx === 0 ? "lyric" : `lyric${lyricIdx + 1}`;
                                   const lyricColorKey = lyricIdx === 0 ? "lyricColor" : `lyric${lyricIdx + 1}Color`;

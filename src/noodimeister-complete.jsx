@@ -110,6 +110,8 @@ import {
   mergeMeasuresWithRepeatMarks,
   buildPlaybackNoteEvents,
 } from './notation/repeatMarksEngine';
+import { attachPlaybackNoteDurations } from './musical/scorePlaybackLegato';
+import { NOTEHEAD_ARTICULATION_DEFS } from './notation/articulationCatalog';
 
 // Safe Initialization: väline seadete objekt KÕIGE ALGUSES (väljaspool komponente). Vercel ei minifitseeri var-deklaratsioone YA/JA-ks.
 var GLOBAL_NOTATION_CONFIG = {
@@ -1324,12 +1326,35 @@ function getToolboxes(t, instrumentConfig, shortcutLabels = {}) {
     notehead: {
       id: 'notehead', name: t('toolbox.notehead'), icon: 'Palette', shortcut: shortcutLabels['toolbox.notehead'] || 'Shift+6',
       options: [
+        { type: 'category', id: 'nh-shapes', label: t('notehead.categoryShapes') },
         { id: 'shape-oval', label: t('notehead.shapeOval'), value: 'shape:oval', key: null },
         { id: 'shape-x', label: t('notehead.shapeX'), value: 'shape:x', key: null },
         { id: 'shape-square', label: t('notehead.shapeSquare'), value: 'shape:square', key: null },
         { id: 'shape-triangle', label: t('notehead.shapeTriangle'), value: 'shape:triangle', key: null },
-        { id: 'shape-emoji', label: t('notehead.shapeEmoji'), value: 'shape:emoji', key: null }
-      ]
+        { id: 'shape-emoji', label: t('notehead.shapeEmoji'), value: 'shape:emoji', key: null },
+        { type: 'category', id: 'nh-artic', label: t('notehead.categoryArticulation') },
+        {
+          type: 'option',
+          id: 'artic-legato-slur',
+          label: t('notehead.legatoSlur') || 'Legato kaar',
+          value: 'slur:toggle',
+          previewGlyph: '⌒',
+        },
+        {
+          type: 'option',
+          id: 'artic-none',
+          label: t('articulation.none'),
+          value: 'artic:none',
+          previewGlyph: null,
+        },
+        ...NOTEHEAD_ARTICULATION_DEFS.map((d) => ({
+          type: 'option',
+          id: `artic-${d.id}`,
+          label: t(d.labelKey),
+          value: `artic:${d.id}`,
+          previewGlyph: d.glyphAbove,
+        })),
+      ],
     },
     instruments: {
       id: 'instruments', name: t('toolbox.instruments'), icon: 'Music2', shortcut: shortcutLabels['toolbox.instruments'] || 'Shift+7',
@@ -1424,7 +1449,7 @@ const TOOLBOX_HELP_TEXTS = {
     pitchInput: 'Vali sisestatava noodi kõrgus (A-G).',
     pianoKeyboard: 'Ava ekraaniklaviatuur nootide sisestuseks ja kuulamiseks.',
     timelinePanel: 'Ava ajajoon, et hallata takte ja plokkide struktuuri.',
-    notehead: 'Muuda noodipea kuju või notatsioonistiili.',
+    notehead: 'Noodipea kujund, kursor ja artikulatsioon (Leland glüüfid; taasesitus MuseScore gate time).',
     instruments: 'Halda instrumente, ridu ja nende ulatust.',
     repeatsJumps: 'Lisa kordusmärgid, hüpped ja lõputaktijooned.',
     layout: 'Muuda lehe paigutust, vahekaugusi ja joonestiku stiili.',
@@ -1440,7 +1465,7 @@ const TOOLBOX_HELP_TEXTS = {
     pitchInput: 'Choose the input pitch (A-G) for note entry.',
     pianoKeyboard: 'Open the on-screen keyboard for entry and playback.',
     timelinePanel: 'Open the timeline to manage bars and block flow.',
-    notehead: 'Adjust notehead shape and notation style.',
+    notehead: 'Notehead shape, cursor, and articulations (Leland glyphs; playback uses MuseScore gate time).',
     instruments: 'Manage instruments, staves, and playable ranges.',
     repeatsJumps: 'Insert repeats, jumps, and final barlines.',
     layout: 'Adjust spacing, page flow, and score layout behavior.',
@@ -1456,7 +1481,7 @@ const TOOLBOX_HELP_TEXTS = {
     pitchInput: 'Valitse syötettävän nuotin korkeus (A-G).',
     pianoKeyboard: 'Avaa ruudulla oleva pianonäppäimistö syöttöä varten.',
     timelinePanel: 'Avaa aikajana tahtien ja rakenteen hallintaan.',
-    notehead: 'Muuta nuottipään muotoa ja notaatiotyyliä.',
+    notehead: 'Nuottipään muoto, kursor ja artikulaatiot (Leland; toisto MuseScore gate time).',
     instruments: 'Hallitse instrumentteja, rivejä ja äänialoja.',
     repeatsJumps: 'Lisää kertausmerkit, hypyt ja lopputahtiviivat.',
     layout: 'Säädä asettelua, välejä ja sivun virtausta.',
@@ -1840,6 +1865,8 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   const [notationMode, setNotationMode] = useState('traditional');
   const [noteheadShape, setNoteheadShape] = useState('oval'); // 'oval' | 'x' | 'square' | 'triangle' | 'emoji'
   const [noteheadEmoji, setNoteheadEmoji] = useState('♪'); // used when noteheadShape === 'emoji'
+  /** Järgmised sisestatud noodid + valiku korral artikulatsioon; null = märkideta (MuseScore gate 100%). */
+  const [pendingArticulation, setPendingArticulation] = useState(null);
   // Kas projekt on loodud pedagoogilise notatsiooni viisardiga (JO-võti, TAB/sõrmitsus, animatsioon jm)?
   const [isPedagogicalProject, setIsPedagogicalProject] = useState(false);
   const [noteInputMode, setNoteInputMode] = useState(false); // default SEL (selection) mode; N = note input
@@ -1902,7 +1929,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   /** Pedagoogilise alumise meedia-toolbar’i kõrgus (MP3 + animatsioon + noodijoon + video). */
   const [pedagogicalBottomToolbarHeight, setPedagogicalBottomToolbarHeight] = useState(320);
   const videoRulerResizeDragRef = useRef(null); // { startY, startHeight }
-  const N_MODE_PRIMARY_TOOL_IDS = useMemo(() => ['rhythm', 'pitchInput', 'pianoKeyboard', 'chords'], []);
+  const N_MODE_PRIMARY_TOOL_IDS = useMemo(() => ['rhythm', 'pitchInput', 'pianoKeyboard', 'chords', 'notehead'], []);
   const PIANO_RANGE_PRESETS = useMemo(() => [
     { id: 'C3-C5', label: 'C3-C5', first: 48, last: 72 },
     { id: 'C2-C5', label: 'C2-C5', first: 36, last: 72 },
@@ -6935,6 +6962,49 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     return [];
   }, [notes, selectedNoteIndex, selectionStart, selectionEnd]);
 
+  const noteheadArticulationActiveId = useMemo(() => {
+    let sel = [];
+    if (selectionStart >= 0 && selectionEnd >= 0) {
+      const lo = Math.min(selectionStart, selectionEnd);
+      const hi = Math.max(selectionStart, selectionEnd);
+      for (let i = lo; i <= hi; i++) if (notes[i]) sel.push(notes[i]);
+    } else if (selectedNoteIndex >= 0 && notes[selectedNoteIndex]) {
+      sel = [notes[selectedNoteIndex]];
+    }
+    const pitched = sel.filter((n) => n && !n.isRest);
+    if (pitched.length > 0) {
+      const a0 = pitched[0].articulation ?? null;
+      if (pitched.every((n) => (n.articulation ?? null) === a0)) return a0;
+    }
+    return pendingArticulation;
+  }, [notes, selectedNoteIndex, selectionStart, selectionEnd, pendingArticulation]);
+
+  const applyArticulationFromToolbox = useCallback((articulation) => {
+    const nextArt = articulation || null;
+    setPendingArticulation(nextArt);
+    const indices = [];
+    if (selectionStart >= 0 && selectionEnd >= 0) {
+      const lo = Math.min(selectionStart, selectionEnd);
+      const hi = Math.max(selectionStart, selectionEnd);
+      for (let i = lo; i <= hi; i++) indices.push(i);
+    } else if (selectedNoteIndex >= 0) indices.push(selectedNoteIndex);
+    if (indices.length === 0) {
+      dirtyRef.current = true;
+      return;
+    }
+    saveToHistory(notes);
+    setNotes((prev) => prev.map((n, i) => {
+      if (!indices.includes(i) || !n || n.isRest) return n;
+      if (!nextArt) {
+        if (!('articulation' in n)) return n;
+        const { articulation: _a, ...rest } = n;
+        return rest;
+      }
+      return { ...n, articulation: nextArt };
+    }));
+    dirtyRef.current = true;
+  }, [notes, selectionStart, selectionEnd, selectedNoteIndex, saveToHistory, setNotes]);
+
   // Kopeeri praegune valik lõikelauale (Ctrl/Cmd+C, kontekstimenüü).
   const copySelectionToClipboard = useCallback(() => {
     const selectedNotes = getSelectedNotes();
@@ -7187,6 +7257,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
 
   const playPianoNote = useCallback((pitch, octave, semitonesOffset = 0, options = {}) => {
     const durationMs = Math.max(40, Number(options.durationMs) || 280);
+    const scorePlayback = !!options.scorePlayback;
     const cutPrevious = options.cutPrevious !== false;
     if (cutPrevious) stopPreviewNote();
     const instrumentId = options.instrumentId || instrument;
@@ -7214,26 +7285,34 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     const cached = ctx && soundfontCacheRef.current[sfCacheKey];
     if (cached) {
       try {
-        const voice = cached.play(midiNote, ctx.currentTime, { duration: durationMs / 1000 });
+        const sfOpts = { duration: durationMs / 1000 };
+        if (scorePlayback) {
+          sfOpts.attack = 0.004;
+          sfOpts.decay = 0.05;
+          sfOpts.sustain = 0.9;
+          sfOpts.release = 0.52;
+        }
+        const voice = cached.play(midiNote, ctx.currentTime, sfOpts);
         activeSoundfontVoiceRef.current = voice || null;
+        const stopPadMs = scorePlayback ? 120 : 40;
         activePreviewStopTimeoutRef.current = setTimeout(() => {
           if (activeSoundfontVoiceRef.current && typeof activeSoundfontVoiceRef.current.stop === 'function') {
             try { activeSoundfontVoiceRef.current.stop(); } catch (_) {}
           }
           activeSoundfontVoiceRef.current = null;
           activePreviewStopTimeoutRef.current = null;
-        }, durationMs + 40);
+        }, durationMs + stopPadMs);
         return;
       } catch (_) {}
     }
-    activeOscillatorStopRef.current = playTone(audioContextRef, freq, durationMs);
+    activeOscillatorStopRef.current = playTone(audioContextRef, freq, durationMs, scorePlayback);
     activePreviewStopTimeoutRef.current = setTimeout(() => {
       if (activeOscillatorStopRef.current) {
         try { activeOscillatorStopRef.current(); } catch (_) {}
       }
       activeOscillatorStopRef.current = null;
       activePreviewStopTimeoutRef.current = null;
-    }, durationMs + 40);
+    }, durationMs + (scorePlayback ? 120 : 40));
     if (ctx && !soundfontCacheRef.current[sfCacheKey]) {
       Soundfont.instrument(ctx, soundfontName, { soundfont: soundfontPack })
         .then((player) => {
@@ -7418,7 +7497,9 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
 
   const buildOrchestrationPlaybackNotes = useCallback(() => {
     const allNotes = [];
-    for (const staff of staves || []) {
+    const staffList = staves || [];
+    for (let staffIndex = 0; staffIndex < staffList.length; staffIndex++) {
+      const staff = staffList[staffIndex];
       const instrumentId = staff?.instrumentId || 'single-staff-treble';
       const staffNotes = notesWithExplicitBeatsEarly(staff?.notes || [])
         .map((n) => ({
@@ -7426,6 +7507,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
           beat: Number(n.beat) || 0,
           duration: noteDurationInQuarterBeats(n),
           instrumentId,
+          staffIndex,
         }));
       allNotes.push(...staffNotes);
     }
@@ -7496,6 +7578,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
 
     const bpm = getEffectivePlaybackBpm();
     const beatMs = 60000 / bpm;
+    attachPlaybackNoteDurations(playbackEvents, beatMs);
     const startBeat = Math.max(0, Math.min(totalBeats, mapScoreBeatToPlaybackBeat(cursorPosition)));
     scorePlaybackStartedAtRef.current = performance.now() - startBeat * beatMs;
     scorePlaybackLastBeatRef.current = startBeat;
@@ -7508,10 +7591,12 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       const prevBeat = scorePlaybackLastBeatRef.current;
       for (const n of playbackEvents) {
         if (!n.isRest && n.playbackBeat > prevBeat && n.playbackBeat <= beatNow) {
+          const dm = Number.isFinite(n.playbackDurationMs) ? n.playbackDurationMs : n.duration * beatMs;
           playPianoNote(n.pitch, n.octave ?? 4, n.accidental ?? 0, {
-            durationMs: n.duration * beatMs,
+            durationMs: dm,
             cutPrevious: false,
             instrumentId: n.instrumentId,
+            scorePlayback: true,
           });
         }
       }
@@ -7778,6 +7863,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       isDotted: tupletPayload ? false : (options.forceDotted != null ? !!options.forceDotted : isDotted),
       isRest: options.forceRest != null ? !!options.forceRest : isRest,
       lyric: '',
+      ...(pendingArticulation ? { articulation: pendingArticulation } : {}),
       ...accidentalPayload,
       ...(tupletPayload && { tuplet: tupletPayload })
     };
@@ -7896,7 +7982,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       const semitones = accResolved === 1 ? 1 : accResolved === -1 ? -1 : 0;
       playPianoNote(pitch, oct, semitones);
     }
-  }, [cursorPosition, selectedDuration, getEffectiveDuration, isDotted, isRest, notes, saveToHistory, ghostOctave, ghostAccidental, ghostAccidentalIsExplicit, playPianoNote, playNoteOnInsert, tupletMode, durations, staves, activeStaffIndex, notesWithExplicitBeats, noteDurationInQuarterBeats, notationStyle, keySignature, instrument, t, noteInputMode, expandScoreForNoteInputAdvance, timeSignature, pickupEnabled, pickupQuantity, pickupDuration, assertCursorTimeModelInputs, throwCursorModelError]);
+  }, [cursorPosition, selectedDuration, getEffectiveDuration, isDotted, isRest, notes, saveToHistory, ghostOctave, ghostAccidental, ghostAccidentalIsExplicit, playPianoNote, playNoteOnInsert, tupletMode, durations, staves, activeStaffIndex, notesWithExplicitBeats, noteDurationInQuarterBeats, notationStyle, keySignature, instrument, t, noteInputMode, expandScoreForNoteInputAdvance, timeSignature, pickupEnabled, pickupQuantity, pickupDuration, assertCursorTimeModelInputs, throwCursorModelError, pendingArticulation]);
 
   // Add a note on top of the note at cursor (chord input). Traditional or Pedagogical only. Shift+Letter.
   const addNoteOnTopOfCursor = useCallback((pitch, octave, accidental, options = {}) => {
@@ -8401,6 +8487,19 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         break;
       }
       case 'notehead':
+        if (option.value === 'slur:toggle') {
+          applySlurFromToolbox();
+          setActiveToolbox(null);
+          setSelectedOptionIndex(0);
+          return;
+        }
+        if (String(option.value || '').startsWith('artic:')) {
+          const raw = option.value.slice(6);
+          applyArticulationFromToolbox(raw === 'none' ? null : raw);
+          setActiveToolbox(null);
+          setSelectedOptionIndex(0);
+          return;
+        }
         if (String(option.value || '').startsWith('shape:')) {
           setNoteheadShape(option.value.slice(7));
         }
@@ -8705,6 +8804,91 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     getBeatAtNoteIndex, saveToHistory, setNotes, setSaveFeedback,
   ]);
 
+  /** Noodipea tööriistakasti "Legato kaar" nupp (pointer click). */
+  const applySlurFromToolbox = useCallback(() => {
+    if (noteInputMode) {
+      setSaveFeedback('Legato kaar on SEL-režiimi tööriist.');
+      setTimeout(() => setSaveFeedback(''), 2200);
+      return;
+    }
+    if (notationStyle === 'FIGURENOTES' || (notationMode !== 'traditional' && notationMode !== 'vabanotatsioon')) return;
+
+    const hasRange = selectionStart >= 0 && selectionEnd >= 0;
+    const selectedCount = hasRange
+      ? Math.abs(selectionEnd - selectionStart) + 1
+      : (selectedNoteIndex >= 0 ? 1 : 0);
+
+    if (selectedCount >= 2) {
+      applySlurToSelection();
+      return;
+    }
+
+    if (selectedCount === 1 && activeLegatoSlurPair) {
+      applyLegatoSlurRemoveForPair(activeLegatoSlurPair);
+      return;
+    }
+
+    if (selectedCount === 1) {
+      setSaveFeedback('Legato kaar: vali teine noot (Shift+klõps või Shift+nooled).');
+      setTimeout(() => setSaveFeedback(''), 2800);
+      return;
+    }
+
+    if (noteIndexAtCursor < 0 || noteIndexAtCursor >= notes.length) {
+      setSaveFeedback('Legato kaar: vii SEL-kursor noodi peale.');
+      setTimeout(() => setSaveFeedback(''), 2600);
+      return;
+    }
+
+    const anchor = notes[noteIndexAtCursor];
+    if (!anchor || anchor.isRest) {
+      setSaveFeedback('Legato kaar vajab helistavaid (mitte puhkuse) noote.');
+      setTimeout(() => setSaveFeedback(''), 2600);
+      return;
+    }
+
+    // Kui kursori noot juba on kaare ots, siis nupuvajutus eemaldab kaare.
+    if (anchor.slurTo || anchor.slurFrom) {
+      const pair = anchor.slurTo
+        ? { startId: anchor.id, endId: anchor.slurTo }
+        : { startId: anchor.slurFrom, endId: anchor.id };
+      applyLegatoSlurRemoveForPair(pair);
+      return;
+    }
+
+    const timeline = notes
+      .map((n, i) => ({ n, i, beat: getBeatAtNoteIndex(notes, i) }))
+      .sort((a, b) => a.beat - b.beat || a.i - b.i);
+    const pos = timeline.findIndex((x) => x.i === noteIndexAtCursor);
+    if (pos < 0) return;
+    let k = pos + 1;
+    while (k < timeline.length && timeline[k].n?.isRest) k += 1;
+    if (k >= timeline.length) {
+      setSaveFeedback('Järgmist helilist nooti pole — legato kaart ei saa lisada.');
+      setTimeout(() => setSaveFeedback(''), 3000);
+      return;
+    }
+
+    const nextIdx = timeline[k].i;
+    const nextNote = notes[nextIdx];
+    if (!nextNote || nextNote.isRest) return;
+    saveToHistory(notes);
+    setNotes((prev) => {
+      const withIds = prev.map((n, ii) => ({ ...n, id: n.id != null ? n.id : Date.now() + ii * 0.0001 }));
+      const a = { ...withIds[noteIndexAtCursor] };
+      const b = { ...withIds[nextIdx] };
+      a.slurTo = b.id;
+      b.slurFrom = a.id;
+      withIds[noteIndexAtCursor] = a;
+      withIds[nextIdx] = b;
+      return withIds;
+    });
+    dirtyRef.current = true;
+  }, [
+    noteInputMode, notationStyle, notationMode, selectionStart, selectionEnd, selectedNoteIndex, activeLegatoSlurPair,
+    notes, noteIndexAtCursor, getBeatAtNoteIndex, applySlurToSelection, applyLegatoSlurRemoveForPair, saveToHistory, setNotes, setSaveFeedback,
+  ]);
+
   /** Kui on üks noot valitud — kaare alg- või lõpp-ankur, tagasta { startId, endId } pildi / klahvijoone jaoks. */
   const activeLegatoSlurPair = useMemo(() => {
     if (notationStyle === 'FIGURENOTES' || (notationMode !== 'traditional' && notationMode !== 'vabanotatsioon')) {
@@ -8727,6 +8911,74 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     }
     return null;
   }, [notationStyle, notationMode, selectionStart, selectionEnd, selectedNoteIndex, notes]);
+
+  /** Noodipea horisontaalriba: legato + artikulatsioon (sama loogika mis tööriistakastis). */
+  const renderNoteheadArticulationRibbon = () => {
+    const opts = (toolboxes.notehead?.options ?? []).filter(
+      (o) => o && o.type !== 'category' && (String(o.value || '').startsWith('artic:') || o.value === 'slur:toggle')
+    );
+    if (opts.length === 0) return null;
+    return (
+      <div
+        className="flex flex-wrap items-center justify-center gap-1.5 border-t border-amber-200/80 pt-2 mt-0.5 w-full"
+        role="group"
+        aria-label={`${toolboxes.notehead?.name ?? ''} — ${t('notehead.categoryArticulation')}`}
+      >
+        <span className="text-xs font-bold text-amber-800 uppercase tracking-wider mr-1 self-center shrink-0">
+          {t('notehead.categoryArticulation')}
+        </span>
+        {opts.map((option) => {
+          const isArtic = String(option.value || '').startsWith('artic:');
+          const isSlur = option.value === 'slur:toggle';
+          let isActive = false;
+          if (isArtic) {
+            const aid = option.value === 'artic:none' ? null : option.value.slice(6);
+            isActive = (noteheadArticulationActiveId ?? null) === (aid ?? null);
+          } else if (isSlur && !noteInputMode) {
+            isActive = Boolean(activeLegatoSlurPair);
+          }
+          const slurTitle =
+            isSlur && noteInputMode
+              ? `${option.label} (${t('toolbar.selectionMode')})`
+              : option.label;
+          return (
+            <button
+              key={option.id}
+              type="button"
+              title={isSlur ? slurTitle : option.label}
+              onClick={() => {
+                if (isSlur) applySlurFromToolbox();
+                else if (isArtic) {
+                  const raw = option.value.slice(6);
+                  applyArticulationFromToolbox(raw === 'none' ? null : raw);
+                }
+              }}
+              className={`flex flex-col items-center gap-0.5 rounded-lg min-w-[2.65rem] px-1 py-1 transition-all border ${
+                isActive
+                  ? 'bg-amber-400 ring-2 shadow-md ring-[var(--primary-color)] border-amber-300'
+                  : 'bg-white/80 hover:bg-amber-100 border border-amber-200'
+              }`}
+            >
+              <span
+                className="inline-flex h-7 w-8 items-center justify-center text-xl leading-none text-amber-900"
+                style={{ fontFamily: 'Leland, serif' }}
+                aria-hidden="true"
+              >
+                {option.previewGlyph != null
+                  ? option.previewGlyph
+                  : isArtic && option.value === 'artic:none'
+                    ? '—'
+                    : '\u00a0'}
+              </span>
+              <span className="max-w-[4.25rem] truncate text-[9px] font-medium text-amber-900 text-center leading-tight">
+                {option.label}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    );
+  };
 
   const applyLegatoSlurRemoveForPair = useCallback((pair) => {
     if (notationStyle === 'FIGURENOTES' || (notationMode !== 'traditional' && notationMode !== 'vabanotatsioon')) return;
@@ -14991,7 +15243,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                 dualFigurenotesChordStrip
                   ? 'w-full max-w-[min(100vw-2rem,92rem)] max-h-[min(50vh,18rem)] xl:max-h-[min(56vh,22rem)]'
                   : isRhythmWideInNMode
-                    ? 'w-[min(100vw-2rem,78rem)] max-h-[7.5rem]'
+                    ? `w-[min(100vw-2rem,78rem)] ${noteInputMode && visibleToolIds.includes('notehead') ? 'max-h-[min(50vh,14rem)]' : 'max-h-[7.5rem]'}`
                     : isKeySignaturesToolbox
                       ? 'w-[min(100vw-2rem,44rem)] max-h-[min(68vh,28rem)]'
                       : 'w-max max-w-[min(100vw-2rem,28rem)] max-h-[7.5rem]'
@@ -15030,6 +15282,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                     );
                   })}
                 </div>
+                {noteInputMode && visibleToolIds.includes('notehead') && renderNoteheadArticulationRibbon()}
                 <p className="text-[10px] text-amber-700 text-center">{t('rhythm.restShortcut')}</p>
                 {(notationMode === 'traditional' || notationMode === 'vabanotatsioon') && (
                   <p className="text-[10px] text-amber-600 text-center mt-0.5">{t('noteInput.chordHint')}</p>
@@ -15518,6 +15771,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                   )}
                   {activeToolbox === 'notehead' && (
                     <div className="mt-3 pt-3 border-t border-amber-200 w-full space-y-3">
+                      {visibleToolIds.includes('notehead') && renderNoteheadArticulationRibbon()}
                       {noteheadShape === 'emoji' && (
                         <div className="mb-2">
                           <label className="block text-xs font-medium text-amber-900 mb-1">{t('notehead.emojiPlaceholder')}</label>
@@ -15684,12 +15938,54 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                       </div>
                     </div>
                   )}
-                  {activeToolbox && activeToolbox !== 'pianoKeyboard' && activeToolbox !== 'rhythm' && activeToolbox !== 'textBox' && activeToolbox !== 'clefs' && activeToolbox !== 'instruments' && activeToolbox !== 'keySignatures' && toolboxes[activeToolbox]?.options?.map((option, idx) => {
+                  {activeToolbox === 'notehead' && toolboxes.notehead?.options && (
+                    <div className="mt-1 flex flex-col gap-1.5">
+                      {toolboxes.notehead.options.map((option, idx) => {
+                        if (option.type === 'category') {
+                          return (
+                            <div key={option.id} className="pt-2 pb-0.5 text-xs font-bold text-amber-800 uppercase tracking-wide border-b border-amber-200 first:pt-0">
+                              {option.label}
+                            </div>
+                          );
+                        }
+                        const isShape = String(option.value || '').startsWith('shape:');
+                        const isArtic = String(option.value || '').startsWith('artic:');
+                        let isActive = false;
+                        if (isShape) isActive = noteheadShape === option.value.slice(7);
+                        else if (isArtic) {
+                          const aid = option.value === 'artic:none' ? null : option.value.slice(6);
+                          isActive = (noteheadArticulationActiveId ?? null) === (aid ?? null);
+                        }
+                        return (
+                          <button
+                            key={option.id}
+                            type="button"
+                            onClick={() => handleToolboxSelection(idx)}
+                            className={`flex min-h-[2.25rem] items-center gap-2 rounded px-2 py-1.5 text-sm transition-all border border-amber-200 ${
+                              isActive ? 'bg-amber-200 ring-2 ring-[var(--primary-color)]' : 'bg-white/80 hover:bg-amber-100'
+                            }`}
+                          >
+                            {option.previewGlyph != null && (
+                              <span className="inline-flex w-8 shrink-0 items-center justify-center text-2xl leading-none text-amber-900" style={{ fontFamily: 'Leland, serif' }} aria-hidden="true">
+                                {option.previewGlyph}
+                              </span>
+                            )}
+                            {!option.previewGlyph && isArtic && option.value === 'artic:none' && (
+                              <span className="inline-flex w-8 shrink-0 justify-center text-xs font-bold text-amber-600" aria-hidden="true">—</span>
+                            )}
+                            <span className="font-medium text-amber-900">{option.label}</span>
+                            {isActive && <Check className="h-3.5 w-3.5 shrink-0 text-amber-600 ml-auto" />}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                  {activeToolbox && activeToolbox !== 'pianoKeyboard' && activeToolbox !== 'rhythm' && activeToolbox !== 'textBox' && activeToolbox !== 'clefs' && activeToolbox !== 'instruments' && activeToolbox !== 'keySignatures' && activeToolbox !== 'notehead' && toolboxes[activeToolbox]?.options?.map((option, idx) => {
                     if (activeToolbox === 'chords' && option.value === 'custom') return null;
                     if ((activeToolbox === 'instruments' || activeToolbox === 'repeatsJumps') && option.type === 'category') return <div key={option.id} className="pt-1.5 pb-0.5 px-1.5 text-xs font-bold text-amber-800 uppercase tracking-wide border-b border-amber-200 first:pt-0">{option.label}</div>;
-                    const isActive = activeToolbox === 'timeSignature' && option.value === 'mode-toggle' ? false : activeToolbox === 'keySignatures' ? option.value === keySignature : activeToolbox === 'transpose' ? option.value === keySignature : activeToolbox === 'notehead' ? (option.value.startsWith('shape:') ? noteheadShape === option.value.slice(7) : option.value === notationMode) : activeToolbox === 'instruments' ? option.type === 'option' && option.value === instrument : activeToolbox === 'layout' ? (option.value === 'gridOnly' && notationStyle === 'FIGURENOTES') || (option.id === 'staff-5' && notationStyle === 'TRADITIONAL' && staffLines === 5) || (option.id === 'staff-1' && notationStyle === 'TRADITIONAL' && staffLines === 1) || (option.id?.startsWith('spacing-') && pixelsPerBeat === option.value) : selectedOptionIndex === idx;
+                    const isActive = activeToolbox === 'timeSignature' && option.value === 'mode-toggle' ? false : activeToolbox === 'keySignatures' ? option.value === keySignature : activeToolbox === 'transpose' ? option.value === keySignature : activeToolbox === 'instruments' ? option.type === 'option' && option.value === instrument : activeToolbox === 'layout' ? (option.value === 'gridOnly' && notationStyle === 'FIGURENOTES') || (option.id === 'staff-5' && notationStyle === 'TRADITIONAL' && staffLines === 5) || (option.id === 'staff-1' && notationStyle === 'TRADITIONAL' && staffLines === 1) || (option.id?.startsWith('spacing-') && pixelsPerBeat === option.value) : selectedOptionIndex === idx;
                     return (
-                      <button key={option.id} onClick={() => handleToolboxSelection(idx)} className={`w-fit max-w-full px-2 py-1 rounded text-left text-sm transition-all flex items-center gap-2 flex-wrap ${(['layout', 'keySignatures', 'transpose', 'instruments', 'notehead'].includes(activeToolbox) ? isActive : selectedOptionIndex === idx) ? 'bg-amber-200 border-l-2 border-amber-600' : 'hover:bg-amber-100'}`}>
+                      <button key={option.id} onClick={() => handleToolboxSelection(idx)} className={`w-fit max-w-full px-2 py-1 rounded text-left text-sm transition-all flex items-center gap-2 flex-wrap ${(['layout', 'keySignatures', 'transpose', 'instruments'].includes(activeToolbox) ? isActive : selectedOptionIndex === idx) ? 'bg-amber-200 border-l-2 border-amber-600' : 'hover:bg-amber-100'}`}>
                         <span className="font-medium truncate">{option.label}</span>
                         {isActive && <Check className="w-3.5 h-3.5 text-amber-600 shrink-0" />}
                         {activeToolbox === 'timeSignature' && option.value === 'mode-toggle' && <span className="text-xs text-amber-600">({timeSignatureMode === 'pedagogical' ? t('timesig.pedagogical') : t('timesig.classic')})</span>}
@@ -18481,7 +18777,7 @@ function getNoteFrequency(refNote, refOctave, refHz, pitch, octave, semitonesOff
 }
 
 // Ühe noodi lühike heli Web Audio API-ga (kutsuda kasutajategevuse kontekstis).
-function playTone(audioContextRef, frequency, durationMs = 280) {
+function playTone(audioContextRef, frequency, durationMs = 280, smoothPlayback = false) {
   try {
     let ctx = audioContextRef.current;
     if (!ctx) {
@@ -18496,10 +18792,16 @@ function playTone(audioContextRef, frequency, durationMs = 280) {
     osc.type = 'sine';
     osc.frequency.setValueAtTime(frequency, ctx.currentTime);
     gain.gain.setValueAtTime(0, ctx.currentTime);
-    gain.gain.linearRampToValueAtTime(0.2, ctx.currentTime + 0.02);
-    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + durationMs / 1000);
+    const tEnd = ctx.currentTime + durationMs / 1000;
+    if (smoothPlayback) {
+      gain.gain.linearRampToValueAtTime(0.14, ctx.currentTime + 0.012);
+      gain.gain.linearRampToValueAtTime(0.001, tEnd);
+    } else {
+      gain.gain.linearRampToValueAtTime(0.2, ctx.currentTime + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.01, tEnd);
+    }
     osc.start(ctx.currentTime);
-    osc.stop(ctx.currentTime + durationMs / 1000);
+    osc.stop(tEnd);
     return () => {
       try { osc.stop(); } catch (_) {}
     };

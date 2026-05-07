@@ -22,6 +22,7 @@ import {
   smuflPrecomposedTypeForDurationLabel,
   SMUFL_MUSIC_FONT_FAMILY,
 } from '../notation/smufl/glyphs';
+import { smuflArticulationGlyph } from '../notation/articulationCatalog';
 import {
   TIME_SIG_LAYOUT,
   TIME_SIG_SPACING,
@@ -2065,6 +2066,23 @@ export function TraditionalNotationView({
                                 y={dotY}
                                 glyph={SMUFL_GLYPH.augmentationDot}
                                 fontSize={glyphFontSize}
+                                fill={noteFillColor}
+                                dominantBaseline="central"
+                              />
+                            );
+                          })()}
+                          {note.articulation && (() => {
+                            const ag = smuflArticulationGlyph(note.articulation, stemUp);
+                            if (!ag) return null;
+                            const afs = spacing * 1.05;
+                            const ady = stemUp ? -spacing * 0.95 : spacing * 0.95;
+                            return (
+                              <SmuflGlyph
+                                key="artic"
+                                x={noteX}
+                                y={noteY + ady}
+                                glyph={ag}
+                                fontSize={afs}
                                 fill={noteFillColor}
                                 dominantBaseline="central"
                               />
