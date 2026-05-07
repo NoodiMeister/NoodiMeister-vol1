@@ -34,7 +34,6 @@ html, body, #root {
   padding: 15mm; /* Turvaala, et noodid ei läheks äärtesse */
   margin: 10px auto;
   background: white;
-  box-shadow: 0 0 10px rgba(0,0,0,0.1);
   box-sizing: border-box;
   overflow: hidden;
   position: relative;
@@ -463,8 +462,10 @@ html, body, #root {
   width: 100%;
 }
 
-/* PDF export capture: eemaldab teksti-põhise tühimiku (3–4 px nihe), lukustab tausta. */
-.noodimeister-export-capture,
+/* PDF export: ühtlane valge paber (ekraanil võib olla transparent + nm-score-page-stripes). */
+.noodimeister-export-capture.sheet-music-page {
+  background: #fff !important;
+}
 .noodimeister-export-capture div,
 .noodimeister-export-capture svg,
 .noodimeister-export-capture img {
@@ -504,7 +505,6 @@ html, body, #root {
   right: 0;
   height: 0;
   border-top: 1px solid rgba(148, 163, 184, 0.9);
-  box-shadow: 0 10px 14px -14px rgba(2, 6, 23, 0.28);
 }
 .nm-page-separator-line-v {
   position: absolute;
@@ -512,11 +512,16 @@ html, body, #root {
   bottom: 0;
   width: 0;
   border-left: 1px solid rgba(148, 163, 184, 0.9);
-  box-shadow: 10px 0 14px -14px rgba(2, 6, 23, 0.28);
 }
 
 /* Never show separators in export capture or print. */
 .noodimeister-export-capture .nm-page-separator-overlay {
+  display: none !important;
+}
+
+/* Ekraan: eraldi lehed laua vahega (nm-score-page-stripes); trükis/ekspordil üks pidev paber. */
+.noodimeister-export-capture .nm-score-page-stripes,
+.print .nm-score-page-stripes {
   display: none !important;
 }
 

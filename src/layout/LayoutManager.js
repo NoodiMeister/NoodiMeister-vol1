@@ -21,6 +21,13 @@ export function getScorePageDimensions (orientation, paperSize = 'a4') {
 }
 
 export const LAYOUT = {
+  /**
+   * Peab klappima `index.css` → `.sheet-music-page { padding }`.
+   * Paigutus kasutab sisemist sisu kasti (paber – padding), et portrait↔landscape ei murraks sisu vale kõrguse järgi.
+   */
+  SCORE_SHEET_PADDING_MM: 15,
+  /** Vertikaalne vahe ekraanil lehtede vahel (laua taust); peab klappima Timeline `physicalPageGapPx`. */
+  SCORE_DESK_PAGE_GAP_PX: 28,
   /** Lehe laius/kõrgus px (96 DPI), vaikimisi A4 portrait. */
   PAGE_WIDTH_PX: DEFAULT_PAGE_DIMS.width,
   PAGE_HEIGHT_PX: DEFAULT_PAGE_DIMS.height,

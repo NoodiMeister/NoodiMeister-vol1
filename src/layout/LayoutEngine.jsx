@@ -135,6 +135,20 @@ function calculateFigureGrid(data, availableWidth, availablePageHeight = 0) {
   const effectiveWidth = Math.max(200, rawEffectiveWidth - edgeSafetyPadPx);
 
   const pageHeight = availablePageHeight > 0 ? availablePageHeight : null;
+  /** Esimese lehe noodiala on lühem kui täisleht, kui pealkiri/autor on SVG-st eraldiseisev (vt noodimeister-complete). */
+  const headerReserveRaw = Number(data?.notationPageHeaderReservePx);
+  const headerReserve = (pageHeight != null && pageHeight > 0 && Number.isFinite(headerReserveRaw) && headerReserveRaw > 0)
+    ? Math.min(Math.max(0, headerReserveRaw), Math.max(0, pageHeight - 120))
+    : 0;
+  const firstPageBodyH = pageHeight != null ? Math.max(120, pageHeight - headerReserve) : 0;
+  const restPageH = pageHeight != null ? pageHeight : 0;
+  const pageContentBottomForY = (y) => {
+    if (pageHeight == null || pageHeight <= 0) return Infinity;
+    if (y < firstPageBodyH) return firstPageBodyH;
+    const rem = y - firstPageBodyH;
+    const idx = Math.floor(rem / restPageH);
+    return firstPageBodyH + (idx + 1) * restPageH;
+  };
 
   if (measures.length === 0) {
     return [{
@@ -177,11 +191,10 @@ function calculateFigureGrid(data, availableWidth, availablePageHeight = 0) {
     const userPageBreak = rowIndices.some((m) => pageBreakBefore.has(m + 1));
     let doPageBreak = userPageBreak;
     if (pageHeight != null && pageHeight > 0 && sIndex > 0) {
-      const pageTop = Math.floor(systemY / pageHeight) * pageHeight;
-      const pageBottom = pageTop + pageHeight;
-      if (systemY + staffSpacing > pageBottom) {
+      const bottom = pageContentBottomForY(systemY);
+      if (systemY + staffSpacing > bottom) {
         doPageBreak = true;
-        systemY = pageBottom;
+        systemY = bottom;
       }
     }
 
