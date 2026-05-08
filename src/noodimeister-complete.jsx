@@ -8813,6 +8813,28 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     getBeatAtNoteIndex, saveToHistory, setNotes, setSaveFeedback,
   ]);
 
+  const applyLegatoSlurRemoveForPair = useCallback((pair) => {
+    if (notationStyle === 'FIGURENOTES' || (notationMode !== 'traditional' && notationMode !== 'vabanotatsioon')) return;
+    if (!pair) return;
+    const { startId, endId } = pair;
+    if (startId == null || endId == null) return;
+    const sIdx = notes.findIndex((x) => x && Number(x.id) === Number(startId));
+    const eIdx = notes.findIndex((x) => x && Number(x.id) === Number(endId));
+    if (sIdx < 0 || eIdx < 0) return;
+    saveToHistory(notes);
+    setNotes((prev) => {
+      const withIds = prev.map((n, k) => ({ ...n, id: n.id != null ? n.id : Date.now() + k * 0.0001 }));
+      const a0 = { ...withIds[sIdx] };
+      const b0 = { ...withIds[eIdx] };
+      delete a0.slurTo; delete a0.slurFrom;
+      delete b0.slurTo; delete b0.slurFrom;
+      withIds[sIdx] = a0;
+      withIds[eIdx] = b0;
+      return withIds;
+    });
+    dirtyRef.current = true;
+  }, [notationStyle, notationMode, notes, saveToHistory, setNotes]);
+
   /** Kui on üks noot valitud — kaare alg- või lõpp-ankur, tagasta { startId, endId } pildi / klahvijoone jaoks. */
   const activeLegatoSlurPair = useMemo(() => {
     if (notationStyle === 'FIGURENOTES' || (notationMode !== 'traditional' && notationMode !== 'vabanotatsioon')) {
@@ -8988,28 +9010,6 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       </div>
     );
   };
-
-  const applyLegatoSlurRemoveForPair = useCallback((pair) => {
-    if (notationStyle === 'FIGURENOTES' || (notationMode !== 'traditional' && notationMode !== 'vabanotatsioon')) return;
-    if (!pair) return;
-    const { startId, endId } = pair;
-    if (startId == null || endId == null) return;
-    const sIdx = notes.findIndex((x) => x && Number(x.id) === Number(startId));
-    const eIdx = notes.findIndex((x) => x && Number(x.id) === Number(endId));
-    if (sIdx < 0 || eIdx < 0) return;
-    saveToHistory(notes);
-    setNotes((prev) => {
-      const withIds = prev.map((n, k) => ({ ...n, id: n.id != null ? n.id : Date.now() + k * 0.0001 }));
-      const a0 = { ...withIds[sIdx] };
-      const b0 = { ...withIds[eIdx] };
-      delete a0.slurTo; delete a0.slurFrom;
-      delete b0.slurTo; delete b0.slurFrom;
-      withIds[sIdx] = a0;
-      withIds[eIdx] = b0;
-      return withIds;
-    });
-    dirtyRef.current = true;
-  }, [notationStyle, notationMode, notes, saveToHistory, setNotes]);
 
   const applyLegatoSlurExtendForPair = useCallback((pair) => {
     if (notationStyle === 'FIGURENOTES' || (notationMode !== 'traditional' && notationMode !== 'vabanotatsioon')) return;
