@@ -8813,6 +8813,29 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     getBeatAtNoteIndex, saveToHistory, setNotes, setSaveFeedback,
   ]);
 
+  /** Kui on üks noot valitud — kaare alg- või lõpp-ankur, tagasta { startId, endId } pildi / klahvijoone jaoks. */
+  const activeLegatoSlurPair = useMemo(() => {
+    if (notationStyle === 'FIGURENOTES' || (notationMode !== 'traditional' && notationMode !== 'vabanotatsioon')) {
+      return null;
+    }
+    const hasRange = selectionStart >= 0 && selectionEnd >= 0;
+    const isSingle = !hasRange
+      ? selectedNoteIndex >= 0
+      : (Math.min(selectionStart, selectionEnd) === Math.max(selectionStart, selectionEnd));
+    if (!isSingle) return null;
+    const idx = hasRange ? Math.min(selectionStart, selectionEnd) : selectedNoteIndex;
+    if (idx < 0 || idx >= notes.length) return null;
+    const n = notes[idx];
+    if (!n || n.isRest) return null;
+    if (n.slurTo && !n.slurFrom) {
+      return { startId: n.id, endId: n.slurTo };
+    }
+    if (n.slurFrom) {
+      return { startId: n.slurFrom, endId: n.id };
+    }
+    return null;
+  }, [notationStyle, notationMode, selectionStart, selectionEnd, selectedNoteIndex, notes]);
+
   /** Noodipea tööriistakasti "Legato kaar" nupp (pointer click). */
   const applySlurFromToolbox = useCallback(() => {
     if (noteInputMode) {
@@ -8897,29 +8920,6 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     noteInputMode, notationStyle, notationMode, selectionStart, selectionEnd, selectedNoteIndex, activeLegatoSlurPair,
     notes, noteIndexAtCursor, getBeatAtNoteIndex, applySlurToSelection, applyLegatoSlurRemoveForPair, saveToHistory, setNotes, setSaveFeedback,
   ]);
-
-  /** Kui on üks noot valitud — kaare alg- või lõpp-ankur, tagasta { startId, endId } pildi / klahvijoone jaoks. */
-  const activeLegatoSlurPair = useMemo(() => {
-    if (notationStyle === 'FIGURENOTES' || (notationMode !== 'traditional' && notationMode !== 'vabanotatsioon')) {
-      return null;
-    }
-    const hasRange = selectionStart >= 0 && selectionEnd >= 0;
-    const isSingle = !hasRange
-      ? selectedNoteIndex >= 0
-      : (Math.min(selectionStart, selectionEnd) === Math.max(selectionStart, selectionEnd));
-    if (!isSingle) return null;
-    const idx = hasRange ? Math.min(selectionStart, selectionEnd) : selectedNoteIndex;
-    if (idx < 0 || idx >= notes.length) return null;
-    const n = notes[idx];
-    if (!n || n.isRest) return null;
-    if (n.slurTo && !n.slurFrom) {
-      return { startId: n.id, endId: n.slurTo };
-    }
-    if (n.slurFrom) {
-      return { startId: n.slurFrom, endId: n.id };
-    }
-    return null;
-  }, [notationStyle, notationMode, selectionStart, selectionEnd, selectedNoteIndex, notes]);
 
   /** Noodipea horisontaalriba: legato + artikulatsioon (sama loogika mis tööriistakastis). */
   const renderNoteheadArticulationRibbon = () => {
