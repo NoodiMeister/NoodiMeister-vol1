@@ -562,6 +562,8 @@ export function TraditionalNotationView({
   lyricLineYOffset = 0,
   isHorizontal = false,
   a4PageHeight = 400,
+  /** Horisontaalvoos lehtede vahe (px); lükkab järgmise lehe süsteeme X-suunas. */
+  horizontalPageGapPx = 0,
   getStaffHeight = () => 140,
   showStaffSpacerHandles = false,
   onStaffSpacerMouseDown, // (systemIndex) => (e) => { ... } – ridade vertikaalne liigutamine (Layout)
@@ -919,7 +921,8 @@ export function TraditionalNotationView({
       {systems.map((sys) => {
         const systemOffsetX = Number(systemXOffsets?.[sys.systemIndex]) || 0;
         const pageIndex = isHorizontal ? Math.floor(sys.yOffset / a4PageHeight) : 0;
-        const groupTransform = isHorizontal && pageWidth ? `translate(${pageIndex * pageWidth}, ${-pageIndex * a4PageHeight})` : undefined;
+        const hGap = Math.max(0, Number(horizontalPageGapPx) || 0);
+        const groupTransform = isHorizontal && pageWidth ? `translate(${pageIndex * (pageWidth + hGap)}, ${-pageIndex * a4PageHeight})` : undefined;
         /** Top/bottom staff lines for full system (all staves); used for bracket + connected barlines — not per-row `staffY`. */
         const systemTopStaffLineY = sys.yOffset + firstLineY;
         const systemBottomStaffLineY =

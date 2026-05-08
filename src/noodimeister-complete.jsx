@@ -2259,6 +2259,11 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   const [partLayoutLineBreakBefore, setPartLayoutLineBreakBefore] = useState([]);
   const [partLayoutPageBreakBefore, setPartLayoutPageBreakBefore] = useState([]);
   const [partLayoutExtraPages, setPartLayoutExtraPages] = useState(0);
+  /** Ekraanivaates lehtede vaheline „laua“ riba (px); kehtib vertikaal- ja horisontaalvoos. PDF/trükk järgivad endiselt ühte paberit. */
+  const [layoutDeskPageGapPx, setLayoutDeskPageGapPx] = useState(LAYOUT.SCORE_DESK_PAGE_GAP_PX);
+  const [partLayoutDeskPageGapPx, setPartLayoutDeskPageGapPx] = useState(LAYOUT.SCORE_DESK_PAGE_GAP_PX);
+  /** Noolte samm (1–300 px) lehevahe suurendamiseks/vähendamiseks. */
+  const [deskPageGapAdjustStepPx, setDeskPageGapAdjustStepPx] = useState(4);
   const [showPageNavigator, setShowPageNavigator] = useState(false);
   const [showPedagogicalVideoRuler, setShowPedagogicalVideoRuler] = useState(false);
   /** When true, scale the score so one A4 page fits in the visible area (whole page layout on screen). */
@@ -4697,6 +4702,9 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     layoutLineBreakBefore,
     layoutPageBreakBefore,
     layoutExtraPages,
+    layoutDeskPageGapPx,
+    partLayoutDeskPageGapPx,
+    deskPageGapAdjustStepPx,
     layoutSystemGap,
     layoutPartsGap,
     layoutPartsGapMm,
@@ -4813,7 +4821,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     lyricFontSize,
     noteheadShape,
     noteheadEmoji
-  }), [staves, activeStaffIndex, staffYOffsets, measureStretchFactors, systemYOffsets, systemXOffsets, visibleStaves, instrumentPartGroups, intermissionLabels, timeSignature, timeSignatureMode, keySignature, staffLines, notationStyle, pixelsPerBeat, notationMode, instrumentNotationVariant, linkedNotationByStaffId, tinWhistleLinkedFingeringScalePercent, cursorPosition, addedMeasures, measureRepeatMarks, setupCompleted, songTitle, author, pickupEnabled, pickupQuantity, pickupDuration, pageOrientation, paperSize, layoutMeasuresPerLine, layoutStrictMeasuresPerLine, layoutLineBreakBefore, layoutPageBreakBefore, layoutExtraPages, layoutSystemGap, layoutPartsGap, layoutPartsGapMm, layoutSizeUnit, layoutConnectedBarlines, layoutGlobalSpacingMultiplier, notationCtx?.globalSpacingMultiplier, notationCtx?.staffSpacing, notationCtx?.measureWidthMultiplier, viewMode, partLayoutMeasuresPerLine, partLayoutStrictMeasuresPerLine, partLayoutLineBreakBefore, partLayoutPageBreakBefore, partLayoutExtraPages, showPageNavigator, showPedagogicalVideoRuler, pageFlowDirection, viewFitPage, viewSmartPage, visibleToolIds, tuningReferenceNote, tuningReferenceOctave, tuningReferenceHz, playNoteOnInsert, figurenotesSize, figurenotesStems, figurenotesChordLineGap, figurenotesChordBlocks, figurenotesChordBlocksShowTones, figurenotesMelodyShowNoteNames, timeSignatureSize, pedagogicalTimeSigDenominatorType, pedagogicalTimeSigDenominatorColor, pedagogicalTimeSigDenominatorInstrument, pedagogicalTimeSigDenominatorEmoji, singleLineBarlineHalfSpanPx, singleLineBarlineThicknessPx, showBarNumbers, barNumberSize, voltaNumberSize, showRhythmSyllables, showAllNoteLabels, enableEmojiOverlays, joClefStaffPosition, relativeNotationShowKeySignature, relativeNotationShowTraditionalClef, isPedagogicalProject, pedagogicalAudioBpm, pedagogicalAudioPlaybackRate, pedagogicalSyncMode, pedagogicalSyncStartBeat, pedagogicalSyncStartTimeSec, pedagogicalSyncEndBeat, pedagogicalSyncEndTimeSec, pedagogicalLoopEnabled, pedagogicalLoopCount, pedagogicalCues, pedagogicalRhythmStep, pedagogicalPlayheadStyle, pedagogicalPlayheadEmoji, pedagogicalPlayheadEmojiSize, cursorLineStrokeWidth, pedagogicalPlayheadMovement, rhythmCursorColor, rhythmCursorOpacity, rhythmCursorWidthMultiplier, rhythmCursorHighContrast, chords, textBoxes, documentFontFamily, lyricFontFamily, lyricBold, lyricItalic, lyricUnderline, lyricWeight, titleFontSize, authorFontSize, titleFontFamily, authorFontFamily, titleColor, authorColor, titleBold, titleItalic, titleUnderline, titleWeight, authorBold, authorItalic, authorUnderline, authorWeight, titleAlignment, authorAlignment, staffRowAlignment, pageDesignDataUrl, pageDesignOpacity, pageDesignFit, pageDesignPositionX, pageDesignPositionY, pageDesignCrop, timeSignatureOffset, lyricLineIndex, lyricLineYOffset, lyricFontSize, noteheadShape, noteheadEmoji]);
+  }), [staves, activeStaffIndex, staffYOffsets, measureStretchFactors, systemYOffsets, systemXOffsets, visibleStaves, instrumentPartGroups, intermissionLabels, timeSignature, timeSignatureMode, keySignature, staffLines, notationStyle, pixelsPerBeat, notationMode, instrumentNotationVariant, linkedNotationByStaffId, tinWhistleLinkedFingeringScalePercent, cursorPosition, addedMeasures, measureRepeatMarks, setupCompleted, songTitle, author, pickupEnabled, pickupQuantity, pickupDuration, pageOrientation, paperSize, layoutMeasuresPerLine, layoutStrictMeasuresPerLine, layoutLineBreakBefore, layoutPageBreakBefore, layoutExtraPages, layoutDeskPageGapPx, partLayoutDeskPageGapPx, deskPageGapAdjustStepPx, layoutSystemGap, layoutPartsGap, layoutPartsGapMm, layoutSizeUnit, layoutConnectedBarlines, layoutGlobalSpacingMultiplier, notationCtx?.globalSpacingMultiplier, notationCtx?.staffSpacing, notationCtx?.measureWidthMultiplier, viewMode, partLayoutMeasuresPerLine, partLayoutStrictMeasuresPerLine, partLayoutLineBreakBefore, partLayoutPageBreakBefore, partLayoutExtraPages, showPageNavigator, showPedagogicalVideoRuler, pageFlowDirection, viewFitPage, viewSmartPage, visibleToolIds, tuningReferenceNote, tuningReferenceOctave, tuningReferenceHz, playNoteOnInsert, figurenotesSize, figurenotesStems, figurenotesChordLineGap, figurenotesChordBlocks, figurenotesChordBlocksShowTones, figurenotesMelodyShowNoteNames, timeSignatureSize, pedagogicalTimeSigDenominatorType, pedagogicalTimeSigDenominatorColor, pedagogicalTimeSigDenominatorInstrument, pedagogicalTimeSigDenominatorEmoji, singleLineBarlineHalfSpanPx, singleLineBarlineThicknessPx, showBarNumbers, barNumberSize, voltaNumberSize, showRhythmSyllables, showAllNoteLabels, enableEmojiOverlays, joClefStaffPosition, relativeNotationShowKeySignature, relativeNotationShowTraditionalClef, isPedagogicalProject, pedagogicalAudioBpm, pedagogicalAudioPlaybackRate, pedagogicalSyncMode, pedagogicalSyncStartBeat, pedagogicalSyncStartTimeSec, pedagogicalSyncEndBeat, pedagogicalSyncEndTimeSec, pedagogicalLoopEnabled, pedagogicalLoopCount, pedagogicalCues, pedagogicalRhythmStep, pedagogicalPlayheadStyle, pedagogicalPlayheadEmoji, pedagogicalPlayheadEmojiSize, cursorLineStrokeWidth, pedagogicalPlayheadMovement, rhythmCursorColor, rhythmCursorOpacity, rhythmCursorWidthMultiplier, rhythmCursorHighContrast, chords, textBoxes, documentFontFamily, lyricFontFamily, lyricBold, lyricItalic, lyricUnderline, lyricWeight, titleFontSize, authorFontSize, titleFontFamily, authorFontFamily, titleColor, authorColor, titleBold, titleItalic, titleUnderline, titleWeight, authorBold, authorItalic, authorUnderline, authorWeight, titleAlignment, authorAlignment, staffRowAlignment, pageDesignDataUrl, pageDesignOpacity, pageDesignFit, pageDesignPositionX, pageDesignPositionY, pageDesignCrop, timeSignatureOffset, lyricLineIndex, lyricLineYOffset, lyricFontSize, noteheadShape, noteheadEmoji]);
 
   const saveToStorageSync = useCallback(() => {
     try {
@@ -5168,6 +5176,9 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       if (Array.isArray(data.layoutLineBreakBefore)) setLayoutLineBreakBefore(data.layoutLineBreakBefore);
       if (Array.isArray(data.layoutPageBreakBefore)) setLayoutPageBreakBefore(data.layoutPageBreakBefore);
       if (data.layoutExtraPages != null) setLayoutExtraPages(Math.max(0, Math.round(Number(data.layoutExtraPages) || 0)));
+      if (data.layoutDeskPageGapPx != null) setLayoutDeskPageGapPx(Math.max(0, Math.min(600, Math.round(Number(data.layoutDeskPageGapPx) || 0))));
+      if (data.partLayoutDeskPageGapPx != null) setPartLayoutDeskPageGapPx(Math.max(0, Math.min(600, Math.round(Number(data.partLayoutDeskPageGapPx) || 0))));
+      if (data.deskPageGapAdjustStepPx != null) setDeskPageGapAdjustStepPx(Math.max(1, Math.min(300, Math.round(Number(data.deskPageGapAdjustStepPx) || 4))));
       if (data.layoutSystemGap != null) setLayoutSystemGap(Math.max(5, Math.min(250, Number(data.layoutSystemGap))));
       if (data.layoutPartsGap != null) setLayoutPartsGap(Math.max(2, Math.min(80, Number(data.layoutPartsGap))));
       if (data.layoutPartsGapMm != null) setLayoutPartsGapMm(Math.max(0, Math.min(100, Number(data.layoutPartsGapMm))));
@@ -5511,6 +5522,9 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         if (Array.isArray(data.layoutLineBreakBefore)) setLayoutLineBreakBefore(data.layoutLineBreakBefore);
         if (Array.isArray(data.layoutPageBreakBefore)) setLayoutPageBreakBefore(data.layoutPageBreakBefore);
         if (data.layoutExtraPages != null) setLayoutExtraPages(Math.max(0, Math.round(Number(data.layoutExtraPages) || 0)));
+        if (data.layoutDeskPageGapPx != null) setLayoutDeskPageGapPx(Math.max(0, Math.min(600, Math.round(Number(data.layoutDeskPageGapPx) || 0))));
+        if (data.partLayoutDeskPageGapPx != null) setPartLayoutDeskPageGapPx(Math.max(0, Math.min(600, Math.round(Number(data.partLayoutDeskPageGapPx) || 0))));
+        if (data.deskPageGapAdjustStepPx != null) setDeskPageGapAdjustStepPx(Math.max(1, Math.min(300, Math.round(Number(data.deskPageGapAdjustStepPx) || 4))));
         if (data.layoutSystemGap != null) setLayoutSystemGap(Math.max(5, Math.min(250, Number(data.layoutSystemGap))));
         if (data.layoutPartsGap != null) setLayoutPartsGap(Math.max(2, Math.min(80, Number(data.layoutPartsGap))));
         if (data.layoutPartsGapMm != null) setLayoutPartsGapMm(Math.max(0, Math.min(100, Number(data.layoutPartsGapMm))));
@@ -6823,6 +6837,9 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       layoutLineBreakBefore,
       layoutPageBreakBefore,
       layoutExtraPages,
+      layoutDeskPageGapPx,
+      partLayoutDeskPageGapPx,
+      deskPageGapAdjustStepPx,
       layoutSystemGap,
       layoutPartsGap,
       layoutPartsGapMm,
@@ -6849,6 +6866,9 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     layoutLineBreakBefore,
     layoutPageBreakBefore,
     layoutExtraPages,
+    layoutDeskPageGapPx,
+    partLayoutDeskPageGapPx,
+    deskPageGapAdjustStepPx,
     layoutSystemGap,
     layoutPartsGap,
     layoutPartsGapMm,
@@ -6897,6 +6917,9 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
           if (Array.isArray(layout.layoutLineBreakBefore)) setLayoutLineBreakBefore(layout.layoutLineBreakBefore);
           if (Array.isArray(layout.layoutPageBreakBefore)) setLayoutPageBreakBefore(layout.layoutPageBreakBefore);
           if (layout.layoutExtraPages != null) setLayoutExtraPages(Math.max(0, Math.round(Number(layout.layoutExtraPages) || 0)));
+          if (layout.layoutDeskPageGapPx != null) setLayoutDeskPageGapPx(Math.max(0, Math.min(600, Math.round(Number(layout.layoutDeskPageGapPx) || 0))));
+          if (layout.partLayoutDeskPageGapPx != null) setPartLayoutDeskPageGapPx(Math.max(0, Math.min(600, Math.round(Number(layout.partLayoutDeskPageGapPx) || 0))));
+          if (layout.deskPageGapAdjustStepPx != null) setDeskPageGapAdjustStepPx(Math.max(1, Math.min(300, Math.round(Number(layout.deskPageGapAdjustStepPx) || 4))));
           if (layout.layoutSystemGap != null) setLayoutSystemGap(Math.max(5, Math.min(250, Number(layout.layoutSystemGap))));
           if (layout.layoutPartsGap != null) setLayoutPartsGap(Math.max(2, Math.min(80, Number(layout.layoutPartsGap))));
           if (layout.layoutPartsGapMm != null) setLayoutPartsGapMm(Math.max(0, Math.min(100, Number(layout.layoutPartsGapMm))));
@@ -6936,6 +6959,9 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         if (Array.isArray(layout.layoutLineBreakBefore)) setLayoutLineBreakBefore(layout.layoutLineBreakBefore);
         if (Array.isArray(layout.layoutPageBreakBefore)) setLayoutPageBreakBefore(layout.layoutPageBreakBefore);
         if (layout.layoutExtraPages != null) setLayoutExtraPages(Math.max(0, Math.round(Number(layout.layoutExtraPages) || 0)));
+        if (layout.layoutDeskPageGapPx != null) setLayoutDeskPageGapPx(Math.max(0, Math.min(600, Math.round(Number(layout.layoutDeskPageGapPx) || 0))));
+        if (layout.partLayoutDeskPageGapPx != null) setPartLayoutDeskPageGapPx(Math.max(0, Math.min(600, Math.round(Number(layout.partLayoutDeskPageGapPx) || 0))));
+        if (layout.deskPageGapAdjustStepPx != null) setDeskPageGapAdjustStepPx(Math.max(1, Math.min(300, Math.round(Number(layout.deskPageGapAdjustStepPx) || 4))));
         if (layout.layoutSystemGap != null) setLayoutSystemGap(Math.max(5, Math.min(250, Number(layout.layoutSystemGap))));
         if (layout.layoutPartsGap != null) setLayoutPartsGap(Math.max(2, Math.min(80, Number(layout.layoutPartsGap))));
         if (layout.layoutPartsGapMm != null) setLayoutPartsGapMm(Math.max(0, Math.min(100, Number(layout.layoutPartsGapMm))));
@@ -11218,6 +11244,10 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   const effectiveLayoutLineBreakBefore = viewMode === 'score' ? layoutLineBreakBefore : partLayoutLineBreakBefore;
   const effectiveLayoutPageBreakBefore = viewMode === 'score' ? layoutPageBreakBefore : partLayoutPageBreakBefore;
   const effectiveLayoutExtraPages = viewMode === 'score' ? layoutExtraPages : partLayoutExtraPages;
+  const effectiveDeskPageGapPx = Math.max(
+    0,
+    Math.min(600, Math.round(Number(viewMode === 'score' ? layoutDeskPageGapPx : partLayoutDeskPageGapPx) || 0)),
+  );
   const scoreContainerRef = useRef(null);
   const scoreContentRef = useRef(null); // noodiala sisu (pealkiri + SVG); tekstikastid kasutavad scoreContainerRef koordinaate
   const textboxInteractionRef = useRef(null); // { type: 'move'|'resize', id, startX, startY, boxStartX?, boxStartY?, boxStartW?, boxStartH?, handle? }
@@ -11470,12 +11500,12 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     return Math.max(1, countVerticalScoreSheets(notationBody, notationFirstPageBodyPx, scorePageInnerHeight) + extra);
   }, [logicalContentHeight, scorePageInnerHeight, scoreHeadBlockReservePx, notationFirstPageBodyPx, effectiveLayoutExtraPages]);
   const scoreVerticalDeskGapPx = useMemo(() => (
-    pageFlowDirection === 'horizontal' || scoreNotationPageCount <= 1 ? 0 : LAYOUT.SCORE_DESK_PAGE_GAP_PX
-  ), [pageFlowDirection, scoreNotationPageCount]);
+    pageFlowDirection === 'horizontal' || scoreNotationPageCount <= 1 ? 0 : effectiveDeskPageGapPx
+  ), [pageFlowDirection, scoreNotationPageCount, effectiveDeskPageGapPx]);
   useEffect(() => {
-    const gapTotal = pageFlowDirection !== 'horizontal' && scoreNotationPageCount > 1 ? (scoreNotationPageCount - 1) * LAYOUT.SCORE_DESK_PAGE_GAP_PX : 0;
+    const gapTotal = pageFlowDirection !== 'horizontal' && scoreNotationPageCount > 1 ? (scoreNotationPageCount - 1) * effectiveDeskPageGapPx : 0;
     exportContentBoundsRef.current = { width: basePageWidth, height: logicalContentHeight + gapTotal };
-  }, [basePageWidth, logicalContentHeight, pageFlowDirection, scoreNotationPageCount]);
+  }, [basePageWidth, logicalContentHeight, pageFlowDirection, scoreNotationPageCount, effectiveDeskPageGapPx]);
   const exportLayoutSnapshot = useMemo(() => ({
     source: notationStyle === 'FIGURENOTES' ? 'figurenotes-layout' : 'traditionalMultiStaffGeometry',
     notationStyle,
@@ -16159,6 +16189,56 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                         </div>
                       </div>
                       <div className="mb-3">
+                        <h4 className="text-xs font-bold text-amber-900 uppercase mb-1">{t('layout.deskPageGap')}</h4>
+                        <p className="text-xs text-amber-700 mb-1">{t('layout.deskPageGapHint')}</p>
+                        <div className="flex flex-wrap items-center gap-2 mb-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              dirtyRef.current = true;
+                              const step = Math.max(1, Math.min(300, Math.round(Number(deskPageGapAdjustStepPx) || 1)));
+                              if (viewMode === 'score') setLayoutDeskPageGapPx((g) => Math.max(0, Math.min(600, (Number(g) || 0) - step)));
+                              else setPartLayoutDeskPageGapPx((g) => Math.max(0, Math.min(600, (Number(g) || 0) - step)));
+                            }}
+                            className="px-2.5 py-1.5 rounded-lg bg-amber-100 text-amber-900 text-sm font-bold hover:bg-amber-200 border border-amber-300 min-w-[2.25rem]"
+                            aria-label="Vähenda lehtede vahet"
+                          >
+                            −
+                          </button>
+                          <span className="text-sm font-semibold text-amber-900 tabular-nums min-w-[4.5rem] text-center">{effectiveDeskPageGapPx} px</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              dirtyRef.current = true;
+                              const step = Math.max(1, Math.min(300, Math.round(Number(deskPageGapAdjustStepPx) || 1)));
+                              if (viewMode === 'score') setLayoutDeskPageGapPx((g) => Math.max(0, Math.min(600, (Number(g) || 0) + step)));
+                              else setPartLayoutDeskPageGapPx((g) => Math.max(0, Math.min(600, (Number(g) || 0) + step)));
+                            }}
+                            className="px-2.5 py-1.5 rounded-lg bg-amber-100 text-amber-900 text-sm font-bold hover:bg-amber-200 border border-amber-300 min-w-[2.25rem]"
+                            aria-label="Suurenda lehtede vahet"
+                          >
+                            +
+                          </button>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-xs text-amber-800">{t('layout.deskPageGapStep')}</span>
+                          <input
+                            type="number"
+                            min={1}
+                            max={300}
+                            step={1}
+                            value={deskPageGapAdjustStepPx}
+                            onChange={(e) => {
+                              const v = Math.max(1, Math.min(300, Math.round(Number(e.target.value) || 1)));
+                              dirtyRef.current = true;
+                              setDeskPageGapAdjustStepPx(v);
+                            }}
+                            className="w-16 px-2 py-1 rounded border-2 border-amber-200 bg-amber-50 text-amber-900 text-sm tabular-nums"
+                          />
+                          <span className="text-[11px] text-amber-700">{t('layout.deskPageGapStepHint')}</span>
+                        </div>
+                      </div>
+                      <div className="mb-3">
                         <label className="flex items-start gap-2 cursor-pointer">
                           <input
                             type="checkbox"
@@ -16277,7 +16357,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                         <button type="button" title={t('layout.compressMeasureShortcut')} onClick={() => { saveToHistory(notes); dirtyRef.current = true; setMeasureStretchFactors((prev) => { const next = [...(prev || [])]; while (next.length <= cursorMeasureIndex) next.push(1); next[cursorMeasureIndex] = Math.max(0.25, (next[cursorMeasureIndex] ?? 1) - 0.1); return next; }); }} className="py-1.5 px-2 rounded bg-slate-100 text-slate-800 hover:bg-slate-200 font-medium">{t('layout.compressMeasure')}</button>
                         <button type="button" title={t('layout.stretchMeasureShortcut')} onClick={() => { saveToHistory(notes); dirtyRef.current = true; setMeasureStretchFactors((prev) => { const next = [...(prev || [])]; while (next.length <= cursorMeasureIndex) next.push(1); next[cursorMeasureIndex] = Math.min(4, (next[cursorMeasureIndex] ?? 1) + 0.1); return next; }); }} className="py-1.5 px-2 rounded bg-slate-100 text-slate-800 hover:bg-slate-200 font-medium">{t('layout.stretchMeasure')}</button>
                       </div>
-                      <button type="button" onClick={() => { saveToHistory(notes); dirtyRef.current = true; (viewMode === 'score' ? setLayoutLineBreakBefore : setPartLayoutLineBreakBefore)([]); (viewMode === 'score' ? setLayoutPageBreakBefore : setPartLayoutPageBreakBefore)([]); (viewMode === 'score' ? setLayoutMeasuresPerLine : setPartLayoutMeasuresPerLine)(0); (viewMode === 'score' ? setLayoutStrictMeasuresPerLine : setPartLayoutStrictMeasuresPerLine)(true); (viewMode === 'score' ? setLayoutExtraPages : setPartLayoutExtraPages)(0); setMeasureStretchFactors([]); setSystemYOffsets([]); setSystemXOffsets([]); setLayoutSystemGap(15); setLayoutPartsGap(10); setLayoutConnectedBarlines(true); setLayoutGlobalSpacingMultiplier(1); pixelsPerBeatLinkedToFigureSizeRef.current = true; setPixelsPerBeat(85); setFigurenotesSize(85); }} className="mt-3 w-full py-2 px-3 rounded-lg bg-slate-100 text-slate-800 text-sm font-semibold hover:bg-slate-200 border border-slate-300" title={t('layout.resetLayoutHint')}>{t('layout.resetLayout')}</button>
+                      <button type="button" onClick={() => { saveToHistory(notes); dirtyRef.current = true; (viewMode === 'score' ? setLayoutLineBreakBefore : setPartLayoutLineBreakBefore)([]); (viewMode === 'score' ? setLayoutPageBreakBefore : setPartLayoutPageBreakBefore)([]); (viewMode === 'score' ? setLayoutMeasuresPerLine : setPartLayoutMeasuresPerLine)(0); (viewMode === 'score' ? setLayoutStrictMeasuresPerLine : setPartLayoutStrictMeasuresPerLine)(true); (viewMode === 'score' ? setLayoutExtraPages : setPartLayoutExtraPages)(0); setMeasureStretchFactors([]); setSystemYOffsets([]); setSystemXOffsets([]); setLayoutSystemGap(15); setLayoutPartsGap(10); setLayoutDeskPageGapPx(LAYOUT.SCORE_DESK_PAGE_GAP_PX); setPartLayoutDeskPageGapPx(LAYOUT.SCORE_DESK_PAGE_GAP_PX); setDeskPageGapAdjustStepPx(4); setLayoutConnectedBarlines(true); setLayoutGlobalSpacingMultiplier(1); pixelsPerBeatLinkedToFigureSizeRef.current = true; setPixelsPerBeat(85); setFigurenotesSize(85); }} className="mt-3 w-full py-2 px-3 rounded-lg bg-slate-100 text-slate-800 text-sm font-semibold hover:bg-slate-200 border border-slate-300" title={t('layout.resetLayoutHint')}>{t('layout.resetLayout')}</button>
                     </div>
                     {pageDesignDataUrl && (
                       <>
@@ -17034,9 +17114,11 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
             const pw = effectiveLayoutPageWidth;
             // Terve leht või tark: kas loogiline kõrgus või tegelik scroll kõrgus
             const contentH = logicalContentHeight || 800;
-            const verticalDeskGapTotal = (!isHorizontalFlow && totalPagesVal > 1) ? (totalPagesVal - 1) * LAYOUT.SCORE_DESK_PAGE_GAP_PX : 0;
+            const verticalDeskGapTotal = (!isHorizontalFlow && totalPagesVal > 1) ? (totalPagesVal - 1) * effectiveDeskPageGapPx : 0;
+            const horizontalDeskGapTotal = (isHorizontalFlow && totalPagesVal > 1) ? (totalPagesVal - 1) * effectiveDeskPageGapPx : 0;
+            const horizontalContentWidth = totalPagesVal * pw + horizontalDeskGapTotal;
             const contentHWithExtraPages = isHorizontalFlow ? contentH : Math.max(contentH, totalPagesVal * scorePageInnerHeight) + scorePaddingYPx + verticalDeskGapTotal;
-            const baseW = isHorizontalFlow ? totalPagesVal * pw : (viewFitOrSmart ? pw * fitPageScale : pw);
+            const baseW = isHorizontalFlow ? horizontalContentWidth : (viewFitOrSmart ? pw * fitPageScale : pw);
             const baseH = isHorizontalFlow ? a4PageHeightVal : contentHWithExtraPages;
             const handleFitToWidth = () => {
               const viewW = mainRef.current?.clientWidth ?? 800;
@@ -17068,7 +17150,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
           >
           <div
             className={isHorizontalFlow ? 'flex-shrink-0' : ''}
-            style={isHorizontalFlow ? { width: totalPagesVal * pw, height: a4PageHeightVal } : undefined}
+            style={isHorizontalFlow ? { width: horizontalContentWidth, height: a4PageHeightVal } : undefined}
           >
           {/* Terve leht: A4 täidab vaateakna (scale=1). Tark lehe vaade: skaleerib noteeritud ala. */}
           <div
@@ -17080,16 +17162,21 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
             >
           <div
             ref={scoreContainerRef}
-            className={`noodimeister-print-area A4-page-container sheet-music-page print-page-${paperSize}-${pageFlowDirection === 'horizontal' ? 'landscape' : pageOrientation} relative flex-1 transition-colors ${viewFitPage && !viewSmartPage ? 'ml-0' : 'mx-auto'} ${isHorizontalFlow ? '' : 'border border-slate-300 dark:border-slate-600'}`}
+            className={`noodimeister-print-area A4-page-container sheet-music-page print-page-${paperSize}-${pageFlowDirection === 'horizontal' ? 'landscape' : pageOrientation} relative flex-1 transition-colors ${viewFitPage && !viewSmartPage ? 'ml-0' : 'mx-auto'} ${(!isHorizontalFlow && totalPagesVal <= 1) ? 'border border-slate-300 dark:border-slate-600' : ''}`}
             style={{
               backgroundColor: (totalPagesVal > 1 && !isHorizontalFlow) ? 'transparent' : scorePagePaperBackground,
               minWidth: LAYOUT.PAGE_WIDTH_MIN,
               /* Fikseeritud lehe laius: ei sõltu seadme/brauseri laiusest (iPad, tahvel, MacBook, PC). */
               ...(viewFitPage && !viewSmartPage ? {} : { width: basePageWidth, maxWidth: basePageWidth }),
               /* Portrait: border-box minHeight = padding + sisu (lehtede sisekõrgused). */
-              minHeight: isHorizontalFlow ? a4PageHeightVal : scorePaddingYPx + Math.max(scorePageInnerHeight * totalPagesVal, 500, getStaffHeight() + LAYOUT.SYSTEM_GAP + getStaffHeight() + 120) + verticalDeskGapTotal,
+              minHeight: isHorizontalFlow
+                ? a4PageHeightVal
+                : Math.max(
+                    a4PageHeightVal * totalPagesVal,
+                    scorePaddingYPx + Math.max(scorePageInnerHeight * totalPagesVal, 500, getStaffHeight() + LAYOUT.SYSTEM_GAP + getStaffHeight() + 120),
+                  ) + verticalDeskGapTotal,
               ...(viewFitPage && !viewSmartPage ? { width: pw, boxSizing: 'border-box' } : { boxSizing: 'border-box' }),
-              ...(isHorizontalFlow ? { width: totalPagesVal * pw, height: a4PageHeightVal } : {}),
+              ...(isHorizontalFlow ? { width: horizontalContentWidth, height: a4PageHeightVal } : {}),
             }}
             onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; e.currentTarget.classList.add('ring-2', 'ring-amber-400', 'ring-offset-2'); }}
             onDragLeave={(e) => { e.currentTarget.classList.remove('ring-2', 'ring-amber-400', 'ring-offset-2'); }}
@@ -17138,9 +17225,9 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                   data-export-ignore
                   className="nm-score-page-stripes pointer-events-none absolute z-0 flex flex-col"
                   style={{
-                    top: scorePadMm * pxPerMm,
-                    left: scorePadMm * pxPerMm,
-                    right: scorePadMm * pxPerMm,
+                    top: 0,
+                    left: 0,
+                    right: 0,
                   }}
                 >
                   {Array.from({ length: totalPagesVal }, (_, i) => (
@@ -17149,8 +17236,8 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                         <div
                           className="nm-score-desk-gap flex-shrink-0"
                           style={{
-                            height: LAYOUT.SCORE_DESK_PAGE_GAP_PX,
-                            minHeight: LAYOUT.SCORE_DESK_PAGE_GAP_PX,
+                            height: effectiveDeskPageGapPx,
+                            minHeight: effectiveDeskPageGapPx,
                             background: 'transparent',
                           }}
                         />
@@ -17158,8 +17245,8 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                       <div
                         className="flex-shrink-0"
                         style={{
-                          height: scorePageInnerHeight,
-                          minHeight: scorePageInnerHeight,
+                          height: a4PageHeightVal,
+                          minHeight: a4PageHeightVal,
                           backgroundColor: scorePagePaperBackground,
                         }}
                       />
@@ -17216,11 +17303,11 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                   ))}
                 </div>
               )}
-              {isHorizontalFlow && totalPagesVal > 1 && (
+              {totalPagesVal > 1 && (
               <PageSeparatorsOverlay
                 totalPages={totalPagesVal}
-                pageWidth={isHorizontalFlow ? pw : scoreContentWidth}
-                pageHeight={scorePageInnerHeight}
+                pageWidth={isHorizontalFlow ? pw + effectiveDeskPageGapPx : scoreContentWidth}
+                pageHeight={isHorizontalFlow ? scorePageInnerHeight : (scorePageInnerHeight + effectiveDeskPageGapPx)}
                 isHorizontal={isHorizontalFlow}
                 scrollTop={mainScrollTop}
                 scrollLeft={mainScrollLeft}
@@ -17248,8 +17335,8 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                     (viewMode === 'score' ? setLayoutExtraPages : setPartLayoutExtraPages)((prev) => Math.max(0, (Number(prev) || 0) - 1));
                   };
                   const pageIndex = Math.max(0, (Number(totalPagesVal) || 1) - 1);
-                  const left = (isHorizontalFlow ? pageIndex * pw : 0) + pw - 58;
-                  const pageStride = scorePageInnerHeight + ((!isHorizontalFlow && totalPagesVal > 1) ? LAYOUT.SCORE_DESK_PAGE_GAP_PX : 0);
+                  const left = (isHorizontalFlow ? pageIndex * (pw + effectiveDeskPageGapPx) : 0) + pw - 58;
+                  const pageStride = scorePageInnerHeight + ((!isHorizontalFlow && totalPagesVal > 1) ? effectiveDeskPageGapPx : 0);
                   const top = (isHorizontalFlow ? 0 : scorePadMm * pxPerMm + pageIndex * pageStride) + 10;
                   return (
                     <div style={{ position: 'absolute', left, top, display: 'flex', gap: 6, pointerEvents: 'auto' }}>
@@ -17279,7 +17366,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                 }
                 const numPagesVertical = totalPagesVal;
                 if (numPagesVertical <= 0) return null;
-                const vPageStride = scorePageInnerHeight + (numPagesVertical > 1 ? LAYOUT.SCORE_DESK_PAGE_GAP_PX : 0);
+                const vPageStride = scorePageInnerHeight + (numPagesVertical > 1 ? effectiveDeskPageGapPx : 0);
                 if ((pageDesignFit === 'cover' || pageDesignFit === 'contain') && numPagesVertical >= 1) {
                   return (
                     <div aria-hidden="true" className="absolute inset-0" style={designWrapperStyle}>
@@ -17643,7 +17730,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                   pageOrientation={pageOrientation}
                   notationLayoutPageHeight={scorePageInnerHeight}
                   notationFirstPageBodyPx={notationFirstPageBodyPx}
-                  physicalPageGapPx={scoreVerticalDeskGapPx}
+                  physicalPageGapPx={effectiveDeskPageGapPx}
                   disablePhysicalPageGaps={showPdfExportPreview}
                   hideCursorOverlay={showPdfExportPreview || isExportingPdf}
                   timeSignature={timeSignature}
@@ -18326,7 +18413,9 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
             );
           if (totalPages <= 1) return null;
           const pageStepV = viewFitOrSmart ? (scorePageInnerHeight + scoreVerticalDeskGapPx) * fitPageScale : (scorePageInnerHeight + scoreVerticalDeskGapPx);
-          const pageStepH = viewFitOrSmart ? a4PageWidth * fitPageScale : a4PageWidth;
+          const pageStepH = viewFitOrSmart
+            ? (a4PageWidth + (totalPages > 1 ? effectiveDeskPageGapPx : 0)) * fitPageScale
+            : (a4PageWidth + (totalPages > 1 ? effectiveDeskPageGapPx : 0));
           const currentPage = isHorizontalFlow
             ? Math.min(totalPages, Math.max(1, Math.floor(mainScrollLeft / pageStepH) + 1))
             : Math.min(totalPages, Math.max(1, Math.floor(mainScrollTop / pageStepV) + 1));
@@ -19048,14 +19137,15 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
   };
   const totalPages = Math.max(1, totalPagesFromContentHeight(totalHeightLogical));
   // Screen-only "physical page gaps" like MuseScore/Docs (keeps logical layout & export intact).
-  const pageGapPx = (!disablePhysicalPageGaps && !isHorizontal) ? Math.max(0, Number(physicalPageGapPx) || 0) : 0;
-  const systemsForDisplay = pageGapPx > 0
+  const verticalPageGapPx = (!disablePhysicalPageGaps && !isHorizontal) ? Math.max(0, Number(physicalPageGapPx) || 0) : 0;
+  const horizontalPageGapPx = (!disablePhysicalPageGaps && isHorizontal) ? Math.max(0, Number(physicalPageGapPx) || 0) : 0;
+  const systemsForDisplay = verticalPageGapPx > 0
     ? systems.map((sys) => {
         const pageIndex = physicalPageIndexForLayoutY(sys.yOffset || 0);
-        return { ...sys, yOffset: (sys.yOffset || 0) + pageIndex * pageGapPx };
+        return { ...sys, yOffset: (sys.yOffset || 0) + pageIndex * verticalPageGapPx };
       })
     : systems;
-  const totalHeight = pageGapPx > 0 ? (totalHeightLogical + Math.max(0, totalPages - 1) * pageGapPx) : totalHeightLogical;
+  const totalHeight = verticalPageGapPx > 0 ? (totalHeightLogical + Math.max(0, totalPages - 1) * verticalPageGapPx) : totalHeightLogical;
   const centerY = timelineHeight / 2;
   const pw = pageWidth || LAYOUT.PAGE_WIDTH_MIN;
   const marginLeft = isFigurenotesMode && systemsComputed.length > 0
@@ -19615,9 +19705,11 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
     return null;
   })();
 
-  const svgWidth = isHorizontal ? totalPages * (pageWidth || LAYOUT.PAGE_WIDTH_MIN) : '100%';
+  const svgWidth = isHorizontal
+    ? totalPages * pw + Math.max(0, totalPages - 1) * horizontalPageGapPx
+    : '100%';
   const svgHeight = isHorizontal ? a4PageHeight : totalHeight;
-  var viewBoxW = typeof svgWidth === 'number' ? svgWidth : (pageWidth || LAYOUT.PAGE_WIDTH_MIN);
+  var viewBoxW = typeof svgWidth === 'number' ? svgWidth : pw;
   var viewBoxH = typeof svgHeight === 'number' ? svgHeight : totalHeight;
 
   return (
@@ -19689,6 +19781,7 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
           lyricReserveHeight={figurenotesLyricReserveHeight}
           isHorizontal={isHorizontal}
           a4PageHeight={a4PageHeight}
+          horizontalPageGapPx={horizontalPageGapPx}
           pageFlowDirection={pageFlowDirection}
           figureBaseWidth={FIGURE_BASE_WIDTH * (layoutGlobalSpacingMultiplier ?? 1)}
           showStaffSpacerHandles={showStaffSpacerHandles && typeof onSystemYOffsetChange === 'function'}
@@ -19775,6 +19868,7 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
           lyricLineYOffset={lyricLineYOffset}
           isHorizontal={isHorizontal}
           a4PageHeight={a4PageHeight}
+          horizontalPageGapPx={horizontalPageGapPx}
           staffSpace={spacing}
           singleLineBarlineHalfSpanPx={singleLineBarlineHalfSpanPx}
           singleLineBarlineThicknessPx={singleLineBarlineThicknessPx}

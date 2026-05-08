@@ -503,6 +503,7 @@ export function FigurenotesView({
   lyricReserveHeight = 0,
   isHorizontal = false,
   a4PageHeight = 400,
+  horizontalPageGapPx = 0,
   pageFlowDirection = "vertical",
   figureBaseWidth = FIGURE_BASE_WIDTH,
   showStaffSpacerHandles = false,
@@ -861,9 +862,10 @@ export function FigurenotesView({
         const pageIndex = isHorizontal
           ? Math.floor(sys.yOffset / a4PageHeight)
           : 0;
+        const hGap = Math.max(0, Number(horizontalPageGapPx) || 0);
         const groupTransform =
           isHorizontal && pageWidth
-            ? `translate(${pageIndex * pageWidth}, ${-pageIndex * a4PageHeight})`
+            ? `translate(${pageIndex * (pageWidth + hGap)}, ${-pageIndex * a4PageHeight})`
             : undefined;
         return (
           <g key={sys.systemIndex} transform={groupTransform}>
@@ -3491,7 +3493,6 @@ export function FigurenotesView({
                         </>
                       );
                     })()}
-                  })}
                 </g>
               );
             });
