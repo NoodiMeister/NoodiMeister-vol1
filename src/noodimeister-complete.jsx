@@ -11371,6 +11371,8 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     interStaffGapPx: traditionalPartsGapPxEffective,
     getStaffHeight: notationStyle === 'FIGURENOTES' ? getStaffHeight : () => traditionalScoredHeightPx,
   });
+  /** Pealkiri/autor (pt-6, mb-4, kaks rida) — pole süsteemide lastY sees; zoom/absolute kõrgus peab seda arvestama. */
+  const scoreHeadBlockReservePx = notationMode === 'vabanotatsioon' ? 220 : 140;
   const systemsForScore = useMemo(() => {
     if (notationStyle === 'FIGURENOTES') {
       const figureStaffStep = figurenotesTotalRowHeight + layoutPartsGap;
@@ -11416,8 +11418,6 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     useManualOffsets: useManualStaffOffsets,
     staffYOffsets,
   }), [visibleStaffList, staves, traditionalStaffStepPx, traditionalPartsGapPxEffective, useManualStaffOffsets, staffYOffsets]);
-  /** Pealkiri/autor (pt-6, mb-4, kaks rida) — pole süsteemide lastY sees; zoom/absolute kõrgus peab seda arvestama. */
-  const scoreHeadBlockReservePx = notationMode === 'vabanotatsioon' ? 220 : 140;
   /** Esimene leht: noodialale jääv vertikaal (täislehest miinus pealkirjaruum), klappib LayoutEngine + Timeline füüsilise vahega. */
   const notationFirstPageBodyPx = Math.max(120, scorePageInnerHeight - Math.min(scoreHeadBlockReservePx, Math.max(0, scorePageInnerHeight - 120)));
   const logicalContentHeight = useMemo(() => {
