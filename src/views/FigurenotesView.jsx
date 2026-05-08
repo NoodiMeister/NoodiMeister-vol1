@@ -26,8 +26,10 @@ import { measureLengthInQuarterBeats } from "../musical/timeSignature";
 import { getAccidentalForPitchInKey } from "../utils/notationConstants";
 import {
   TIME_SIG_LAYOUT,
+  TIME_SIG_SPACING,
   getFigureTimeSignatureX,
 } from "../notation/TimeSignatureLayout";
+import { ensureMinGlyphHorizontalGapPx } from "../notation/glyphSpacing";
 import {
   getLeftBarlineRepeatRender,
   shouldDrawRepeatEndGlyphOnRight,
@@ -53,6 +55,23 @@ const FIGURE_REPEAT_DOT_NOTE_CLEARANCE_PX = 10;
 const FIGURE_REPEAT_NOTE_MIN_GAP_PX = 3;
 /** Reference size (px) for which bar line and padding design values were chosen. */
 const NOTATION_SIZE_REF = 75;
+
+/** Volta / jump marks: anchor Y above the top staff line (one bracket per system — not per row). */
+function getFigurenotesVoltaMarkerAnchorY({
+  sys,
+  padVertical,
+  notationScale,
+  combinedRows,
+  instrumentCount,
+}) {
+  const firstStaffTopY = sys.yOffset + padVertical;
+  const baseLift = Math.max(10, Math.round(12 * notationScale));
+  const multiStaffBoost =
+    combinedRows && instrumentCount > 1
+      ? Math.max(8, Math.round(10 * notationScale))
+      : 0;
+  return firstStaffTopY - baseLift - multiStaffBoost;
+}
 
 /**
  * Horizontal space reserved left/right of the beat grid for repeat SMuFL barlines.
@@ -454,6 +473,43 @@ function renderTimeSignature(
   );
 }
 
+/** Horisontaalne ulatus figuurnotatsiooni taktimõõdu keskpunktist paremale (ligikaudu sama skaala mis renderTimeSignature). */
+function estimateFigurenotesTimeSignatureRightExtentPx(
+  timeSignature,
+  timeSignatureMode,
+  notationSize = TIME_SIG_REF,
+) {
+  const beats = timeSignature?.beats ?? 4;
+  const beatUnit = timeSignature?.beatUnit ?? 4;
+  const scale = Math.max(0.25, (notationSize || TIME_SIG_REF) / TIME_SIG_REF);
+  const L = TIME_SIG_LAYOUT;
+  const fNum = Math.max(8, Math.round(18 * scale));
+  const fDen = Math.max(8, Math.round(18 * scale));
+  const fDenFallback = Math.max(8, Math.round(16 * scale));
+  const lineHalf = L.LINE_HALF * scale;
+  const spacingNum = fNum * 0.5;
+  const dBeats = Math.max(1, String(Math.floor(Number(beats) || 0)).length);
+  const halfNum = ((dBeats - 1) * spacingNum) / 2 + fNum * 0.44;
+  if (timeSignatureMode !== "pedagogical") {
+    const dDen = Math.max(1, String(Math.floor(Number(beatUnit) || 0)).length);
+    const spacingDen = fDen * 0.5;
+    const halfDen = ((dDen - 1) * spacingDen) / 2 + fDen * 0.44;
+    return Math.max(lineHalf, halfNum, halfDen) + 1;
+  }
+  const noteXOfs = L.NOTE_X_OFFSET * scale;
+  const bu = Math.floor(Number(beatUnit) || 4);
+  let denRight = 0;
+  if (bu === 1) denRight = noteXOfs + L.WHOLE_RX * scale + 1;
+  else if (bu === 2 || bu === 4 || bu === 8 || bu === 16) {
+    denRight = noteXOfs + L.ELLIPSE_RX * scale + 3 * scale;
+  } else {
+    const dDen = Math.max(1, String(bu).length);
+    const sp = fDenFallback * 0.5;
+    denRight = noteXOfs + ((dDen - 1) * sp) / 2 + fDenFallback * 0.44;
+  }
+  return Math.max(lineHalf, halfNum, denRight) + 1;
+}
+
 export function FigurenotesView({
   systems,
   effectiveMeasures,
@@ -547,6 +603,30 @@ export function FigurenotesView({
   const beatsPerMeasure = measureLengthInQuarterBeats(timeSignature);
   const timeSigTextColor = themeColors?.textColor ?? "#333";
   const timeSigNoteFill = themeColors?.noteFill ?? "#333";
+
+  const figureFirstSystemTimeSigBaseX = useMemo(() => {
+    const sys = systems?.[0];
+    if (!sys || sys.systemIndex !== 0) return null;
+    const firstMeasureIdx = sys.measureIndices?.[0];
+    const firstMeasure =
+      typeof firstMeasureIdx === "number" ? layoutSourceMeasures?.[firstMeasureIdx] : null;
+    const hasRepeatStartAtRowStart = !!firstMeasure?.repeatStart;
+    return hasRepeatStartAtRowStart
+      ? getFigureTimeSignatureX(marginLeft) -
+        FIGURE_TIME_SIG_REPEAT_START_CLEARANCE_PX -
+        FIGURE_TIME_SIGNATURE_LEFT_SHIFT_PX
+      : getFigureTimeSignatureX(marginLeft);
+  }, [systems, layoutSourceMeasures, marginLeft]);
+
+  const figureFirstSystemTimeSigRightExtent = useMemo(
+    () =>
+      estimateFigurenotesTimeSignatureRightExtentPx(
+        timeSignature,
+        timeSignatureMode,
+        timeSignatureSize,
+      ),
+    [timeSignature, timeSignatureMode, timeSignatureSize],
+  );
 
   /** Scale beat-box padding and barlines with Noodigraafika suurus so they match note size. */
   const notationScale = Math.max(0.5, figurenotesSize / NOTATION_SIZE_REF);
@@ -712,9 +792,15 @@ export function FigurenotesView({
 
   useEffect(() => {
     if (!timeSigDrag || typeof onTimeSignatureOffsetChange !== "function") return;
+    const gap = ensureMinGlyphHorizontalGapPx(TIME_SIG_SPACING.BEFORE_FIRST_MEASURE_PX);
+    const maxOffsetX =
+      figureFirstSystemTimeSigBaseX != null && Number.isFinite(marginLeft)
+        ? marginLeft - gap - figureFirstSystemTimeSigRightExtent - figureFirstSystemTimeSigBaseX
+        : Infinity;
     const onMove = (e) => {
+      const rawX = timeSigDrag.startOffsetX + (e.clientX - timeSigDrag.startClientX);
       onTimeSignatureOffsetChange({
-        x: timeSigDrag.startOffsetX + (e.clientX - timeSigDrag.startClientX),
+        x: Number.isFinite(maxOffsetX) ? Math.min(rawX, maxOffsetX) : rawX,
         y: timeSigDrag.startOffsetY + (e.clientY - timeSigDrag.startClientY),
       });
     };
@@ -725,7 +811,35 @@ export function FigurenotesView({
       window.removeEventListener("mousemove", onMove);
       window.removeEventListener("mouseup", onUp);
     };
-  }, [timeSigDrag, onTimeSignatureOffsetChange]);
+  }, [
+    timeSigDrag,
+    onTimeSignatureOffsetChange,
+    marginLeft,
+    figureFirstSystemTimeSigBaseX,
+    figureFirstSystemTimeSigRightExtent,
+  ]);
+
+  useEffect(() => {
+    if (timeSigDrag || typeof onTimeSignatureOffsetChange !== "function") return;
+    if (figureFirstSystemTimeSigBaseX == null || !Number.isFinite(marginLeft)) return;
+    const gap = ensureMinGlyphHorizontalGapPx(TIME_SIG_SPACING.BEFORE_FIRST_MEASURE_PX);
+    const maxOffsetX =
+      marginLeft - gap - figureFirstSystemTimeSigRightExtent - figureFirstSystemTimeSigBaseX;
+    if (!Number.isFinite(maxOffsetX)) return;
+    const ox = Number(timeSignatureOffset?.x);
+    const oy = Number(timeSignatureOffset?.y);
+    if (!Number.isFinite(ox)) return;
+    if (ox <= maxOffsetX + 0.25) return;
+    onTimeSignatureOffsetChange({ x: maxOffsetX, y: Number.isFinite(oy) ? oy : 0 });
+  }, [
+    timeSigDrag,
+    onTimeSignatureOffsetChange,
+    timeSignatureOffset?.x,
+    timeSignatureOffset?.y,
+    marginLeft,
+    figureFirstSystemTimeSigBaseX,
+    figureFirstSystemTimeSigRightExtent,
+  ]);
 
   useEffect(() => {
     if (!systemDrag) return;
@@ -2073,9 +2187,13 @@ export function FigurenotesView({
                                   </g>
                                 )}
                                 {(() => {
-                                  const markerY =
-                                    sys.yOffset +
-                                    Math.max(10, 12 * notationScale);
+                                  const markerY = getFigurenotesVoltaMarkerAnchorY({
+                                    sys,
+                                    padVertical,
+                                    notationScale,
+                                    combinedRows,
+                                    instrumentCount: instruments.length,
+                                  });
                                   const markers = [];
                                   if (mBar.segno) markers.push({ key: "segno", label: "segno", glyph: SMUFL_GLYPH.segno });
                                   if (mBar.coda) markers.push({ key: "coda", label: "coda", glyph: SMUFL_GLYPH.coda });
@@ -3379,9 +3497,13 @@ export function FigurenotesView({
                             </g>
                           )}
                           {(() => {
-                            const markerY =
-                              sys.yOffset +
-                              Math.max(10, 12 * notationScale);
+                            const markerY = getFigurenotesVoltaMarkerAnchorY({
+                              sys,
+                              padVertical,
+                              notationScale,
+                              combinedRows,
+                              instrumentCount: instruments.length,
+                            });
                             const markers = [];
                             if (measureBar.segno) markers.push({ key: "segno", label: "segno", glyph: SMUFL_GLYPH.segno });
                             if (measureBar.coda) markers.push({ key: "coda", label: "coda", glyph: SMUFL_GLYPH.coda });

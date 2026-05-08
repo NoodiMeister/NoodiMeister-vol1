@@ -27,8 +27,12 @@ import {
   TIME_SIG_LAYOUT,
   TIME_SIG_SPACING,
   getTraditionalTimeSignatureX,
+  getTraditionalTimeSignaturePreferredX,
   estimateKeySignatureWidthPx,
+  estimateClassicTimeSignatureRightExtentPx,
+  estimatePedagogicalTimeSignatureRightExtentPx,
   getPedagogicalTimeSignatureX,
+  getPedagogicalTimeSignaturePreferredX,
   getPedagogicalRelativeKeySignatureWidthPx,
   getKeySignatureStepPx,
 } from '../notation/TimeSignatureLayout';
@@ -636,10 +640,9 @@ export function TraditionalNotationView({
     return () => window.removeEventListener('noodimeister-optional-fonts-changed', handleOptionalFontsChanged);
   }, []);
 
-  // Layout: must be before measureLayout useMemo (which uses effectiveMarginLeft)
+  // Layout: must be before measureLayout useMemo (which uses first-system measure start)
   const staffLeft = (isFirstInBraceGroup && braceGroupSize >= 2) ? STAFF_LEFT_WITH_BRACE : STAFF_LEFT_WITHOUT_BRACE;
   const clefX = staffLeft + GAP_BEFORE_CLEF_PX + (Number(clefHandOffset?.x) || 0);
-  const timeSigWidthPx = 28;
   const isSingleLineRhythmStaff = staffLines === 1;
   const singleLineBarHalfSpanSetting = Math.max(1, Math.min(500, Math.round(Number(singleLineBarlineHalfSpanPx) || 20)));
   const singleLineBarThicknessSetting = Math.max(1, Math.min(500, Math.round(Number(singleLineBarlineThicknessPx) || 2)));
@@ -661,33 +664,113 @@ export function TraditionalNotationView({
     LAYOUT.CLEF_WIDTH +
     keySigWidthWorstCase +
     (keySigWidthWorstCase > 0 ? TIME_SIG_SPACING.GAP_AFTER_KEY_SIG_BEFORE_TIME_SIG_PX : 0);
-  const minContentStart = isSingleLineRhythmStaff
-    ? (
-      staffLeft +
-      1 +
-      singleLineTimeSigBoxWidth +
-      singleLineTimeSigGapPx
-    )
-    : (
-      staffLeft +
-      1 +
-      (isVabanotatsioon ? pedagogicalLeftPrefixWorstCase : traditionalLeftPrefixWorstCase) +
-      timeSigWidthPx +
-      2
-    );
-  const effectiveMarginLeft = Math.max(marginLeft, minContentStart);
+  /** Clef + key (+ pedagoogiline JO) — enne taktimõõtu; sama kõikidel süsteemidel. */
+  const prefixCoreNonSingle = staffLeft + 1 + (isVabanotatsioon ? pedagogicalLeftPrefixWorstCase : traditionalLeftPrefixWorstCase);
+  /** Vahe võtmemärgi ja esimese takti sisu vahel, kui taktimõõtu pole joonistatud (2.+ süsteem). */
+  const continuationGapBeforeMeasuresPx = ensureMinGlyphHorizontalGapPx(TIME_SIG_SPACING.BEFORE_FIRST_MEASURE_PX);
+  const gapBeforeFirstMeasureContent = ensureMinGlyphHorizontalGapPx(TIME_SIG_SPACING.BEFORE_FIRST_MEASURE_PX);
+  const beatsTs = Number(timeSignature?.beats) === Number(timeSignature?.beats) ? timeSignature.beats : 4;
+  const beatUnitTs = Number(timeSignature?.beatUnit) === Number(timeSignature?.beatUnit) ? timeSignature.beatUnit : 4;
+  const showTraditionalKeySignatureForLayout = !isVabanotatsioon && !!keySignature && keySignature !== 'C';
+  const showRelativeKeySignatureForLayout = isVabanotatsioon && relativeNotationShowKeySignature && !!keySignature && keySignature !== 'C';
+  const minContentStartFirstSystem = isSingleLineRhythmStaff
+    ? staffLeft + 1 + singleLineTimeSigBoxWidth + singleLineTimeSigGapPx
+    : isVabanotatsioon
+      ? getPedagogicalTimeSignaturePreferredX({
+          clefX,
+          clefColumnWidth: LAYOUT.CLEF_WIDTH,
+          showTraditionalClef: relativeNotationShowTraditionalClef,
+          keySigCount: showRelativeKeySignatureForLayout ? keySignatureInfo.count : 0,
+          ksFontSize: ksFontForLayout,
+          joClefWidthPx: getJoClefPixelWidth(spacing),
+        }) +
+        estimatePedagogicalTimeSignatureRightExtentPx(spacing, beatsTs, beatUnitTs, {
+          denominatorType: pedagogicalTimeSigDenominatorType,
+        }) +
+        gapBeforeFirstMeasureContent
+      : getTraditionalTimeSignaturePreferredX({
+          clefX,
+          clefWidth: LAYOUT.CLEF_WIDTH,
+          keySigCount: showTraditionalKeySignatureForLayout ? keySignatureInfo.count : 0,
+          ksFontSize: ksFontForLayout,
+        }) +
+        estimateClassicTimeSignatureRightExtentPx(spacing, beatsTs, beatUnitTs) +
+        gapBeforeFirstMeasureContent;
+  const minContentStartContinuation = isSingleLineRhythmStaff
+    ? staffLeft + 1 + Math.max(12, Math.round(spacing * 2.4))
+    : prefixCoreNonSingle + continuationGapBeforeMeasuresPx;
+  const effectiveMarginLeftFirstSystem = Math.max(marginLeft, minContentStartFirstSystem);
+  const effectiveMarginLeftContinuation = Math.max(marginLeft, minContentStartContinuation);
+
+  const firstSystemTimeSignatureCenterX = React.useMemo(() => {
+    if (isSingleLineRhythmStaff) {
+      return effectiveMarginLeftFirstSystem - singleLineTimeSigGapPx - singleLineTimeSigBoxWidth / 2;
+    }
+    const ksFont = getGlyphFontSize(spacing);
+    if (isVabanotatsioon) {
+      return getPedagogicalTimeSignatureX({
+        clefX,
+        clefColumnWidth: LAYOUT.CLEF_WIDTH,
+        showTraditionalClef: relativeNotationShowTraditionalClef,
+        keySigCount: showRelativeKeySignatureForLayout ? keySignatureInfo.count : 0,
+        ksFontSize: ksFont,
+        joClefWidthPx: getJoClefPixelWidth(spacing),
+        measureStartX: effectiveMarginLeftFirstSystem,
+        staffSpace: spacing,
+        beats: beatsTs,
+        beatUnit: beatUnitTs,
+        pedagogicalDenominatorType: pedagogicalTimeSigDenominatorType,
+      });
+    }
+    return getTraditionalTimeSignatureX({
+      clefX,
+      clefWidth: LAYOUT.CLEF_WIDTH,
+      keySigCount: showTraditionalKeySignatureForLayout ? keySignatureInfo.count : 0,
+      ksFontSize: ksFont,
+      measureStartX: effectiveMarginLeftFirstSystem,
+      staffSpace: spacing,
+      beats: beatsTs,
+      beatUnit: beatUnitTs,
+    });
+  }, [
+    isSingleLineRhythmStaff,
+    effectiveMarginLeftFirstSystem,
+    singleLineTimeSigGapPx,
+    singleLineTimeSigBoxWidth,
+    isVabanotatsioon,
+    clefX,
+    relativeNotationShowTraditionalClef,
+    showRelativeKeySignatureForLayout,
+    keySignatureInfo.count,
+    spacing,
+    showTraditionalKeySignatureForLayout,
+    beatsTs,
+    beatUnitTs,
+    pedagogicalTimeSigDenominatorType,
+  ]);
+
+  const firstSystemTimeSignatureRightExtent = React.useMemo(() => {
+    if (isSingleLineRhythmStaff) return singleLineTimeSigBoxWidth / 2;
+    if (isVabanotatsioon) {
+      return estimatePedagogicalTimeSignatureRightExtentPx(spacing, beatsTs, beatUnitTs, {
+        denominatorType: pedagogicalTimeSigDenominatorType,
+      });
+    }
+    return estimateClassicTimeSignatureRightExtentPx(spacing, beatsTs, beatUnitTs);
+  }, [isSingleLineRhythmStaff, singleLineTimeSigBoxWidth, isVabanotatsioon, spacing, beatsTs, beatUnitTs, pedagogicalTimeSigDenominatorType]);
+
   useEffect(() => {
     if (typeof onMeasureStartXChange !== 'function') return;
-    onMeasureStartXChange(effectiveMarginLeft);
-  }, [effectiveMarginLeft, onMeasureStartXChange]);
+    onMeasureStartXChange(effectiveMarginLeftFirstSystem);
+  }, [effectiveMarginLeftFirstSystem, onMeasureStartXChange]);
 
-  // Measure layout for getBeatFromX (first system only; notation starts at effectiveMarginLeft after clef/key/time sig)
+  // Measure layout for getBeatFromX (first system only; notation starts after clef/key/time sig)
   const measureLayout = React.useMemo(() => {
     const sys = systems?.[0];
     if (!sys || !effectiveMeasuresProp) return [];
     const mw = sys.measureWidths ?? [];
     const beatsPerMeasure = measureLengthInQuarterBeats(timeSignature);
-    const left = effectiveMarginLeft;
+    const left = effectiveMarginLeftFirstSystem;
     return sys.measureIndices.map((measureIdx, j) => {
       const measure = effectiveMeasuresProp[measureIdx];
       if (!measure) return null;
@@ -697,7 +780,7 @@ export function TraditionalNotationView({
       const endBeat = measure.startBeat + (measure.beatCount ?? beatsPerMeasure);
       return { xStart, xEnd, startBeat, endBeat };
     }).filter(Boolean);
-  }, [systems, effectiveMeasuresProp, effectiveMarginLeft, timeSignature]);
+  }, [systems, effectiveMeasuresProp, effectiveMarginLeftFirstSystem, timeSignature]);
 
   const getBeatFromX = React.useCallback((x) => {
     const firstSystemOffsetX = Number(systemXOffsets?.[systems?.[0]?.systemIndex]) || 0;
@@ -759,9 +842,12 @@ export function TraditionalNotationView({
 
   useEffect(() => {
     if (!timeSigDrag || typeof onTimeSignatureOffsetChange !== 'function') return;
+    const gap = ensureMinGlyphHorizontalGapPx(TIME_SIG_SPACING.BEFORE_FIRST_MEASURE_PX);
+    const maxOffsetX = effectiveMarginLeftFirstSystem - gap - firstSystemTimeSignatureRightExtent - firstSystemTimeSignatureCenterX;
     const onMove = (e) => {
+      const rawX = timeSigDrag.startOffsetX + (e.clientX - timeSigDrag.startClientX);
       onTimeSignatureOffsetChange({
-        x: timeSigDrag.startOffsetX + (e.clientX - timeSigDrag.startClientX),
+        x: Math.min(rawX, maxOffsetX),
         y: timeSigDrag.startOffsetY + (e.clientY - timeSigDrag.startClientY),
       });
     };
@@ -772,7 +858,34 @@ export function TraditionalNotationView({
       window.removeEventListener('mousemove', onMove);
       window.removeEventListener('mouseup', onUp);
     };
-  }, [timeSigDrag, onTimeSignatureOffsetChange]);
+  }, [
+    timeSigDrag,
+    onTimeSignatureOffsetChange,
+    effectiveMarginLeftFirstSystem,
+    firstSystemTimeSignatureRightExtent,
+    firstSystemTimeSignatureCenterX,
+  ]);
+
+  /** Salvestatud / imporditud offset: ära luba taktimõõdul ulatuda esimese takti sisu alla (sh pärast laadimist). */
+  useEffect(() => {
+    if (timeSigDrag || typeof onTimeSignatureOffsetChange !== 'function') return;
+    const gap = ensureMinGlyphHorizontalGapPx(TIME_SIG_SPACING.BEFORE_FIRST_MEASURE_PX);
+    const maxOffsetX = effectiveMarginLeftFirstSystem - gap - firstSystemTimeSignatureRightExtent - firstSystemTimeSignatureCenterX;
+    if (!Number.isFinite(maxOffsetX)) return;
+    const ox = Number(timeSignatureOffset?.x);
+    const oy = Number(timeSignatureOffset?.y);
+    if (!Number.isFinite(ox)) return;
+    if (ox <= maxOffsetX + 0.25) return;
+    onTimeSignatureOffsetChange({ x: maxOffsetX, y: Number.isFinite(oy) ? oy : 0 });
+  }, [
+    timeSigDrag,
+    onTimeSignatureOffsetChange,
+    timeSignatureOffset?.x,
+    timeSignatureOffset?.y,
+    effectiveMarginLeftFirstSystem,
+    firstSystemTimeSignatureRightExtent,
+    firstSystemTimeSignatureCenterX,
+  ]);
 
   useEffect(() => {
     if (!systemDrag) return;
@@ -929,6 +1042,21 @@ export function TraditionalNotationView({
           sys.yOffset + (staffList.length - 1) * timelineHeight + lastLineY;
         const bracketTopY = systemTopStaffLineY;
         const bracketBottomY = systemBottomStaffLineY;
+        /** Taktimõõt ainult 1. süsteemil — lühem vasak eesliide jätkuritel (MuseScore / Sibelius). */
+        const measureAreaLeft = sys.systemIndex === 0 ? effectiveMarginLeftFirstSystem : effectiveMarginLeftContinuation;
+        const continuationLeftDelta = Math.max(0, effectiveMarginLeftFirstSystem - effectiveMarginLeftContinuation);
+        const beatsForLayoutWidths = measureLengthInQuarterBeats(timeSignature);
+        const measureWidthsBaseForSys =
+          sys.measureWidths ?? sys.measureIndices.map(() => sys.measureWidth ?? beatsForLayoutWidths * 80);
+        const continuationBoostPerMeasure =
+          sys.systemIndex > 0 && measureWidthsBaseForSys.length > 0
+            ? continuationLeftDelta / measureWidthsBaseForSys.length
+            : 0;
+        const adjustedMeasureWidthsForSys =
+          continuationBoostPerMeasure !== 0
+            ? measureWidthsBaseForSys.map((w) => w + continuationBoostPerMeasure)
+            : measureWidthsBaseForSys;
+        const totalMeasuresWidthThisSystem = adjustedMeasureWidthsForSys.reduce((a, b) => a + b, 0);
         return (
           <g key={sys.systemIndex} transform={groupTransform}>
             <g transform={systemOffsetX ? `translate(${systemOffsetX}, 0)` : undefined}>
@@ -936,7 +1064,7 @@ export function TraditionalNotationView({
               <rect
                 x={0}
                 y={sys.yOffset}
-                width={Math.max(Number(pageWidth) || 0, effectiveMarginLeft + (sys.measureWidths ?? []).reduce((a, b) => a + b, 0) + 120)}
+                width={Math.max(Number(pageWidth) || 0, measureAreaLeft + totalMeasuresWidthThisSystem + 120)}
                 height={timelineHeight * (multiStaff ? staffList.length : 1)}
                 fill="transparent"
                 style={{ cursor: 'grab' }}
@@ -1081,7 +1209,7 @@ export function TraditionalNotationView({
                       key={`staff-${sys.systemIndex}-${staffIndex}-${index}`}
                       x1={staffLeft}
                       y1={staffY + y}
-                      x2={effectiveMarginLeft + (sys.measureWidths ?? []).reduce((a, b) => a + b, 0)}
+                      x2={measureAreaLeft + totalMeasuresWidthThisSystem}
                       y2={staffY + y}
                       stroke="#000"
                       strokeWidth={getStaffLineThickness(spacing)}
@@ -1273,27 +1401,7 @@ export function TraditionalNotationView({
                   {/* Time signature only on first system (first bar); after clef and key marks */}
                   {sys.systemIndex === 0 && staffIndex === 0 && (
                     (() => {
-                      const keySigCount = shouldDrawAnyKeySignature ? keySignatureInfo.count : 0;
-                      const ksFont = getGlyphFontSize(spacing);
-                      const timeSigX = isSingleLineRhythmStaff
-                        ? (effectiveMarginLeft - singleLineTimeSigGapPx - singleLineTimeSigBoxWidth / 2)
-                        : isVabanotatsioon
-                        ? getPedagogicalTimeSignatureX({
-                            clefX,
-                            clefColumnWidth: LAYOUT.CLEF_WIDTH,
-                            showTraditionalClef: relativeNotationShowTraditionalClef,
-                            keySigCount: showRelativeKeySignature ? keySignatureInfo.count : 0,
-                            ksFontSize: ksFont,
-                            joClefWidthPx: getJoClefPixelWidth(spacing),
-                            measureStartX: effectiveMarginLeft,
-                          })
-                        : getTraditionalTimeSignatureX({
-                            clefX,
-                            clefWidth: LAYOUT.CLEF_WIDTH,
-                            keySigCount,
-                            ksFontSize: ksFont,
-                            measureStartX: effectiveMarginLeft,
-                          });
+                      const timeSigX = firstSystemTimeSignatureCenterX;
                       return (
                         <g
                           transform={`translate(${timeSigX + (Number(timeSignatureOffset?.x) || 0)}, ${staffY + (Number(timeSignatureOffset?.y) || 0)})`}
@@ -1348,7 +1456,8 @@ export function TraditionalNotationView({
                       staffResolvePitchY,
                       middleLineY,
                       isHandbellsStaff: isHandbellsStaffForTie,
-                      effectiveMarginLeft,
+                      effectiveMarginLeft: measureAreaLeft,
+                      measureWidthsOverride: adjustedMeasureWidthsForSys,
                     });
                     return (
                     <Fragment key={`ts-${sys.systemIndex}-${String(inst.id)}`}>
@@ -1363,9 +1472,9 @@ export function TraditionalNotationView({
                   prevMeasureInSystem,
                 });
                 const drawRepeatEndGlyphRight = shouldDrawRepeatEndGlyphOnRight(measure, nextMeasureInSystem);
-                const measureWidths = sys.measureWidths ?? sys.measureIndices.map(() => sys.measureWidth ?? beatsPerMeasure * 80);
+                const measureWidths = adjustedMeasureWidthsForSys;
                 const measureWidth = measureWidths[j] ?? (sys.measureWidth ?? beatsPerMeasure * 80);
-                const measureX = effectiveMarginLeft + measureWidths.slice(0, j).reduce((a, b) => a + b, 0);
+                const measureX = measureAreaLeft + measureWidths.slice(0, j).reduce((a, b) => a + b, 0);
                 const beatsInMeasure = measure.beatCount ?? beatsPerMeasure;
                 const beatWidth = measureWidth / beatsInMeasure;
 

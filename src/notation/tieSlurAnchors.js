@@ -172,13 +172,18 @@ export function buildTieSlurAnchorMapForStaffSystem({
   middleLineY,
   isHandbellsStaff,
   effectiveMarginLeft,
+  /** Optional per-system widths (e.g. continuation systems stretched after narrower left margin). */
+  measureWidthsOverride = null,
 }) {
   const merged = new Map();
   const list = Array.isArray(measureIndices) && measureIndices.length
     ? measureIndices
     : instMeasures.map((_, i) => i);
   const beatsPerMeasure = measureLengthInQuarterBeats(timeSignature);
-  const measureWidths = sys?.measureWidths ?? list.map(() => (sys?.measureWidth ?? beatsPerMeasure * 80));
+  const measureWidths =
+    Array.isArray(measureWidthsOverride) && measureWidthsOverride.length === list.length
+      ? measureWidthsOverride
+      : sys?.measureWidths ?? list.map(() => (sys?.measureWidth ?? beatsPerMeasure * 80));
   for (let j = 0; j < list.length; j += 1) {
     const measureIdx = list[j];
     const measure = instMeasures[measureIdx];

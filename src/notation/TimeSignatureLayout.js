@@ -44,8 +44,8 @@ export const TIME_SIG_SPACING = {
   MIN_GLYPH_HORIZONTAL_GAP_PX,
   /** Gap after clef column before first key-signature accidental (visual: tuck time sig after key). */
   AFTER_CLEF_PX: 2,
-  /** First key-sig accidental center X offset from clef’s right edge. */
-  KEY_SIG_FIRST_CENTER_OFFSET_PX: 0,
+  /** First key-sig accidental center X offset from clef’s right edge (negative = closer to clef, MuseScore-like). */
+  KEY_SIG_FIRST_CENTER_OFFSET_PX: -6,
   /** Fallback horizontal distance between consecutive key-signature accidentals. */
   KEY_SIG_STEP_PX: 10,
   /** Rough right extent past last accidental center for SMuFL glyph (Leland ~1 em). */
@@ -79,9 +79,100 @@ export function estimateKeySignatureWidthPx(accidentalCount, ksFontSize) {
   );
 }
 
+/** Ref. staff space (px) — sama mis TraditionalNotationView STAFF_SPACE. */
+const TS_STAFF_SPACE_REF = 10;
+/** Leland time sig numerator/denominator font at ref. staff space — sama mis TIME_SIG_REFS.FONT_NUM_AT_REF_SP. */
+const TS_FONT_NUM_AT_REF_SP = 5.2;
+const TS_DEN_FALLBACK_RATIO = 25 / 26;
+
+function timeSigDigitCount(num) {
+  const n = Math.max(0, Math.floor(Number(num) || 0));
+  return Math.max(1, String(n).length);
+}
+
+/** Pool horisontaalset ulatust SMuFL taktimõõdu numbririda keskelt (ligikaudne, veidi konservatiivne). */
+function timeSigDigitRunHalfWidthPx(fNum, num) {
+  const f = Math.max(8, Math.round(Number(fNum) || 8));
+  const spacing = f * 0.5;
+  const d = timeSigDigitCount(num);
+  const runWidth = (d - 1) * spacing + f * 0.88;
+  return runWidth / 2;
+}
+
+/**
+ * Klassikaline taktimõõt (stacked digits + keskjoon): parem pool keskpunktist kuni visuaalse servani.
+ * Kasutatakse nii paigutusreservi kui clamp’i, et taktimõõt ei kattuks esimese takti sisuga.
+ */
+export function estimateClassicTimeSignatureRightExtentPx(staffSpace, beats, beatUnit) {
+  const sp = Math.max(3, Number(staffSpace) || TS_STAFF_SPACE_REF);
+  const scale = Math.max(0.3, sp / TS_STAFF_SPACE_REF);
+  const fNum = Math.max(8, Math.round(TS_FONT_NUM_AT_REF_SP * sp));
+  const fDen = Math.max(8, Math.round(fNum * TS_DEN_FALLBACK_RATIO));
+  const lineHalf = TIME_SIG_LAYOUT.LINE_HALF * scale;
+  const halfNum = timeSigDigitRunHalfWidthPx(fNum, beats);
+  const halfDen = timeSigDigitRunHalfWidthPx(fDen, beatUnit);
+  const stackedHalf = Math.max(halfNum, halfDen);
+  return Math.max(lineHalf, stackedHalf) + 1;
+}
+
+/**
+ * Pedagoogiline taktimõõt: parem pool keskpunktist (lugeja + kriips + nimetaja sümbol).
+ */
+export function estimatePedagogicalTimeSignatureRightExtentPx(staffSpace, beats, beatUnit, pedagogicalOptions = {}) {
+  const sp = Math.max(3, Number(staffSpace) || TS_STAFF_SPACE_REF);
+  const scale = Math.max(0.3, sp / TS_STAFF_SPACE_REF);
+  const fNum = Math.max(8, Math.round(TS_FONT_NUM_AT_REF_SP * sp));
+  const L = TIME_SIG_LAYOUT;
+  const lineHalf = L.LINE_HALF * scale;
+  const halfNum = timeSigDigitRunHalfWidthPx(fNum, beats);
+  const noteXOfs = L.NOTE_X_OFFSET * scale;
+  const denType = pedagogicalOptions.denominatorType || 'rhythm';
+
+  let denRight = 0;
+  if (denType === 'number') {
+    const fDen = Math.max(8, Math.round(fNum * TS_DEN_FALLBACK_RATIO));
+    denRight = noteXOfs + timeSigDigitRunHalfWidthPx(fDen, beatUnit);
+  } else if (denType === 'emoji') {
+    const fs = Math.max(8, Math.max(18 * scale, Math.round(fNum * TS_DEN_FALLBACK_RATIO)));
+    denRight = noteXOfs + fs * 0.55;
+  } else if (denType === 'instrument') {
+    denRight = noteXOfs + 10 * scale;
+  } else {
+    const bu = Math.floor(Number(beatUnit) || 4);
+    if (bu === 1) denRight = noteXOfs + L.WHOLE_RX * scale + 1;
+    else if (bu === 2 || bu === 4 || bu === 8 || bu === 16) denRight = noteXOfs + L.ELLIPSE_RX * scale + 3 * scale;
+    else {
+      const fDen = Math.max(8, Math.round(fNum * TS_DEN_FALLBACK_RATIO));
+      denRight = noteXOfs + timeSigDigitRunHalfWidthPx(fDen, bu);
+    }
+  }
+  return Math.max(lineHalf, halfNum, denRight) + 1;
+}
+
+/**
+ * Traditsiooniline režiim: eelistatud taktimõõdu kesk-X (enne esimese takti serva clamp’i).
+ */
+export function getTraditionalTimeSignaturePreferredX({ clefX, clefWidth = 45, keySigCount = 0, ksFontSize }) {
+  const n = Math.max(0, Math.min(7, Math.floor(Number(keySigCount) || 0)));
+  const stepPx = getKeySignatureStepPx(ksFontSize);
+  const clefRightX = clefX + clefWidth;
+  const afterClefGap = ensureMinGlyphHorizontalGapPx(TIME_SIG_SPACING.AFTER_CLEF_PX);
+  const afterKeySigGap = ensureMinGlyphHorizontalGapPx(TIME_SIG_SPACING.GAP_AFTER_KEY_SIG_BEFORE_TIME_SIG_PX);
+  if (n === 0) {
+    return clefRightX + afterClefGap;
+  }
+  const keySigRightX =
+    clefRightX +
+    TIME_SIG_SPACING.KEY_SIG_FIRST_CENTER_OFFSET_PX +
+    (n - 1) * stepPx +
+    TIME_SIG_SPACING.KEY_SIG_GLYPH_TAIL_PX;
+  return keySigRightX + afterKeySigGap;
+}
+
 /**
  * Traditsiooniline režiim: taktimõõdu keskpunkti X (sama koordinaat mis renderTimeSignature `x`).
  * Peab olema pärast viimast võtmemärki + selge vahe, et diees/bemoll ja taktimõõt ei kattuks.
+ * Kui `measureStartX` on antud, ei tohi taktimõõt ulatuda esimese takti algusesse (overlap noodiga).
  */
 export function getTraditionalTimeSignatureX({
   clefX,
@@ -89,26 +180,16 @@ export function getTraditionalTimeSignatureX({
   keySigCount = 0,
   ksFontSize,
   measureStartX,
+  staffSpace = TS_STAFF_SPACE_REF,
+  beats = 4,
+  beatUnit = 4,
 }) {
-  const n = Math.max(0, Math.min(7, Math.floor(Number(keySigCount) || 0)));
-  const stepPx = getKeySignatureStepPx(ksFontSize);
-  const clefRightX = clefX + clefWidth;
-  const afterClefGap = ensureMinGlyphHorizontalGapPx(TIME_SIG_SPACING.AFTER_CLEF_PX);
-  const afterKeySigGap = ensureMinGlyphHorizontalGapPx(TIME_SIG_SPACING.GAP_AFTER_KEY_SIG_BEFORE_TIME_SIG_PX);
-  let baseX;
-  if (n === 0) {
-    baseX = clefRightX + afterClefGap;
-  } else {
-    const keySigRightX =
-      clefRightX +
-      TIME_SIG_SPACING.KEY_SIG_FIRST_CENTER_OFFSET_PX +
-      (n - 1) * stepPx +
-      TIME_SIG_SPACING.KEY_SIG_GLYPH_TAIL_PX;
-    baseX = keySigRightX + afterKeySigGap;
+  const baseX = getTraditionalTimeSignaturePreferredX({ clefX, clefWidth, keySigCount, ksFontSize });
+  if (typeof measureStartX === 'number' && Number.isFinite(measureStartX)) {
+    const gap = ensureMinGlyphHorizontalGapPx(TIME_SIG_SPACING.BEFORE_FIRST_MEASURE_PX);
+    const rightEx = estimateClassicTimeSignatureRightExtentPx(staffSpace, beats, beatUnit);
+    return Math.min(baseX, measureStartX - gap - rightEx);
   }
-  // Keep time signature directly after key signature block (reference layout behavior).
-  // Caller/layout guarantees enough left prefix width before first measure.
-  if (typeof measureStartX === 'number' && Number.isFinite(measureStartX)) return baseX;
   return baseX;
 }
 
@@ -133,8 +214,28 @@ export function getPedagogicalRelativeKeySignatureWidthPx(ksCount, ksFontSize) {
 }
 
 /**
- * Pedagoogiline režiim: taktimõõt pärast (valikuline) trad. võtit, võtmemärki ja JO-võtit.
+ * Pedagoogiline režiim: eelistatud taktimõõdu kesk-X (enne clamp’i).
  * clefX = esimese sümboli (trad. võti või võtmemärk või JO) vasak serv.
+ */
+export function getPedagogicalTimeSignaturePreferredX({
+  clefX,
+  clefColumnWidth = 45,
+  showTraditionalClef,
+  keySigCount = 0,
+  ksFontSize,
+  joClefWidthPx,
+}) {
+  const afterClefGap = ensureMinGlyphHorizontalGapPx(TIME_SIG_SPACING.AFTER_CLEF_PX);
+  let x = clefX;
+  if (showTraditionalClef) x += clefColumnWidth;
+  x += getPedagogicalRelativeKeySignatureWidthPx(keySigCount, ksFontSize);
+  x += Math.max(0, Number(joClefWidthPx) || 0);
+  x += afterClefGap;
+  return x;
+}
+
+/**
+ * Pedagoogiline režiim: taktimõõt pärast (valikuline) trad. võtit, võtmemärki ja JO-võtit.
  */
 export function getPedagogicalTimeSignatureX({
   clefX,
@@ -144,15 +245,25 @@ export function getPedagogicalTimeSignatureX({
   ksFontSize,
   joClefWidthPx,
   measureStartX,
+  staffSpace = TS_STAFF_SPACE_REF,
+  beats = 4,
+  beatUnit = 4,
+  pedagogicalDenominatorType = 'rhythm',
 }) {
-  const afterClefGap = ensureMinGlyphHorizontalGapPx(TIME_SIG_SPACING.AFTER_CLEF_PX);
-  let x = clefX;
-  if (showTraditionalClef) x += clefColumnWidth;
-  x += getPedagogicalRelativeKeySignatureWidthPx(keySigCount, ksFontSize);
-  x += Math.max(0, Number(joClefWidthPx) || 0);
-  x += afterClefGap;
+  const x = getPedagogicalTimeSignaturePreferredX({
+    clefX,
+    clefColumnWidth,
+    showTraditionalClef,
+    keySigCount,
+    ksFontSize,
+    joClefWidthPx,
+  });
   if (typeof measureStartX === 'number' && Number.isFinite(measureStartX)) {
-    return Math.min(x, Math.max(0, measureStartX - TIME_SIG_SPACING.BEFORE_FIRST_MEASURE_PX));
+    const gap = ensureMinGlyphHorizontalGapPx(TIME_SIG_SPACING.BEFORE_FIRST_MEASURE_PX);
+    const rightEx = estimatePedagogicalTimeSignatureRightExtentPx(staffSpace, beats, beatUnit, {
+      denominatorType: pedagogicalDenominatorType,
+    });
+    return Math.min(x, Math.max(0, measureStartX - gap - rightEx));
   }
   return x;
 }
