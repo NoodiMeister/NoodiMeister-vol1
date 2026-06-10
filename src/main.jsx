@@ -62,12 +62,12 @@ try {
   if (hasMicrosoftCode || hasMicrosoftError) {
     root.render(<MicrosoftRedirectHandler />);
   } else {
-    const app = <App />;
-    if (googleClientId) {
-      root.render(<GoogleOAuthProvider clientId={googleClientId}>{app}</GoogleOAuthProvider>);
-    } else {
-      root.render(app);
-    }
+    // CloudLogin kasutab useGoogleLogin — provider peab alati olemas olema (clientId võib buildis puududa).
+    root.render(
+      <GoogleOAuthProvider clientId={googleClientId}>
+        <App />
+      </GoogleOAuthProvider>
+    );
   }
 } catch (err) {
   console.error(err);

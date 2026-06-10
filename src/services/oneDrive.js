@@ -73,7 +73,7 @@ export async function listNoodimeisterFilesFromOneDrive(token, folderId) {
       .filter((item) => !item.folder && typeof item.name === 'string')
       .filter((item) => {
         const name = item.name.toLowerCase();
-        return name.includes('.nm') || name.includes('.noodimeister');
+        return name.includes('.nm') || name.includes('.nmc') || name.includes('.noodimeister');
       });
     return {
       ok: true,
@@ -106,7 +106,7 @@ export async function listNoodimeisterFilesSharedWithMe(token) {
       .filter((item) => !item.folder && typeof item.name === 'string')
       .filter((item) => {
         const name = item.name.toLowerCase();
-        return name.includes('.nm') || name.includes('.noodimeister');
+        return name.includes('.nm') || name.includes('.nmc') || name.includes('.noodimeister');
       })
       .map((f) => ({
         id: f.id,

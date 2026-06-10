@@ -3083,6 +3083,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   const isNewWorkFlow = (searchParams && typeof searchParams.get === 'function' && searchParams.get('new')) === '1';
   const isImportMusicXmlFlow = (searchParams && typeof searchParams.get === 'function' && searchParams.get('importMusicXml')) === '1';
   const isImportPdfFlow = (searchParams && typeof searchParams.get === 'function' && searchParams.get('importPdf')) === '1';
+  const isNotationCaptureMode = (searchParams && typeof searchParams.get === 'function' && searchParams.get('notationCapture')) === '1';
   const partStaffId = searchParams && typeof searchParams.get === 'function' ? searchParams.get('staffId') : undefined;
   // Kui fail on avatud pilvest (/app?fileId=...), hoiame meeles, millisest teenusest ja millise fileId-ga, et Cmd/Ctrl+S kirjutaks sama faili üle (mitte ei looks koopiat).
   const [openedCloudFile, setOpenedCloudFile] = useState(null); // { provider, fileId, modifiedTime?, eTag?, fileName? }
@@ -5375,6 +5376,82 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       syncChannelRef.current = null;
     };
   }, [importProject]);
+
+  /** Kujundaja import: peidetud iframe renderdab sama SVG mudeli mis PDF/print. */
+  useEffect(() => {
+    if (!isNotationCaptureMode || typeof window === 'undefined' || window.parent === window) return;
+
+    const origin = window.location.origin;
+    const CAPTURE_SOURCE = 'nm-notation-capture';
+    const COMPOSER_SOURCE = 'nm-composer-import';
+
+    const post = (payload) => {
+      try {
+        window.parent.postMessage({ source: CAPTURE_SOURCE, ...payload }, origin);
+      } catch (_) { /* ignore */ }
+    };
+
+    post({ type: 'nm-capture-ready' });
+
+    const runCapture = async (project) => {
+      try {
+        if (!project || typeof project !== 'object') throw new Error('Projekti andmed puuduvad.');
+        if (!importProject(project)) throw new Error('Projekti laadimine ebaõnnestus.');
+
+        await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+        try {
+          if (document.fonts?.ready) await document.fonts.ready;
+        } catch (_) { /* ignore */ }
+
+        let lastErr = null;
+        for (let attempt = 0; attempt < 16; attempt += 1) {
+          try {
+            const el = scoreContainerRef?.current;
+            if (!el) throw new Error('Noodileht pole veel valmis.');
+            const pageModel = buildScoreExportSnapshot(el);
+            const { defsString, contentString, footerText, pageCount, orientation, paperSize } = pageModel;
+            const count = Math.max(1, Number(pageCount) || 1);
+            const pages = [];
+            for (let p = 0; p < count; p += 1) {
+              let svg = getPageSvgString(defsString, contentString, pageModel, p, { footerText });
+              const smuflCheck = validateSmuflTimeSigExport({ defsString, contentString });
+              if (!smuflCheck.ok) svg = rewriteSmuflTimeSigDigitsToAscii(svg);
+              pages.push(svg);
+            }
+            post({
+              type: 'nm-capture-result',
+              ok: true,
+              pages,
+              pageCount: count,
+              orientation,
+              paperSize,
+            });
+            return;
+          } catch (e) {
+            lastErr = e;
+            await new Promise((r) => setTimeout(r, 150));
+          }
+        }
+        throw lastErr || new Error('SVG render ebaõnnestus.');
+      } catch (e) {
+        post({
+          type: 'nm-capture-result',
+          ok: false,
+          error: e?.message || 'SVG render ebaõnnestus.',
+        });
+      }
+    };
+
+    const onMessage = (ev) => {
+      if (ev.origin !== origin) return;
+      if (ev.data?.source !== COMPOSER_SOURCE) return;
+      if (ev.data?.type !== 'nm-capture-project') return;
+      runCapture(ev.data.project);
+    };
+
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
+  }, [isNotationCaptureMode, importProject, buildScoreExportSnapshot]);
 
   const sanitizeSyncPayload = useCallback((state) => {
     // Sync should carry musical content + metadata, not per-window UI state.

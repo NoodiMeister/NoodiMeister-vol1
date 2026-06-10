@@ -9,6 +9,21 @@ import { AppLogo } from '../components/AppLogo';
 import { useNoodimeisterOptional } from '../store/NoodimeisterContext';
 import { openCloudFileInNewBrowserTab } from '../utils/appUrls';
 import { runPdfImportPipeline } from '../import/pdf/pdfImportPipeline';
+import { isComposerFileName } from '../document/composerDocumentModel';
+
+function getProjectFileHref(basePath, file, cloud) {
+  const params = new URLSearchParams();
+  params.set('fileId', String(file.id));
+  if (cloud === 'onedrive') params.set('cloud', 'onedrive');
+  const route = isComposerFileName(file.name) ? 'kujundaja' : 'app';
+  return `${basePath}/${route}?${params.toString()}`;
+}
+
+function getNewDesignHref(basePath, cloud, folderId) {
+  const params = new URLSearchParams({ new: '1', cloud });
+  if (folderId) params.set('saveFolderId', folderId);
+  return `${basePath}/kujundaja?${params.toString()}`;
+}
 
 /** Error Boundary: sisselogimise järgne vaade – punane kast veateatega */
 class MinuToodErrorBoundary extends React.Component {
@@ -994,10 +1009,10 @@ export default function MinuTöödPage() {
               <FolderOpen className="w-5 h-5" /> {t['mywork.openLastModified']}
             </a>
             <a
-              href={`${basePath}/koostaja`}
+              href={`${basePath}/kujundaja?new=1`}
               className="inline-flex items-center gap-2 px-6 py-3 rounded-xl border-2 border-amber-400 bg-white dark:bg-zinc-900 text-amber-800 dark:text-white font-semibold hover:bg-amber-50 dark:hover:bg-white/10 transition-colors no-underline"
             >
-              <FolderOpen className="w-5 h-5" /> {t['mywork.openComposer'] || 'Ava lehekoostaja'}
+              <FolderOpen className="w-5 h-5" /> {t['mywork.openComposer'] || 'Ava kujundaja'}
             </a>
             <button
               type="button"
@@ -1118,10 +1133,10 @@ export default function MinuTöödPage() {
                           <FilePlus className="w-4 h-4" /> {t['mywork.newWorkInFolder']}
                         </a>
                         <a
-                          href={`${basePath}/koostaja?cloud=google&saveFolderId=${encodeURIComponent(folder.id)}`}
+                          href={getNewDesignHref(basePath, 'google', folder.id)}
                           className="ml-2 inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-white text-amber-900 border border-amber-300 hover:bg-amber-50 transition-colors no-underline"
                         >
-                          <FolderOpen className="w-4 h-4" /> {t['mywork.openComposer'] || 'Ava lehekoostaja'}
+                          <FolderOpen className="w-4 h-4" /> {t['mywork.newDesignInFolder'] || 'Uus kujundus selles kaustas'}
                         </a>
                       </li>
                       {files.length === 0 ? (
@@ -1136,7 +1151,7 @@ export default function MinuTöödPage() {
                             style={{ marginLeft: `${Math.min(index * 4, 12)}px` }}
                           >
                             <a
-                              href={`${basePath}/app?fileId=${encodeURIComponent(f.id)}`}
+                              href={getProjectFileHref(basePath, f, 'google')}
                               className="flex-1 min-w-0 text-left flex items-center gap-3 px-4 py-3 rounded-xl bg-white dark:bg-zinc-900 border border-amber-200/60 dark:border-white/20 shadow-sm hover:bg-amber-50 dark:hover:bg-white/10 hover:border-amber-300 dark:hover:border-white/30 transition-colors no-underline text-inherit text-amber-900 dark:text-white"
                             >
                               <AppLogo variant="iconMd" alt="" />
@@ -1157,14 +1172,16 @@ export default function MinuTöödPage() {
                             >
                               <ExternalLink className="w-5 h-5" aria-hidden />
                             </button>
+                            {!isComposerFileName(f.name) && (
                             <a
-                              href={`${basePath}/koostaja?fileId=${encodeURIComponent(f.id)}&cloud=google`}
+                              href={`${basePath}/kujundaja?fileId=${encodeURIComponent(f.id)}&cloud=google`}
                               className="p-2 rounded-lg text-amber-700 dark:text-white/80 hover:bg-amber-100 dark:hover:bg-white/10 border border-transparent hover:border-amber-200 transition-colors"
-                              title={t['mywork.openInComposer'] || 'Ava lehekoostajas'}
-                              aria-label={t['mywork.openInComposer'] || 'Ava lehekoostajas'}
+                              title={t['mywork.openInComposer'] || 'Lisa kujundajasse plokina'}
+                              aria-label={t['mywork.openInComposer'] || 'Lisa kujundajasse plokina'}
                             >
                               <FolderOpen className="w-5 h-5" aria-hidden />
                             </a>
+                            )}
                             <button
                               type="button"
                               onClick={(e) => { e.preventDefault(); handleCopyGoogleFile(f.id, f.name, folder.id); }}
@@ -1289,10 +1306,10 @@ export default function MinuTöödPage() {
                           <FilePlus className="w-4 h-4" /> {t['mywork.newWorkInFolder']}
                         </a>
                         <a
-                          href={`${basePath}/koostaja?cloud=onedrive&saveFolderId=${encodeURIComponent(folder.id)}`}
+                          href={getNewDesignHref(basePath, 'onedrive', folder.id)}
                           className="ml-2 inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-white text-amber-900 border border-amber-300 hover:bg-amber-50 transition-colors no-underline"
                         >
-                          <FolderOpen className="w-4 h-4" /> {t['mywork.openComposer'] || 'Ava lehekoostaja'}
+                          <FolderOpen className="w-4 h-4" /> {t['mywork.newDesignInFolder'] || 'Uus kujundus selles kaustas'}
                         </a>
                       </li>
                       {files.length === 0 ? (
@@ -1307,7 +1324,7 @@ export default function MinuTöödPage() {
                             style={{ marginLeft: `${Math.min(index * 4, 12)}px` }}
                           >
                             <a
-                              href={`${basePath}/app?fileId=${encodeURIComponent(f.id)}&cloud=onedrive`}
+                              href={getProjectFileHref(basePath, f, 'onedrive')}
                               className="flex-1 min-w-0 text-left flex items-center gap-3 px-4 py-3 rounded-xl bg-white dark:bg-zinc-900 border border-amber-200/60 dark:border-white/20 shadow-sm hover:bg-amber-50 dark:hover:bg-white/10 hover:border-amber-300 dark:hover:border-white/30 transition-colors no-underline text-inherit text-amber-900 dark:text-white"
                             >
                               <AppLogo variant="iconMd" alt="" />
@@ -1328,14 +1345,16 @@ export default function MinuTöödPage() {
                             >
                               <ExternalLink className="w-5 h-5" aria-hidden />
                             </button>
+                            {!isComposerFileName(f.name) && (
                             <a
-                              href={`${basePath}/koostaja?fileId=${encodeURIComponent(f.id)}&cloud=onedrive`}
+                              href={`${basePath}/kujundaja?fileId=${encodeURIComponent(f.id)}&cloud=onedrive`}
                               className="p-2 rounded-lg text-amber-700 dark:text-white/80 hover:bg-amber-100 dark:hover:bg-white/10 border border-transparent hover:border-amber-200 transition-colors"
-                              title={t['mywork.openInComposer'] || 'Ava lehekoostajas'}
-                              aria-label={t['mywork.openInComposer'] || 'Ava lehekoostajas'}
+                              title={t['mywork.openInComposer'] || 'Lisa kujundajasse plokina'}
+                              aria-label={t['mywork.openInComposer'] || 'Lisa kujundajasse plokina'}
                             >
                               <FolderOpen className="w-5 h-5" aria-hidden />
                             </a>
+                            )}
                             <button
                               type="button"
                               onClick={(e) => { e.preventDefault(); handleCopyOneDriveFile(f.id, f.name, folder.id); }}
@@ -1394,7 +1413,7 @@ export default function MinuTöödPage() {
                     {sharedGoogleFiles.map((f) => (
                       <li key={f.id} className="flex items-center gap-2">
                         <a
-                          href={`${basePath}/app?fileId=${encodeURIComponent(f.id)}`}
+                          href={getProjectFileHref(basePath, f, 'google')}
                           className="flex-1 min-w-0 flex items-center gap-3 px-4 py-3 rounded-xl bg-white dark:bg-zinc-900 border border-amber-200/60 dark:border-white/20 shadow-sm hover:bg-amber-50 dark:hover:bg-white/10 hover:border-amber-300 dark:hover:border-white/30 transition-colors no-underline text-inherit text-amber-900 dark:text-white"
                         >
                           <AppLogo variant="iconMd" alt="" />
@@ -1435,7 +1454,7 @@ export default function MinuTöödPage() {
                     {sharedOneDriveFiles.map((f) => (
                       <li key={f.id} className="flex items-center gap-2">
                         <a
-                          href={`${basePath}/app?fileId=${encodeURIComponent(f.id)}&cloud=onedrive`}
+                          href={getProjectFileHref(basePath, f, 'onedrive')}
                           className="flex-1 min-w-0 flex items-center gap-3 px-4 py-3 rounded-xl bg-white dark:bg-zinc-900 border border-amber-200/60 dark:border-white/20 shadow-sm hover:bg-amber-50 dark:hover:bg-white/10 hover:border-amber-300 dark:hover:border-white/30 transition-colors no-underline text-inherit text-amber-900 dark:text-white"
                         >
                           <AppLogo variant="iconMd" alt="" />

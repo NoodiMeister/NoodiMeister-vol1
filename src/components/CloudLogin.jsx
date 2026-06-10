@@ -493,7 +493,7 @@ function CloudLoginButtonsInner({ mode = 'login', stayLoggedIn = false, onError,
           {microsoftInProgress ? '...' : 'Microsoft'}
         </button>
       </div>
-      {!googleEnabled && <p className="text-xs text-amber-600 text-center">Google: lisa `VITE_GOOGLE_CLIENT_ID` .env faili.</p>}
+      {!googleEnabled && <p className="text-xs text-amber-600 text-center">Google: `VITE_GOOGLE_CLIENT_ID` puudub (kohalik: `.env`; tootmine: Cloudflare Build variables).</p>}
       {!microsoftEnabled && <p className="text-xs text-amber-600 text-center">Microsoft: lisa `VITE_MICROSOFT_CLIENT_ID` .env faili.</p>}
     </div>
   );

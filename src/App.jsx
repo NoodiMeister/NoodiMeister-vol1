@@ -286,7 +286,8 @@ function AppRoutes() {
           <Route path="/privacy" element={<Navigate to="/privaatsus" replace />} />
           <Route path="/terms" element={<Navigate to="/tingimused" replace />} />
           <Route path="/kuidas" element={<HowToPage />} />
-          <Route path="/koostaja" element={<ComposerPage />} />
+          <Route path="/kujundaja" element={<ComposerPage />} />
+          <Route path="/koostaja" element={<Navigate to="/kujundaja" replace />} />
           <Route path="/how-to" element={<Navigate to="/kuidas" replace />} />
           <Route path="/about" element={<Navigate to="/teave" replace />} />
           <Route path="/administraator" element={<AdminGrantSupportPage />} />

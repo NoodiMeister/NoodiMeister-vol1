@@ -1,33 +1,70 @@
 import { jsPDF } from 'jspdf';
 import 'svg2pdf.js';
+import { isComposerTextBlock, partitionBlocksForRender } from '../document/composerDocumentModel';
 
-function pageToSvg(page) {
-  const blocksMarkup = (page.blocks || []).map((block) => {
-    if (block.type === 'svg') {
-      const slice = block.slice || { x: 0, y: 0, width: block.sourceWidth || block.width, height: block.sourceHeight || block.height };
-      const sx = (Number(block.width) || 1) / Math.max(1, Number(slice.width) || 1);
-      const sy = (Number(block.height) || 1) / Math.max(1, Number(slice.height) || 1);
-      const innerW = (Number(block.sourceWidth) || Number(block.width) || 1) * sx;
-      const innerH = (Number(block.sourceHeight) || Number(block.height) || 1) * sy;
-      const offsetX = (Number(slice.x) || 0) * sx;
-      const offsetY = (Number(slice.y) || 0) * sy;
-      return `
+function escapeHtml(text) {
+  return String(text || '').replace(/[<>&"]/g, (ch) => {
+    if (ch === '<') return '&lt;';
+    if (ch === '>') return '&gt;';
+    if (ch === '&') return '&amp;';
+    return '&quot;';
+  });
+}
+
+function textBlockExportStyle(block) {
+  const weight = block.fontWeight ?? 400;
+  const style = block.fontStyle === 'italic' ? 'italic' : 'normal';
+  const decoration = block.textDecoration === 'underline' ? 'underline' : 'none';
+  return [
+    'font-family:Arial,Helvetica,sans-serif',
+    `font-size:${Number(block.fontSize) || 14}px`,
+    `font-weight:${weight}`,
+    `font-style:${style}`,
+    `text-decoration:${decoration}`,
+    `text-align:${block.align || 'left'}`,
+    `color:${block.color || '#111827'}`,
+    `line-height:${Number(block.lineHeight) || 1.4}`,
+    'white-space:pre-wrap',
+    'word-break:break-word',
+    'margin:0',
+    'padding:8px',
+    'box-sizing:border-box',
+    'width:100%',
+    'height:100%',
+  ].join(';');
+}
+
+function blockToForeignObject(block) {
+  if (block.type === 'svg') {
+    const slice = block.slice || { x: 0, y: 0, width: block.sourceWidth || block.width, height: block.sourceHeight || block.height };
+    const sx = (Number(block.width) || 1) / Math.max(1, Number(slice.width) || 1);
+    const sy = (Number(block.height) || 1) / Math.max(1, Number(slice.height) || 1);
+    const innerW = (Number(block.sourceWidth) || Number(block.width) || 1) * sx;
+    const innerH = (Number(block.sourceHeight) || Number(block.height) || 1) * sy;
+    const offsetX = (Number(slice.x) || 0) * sx;
+    const offsetY = (Number(slice.y) || 0) * sy;
+    return `
       <foreignObject x="${Number(block.x) || 0}" y="${Number(block.y) || 0}" width="${Number(block.width) || 1}" height="${Number(block.height) || 1}">
         <div xmlns="http://www.w3.org/1999/xhtml" style="position:relative;width:${Number(block.width) || 1}px;height:${Number(block.height) || 1}px;overflow:hidden;background:#fff;">
           <div style="position:absolute;left:-${offsetX}px;top:-${offsetY}px;width:${innerW}px;height:${innerH}px;">${block.svgMarkup || ''}</div>
         </div>
       </foreignObject>`;
-    }
-    const text = String(block.text || '').replace(/[<>&"]/g, (ch) => {
-      if (ch === '<') return '&lt;';
-      if (ch === '>') return '&gt;';
-      if (ch === '&') return '&amp;';
-      return '&quot;';
-    });
+  }
+  if (isComposerTextBlock(block)) {
+    const text = escapeHtml(block.text || '');
     return `<foreignObject x="${Number(block.x) || 0}" y="${Number(block.y) || 0}" width="${Number(block.width) || 120}" height="${Number(block.height) || 80}">
-      <div xmlns="http://www.w3.org/1999/xhtml" style="font-family:Arial,sans-serif;font-size:18px;color:#111827;">${text}</div>
+      <div xmlns="http://www.w3.org/1999/xhtml" style="${textBlockExportStyle(block)}">${text}</div>
     </foreignObject>`;
-  }).join('');
+  }
+  const text = escapeHtml(block.text || '');
+  return `<foreignObject x="${Number(block.x) || 0}" y="${Number(block.y) || 0}" width="${Number(block.width) || 120}" height="${Number(block.height) || 80}">
+    <div xmlns="http://www.w3.org/1999/xhtml" style="font-family:Arial,sans-serif;font-size:18px;color:#111827;">${text}</div>
+  </foreignObject>`;
+}
+
+function pageToSvg(page) {
+  const { backgroundSvg, textBlocks, foregroundSvg } = partitionBlocksForRender(page.blocks || []);
+  const blocksMarkup = [...backgroundSvg, ...textBlocks, ...foregroundSvg].map(blockToForeignObject).join('');
 
   return `
 <svg xmlns="http://www.w3.org/2000/svg" width="${page.width}" height="${page.height}" viewBox="0 0 ${page.width} ${page.height}">
