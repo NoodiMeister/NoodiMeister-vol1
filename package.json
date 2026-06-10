@@ -17,7 +17,8 @@
     "report:work-hours": "node scripts/generate-work-hours-report.mjs",
     "mark-error-fixed": "node scripts/mark-auth-error-fixed.js",
     "export-symbols": "node scripts/export-all-symbols-png.js",
-    "build-gallery": "node scripts/build-gallery-html.js"
+    "build-gallery": "node scripts/build-gallery-html.js",
+    "deploy:cf": "npm run build && wrangler deploy"
   },
   "dependencies": {
     "@azure/msal-browser": "^5.4.0",
@@ -46,6 +47,7 @@
     "postcss": "^8.4.49",
     "sharp": "^0.34.5",
     "tailwindcss": "^3.4.15",
-    "vite": "^6.0.1"
+    "vite": "^6.0.1",
+    "wrangler": "^4.0.0"
   }
 }
