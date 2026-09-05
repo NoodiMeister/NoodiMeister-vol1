@@ -56,6 +56,17 @@ import { getAugmentationDotCenterPitchY, getAugmentationDotXFromNoteCenter } fro
 import { getGlyphFontSize } from './notation/musescoreStyle';
 import { FigurenotesView } from './views/FigurenotesView';
 import { TraditionalNotationView } from './views/TraditionalNotationView';
+import { HARMONY_FORM_ROW_HEIGHT } from './views/HarmonyFormStaffLayer';
+import {
+  HARMONY_FORM_INSTRUMENT_ID,
+  isHarmonyFormInstrument,
+  normalizeHarmonyChordBeatStep,
+  getHarmonyChordBeatStepOptions,
+  snapBeatToHarmonyChordGrid,
+  advanceHarmonyChordBeat,
+  buildHarmonyFormAnchorNotes,
+  getMeasureBeatCount,
+} from './notation/harmonyFormMode';
 import { LOCALE_STORAGE_KEY, DEFAULT_LOCALE, LOCALES, createT } from './i18n';
 import { computeLayout, getStaffHeight, LAYOUT, PAGE_BREAK_GAP } from './layout/LayoutManager';
 import {
@@ -66,7 +77,7 @@ import {
   getTraditionalSystemTotalHeightPx,
   computeTraditionalVisibleStaffGeometry,
 } from './layout/traditionalMultiStaffGeometry';
-import { FIGURE_BASE_WIDTH, FIGURE_ROW_HEIGHT, calculateLayout } from './layout/LayoutEngine';
+import { FIGURE_BASE_WIDTH, FIGURE_ROW_HEIGHT, calculateLayout, getFigureContentWidthPx, maxPixelsPerBeatToFitPage, clampPixelsPerBeatToPage, SPACING_PRESET_NORMAL_PX, SPACING_PRESET_LOOSE_PX } from './layout/LayoutEngine';
 import { transposeNotes } from './musical/transpose';
 import {
   measureLengthInQuarterBeats,
@@ -93,7 +104,7 @@ import {
 } from './print/nmPrintDocument';
 import { registerSmuflFontsForJsPdf } from './export/registerSmuflFontForJsPdf';
 import { getScorePageDimensions } from './layout/LayoutManager';
-import { getPageCount, normalizePaperSize } from './utils/pageGeometry';
+import { getPageCount, normalizePaperSize, layoutYToDeskDisplayY } from './utils/pageGeometry';
 import { openCloudFileInNewBrowserTab } from './utils/appUrls';
 import { resolveTextBoxLineHeightPx } from './utils/textBoxLayoutModel';
 import {
@@ -580,6 +591,7 @@ var PITCH_NAME_TO_NATURAL = { C: 'C', 'C#': 'C', Db: 'C', D: 'D', 'D#': 'D', Eb:
 
 // Joonestiku/instrumentide konstandid var'iga faili alguses
 var INSTRUMENT_CATEGORIES = [
+  { id: 'harmonyForm', labelKey: 'cat.harmonyForm', instruments: [HARMONY_FORM_INSTRUMENT_ID], traditionalOnly: true },
   { id: 'singleStaff', labelKey: 'cat.singleStaff', instruments: ['single-staff-treble', 'single-staff-bass'] },
   { id: 'orffTuned', labelKey: 'cat.orffTuned', instruments: ['boomwhackers', 'handbells'] },
   { id: 'orffMallets', labelKey: 'cat.orffMallets', instruments: ['soprano-xylophone', 'alto-xylophone', 'bass-xylophone', 'soprano-metallophone', 'alto-metallophone', 'bass-metallophone', 'glockenspiel'] },
@@ -595,6 +607,7 @@ var INSTRUMENT_CATEGORIES = [
   { id: 'other', labelKey: 'cat.other', instruments: ['voice'] }
 ];
 var INSTRUMENT_CONFIG_BASE = {
+  [HARMONY_FORM_INSTRUMENT_ID]: { value: HARMONY_FORM_INSTRUMENT_ID, range: 'C4-C4', type: 'harmonyForm', defaultClef: 'treble' },
   'single-staff-treble': { value: 'single-staff-treble', range: 'E3-A7', type: 'standard', defaultClef: 'treble' },
   'single-staff-bass':   { value: 'single-staff-bass', range: 'E2-G4', type: 'standard', defaultClef: 'bass' },
   boomwhackers: { value: 'boomwhackers', range: 'C4-C6', type: 'standard', defaultClef: 'treble', colorSystem: 'chromaNotes' },
@@ -686,6 +699,7 @@ function getSingleLineStaffPitch(instId, cfg) {
   return { pitch: 'C', octave: 5 };
 }
 var INSTRUMENT_I18N_KEYS = {
+  [HARMONY_FORM_INSTRUMENT_ID]: 'inst.formChords',
   'single-staff-treble': 'inst.singleStaffTreble', 'single-staff-bass': 'inst.singleStaffBass',
   boomwhackers: 'inst.boomwhackers',
   handbells: 'inst.handbells',
@@ -1409,8 +1423,8 @@ function getToolboxes(t, instrumentConfig, shortcutLabels = {}) {
     layout: {
       id: 'layout', name: t('toolbox.layout'), icon: 'Layout', shortcut: shortcutLabels['toolbox.layout'] || 'Shift+9',
       options: [
-        { id: 'spacing-normal', label: t('layout.spacingNormal'), value: 85, key: '1' },
-        { id: 'spacing-loose', label: t('layout.spacingLoose'), value: 120, key: '2' }
+        { id: 'spacing-normal', label: t('layout.spacingNormal'), value: SPACING_PRESET_NORMAL_PX, key: '1' },
+        { id: 'spacing-loose', label: t('layout.spacingLoose'), value: SPACING_PRESET_LOOSE_PX, key: '2' }
       ]
     },
     textBox: {
@@ -2687,6 +2701,8 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   const [figurenotesChordLineGap, setFigurenotesChordLineGap] = useState(6); // Akordirida figuurnotatsioonis: vahe meloodiareal ja akordirea vahel 0–20 px
   const [figurenotesChordBlocks, setFigurenotesChordBlocks] = useState(false); // Akordirežiim figuurnotatsioonis: värvilised akordiplokid akordireal
   const [figurenotesChordBlocksShowTones, setFigurenotesChordBlocksShowTones] = useState(true); // Akordiplokis: näita lisanoote (noodinimed + värvifiguurid)
+  /** Vorm + akordid (traditsiooniline alamrežiim): mitme löögiga akordi ruut. */
+  const [harmonyFormChordBeatStep, setHarmonyFormChordBeatStep] = useState(4);
   const [figurenotesMelodyShowNoteNames, setFigurenotesMelodyShowNoteNames] = useState(true); // Figuurnotatsioonis meloodiarea nootide peal noodinimed (C, D, E)
   const pixelsPerBeatLinkedToFigureSizeRef = useRef(true);
 
@@ -3218,8 +3234,10 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   }, []);
 
   const applyNewWorkSetup = useCallback(() => {
+    const instCfg = instrumentConfig[wizardInstrument];
+    const harmonyForm = wizardNotationMethod === 'traditional' && instCfg?.type === 'harmonyForm';
     // Backward-compatible guard: old state could still contain 'vabanotatsioon'.
-    const pedagogical = wizardNotationMethod === 'pedagogical' || wizardNotationMethod === 'vabanotatsioon';
+    const pedagogical = !harmonyForm && (wizardNotationMethod === 'pedagogical' || wizardNotationMethod === 'vabanotatsioon');
     setIsPedagogicalProject(pedagogical);
     // Pedagoogiline notatsioon kasutab JO võtit (vabanotatsioon) ja võib näidata võtmemärki ning traditsioonilist võtit
     if (pedagogical) {
@@ -3227,11 +3245,11 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       setRelativeNotationShowKeySignature(true);
       setRelativeNotationShowTraditionalClef(true);
     } else {
-      setNotationMode(wizardNotationMethod);
+      setNotationMode(wizardNotationMethod === 'figurenotes' ? 'figurenotes' : 'traditional');
     }
     setNotationStyle(wizardNotationMethod === 'figurenotes' ? 'FIGURENOTES' : 'TRADITIONAL');
     setTimeSignature({ beats: wizardTimeSignature[0], beatUnit: wizardTimeSignature[1] });
-    setKeySignature(wizardKeySignature);
+    if (!harmonyForm) setKeySignature(wizardKeySignature);
     if (pedagogical) {
       const jp = getTonicStaffPosition(wizardKeySignature);
       if (Number.isFinite(jp)) {
@@ -3241,7 +3259,6 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     setSongTitle(wizardSongTitle.trim());
     setAuthor(wizardAuthor.trim());
     setInstrument(wizardInstrument);
-    const instCfg = instrumentConfig[wizardInstrument];
     if (instCfg?.defaultClef) setClefType(instCfg.defaultClef);
     // Pedagoogilises režiimis eelistame võimalusel TAB-i või sõrmitsuse vaadet
     if (pedagogical && instCfg) {
@@ -3259,19 +3276,40 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     setPickupQuantity(wizardPickupQuantity);
     setPickupDuration(wizardPickupDuration);
     const beatsPerMeasure = wizardTimeSignature[0] * (4 / wizardTimeSignature[1]);
-    const quarterCount = Math.max(1, Math.round(beatsPerMeasure * 4));
-    const initialNotes = Array.from({ length: quarterCount }, (_, i) => ({
-      id: i + 1,
-      pitch: 'C',
-      octave: 4,
-      duration: 1,
-      durationLabel: '1/4',
-      isDotted: false,
-      isRest: true
-    }));
-    setNotes(initialNotes);
+    const chordStep = harmonyForm
+      ? normalizeHarmonyChordBeatStep(beatsPerMeasure, { beats: wizardTimeSignature[0], beatUnit: wizardTimeSignature[1] })
+      : null;
+    let initialNotes;
+    if (harmonyForm) {
+      setHarmonyFormChordBeatStep(chordStep);
+      initialNotes = buildHarmonyFormAnchorNotes(4, { beats: wizardTimeSignature[0], beatUnit: wizardTimeSignature[1] }, chordStep);
+    } else {
+      const quarterCount = Math.max(1, Math.round(beatsPerMeasure * 4));
+      initialNotes = Array.from({ length: quarterCount }, (_, i) => ({
+        id: i + 1,
+        pitch: 'C',
+        octave: 4,
+        duration: 1,
+        durationLabel: '1/4',
+        isDotted: false,
+        isRest: true
+      }));
+    }
+    if (harmonyForm) {
+      setStaves([{
+        id: '1',
+        instrumentId: HARMONY_FORM_INSTRUMENT_ID,
+        clefType: 'treble',
+        notes: initialNotes,
+        name: instrumentConfig[HARMONY_FORM_INSTRUMENT_ID]?.label || 'Vorm + akordid',
+      }]);
+      setActiveStaffIndex(0);
+      setInstrument(HARMONY_FORM_INSTRUMENT_ID);
+    } else {
+      setNotes(initialNotes);
+    }
     setCursorPosition(0);
-    setAddedMeasures(0);
+    setAddedMeasures(harmonyForm ? 3 : 0);
     setChords([]);
     setFigurenotesChordBlocks(false);
     setFigurenotesChordBlocksShowTones(true);
@@ -4739,6 +4777,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     figurenotesChordBlocks,
     figurenotesChordBlocksShowTones,
     figurenotesMelodyShowNoteNames,
+    harmonyFormChordBeatStep,
     timeSignatureSize,
     pedagogicalTimeSigDenominatorType,
     pedagogicalTimeSigDenominatorColor,
@@ -5012,6 +5051,9 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       if ('figurenotesChordBlocks' in data) setFigurenotesChordBlocks(!!data.figurenotesChordBlocks);
       if ('figurenotesChordBlocksShowTones' in data) setFigurenotesChordBlocksShowTones(!!data.figurenotesChordBlocksShowTones);
       if ('figurenotesMelodyShowNoteNames' in data) setFigurenotesMelodyShowNoteNames(!!data.figurenotesMelodyShowNoteNames);
+      if (data.harmonyFormChordBeatStep != null) {
+        setHarmonyFormChordBeatStep(normalizeHarmonyChordBeatStep(data.harmonyFormChordBeatStep, data.timeSignature || timeSignature));
+      }
       if (data.timeSignatureSize != null) setTimeSignatureSize(Math.max(12, Math.min(48, data.timeSignatureSize)));
       if (data.pedagogicalTimeSigDenominatorType) setPedagogicalTimeSigDenominatorType(String(data.pedagogicalTimeSigDenominatorType));
       if (data.pedagogicalTimeSigDenominatorColor) setPedagogicalTimeSigDenominatorColor(String(data.pedagogicalTimeSigDenominatorColor));
@@ -5573,6 +5615,9 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       if ('figurenotesChordBlocks' in data) setFigurenotesChordBlocks(!!data.figurenotesChordBlocks);
       if ('figurenotesChordBlocksShowTones' in data) setFigurenotesChordBlocksShowTones(!!data.figurenotesChordBlocksShowTones);
       if ('figurenotesMelodyShowNoteNames' in data) setFigurenotesMelodyShowNoteNames(!!data.figurenotesMelodyShowNoteNames);
+      if (data.harmonyFormChordBeatStep != null) {
+        setHarmonyFormChordBeatStep(normalizeHarmonyChordBeatStep(data.harmonyFormChordBeatStep, data.timeSignature || timeSignature));
+      }
       if (data.timeSignatureSize != null) setTimeSignatureSize(Math.max(12, Math.min(48, data.timeSignatureSize)));
       if (data.pedagogicalTimeSigDenominatorType) setPedagogicalTimeSigDenominatorType(String(data.pedagogicalTimeSigDenominatorType));
       if (data.pedagogicalTimeSigDenominatorColor) setPedagogicalTimeSigDenominatorColor(String(data.pedagogicalTimeSigDenominatorColor));
@@ -6915,6 +6960,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
 
   const createHistorySnapshot = useCallback((newNotes) => ({
     notes: JSON.parse(JSON.stringify(Array.isArray(newNotes) ? newNotes : notes)),
+    chords: JSON.parse(JSON.stringify(Array.isArray(chords) ? chords : [])),
     layout: {
       pageOrientation,
       paperSize,
@@ -6945,6 +6991,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     },
   }), [
     notes,
+    chords,
     pageOrientation,
     paperSize,
     layoutMeasuresPerLine,
@@ -6994,6 +7041,9 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         if (Array.isArray(snapNotes)) {
           setNotes(JSON.parse(JSON.stringify(snapNotes)));
         }
+        if (!Array.isArray(snap) && Array.isArray(snap.chords)) {
+          setChords(JSON.parse(JSON.stringify(snap.chords)));
+        }
         const layout = Array.isArray(snap) ? null : snap.layout;
         if (layout) {
           if (layout.pageOrientation === 'portrait' || layout.pageOrientation === 'landscape') setPageOrientation(layout.pageOrientation);
@@ -7035,6 +7085,9 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       const prevNotes = Array.isArray(snapshot) ? snapshot : snapshot.notes;
       if (Array.isArray(prevNotes)) {
         setNotes(JSON.parse(JSON.stringify(prevNotes)));
+      }
+      if (!Array.isArray(snapshot) && Array.isArray(snapshot.chords)) {
+        setChords(JSON.parse(JSON.stringify(snapshot.chords)));
       }
       const layout = Array.isArray(snapshot) ? null : snapshot.layout;
       if (layout) {
@@ -8252,12 +8305,16 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
 
   // Akordi lisamise asukoht: kursor (sisestusrežiim) või valitud noodi algus
   const getChordInsertBeat = useCallback(() => {
-    if (noteInputMode) return cursorPosition;
-    if (selectedNoteIndex >= 0 && selectedNoteIndex < notes.length) {
-      return notes.slice(0, selectedNoteIndex).reduce((s, n) => s + n.duration, 0);
+    let beat;
+    if (noteInputMode) beat = cursorPosition;
+    else if (selectedNoteIndex >= 0 && selectedNoteIndex < notes.length) {
+      beat = notes.slice(0, selectedNoteIndex).reduce((s, n) => s + n.duration, 0);
+    } else beat = cursorPosition;
+    if (isHarmonyFormInstrument(staves[activeStaffIndex]?.instrumentId ?? instrument, instrumentConfig)) {
+      return snapBeatToHarmonyChordGrid(beat, harmonyFormChordBeatStep, timeSignature);
     }
-    return cursorPosition;
-  }, [noteInputMode, cursorPosition, selectedNoteIndex, notes]);
+    return beat;
+  }, [noteInputMode, cursorPosition, selectedNoteIndex, notes, staves, activeStaffIndex, instrument, instrumentConfig, harmonyFormChordBeatStep, timeSignature]);
 
   const normalizeChordHotkey = useCallback((raw) => {
     const s = String(raw || '').trim();
@@ -8323,7 +8380,10 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       const next = prev.filter((c) => Math.abs((Number(c.beatPosition) || 0) - effectiveBeatPosition) > EPS);
       return [...next, newChord].sort((a, b) => a.beatPosition - b.beatPosition);
     });
-  }, [normalizeChordHotkey, selectedDuration, getEffectiveDuration]);
+    if (isHarmonyFormInstrument(staves[activeStaffIndex]?.instrumentId ?? instrument, instrumentConfig)) {
+      setCursorPosition(advanceHarmonyChordBeat(effectiveBeatPosition, harmonyFormChordBeatStep, timeSignature));
+    }
+  }, [normalizeChordHotkey, selectedDuration, getEffectiveDuration, staves, activeStaffIndex, instrument, instrumentConfig, harmonyFormChordBeatStep, timeSignature]);
 
   /** Kohandatud akord: väljad + „Lisa akord“ / Enter. Paleti „Sisesta akord…“ ei lisanud kunagi midagi — see juhatas ainult siia. */
   const submitCustomChordEntry = useCallback(() => {
@@ -8628,7 +8688,8 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       case 'layout':
         if (option.id.startsWith('spacing-')) {
           pixelsPerBeatLinkedToFigureSizeRef.current = false;
-          setPixelsPerBeat(option.value);
+          const desired = Number(option.value) || SPACING_PRESET_NORMAL_PX;
+          setPixelsPerBeat(desired);
         }
         break;
       case 'instruments': {
@@ -8683,6 +8744,8 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
 
   // Noot kursori all (rütmi järgi); meloodiareal = kursor lugemisel meloodiareal (mitte akordireal)
   const hasChordRow = notationStyle === 'FIGURENOTES' && figurenotesChordBlocks;
+  const activeInstrumentId = staves[activeStaffIndex]?.instrumentId ?? instrument;
+  const isHarmonyFormMode = notationStyle === 'TRADITIONAL' && isHarmonyFormInstrument(activeInstrumentId, instrumentConfig);
   const cursorOnMelodyRow = !hasChordRow || cursorSubRow === 0;
   /** N + figuurnoti akordirida: lülita tööriistaribal automaatselt akordid ↔ rütm (meloodia tagasi tulles ainult kui just lahkusid akordirealt). */
   const prevCursorSubRowForToolboxRef = useRef(cursorSubRow);
@@ -10664,7 +10727,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
           // Kursori asukoht loeb: akordireal (cursorSubRow === 1) → akord; meloodiareal → figuurnoot. Akorditööriistakast avatud → akord.
           // Kasuta cursorSubRow prioriteedina (kui kasutaja on akordirea valinud, ei tohi sisestus minna meloodianoodiks).
           const onChordRow = notationStyle === 'FIGURENOTES' && cursorSubRow === 1;
-          if (onChordRow || activeToolbox === 'chords') {
+          if (onChordRow || activeToolbox === 'chords' || isHarmonyFormMode) {
             addChordAt(getChordInsertBeat(), noteLetter.toUpperCase(), '');
             return;
           }
@@ -11385,6 +11448,8 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   const scorePadMm = Number(LAYOUT.SCORE_SHEET_PADDING_MM) > 0 ? Number(LAYOUT.SCORE_SHEET_PADDING_MM) : 15;
   const scorePaddingYPx = 2 * scorePadMm * pxPerMm;
   const scorePaddingXPx = 2 * scorePadMm * pxPerMm;
+  const scorePageEdgeReserveMm = Number(LAYOUT.PAGE_EDGE_RESERVE_MM) > 0 ? Number(LAYOUT.PAGE_EDGE_RESERVE_MM) : 16;
+  const scorePageEdgeReservePx = Math.max(24, Math.round(scorePageEdgeReserveMm * pxPerMm));
   /** Joonistatava ala kõrgus ühe vertikaalse lehe lõigu kohta: A4 pikslid − `.sheet-music-page` ülemine/alumine padding. */
   const scorePageInnerHeight = Math.max(200, a4PageHeightPx - scorePaddingYPx);
   /** Sisemine laius (border-box laius − vasak/parem padding). */
@@ -11410,13 +11475,17 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   const traditionalPartsGapPx = getTraditionalInterStaffGapPx({ layoutPartsGapMm, pxPerMm });
   /**
    * Figuurnotatsiooni "fit-to-row" kaitse:
-   * Kui kasutaja lukustab nt "4 takti reas", peab ka suur noodigraafika mahtuma lehe piiridesse (portrait/landscape),
-   * muidu jookseb viimane takt visuaalselt üle lehe riba.
-   *
-   * Kui rida on lukustatud (nt 4 takti reas), vähendame vajadusel figuuri suurust automaatselt,
-   * et viimane takt ei läheks üle scorepage piiri.
+   * Lukustatud taktide arv reas (nt 4 takti 4/4) mahub lehe sisu laiusesse;
+   * vahe:lai / pixelsPerBeat ei tohi takte lehe servast välja lõigata.
    */
   const effectiveFigurenotesSize = figurenotesSizeClamped;
+  const maxPixelsPerBeatForPage = maxPixelsPerBeatToFitPage({
+    contentWidthPx: getFigureContentWidthPx(scoreContentWidth, effectiveFigurenotesSize),
+    measuresPerLine: effectiveLayoutMeasuresPerLine || 4,
+    beatsPerMeasure: measureLengthInQuarterBeats(timeSignature),
+  });
+  const effectivePixelsPerBeat = clampPixelsPerBeatToPage(pixelsPerBeat, maxPixelsPerBeatForPage);
+  const spacingIsPageLimited = effectivePixelsPerBeat + 0.5 < Number(pixelsPerBeat);
 
   /** Figurenotes row height (beat-box / line) scales with effective notation size so barlines and box match note size. */
   const figurenotesRowHeight = Math.max(FIGURE_ROW_HEIGHT, Math.round(FIGURE_ROW_HEIGHT * effectiveFigurenotesSize / 75));
@@ -11451,6 +11520,19 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   const figurenotesLyricReserveHeight = shouldReserveFigureLyricsRow
     ? lyricLayoutReserveHeight
     : 0;
+  const isHarmonyFormLayout = notationStyle === 'TRADITIONAL'
+    && isHarmonyFormInstrument(staves[activeStaffIndex]?.instrumentId ?? instrument, instrumentConfig);
+  const harmonyFormLyricReserveHeight = isHarmonyFormLayout
+    ? Math.max(
+        28,
+        shouldReserveLyricsRow
+          ? lyricLayoutReserveHeight
+          : Math.round((Math.max(1, Number(lyricFontSize) || 12) || 12) * 2),
+      )
+    : 0;
+  const traditionalScoredHeightPxEffective = isHarmonyFormLayout
+    ? HARMONY_FORM_ROW_HEIGHT + harmonyFormLyricReserveHeight
+    : traditionalScoredHeightPx;
   /** Vahe meloodia ja akordirea vahel: kasutaja seade (0–20 px) või vähemalt lauluteksti fondi suuruse suhtes (et tekstid ei jookse kokku). */
   const effectiveChordLineGap = figurenotesChordBlocks
     ? Math.max(
@@ -11486,7 +11568,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     stavesCount: staves.length,
     staffLineSpanPx,
     interStaffGapPx: traditionalPartsGapPxEffective,
-    getStaffHeight: notationStyle === 'FIGURENOTES' ? getStaffHeight : () => traditionalScoredHeightPx,
+    getStaffHeight: notationStyle === 'FIGURENOTES' ? getStaffHeight : () => traditionalScoredHeightPxEffective,
   });
   /** Pealkiri/autor (pt-6, mb-4, kaks rida) — pole süsteemide lastY sees; zoom/absolute kõrgus peab seda arvestama. */
   const scoreHeadBlockReservePx = notationMode === 'vabanotatsioon' ? 220 : 140;
@@ -11497,14 +11579,14 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         + ((visibleStaffCountForLayout - 1) * layoutPartsGap);
       // Figurenotes multistaff rule: one measure's staves (e.g. piano RH+LH + extra instruments)
       // must stay inside the same system; only full system jumps to the next row.
-      const data = { measures, timeSignature, pixelsPerBeat, staffSpacing: figureSystemCoreHeight + layoutSystemGap, globalSpacingMultiplier: layoutGlobalSpacingMultiplier, boxesPerRow: effectiveLayoutMeasuresPerLine || 4, pageWidth: scoreContentWidth, pageHeight: scorePageInnerHeight, notationPageHeaderReservePx: scoreHeadBlockReservePx, lineBreakBefore: effectiveLayoutLineBreakBefore, pageBreakBefore: effectiveLayoutPageBreakBefore, figurenotesSize: effectiveFigurenotesSize, excludePickupFromMeasureCount: pickupEnabled, pickupMeasureIndex: 0, enforceMeasuresPerLine: effectiveLayoutStrictMeasuresPerLine };
+      const data = { measures, timeSignature, pixelsPerBeat: effectivePixelsPerBeat, staffSpacing: figureSystemCoreHeight + layoutSystemGap, globalSpacingMultiplier: layoutGlobalSpacingMultiplier, boxesPerRow: effectiveLayoutMeasuresPerLine || 4, pageWidth: scoreContentWidth, pageHeight: scorePageInnerHeight, notationPageHeaderReservePx: scoreHeadBlockReservePx, notationPageEdgeReservePx: scorePageEdgeReservePx, lineBreakBefore: effectiveLayoutLineBreakBefore, pageBreakBefore: effectiveLayoutPageBreakBefore, figurenotesSize: effectiveFigurenotesSize, excludePickupFromMeasureCount: pickupEnabled, pickupMeasureIndex: 0, enforceMeasuresPerLine: effectiveLayoutStrictMeasuresPerLine };
       const raw = calculateLayout('figure', pageOrientation === 'landscape' ? 'landscape' : 'portrait', data);
       return raw.map((s, i) => ({ ...s, yOffset: s.yOffset + (systemYOffsets[i] ?? 0) }));
     }
-    const opts = { measuresPerLine: effectiveLayoutMeasuresPerLine, lineBreakBefore: effectiveLayoutLineBreakBefore, pageBreakBefore: effectiveLayoutPageBreakBefore, systemGap: effectiveTraditionalSystemGap, staffCount: staves.length, staffHeight: traditionalLayoutStaffHeight, measureStretchFactors, globalSpacingMultiplier: layoutGlobalSpacingMultiplier, pageHeight: scorePageInnerHeight, excludePickupFromMeasureCount: pickupEnabled, pickupMeasureIndex: 0, enforceMeasuresPerLine: effectiveLayoutStrictMeasuresPerLine };
-    const raw = computeLayout(measures, timeSignature, pixelsPerBeat, scoreContentWidth, opts);
+    const opts = { measuresPerLine: effectiveLayoutMeasuresPerLine, lineBreakBefore: effectiveLayoutLineBreakBefore, pageBreakBefore: effectiveLayoutPageBreakBefore, systemGap: effectiveTraditionalSystemGap, staffCount: staves.length, staffHeight: traditionalLayoutStaffHeight, measureStretchFactors, globalSpacingMultiplier: layoutGlobalSpacingMultiplier, pageHeight: scorePageInnerHeight, notationPageHeaderReservePx: scoreHeadBlockReservePx, notationPageEdgeReservePx: scorePageEdgeReservePx, excludePickupFromMeasureCount: pickupEnabled, pickupMeasureIndex: 0, enforceMeasuresPerLine: effectiveLayoutStrictMeasuresPerLine };
+    const raw = computeLayout(measures, timeSignature, effectivePixelsPerBeat, scoreContentWidth, opts);
     return raw.map((s, i) => ({ ...s, yOffset: s.yOffset + (systemYOffsets[i] ?? 0) }));
-  }, [notationStyle, measures, timeSignature, pixelsPerBeat, effectiveLayoutPageWidth, scoreContentWidth, pageOrientation, effectiveLayoutMeasuresPerLine, effectiveLayoutStrictMeasuresPerLine, effectiveLayoutLineBreakBefore, effectiveLayoutPageBreakBefore, effectiveTraditionalSystemGap, layoutGlobalSpacingMultiplier, staves.length, measureStretchFactors, systemYOffsets, scorePageInnerHeight, figurenotesTotalRowHeight, figurenotesChordBlocks, layoutPartsGap, visibleStaffCountForLayout, traditionalLayoutStaffHeight, staffLineSpanPx, figurenotesSize, pickupEnabled]);
+  }, [notationStyle, measures, timeSignature, effectivePixelsPerBeat, effectiveLayoutPageWidth, scoreContentWidth, pageOrientation, effectiveLayoutMeasuresPerLine, effectiveLayoutStrictMeasuresPerLine, effectiveLayoutLineBreakBefore, effectiveLayoutPageBreakBefore, effectiveTraditionalSystemGap, layoutGlobalSpacingMultiplier, staves.length, measureStretchFactors, systemYOffsets, scorePageInnerHeight, scorePageEdgeReservePx, figurenotesTotalRowHeight, figurenotesChordBlocks, layoutPartsGap, visibleStaffCountForLayout, traditionalLayoutStaffHeight, staffLineSpanPx, figurenotesSize, pickupEnabled]);
   useEffect(() => { systemsForScoreRef.current = systemsForScore; }, [systemsForScore]);
   // Nutikas fookus: ainult valitud read; vähem ridu = suurem rea kõrgus (HEV/solfedž)
   const visibleStaffList = useMemo(() => {
@@ -11521,7 +11603,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     ? figurenotesTotalRowHeight
     : (visibleStaffList.length > 0 && visibleStaffList.length < staves.length
       ? focusStaffHeightScaled
-      : ((visibleStaffList.length > 1 || staves.length > 1) ? traditionalStaffStepPx : traditionalScoredHeightPx));
+      : ((visibleStaffList.length > 1 || staves.length > 1) ? traditionalStaffStepPx : traditionalScoredHeightPxEffective));
   const perStaffRowStep = notationStyle === 'FIGURENOTES'
     ? (effectiveStaffHeight + layoutPartsGap)
     : ((visibleStaffList.length > 1 || staves.length > 1) ? traditionalStaffStepPx : (effectiveStaffHeight + layoutPartsGap));
@@ -11550,7 +11632,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     const layoutStaffCount = staves.length || 1;
     if (notationStyle === 'FIGURENOTES') {
       const figureSystemCoreHeight = (nVis * figurenotesTotalRowHeight) + ((nVis - 1) * layoutPartsGap);
-      const data = { measures, timeSignature, pixelsPerBeat, staffSpacing: figureSystemCoreHeight + layoutSystemGap, globalSpacingMultiplier: layoutGlobalSpacingMultiplier, boxesPerRow: effectiveLayoutMeasuresPerLine || 4, pageWidth: scoreContentWidth, pageHeight: scorePageInnerHeight, notationPageHeaderReservePx: scoreHeadBlockReservePx, lineBreakBefore: effectiveLayoutLineBreakBefore, pageBreakBefore: effectiveLayoutPageBreakBefore, figurenotesSize: effectiveFigurenotesSize, enforceMeasuresPerLine: effectiveLayoutStrictMeasuresPerLine, excludePickupFromMeasureCount: pickupEnabled, pickupMeasureIndex: 0 };
+      const data = { measures, timeSignature, pixelsPerBeat: effectivePixelsPerBeat, staffSpacing: figureSystemCoreHeight + layoutSystemGap, globalSpacingMultiplier: layoutGlobalSpacingMultiplier, boxesPerRow: effectiveLayoutMeasuresPerLine || 4, pageWidth: scoreContentWidth, pageHeight: scorePageInnerHeight, notationPageHeaderReservePx: scoreHeadBlockReservePx, notationPageEdgeReservePx: scorePageEdgeReservePx, lineBreakBefore: effectiveLayoutLineBreakBefore, pageBreakBefore: effectiveLayoutPageBreakBefore, figurenotesSize: effectiveFigurenotesSize, enforceMeasuresPerLine: effectiveLayoutStrictMeasuresPerLine, excludePickupFromMeasureCount: pickupEnabled, pickupMeasureIndex: 0 };
       const sys = calculateLayout('figure', pageOrientation === 'landscape' ? 'landscape' : 'portrait', data);
       const lastY = sys.length > 0 ? sys[sys.length - 1].yOffset + (systemYOffsets[sys.length - 1] ?? 0) : 0;
       const maxBaseYOffset = entries.reduce((maxY, { staffIdx, visibleIndex }) => {
@@ -11571,15 +11653,16 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       measureStretchFactors,
       globalSpacingMultiplier: layoutGlobalSpacingMultiplier,
       pageHeight: scorePageInnerHeight,
+      notationPageHeaderReservePx: scoreHeadBlockReservePx, notationPageEdgeReservePx: scorePageEdgeReservePx,
       enforceMeasuresPerLine: effectiveLayoutStrictMeasuresPerLine,
       excludePickupFromMeasureCount: pickupEnabled,
       pickupMeasureIndex: 0,
     };
-    const sys = computeLayout(measures, timeSignature, pixelsPerBeat, scoreContentWidth, opts);
+    const sys = computeLayout(measures, timeSignature, effectivePixelsPerBeat, scoreContentWidth, opts);
     const lastY = sys.length > 0 ? sys[sys.length - 1].yOffset + (systemYOffsets[sys.length - 1] ?? 0) : 0;
     const perStaffCore = sys.length > 0 ? lastY + traditionalLayoutStaffHeight + 40 : traditionalLayoutStaffHeight + 40;
     return scoreHeadBlockReservePx + nVis * perStaffCore + sumBaseYOffset;
-  }, [notationStyle, notationMode, visibleStaffList, staves, effectiveStaffHeight, traditionalLayoutStaffHeight, layoutPartsGap, perStaffRowStep, staffYOffsets, measures, timeSignature, pixelsPerBeat, effectiveLayoutPageWidth, scoreContentWidth, pageOrientation, effectiveLayoutMeasuresPerLine, effectiveLayoutStrictMeasuresPerLine, effectiveLayoutLineBreakBefore, effectiveLayoutPageBreakBefore, effectiveTraditionalSystemGap, layoutGlobalSpacingMultiplier, measureStretchFactors, systemYOffsets, scorePageInnerHeight, figurenotesRowHeight, figurenotesTotalRowHeight, figurenotesSize, figurenotesChordBlocks, figurenotesChordLineGap, figurenotesChordLineHeight, scoreHeadBlockReservePx, useManualStaffOffsets, pickupEnabled]);
+  }, [notationStyle, notationMode, visibleStaffList, staves, effectiveStaffHeight, traditionalLayoutStaffHeight, layoutPartsGap, perStaffRowStep, staffYOffsets, measures, timeSignature, effectivePixelsPerBeat, effectiveLayoutPageWidth, scoreContentWidth, pageOrientation, effectiveLayoutMeasuresPerLine, effectiveLayoutStrictMeasuresPerLine, effectiveLayoutLineBreakBefore, effectiveLayoutPageBreakBefore, effectiveTraditionalSystemGap, layoutGlobalSpacingMultiplier, measureStretchFactors, systemYOffsets, scorePageInnerHeight, scorePageEdgeReservePx, figurenotesRowHeight, figurenotesTotalRowHeight, figurenotesSize, figurenotesChordBlocks, figurenotesChordLineGap, figurenotesChordLineHeight, scoreHeadBlockReservePx, useManualStaffOffsets, pickupEnabled]);
   const scoreNotationPageCount = useMemo(() => {
     const extra = Math.max(0, Number(effectiveLayoutExtraPages) || 0);
     const ch = logicalContentHeight || 800;
@@ -13107,6 +13190,8 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
 
               <div>
                 <label className="block text-sm font-semibold text-amber-900 mb-1">Helistik</label>
+                {!(instrumentConfig[wizardInstrument]?.type === 'harmonyForm') && (
+                <>
                 <p className="text-xs text-amber-700 mb-2">
                   {wizardNotationMethod === 'traditional' && 'Traditsioonilises notatsioonis kuvatakse võtmemärgid (♯ diees, ♭ bemoll).'}
                   {wizardNotationMethod === 'figurenotes' && 'Figuurnotatsioonis noodi sisestus reageerib helistikule: dieesiga toonid (nt D-duur F♯, C♯) = diagonaal paremale üles, bemoliga toonid (nt B-duur E♭, B♭) = diagonaal vasakule üles.'}
@@ -13121,6 +13206,11 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                     <option key={keyVal} value={keyVal}>{t('key.' + keyVal)}</option>
                   ))}
                 </select>
+                </>
+                )}
+                {instrumentConfig[wizardInstrument]?.type === 'harmonyForm' && (
+                  <p className="text-xs text-amber-700">{t('harmonyForm.noKeySignature')}</p>
+                )}
               </div>
 
               <div>
@@ -13191,10 +13281,16 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                 <label className="block text-sm font-semibold text-amber-900 mb-1">{t('toolbox.instruments')}</label>
                 <select
                   value={wizardInstrument}
-                  onChange={(e) => setWizardInstrument(e.target.value)}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setWizardInstrument(v);
+                    if (instrumentConfig[v]?.type === 'harmonyForm') setWizardNotationMethod('traditional');
+                  }}
                   className="w-full px-3 py-2 rounded-lg border-2 border-amber-200 bg-amber-50 text-amber-900"
                 >
-                  {INSTRUMENT_CATEGORIES.map((cat) => (
+                  {INSTRUMENT_CATEGORIES.filter((cat) => (
+                    wizardNotationMethod === 'traditional' ? true : !cat.traditionalOnly
+                  )).map((cat) => (
                     <optgroup key={cat.id} label={t(cat.labelKey)}>
                       {cat.instruments.map((instId) => {
                         const cfg = instrumentConfig[instId];
@@ -15722,6 +15818,43 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                     >
                       {t('chords.add')}
                     </button>
+                    {chords.length > 0 && (
+                      <div className="pt-2 mt-1 border-t border-amber-200">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const ok = typeof window === 'undefined'
+                              ? true
+                              : window.confirm(t('chords.removeAllConfirm'));
+                            if (!ok) return;
+                            saveToHistory(notes);
+                            setChords([]);
+                          }}
+                          className="w-full py-1.5 px-2 rounded border border-amber-400 bg-amber-50 text-amber-900 text-sm font-medium hover:bg-amber-100"
+                        >
+                          {t('chords.removeAll')}
+                        </button>
+                        <p className="text-[10px] text-amber-600 mt-1">{t('chords.removeAllHint')}</p>
+                      </div>
+                    )}
+                    {isHarmonyFormMode && (
+                      <div className="pt-2 mt-2 border-t border-amber-200 space-y-2">
+                        <label className="block text-xs font-semibold text-amber-900 mb-1">{t('harmonyForm.chordBeatStep')}</label>
+                        <p className="text-[10px] text-amber-600 mb-1">{t('harmonyForm.chordBeatStepHint')}</p>
+                        <div className="flex flex-wrap gap-1">
+                          {getHarmonyChordBeatStepOptions(timeSignature).map((step) => (
+                            <button
+                              key={step}
+                              type="button"
+                              onClick={() => { dirtyRef.current = true; setHarmonyFormChordBeatStep(step); }}
+                              className={`px-2 py-1 rounded text-xs font-medium ${harmonyFormChordBeatStep === step ? 'bg-amber-600 text-white' : 'bg-amber-100 text-amber-800 hover:bg-amber-200'}`}
+                            >
+                              {step} {t('harmonyForm.beatsPerChord')}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                     {notationStyle === 'FIGURENOTES' && (
                       <div className="pt-2 mt-2 border-t border-amber-200 space-y-2">
                         <div>
@@ -16174,6 +16307,12 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                     <div className="mt-2 mb-2 px-2 py-1.5 rounded bg-amber-100/80 border border-amber-300 text-amber-900 text-xs">
                       {viewMode === 'score' ? t('view.layoutForScore') : t('view.layoutForPart')}
                     </div>
+                    <p className="px-2 mb-2 text-[11px] text-amber-800">{t('layout.spacingLooseHint')}</p>
+                    {spacingIsPageLimited && (
+                      <p className="px-2 mb-2 text-[11px] text-amber-900 font-medium">
+                        {t('layout.spacingPageLimited')} ({Math.round(effectivePixelsPerBeat)} px)
+                      </p>
+                    )}
                     <div className="mt-4 pt-4 border-t-2 border-amber-200">
                       <h4 className="text-xs font-bold text-amber-900 uppercase mb-2">{t('layout.measuresPerLine')}</h4>
                       <p className="text-xs text-amber-700 mb-2">{t('layout.measuresPerLineHint')}</p>
@@ -16548,7 +16687,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
               <section className="border-r border-slate-300 p-4 overflow-auto">
                 <h4 className="text-xs font-bold uppercase tracking-wide text-slate-700 mb-3">Vasak aken: valik</h4>
                 <div className="flex flex-wrap gap-1.5 mb-3">
-                  {INSTRUMENT_CATEGORIES.map((cat) => (
+                  {INSTRUMENT_CATEGORIES.filter((cat) => notationStyle === 'TRADITIONAL' || !cat.traditionalOnly).map((cat) => (
                     <button
                       key={cat.id}
                       type="button"
@@ -17351,7 +17490,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                         />
                       ) : null}
                       <div
-                        className="flex-shrink-0"
+                        className="nm-score-page-sheet flex-shrink-0"
                         style={{
                           height: a4PageHeightVal,
                           minHeight: a4PageHeightVal,
@@ -17855,11 +17994,12 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                   notationLayoutPageHeight={scorePageInnerHeight}
                   notationFirstPageBodyPx={notationFirstPageBodyPx}
                   physicalPageGapPx={effectiveDeskPageGapPx}
+                  physicalPageFrameYPx={scorePaddingYPx}
                   disablePhysicalPageGaps={showPdfExportPreview}
                   hideCursorOverlay={showPdfExportPreview || isExportingPdf}
                   timeSignature={timeSignature}
                   timeSignatureMode={timeSignatureMode}
-                  pixelsPerBeat={pixelsPerBeat}
+                  pixelsPerBeat={effectivePixelsPerBeat}
                   cursorPosition={cursorPosition}
                   notationMode={notationMode}
                   staffLines={staffLinesForRow}
@@ -18243,6 +18383,14 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                   showBarNumbers={showBarNumbers}
                   barNumberSize={barNumberSize}
                   pickupEnabled={pickupEnabled}
+                  harmonyFormMode={isHarmonyFormInstrument(staff.instrumentId, instrumentConfig)}
+                  harmonyFormChordBeatStep={harmonyFormChordBeatStep}
+                  harmonyFormLyricReserveHeight={isHarmonyFormInstrument(staff.instrumentId, instrumentConfig) ? harmonyFormLyricReserveHeight : 0}
+                  onHarmonyBeatClick={staffIdx === activeStaffIndex && isHarmonyFormInstrument(staff.instrumentId, instrumentConfig) ? (beat) => {
+                    const safe = snapBeatToHarmonyChordGrid(beat, harmonyFormChordBeatStep, timeSignature);
+                    setCursorPosition(safe);
+                    lastBeatClickForLyricRef.current = { beat: safe, at: Date.now() };
+                  } : undefined}
                   voltaNumberSize={voltaNumberSize}
                   showRhythmSyllables={showRhythmSyllables}
                   showAllNoteLabels={showAllNoteLabels}
@@ -19135,7 +19283,7 @@ function getFingeringForNote(pitch, octave, instrumentId) {
 }
 
 // Timeline Component – multi-system layout (VexFlow loogika). (PAGE_BREAK_GAP on defineeritud üleval.)
-function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, pageWidth, cursorPosition, notationMode, staffLines, clefType, keySignature = 'C', relativeNotationShowKeySignature = false, relativeNotationShowTraditionalClef = false, onJoClefPositionChange, joClefFocused = false, onJoClefFocus, instrument = 'single-staff-treble', instrumentNotationVariant = 'standard', instrumentConfig = {}, showBarNumbers = true, barNumberSize = 11, voltaNumberSize = 16, showRhythmSyllables = false, joClefStaffPosition: joClefStaffPositionProp, showAllNoteLabels = false, enableEmojiOverlays = true, noteheadShape = 'oval', noteheadEmoji = '♪', onNoteTeacherLabelChange, onNoteLabelClick, chords = [], isDotted, isRest, selectedDuration, noteInputMode, selectedNoteIndex, isNoteSelected, notes: allNotes, onStaffAddNote, onNoteClick, onNoteMouseDown, onNoteMouseEnter, onNotePitchChange, onNoteBeatChange, canHandDragNotes = false, timeSignatureOffset = { x: 0, y: 0 }, onTimeSignatureOffsetChange, ghostPitch, ghostOctave, ghostAccidental = 0, ghostAccidentalIsExplicit = false, onFigureBeatClick, onChordLineMouseMove, onChordLineClick, notationStyle, layoutMeasuresPerLine = 4, layoutLineBreakBefore = [], layoutPageBreakBefore = [], layoutSystemGap = 120, layoutPartsGap, layoutConnectedBarlines = false, staffRowAlignment = 'center', staffIndexInScore = 0, systemTotalHeight, layoutGlobalSpacingMultiplier = 1, systems: systemsProp, baseYOffset = 0, isActiveStaff = true, staffCount = 1, staffHeight: staffHeightProp, figurenotesSize = 16, figurenotesStems = false, figurenotesChordLineGap = 6, figurenotesChordBlocks = false, figurenotesChordBlocksShowTones = true, figurenotesMelodyShowNoteNames = true, figurenotesRowHeight: figurenotesRowHeightProp, figurenotesChordLineHeight: figurenotesChordLineHeightProp, figurenotesLyricReserveHeight = 0, timeSignatureSize = 16, pedagogicalTimeSigDenominatorType = 'rhythm', pedagogicalTimeSigDenominatorColor = '#1a1a1a', pedagogicalTimeSigDenominatorInstrument = 'handbell', pedagogicalTimeSigDenominatorEmoji = '🥁', singleLineBarlineHalfSpanPx = 20, singleLineBarlineThicknessPx = 2, themeColors: themeColorsProp, pedagogicalPlayheadStyle = 'line', pedagogicalPlayheadEmoji = '🎵', pedagogicalPlayheadEmojiSize = 32, cursorSizePx, cursorLineStrokeWidth = 4, cursorSubRow = 0, pedagogicalPlayheadMovement = 'arch', rhythmCursorColor = '#0ea5e9', rhythmCursorOpacity = 0.55, rhythmCursorWidthMultiplier = 1, rhythmCursorHighContrast = false, isPedagogicalAudioPlaying = false, isExportingAnimation = false, exportCursorRef, scoreContainerRef, pageFlowDirection = 'vertical', pageOrientation = 'portrait', isFirstInBraceGroup = false, braceGroupSize = 0, lyricFontFamily = 'sans-serif', lyricFontSize = 12, lyricBold = false, lyricItalic = false, lyricUnderline = false, lyricWeight = 400, lyricLineYOffset = 0, translateLabel, showLayoutBreakIcons = false, showStaffSpacerHandles = false, showLyricSpacerHandles = false, onSystemYOffsetChange, onSystemXOffsetChange, systemXOffsets = [], onLyricLineYOffsetChange, onToggleLineBreakAfter, onRemoveRepeatMark, selectedRepeatMark = null, selectedRepeatMarks = [], onSelectRepeatMark, onJumpMarkPointerDown, jumpMarkLayoutOverrides = {}, clefHandOffset = { x: 0, y: 0 }, clefHandSizePx = null, onClefPointerDown, activeLyricNoteIndex = null, physicalPageGapPx = 3, disablePhysicalPageGaps = false, hideCursorOverlay = false, exportNotationSvgRef = null, multiStaffInstruments = null, multiStaffMeasuresByInstrument = null, combinedCursorRowOffsetPx = 0, combinedActiveStaffRowIndex = 0, cursorStaffClefType = null, tinWhistleLinkedFingeringScale = 1, linkedNotationByStaffId = null, notationStaffSpace, activeLegatoSlurPair = null, onLegatoPathClick = undefined, onMeasureStartXChange = undefined, notationLayoutPageHeight = null, notationFirstPageBodyPx = null, pickupEnabled = false }) {
+function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, pageWidth, cursorPosition, notationMode, staffLines, clefType, keySignature = 'C', relativeNotationShowKeySignature = false, relativeNotationShowTraditionalClef = false, onJoClefPositionChange, joClefFocused = false, onJoClefFocus, instrument = 'single-staff-treble', instrumentNotationVariant = 'standard', instrumentConfig = {}, showBarNumbers = true, barNumberSize = 11, voltaNumberSize = 16, showRhythmSyllables = false, joClefStaffPosition: joClefStaffPositionProp, showAllNoteLabels = false, enableEmojiOverlays = true, noteheadShape = 'oval', noteheadEmoji = '♪', onNoteTeacherLabelChange, onNoteLabelClick, chords = [], isDotted, isRest, selectedDuration, noteInputMode, selectedNoteIndex, isNoteSelected, notes: allNotes, onStaffAddNote, onNoteClick, onNoteMouseDown, onNoteMouseEnter, onNotePitchChange, onNoteBeatChange, canHandDragNotes = false, timeSignatureOffset = { x: 0, y: 0 }, onTimeSignatureOffsetChange, ghostPitch, ghostOctave, ghostAccidental = 0, ghostAccidentalIsExplicit = false, onFigureBeatClick, onChordLineMouseMove, onChordLineClick, notationStyle, layoutMeasuresPerLine = 4, layoutLineBreakBefore = [], layoutPageBreakBefore = [], layoutSystemGap = 120, layoutPartsGap, layoutConnectedBarlines = false, staffRowAlignment = 'center', staffIndexInScore = 0, systemTotalHeight, layoutGlobalSpacingMultiplier = 1, systems: systemsProp, baseYOffset = 0, isActiveStaff = true, staffCount = 1, staffHeight: staffHeightProp, figurenotesSize = 16, figurenotesStems = false, figurenotesChordLineGap = 6, figurenotesChordBlocks = false, figurenotesChordBlocksShowTones = true, figurenotesMelodyShowNoteNames = true, figurenotesRowHeight: figurenotesRowHeightProp, figurenotesChordLineHeight: figurenotesChordLineHeightProp, figurenotesLyricReserveHeight = 0, timeSignatureSize = 16, pedagogicalTimeSigDenominatorType = 'rhythm', pedagogicalTimeSigDenominatorColor = '#1a1a1a', pedagogicalTimeSigDenominatorInstrument = 'handbell', pedagogicalTimeSigDenominatorEmoji = '🥁', singleLineBarlineHalfSpanPx = 20, singleLineBarlineThicknessPx = 2, themeColors: themeColorsProp, pedagogicalPlayheadStyle = 'line', pedagogicalPlayheadEmoji = '🎵', pedagogicalPlayheadEmojiSize = 32, cursorSizePx, cursorLineStrokeWidth = 4, cursorSubRow = 0, pedagogicalPlayheadMovement = 'arch', rhythmCursorColor = '#0ea5e9', rhythmCursorOpacity = 0.55, rhythmCursorWidthMultiplier = 1, rhythmCursorHighContrast = false, isPedagogicalAudioPlaying = false, isExportingAnimation = false, exportCursorRef, scoreContainerRef, pageFlowDirection = 'vertical', pageOrientation = 'portrait', isFirstInBraceGroup = false, braceGroupSize = 0, lyricFontFamily = 'sans-serif', lyricFontSize = 12, lyricBold = false, lyricItalic = false, lyricUnderline = false, lyricWeight = 400, lyricLineYOffset = 0, translateLabel, showLayoutBreakIcons = false, showStaffSpacerHandles = false, showLyricSpacerHandles = false, onSystemYOffsetChange, onSystemXOffsetChange, systemXOffsets = [], onLyricLineYOffsetChange, onToggleLineBreakAfter, onRemoveRepeatMark, selectedRepeatMark = null, selectedRepeatMarks = [], onSelectRepeatMark, onJumpMarkPointerDown, jumpMarkLayoutOverrides = {}, clefHandOffset = { x: 0, y: 0 }, clefHandSizePx = null, onClefPointerDown, activeLyricNoteIndex = null, physicalPageGapPx = 3, physicalPageFrameYPx = 0, disablePhysicalPageGaps = false, hideCursorOverlay = false, exportNotationSvgRef = null, multiStaffInstruments = null, multiStaffMeasuresByInstrument = null, combinedCursorRowOffsetPx = 0, combinedActiveStaffRowIndex = 0, cursorStaffClefType = null, tinWhistleLinkedFingeringScale = 1, linkedNotationByStaffId = null, notationStaffSpace, activeLegatoSlurPair = null, onLegatoPathClick = undefined, onMeasureStartXChange = undefined, notationLayoutPageHeight = null, notationFirstPageBodyPx = null, pickupEnabled = false, harmonyFormMode = false, harmonyFormChordBeatStep = 4, harmonyFormLyricReserveHeight = 0, onHarmonyBeatClick }) {
   const themeColors = themeColorsProp || { staffLineColor: '#000', noteFill: '#1a1a1a', textColor: '#1a1a1a', isDark: false };
   const safeKey = keySignature ?? 'C';
   // Alati lõplik number (mitte NaN) — varajane `return null` enne hookide kasutamist rikkus Reacti hookide reeglid ja võis jätta noodiala tühjaks.
@@ -19249,27 +19397,29 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
     ? notationFirstPageBodyPx
     : a4PageHeight;
   const notationRestBody = a4PageHeight;
-  const physicalPageIndexForLayoutY = (y) => {
-    const yy = Math.max(0, y);
-    if (yy < notationFirstBody) return 0;
-    return 1 + Math.floor((yy - notationFirstBody) / notationRestBody);
-  };
   const totalPagesFromContentHeight = (h) => {
     const hh = Math.max(0, h);
     if (hh <= notationFirstBody) return 1;
     return 1 + Math.ceil((hh - notationFirstBody) / notationRestBody);
   };
   const totalPages = Math.max(1, totalPagesFromContentHeight(totalHeightLogical));
-  // Screen-only "physical page gaps" like MuseScore/Docs (keeps logical layout & export intact).
+  // Screen-only: skip desk gap + per-page paper padding (full A4 stripe vs inner layout Y).
   const verticalPageGapPx = (!disablePhysicalPageGaps && !isHorizontal) ? Math.max(0, Number(physicalPageGapPx) || 0) : 0;
+  const verticalPageFrameYPx = (!disablePhysicalPageGaps && !isHorizontal) ? Math.max(0, Number(physicalPageFrameYPx) || 0) : 0;
+  const verticalPageExtraPx = verticalPageGapPx + verticalPageFrameYPx;
   const horizontalPageGapPx = (!disablePhysicalPageGaps && isHorizontal) ? Math.max(0, Number(physicalPageGapPx) || 0) : 0;
-  const systemsForDisplay = verticalPageGapPx > 0
-    ? systems.map((sys) => {
-        const pageIndex = physicalPageIndexForLayoutY(sys.yOffset || 0);
-        return { ...sys, yOffset: (sys.yOffset || 0) + pageIndex * verticalPageGapPx };
-      })
+  const systemsForDisplay = verticalPageExtraPx > 0
+    ? systems.map((sys) => ({
+        ...sys,
+        yOffset: layoutYToDeskDisplayY(sys.yOffset || 0, {
+          firstBody: notationFirstBody,
+          restBody: notationRestBody,
+          deskGapPx: verticalPageGapPx,
+          pageFrameYPx: verticalPageFrameYPx,
+        }),
+      }))
     : systems;
-  const totalHeight = verticalPageGapPx > 0 ? (totalHeightLogical + Math.max(0, totalPages - 1) * verticalPageGapPx) : totalHeightLogical;
+  const totalHeight = verticalPageExtraPx > 0 ? (totalHeightLogical + Math.max(0, totalPages - 1) * verticalPageExtraPx) : totalHeightLogical;
   const centerY = timelineHeight / 2;
   const pw = pageWidth || LAYOUT.PAGE_WIDTH_MIN;
   const marginLeft = isFigurenotesMode && systemsComputed.length > 0
@@ -20029,6 +20179,11 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
           onLegatoPathClick={onLegatoPathClick}
           onMeasureStartXChange={onMeasureStartXChange}
           pickupEnabled={pickupEnabled}
+          harmonyFormMode={harmonyFormMode}
+          harmonyFormChordBeatStep={harmonyFormChordBeatStep}
+          harmonyFormNotes={allNotes}
+          lyricReserveHeight={harmonyFormLyricReserveHeight}
+          onHarmonyBeatClick={onHarmonyBeatClick}
         />
       )}
 

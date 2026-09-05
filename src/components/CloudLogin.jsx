@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { useGoogleLogin } from '@react-oauth/google';
 import { useNavigate } from 'react-router-dom';
-import { getStorageForLogin, getStorageForRead, getLoggedInUser, isLoggedIn, setLoggedInUser, clearMicrosoftAuthSession, clearMsalPreRedirectKeys, KEY_GOOGLE_TOKEN, KEY_GOOGLE_EXPIRY, KEY_MICROSOFT_TOKEN, KEY_MICROSOFT_EXPIRY, setGoogleGrantedScopes, setMicrosoftGrantedScopes } from '../services/authStorage';
+import { getStorageForLogin, getStorageForRead, getLoggedInUser, isLoggedIn, setLoggedInUser, clearMicrosoftAuthSession, clearMsalPreRedirectKeys, KEY_GOOGLE_TOKEN, KEY_GOOGLE_EXPIRY, KEY_MICROSOFT_TOKEN, KEY_MICROSOFT_EXPIRY, setGoogleGrantedScopes, setMicrosoftGrantedScopes, assertCloudAccess, hasGoogleReadPermission, hasMicrosoftReadPermission } from '../services/authStorage';
 import { formatAuthError } from '../utils/authError';
 import { getMsalPublicClientApplication } from '../services/msalBrowser';
 import { LOCALE_STORAGE_KEY, DEFAULT_LOCALE, getTranslations } from '../i18n';
 import { getGoogleRedirectUri } from '../utils/googleRedirectUri';
+import { GOOGLE_SCOPE_IDENTITY, GOOGLE_SCOPE_DRIVE, GOOGLE_SCOPE_READ, GOOGLE_SCOPE_WRITE } from '../services/googleOAuthScopes';
 
 function getT() {
   try {
@@ -19,8 +20,6 @@ function getT() {
 const googleClientId = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_GOOGLE_CLIENT_ID) || '';
 
 const microsoftClientId = String((typeof import.meta !== 'undefined' && import.meta.env?.VITE_MICROSOFT_CLIENT_ID) || '').trim();
-const GOOGLE_SCOPE_READ = 'openid email profile https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/drive.install';
-const GOOGLE_SCOPE_WRITE = 'openid email profile https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.install';
 /** MSAL v5 / OIDC: openid (+ profile, offline_access) peab olemas olema koos Graph scope'idega. */
 const MICROSOFT_OIDC_BASE = ['openid', 'profile', 'offline_access'];
 /** OneDrive (kaustad, salvestus): Graph POST /children nõuab Files.ReadWrite — ainult Files.Read annab 403. */
@@ -238,7 +237,7 @@ function useCloudLoginWithProvider(mode = 'login', stayLoggedIn = false, onError
             storage.setItem(KEY_GOOGLE_TOKEN, tokenResponse.access_token);
             const expiresAt = tokenResponse.expires_in ? Date.now() + tokenResponse.expires_in * 1000 : 0;
             storage.setItem(KEY_GOOGLE_EXPIRY, String(expiresAt));
-            setGoogleGrantedScopes(tokenResponse.scope || options.googleScope || GOOGLE_SCOPE_READ);
+            setGoogleGrantedScopes(tokenResponse.scope || options.googleScope || GOOGLE_SCOPE_IDENTITY);
           }
           // Vercel fix: suuna alles siis, kui auth andmed on kinnitatud (loe tagasi), et /app ei laadi enne kui isLoggedIn() töötab.
           // COOP: ära kasuta window.close() – sisselogimine suunab /app poole; close() põhjustaks Cross-Origin-Opener-Policy vigu.
@@ -289,7 +288,7 @@ function useCloudLoginWithProvider(mode = 'login', stayLoggedIn = false, onError
     if (!googleClientId || typeof window === 'undefined') return;
     rememberGoogleReturnUrl();
     const redirectUri = getGoogleRedirectUri();
-    const scope = encodeURIComponent(options.googleScope || GOOGLE_SCOPE_READ);
+    const scope = encodeURIComponent(options.googleScope || GOOGLE_SCOPE_IDENTITY);
     const state = encodeURIComponent(JSON.stringify({ ts: Date.now(), mode }));
     const url =
       'https://accounts.google.com/o/oauth2/v2/auth' +
@@ -326,7 +325,7 @@ function useCloudLoginWithProvider(mode = 'login', stayLoggedIn = false, onError
       }
     },
     flow: 'implicit',
-    scope: options.googleScope || GOOGLE_SCOPE_READ
+    scope: options.googleScope || GOOGLE_SCOPE_IDENTITY
   });
 
   const handleGoogleClick = () => {
@@ -433,7 +432,7 @@ function useCloudLoginWithProvider(mode = 'login', stayLoggedIn = false, onError
   return { handleGoogleClick, handleMicrosoftClick, microsoftInProgress };
 }
 
-function CloudLoginButtonsInner({ mode = 'login', stayLoggedIn = false, onError, googleScope = GOOGLE_SCOPE_READ, microsoftScopes = MICROSOFT_SCOPE_READ }) {
+function CloudLoginButtonsInner({ mode = 'login', stayLoggedIn = false, onError, googleScope = GOOGLE_SCOPE_IDENTITY, microsoftScopes = MICROSOFT_SCOPE_REGISTER_MIN }) {
   const { handleGoogleClick, handleMicrosoftClick, microsoftInProgress } = useCloudLoginWithProvider(mode, stayLoggedIn, onError, { googleScope, microsoftScopes });
   const t = getT();
   const label = mode === 'register' ? (t['auth.registerCloud'] || 'Või registreeru pilveteenusega') : (t['auth.loginOrRegisterCloud'] || 'Või logi sisse pilveteenusega');
@@ -499,7 +498,7 @@ function CloudLoginButtonsInner({ mode = 'login', stayLoggedIn = false, onError,
   );
 }
 
-export function CloudLoginButtons({ mode = 'login', stayLoggedIn = false, onError, googleScope = GOOGLE_SCOPE_READ, microsoftScopes = MICROSOFT_SCOPE_READ }) {
+export function CloudLoginButtons({ mode = 'login', stayLoggedIn = false, onError, googleScope = GOOGLE_SCOPE_IDENTITY, microsoftScopes = MICROSOFT_SCOPE_REGISTER_MIN }) {
   return <CloudLoginButtonsInner mode={mode} stayLoggedIn={stayLoggedIn} onError={onError} googleScope={googleScope} microsoftScopes={microsoftScopes} />;
 }
 
@@ -528,7 +527,8 @@ export async function requestGoogleReadPermission() {
   const response = await new Promise((resolve, reject) => {
     const tokenClient = window.google.accounts.oauth2.initTokenClient({
       client_id: googleClientId,
-      scope: GOOGLE_SCOPE_READ,
+      scope: GOOGLE_SCOPE_DRIVE,
+      include_granted_scopes: true,
       prompt: 'consent',
       callback: (resp) => {
         if (resp?.error) reject(new Error(resp.error_description || resp.error));
@@ -541,9 +541,45 @@ export async function requestGoogleReadPermission() {
   if (response?.access_token && storage) {
     storage.setItem(KEY_GOOGLE_TOKEN, response.access_token);
     storage.setItem(KEY_GOOGLE_EXPIRY, String(Date.now() + Number(response.expires_in || 3600) * 1000));
-    setGoogleGrantedScopes(response.scope || GOOGLE_SCOPE_READ);
+    setGoogleGrantedScopes(response.scope || GOOGLE_SCOPE_DRIVE);
   }
   return response;
+}
+
+/** Kui kasutaja on Google'iga sisse logitud, aga Drive luba puudub, küsi drive.file. */
+export async function ensureGoogleDriveAccess(actionLabel = 'Google Drive') {
+  const access = assertCloudAccess('google', actionLabel);
+  if (access.ok) return access;
+  const user = getLoggedInUser();
+  const provider = String(user?.provider || '').toLowerCase();
+  if (provider !== 'google') return access;
+  try {
+    await requestGoogleReadPermission();
+  } catch (e) {
+    return { ok: false, error: e?.message || `${actionLabel}: Google Drive luba puudub.` };
+  }
+  if (!hasGoogleReadPermission()) {
+    return { ok: false, error: `${actionLabel}: Google Drive luba puudub.` };
+  }
+  return assertCloudAccess('google', actionLabel);
+}
+
+/** Kui kasutaja on Microsoftiga sisse logitud, aga OneDrive luba puudub, küsi Files.ReadWrite. */
+export async function ensureMicrosoftCloudAccess(actionLabel = 'OneDrive') {
+  const access = assertCloudAccess('microsoft', actionLabel);
+  if (access.ok) return access;
+  const user = getLoggedInUser();
+  const provider = String(user?.provider || '').toLowerCase();
+  if (provider !== 'microsoft') return access;
+  try {
+    await requestMicrosoftReadPermission();
+  } catch (e) {
+    return { ok: false, error: e?.message || `${actionLabel}: OneDrive luba puudub.` };
+  }
+  if (!hasMicrosoftReadPermission()) {
+    return { ok: false, error: `${actionLabel}: OneDrive luba puudub.` };
+  }
+  return assertCloudAccess('microsoft', actionLabel);
 }
 
 export async function requestMicrosoftReadPermission() {
@@ -568,4 +604,4 @@ export async function requestMicrosoftReadPermission() {
   return tokenResponse;
 }
 
-export { GOOGLE_SCOPE_READ, GOOGLE_SCOPE_WRITE, MICROSOFT_SCOPE_READ, MICROSOFT_SCOPE_WRITE, MICROSOFT_SCOPE_REGISTER_MIN };
+export { GOOGLE_SCOPE_IDENTITY, GOOGLE_SCOPE_DRIVE, GOOGLE_SCOPE_READ, GOOGLE_SCOPE_WRITE, MICROSOFT_SCOPE_READ, MICROSOFT_SCOPE_WRITE, MICROSOFT_SCOPE_REGISTER_MIN };

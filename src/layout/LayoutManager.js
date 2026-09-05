@@ -4,7 +4,7 @@
  * getStaffHeight.
  */
 
-import { getPaperDimensionsPx } from '../utils/pageGeometry';
+import { getPaperDimensionsPx, getNotationPageBodies, snapSystemYToPage } from '../utils/pageGeometry';
 import { measureLengthInQuarterBeats } from '../musical/timeSignature';
 
 const DEFAULT_PAGE_DIMS = getPaperDimensionsPx('a4', 'portrait');
@@ -26,8 +26,13 @@ export const LAYOUT = {
    * Paigutus kasutab sisemist sisu kasti (paber – padding), et portrait↔landscape ei murraks sisu vale kõrguse järgi.
    */
   SCORE_SHEET_PADDING_MM: 15,
+  /**
+   * Extra keep-out at the bottom of each page’s notation area (inside the padded sheet).
+   * If the next staff would sit in this band, it goes to the next page.
+   */
+  PAGE_EDGE_RESERVE_MM: 16,
   /** Vertikaalne vahe ekraanil lehtede vahel (laua taust); peab klappima Timeline `physicalPageGapPx`. */
-  SCORE_DESK_PAGE_GAP_PX: 28,
+  SCORE_DESK_PAGE_GAP_PX: 36,
   /** Lehe laius/kõrgus px (96 DPI), vaikimisi A4 portrait. */
   PAGE_WIDTH_PX: DEFAULT_PAGE_DIMS.width,
   PAGE_HEIGHT_PX: DEFAULT_PAGE_DIMS.height,
@@ -95,6 +100,8 @@ export function computeLayout(measures, timeSignature, pixelsPerBeat, pageWidth,
     excludePickupFromMeasureCount = false,
     pickupMeasureIndex = 0,
     enforceMeasuresPerLine = true,
+    notationPageHeaderReservePx = 0,
+    notationPageEdgeReservePx = 0,
   } = layoutOptions;
   const mult = Math.max(0.25, Math.min(3, Number(globalSpacingMultiplier) || 1));
   const effectiveMeasuresPerLine = measuresPerLine > 0 ? Math.max(1, Math.round(measuresPerLine / mult)) : 0;
@@ -104,6 +111,18 @@ export function computeLayout(measures, timeSignature, pixelsPerBeat, pageWidth,
     ? optionsStaffSpacing
     : (staffCount || 1) * staffHeightForStep + systemGap;
   const pageHeight = typeof optionsPageHeight === 'number' && optionsPageHeight > 0 ? optionsPageHeight : null;
+  const { firstBody: firstPageBodyH, restBody: restPageH } = pageHeight != null
+    ? getNotationPageBodies(pageHeight, notationPageHeaderReservePx)
+    : { firstBody: 0, restBody: 0 };
+  const placeSystemY = (proposedY, systemIndex, forcePageBreak) => snapSystemYToPage({
+    proposedY,
+    occupyHeight: step,
+    firstBody: firstPageBodyH,
+    restBody: restPageH,
+    forcePageBreak: !!forcePageBreak && systemIndex > 0,
+    isFirstSystem: systemIndex === 0,
+    pageEdgeReservePx: notationPageEdgeReservePx,
+  });
   const lineSet = new Set(Array.isArray(lineBreakBefore) ? lineBreakBefore : []);
   const pageSet = new Set(Array.isArray(pageBreakBefore) ? pageBreakBefore : []);
   const getFactor = (i) => (Array.isArray(measureStretchFactors) && typeof measureStretchFactors[i] === 'number')
@@ -145,16 +164,11 @@ export function computeLayout(measures, timeSignature, pixelsPerBeat, pageWidth,
       if (forceBreak && currentRow.length > 0) {
         const sys = buildSystem([...currentRow], systems.length, nextPageBreak);
         if (sys) {
-          if (pageHeight != null && yAcc + step > pageHeight && yAcc > 0) {
-            sys.pageBreakBefore = true;
-            yAcc = 0;
-          }
-          sys.yOffset = yAcc;
-          yAcc += step;
-          if (nextPageBreak) {
-            yAcc += PAGE_BREAK_GAP;
-            nextPageBreak = false;
-          }
+          const placed = placeSystemY(yAcc, systems.length, nextPageBreak);
+          if (placed.pageBreak) sys.pageBreakBefore = true;
+          sys.yOffset = placed.y;
+          yAcc = placed.y + step;
+          nextPageBreak = false;
           systems.push(sys);
         }
         currentRow = [];
@@ -167,11 +181,9 @@ export function computeLayout(measures, timeSignature, pixelsPerBeat, pageWidth,
     if (currentRow.length > 0) {
       const sys = buildSystem(currentRow, systems.length, nextPageBreak);
       if (sys) {
-        if (pageHeight != null && yAcc + step > pageHeight && yAcc > 0) {
-          sys.pageBreakBefore = true;
-          yAcc = 0;
-        }
-        sys.yOffset = yAcc;
+        const placed = placeSystemY(yAcc, systems.length, nextPageBreak);
+        if (placed.pageBreak) sys.pageBreakBefore = true;
+        sys.yOffset = placed.y;
         systems.push(sys);
       }
     }
@@ -192,6 +204,7 @@ export function computeLayout(measures, timeSignature, pixelsPerBeat, pageWidth,
   const systems = [];
   let measureIdx = 0;
   let systemIndex = 0;
+  let lastPlacedY = 0;
   while (measureIdx < measures.length) {
     let totalBeatCount = 0;
     const rowIndices = [];
@@ -214,18 +227,18 @@ export function computeLayout(measures, timeSignature, pixelsPerBeat, pageWidth,
       ? rowIndices.map((i) => ((measures[i].beatCount ?? beatsPerMeasure) * getFactor(i) / totalWeight) * availableWidth)
       : rowIndices.map((i) => (measures[i].beatCount ?? beatsPerMeasure) * (availableWidth / totalBeatCount));
     const pixelsPerBeatForRow = totalBeatCount > 0 ? availableWidth / totalBeatCount : pixelsPerBeat;
-    const yOffset = systemIndex * step;
-    const autoPageBreak = pageHeight != null && systemIndex > 0
-      && Math.floor(yOffset / pageHeight) > Math.floor(((systemIndex - 1) * step) / pageHeight);
+    const proposedY = systemIndex === 0 ? 0 : lastPlacedY + step;
+    const placed = placeSystemY(proposedY, systemIndex, false);
     systems.push({
       systemIndex,
       measureIndices: rowIndices,
       measureWidths,
-      yOffset,
+      yOffset: placed.y,
       pixelsPerBeat: pixelsPerBeatForRow,
       measureWidth: measureWidths[0],
-      pageBreakBefore: autoPageBreak,
+      pageBreakBefore: placed.pageBreak,
     });
+    lastPlacedY = placed.y;
     measureIdx += rowIndices.length;
     systemIndex++;
   }

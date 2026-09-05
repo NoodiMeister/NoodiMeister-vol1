@@ -80,3 +80,87 @@ export function getPageCount (contentExtentPx, pageExtentPx) {
   const safeContentExtent = Math.max(safePageExtent, Number(contentExtentPx) || safePageExtent);
   return Math.max(1, Math.ceil(safeContentExtent / safePageExtent));
 }
+
+/**
+ * Layout Y uses the inner score box (paper minus padding). The first page is shorter
+ * because the title/author block sits above the SVG.
+ */
+export function getNotationPageBodies(pageInnerHeightPx, headerReservePx = 0) {
+  const pageH = Math.max(0, Number(pageInnerHeightPx) || 0);
+  if (!(pageH > 0)) return { pageH: 0, firstBody: 0, restBody: 0 };
+  const reserveRaw = Number(headerReservePx);
+  const reserve = Number.isFinite(reserveRaw) && reserveRaw > 0
+    ? Math.min(Math.max(0, reserveRaw), Math.max(0, pageH - 120))
+    : 0;
+  const firstBody = Math.max(120, pageH - reserve);
+  return { pageH, firstBody, restBody: pageH };
+}
+
+export function pageContentBottomForLayoutY(y, firstBody, restBody) {
+  const yy = Math.max(0, Number(y) || 0);
+  const first = Math.max(1, Number(firstBody) || 1);
+  const rest = Math.max(1, Number(restBody) || first);
+  if (yy < first) return first;
+  const idx = Math.floor((yy - first) / rest);
+  return first + (idx + 1) * rest;
+}
+
+/** Keep-out so a staff is not packed into the last sliver of a page. */
+export function resolvePageEdgeGutterPx(occupyHeight, pageSpanPx, pageEdgeReservePx = 0) {
+  const occupy = Math.max(0, Number(occupyHeight) || 0);
+  const span = Math.max(1, Number(pageSpanPx) || 1);
+  const reserve = Math.max(0, Number(pageEdgeReservePx) || 0);
+  const gutter = Math.max(reserve, Math.round(occupy * 0.3));
+  const maxGutter = Math.max(0, Math.floor(span * 0.28));
+  return Math.min(gutter, maxGutter);
+}
+
+/** If a system would cross a page edge (or a manual page break), place it at the next page start. */
+export function snapSystemYToPage({
+  proposedY,
+  occupyHeight,
+  firstBody,
+  restBody,
+  forcePageBreak = false,
+  isFirstSystem = false,
+  pageEdgeReservePx = 0,
+} = {}) {
+  const y0 = Math.max(0, Number(proposedY) || 0);
+  const occupy = Math.max(0, Number(occupyHeight) || 0);
+  if (!(Number(firstBody) > 0) || !(Number(restBody) > 0)) {
+    return { y: y0, pageBreak: !!forcePageBreak };
+  }
+  if (isFirstSystem && !forcePageBreak) return { y: y0, pageBreak: false };
+  const bottom = pageContentBottomForLayoutY(y0, firstBody, restBody);
+  const pageSpan = y0 < firstBody ? firstBody : restBody;
+  const gutter = resolvePageEdgeGutterPx(occupy, pageSpan, pageEdgeReservePx);
+  const usableBottom = bottom - gutter;
+  if (forcePageBreak || y0 + occupy > usableBottom) {
+    return { y: bottom, pageBreak: true };
+  }
+  return { y: y0, pageBreak: false };
+}
+
+export function physicalPageIndexForLayoutY(y, firstBody, restBody) {
+  const yy = Math.max(0, Number(y) || 0);
+  const first = Math.max(1, Number(firstBody) || 1);
+  const rest = Math.max(1, Number(restBody) || first);
+  if (yy < first) return 0;
+  return 1 + Math.floor((yy - first) / rest);
+}
+
+/**
+ * Screen desk: each paper stripe is full A4 (including padding). Layout Y is inner-only.
+ * Crossing a page must skip desk gap + that per-page padding, or the staff sits in the empty band.
+ */
+export function layoutYToDeskDisplayY(layoutY, {
+  firstBody,
+  restBody,
+  deskGapPx = 0,
+  pageFrameYPx = 0,
+} = {}) {
+  const y = Number(layoutY) || 0;
+  const pageIndex = physicalPageIndexForLayoutY(y, firstBody, restBody);
+  const extra = Math.max(0, Number(deskGapPx) || 0) + Math.max(0, Number(pageFrameYPx) || 0);
+  return y + pageIndex * extra;
+}

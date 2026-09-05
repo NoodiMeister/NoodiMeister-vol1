@@ -104,6 +104,7 @@ import {
   findNoteInInstMeasuresById,
   isNoteLeftEndpointForSpanner,
 } from '../notation/tieSlurAnchors';
+import { HarmonyFormStaffLayer } from './HarmonyFormStaffLayer';
 
 const LAYOUT = { MARGIN_LEFT: 60, CLEF_WIDTH: 45, MEASURE_MIN_WIDTH: 28 };
 
@@ -605,6 +606,11 @@ export function TraditionalNotationView({
   onLegatoPathClick,
   onMeasureStartXChange,
   pickupEnabled = false,
+  harmonyFormMode = false,
+  harmonyFormChordBeatStep = 4,
+  harmonyFormNotes = [],
+  lyricReserveHeight = 0,
+  onHarmonyBeatClick,
 }) {
   const spacing = staffSpaceProp ?? STAFF_SPACE;
   const isVabanotatsioon = notationMode === 'vabanotatsioon';
@@ -1200,6 +1206,41 @@ export function TraditionalNotationView({
                   ? staffCenterY
                   : getVerticalPosition(pitch, octave, instClef, { centerY: staffCenterY, staffSpace: spacing, keySignature }))
                 : resolvePitchY;
+
+              if (harmonyFormMode && staffIndex === 0) {
+                return (
+                  <HarmonyFormStaffLayer
+                    key={`harmony-form-${sys.systemIndex}`}
+                    sys={sys}
+                    staffY={staffY}
+                    marginLeft={marginLeft}
+                    timeSignature={timeSignature}
+                    chords={chords}
+                    notes={harmonyFormNotes}
+                    harmonyFormChordBeatStep={harmonyFormChordBeatStep}
+                    measureWidths={adjustedMeasureWidthsForSys}
+                    showBarNumbers={showBarNumbers}
+                    barNumberSize={barNumberSize}
+                    isFirstSystem={sys.systemIndex === 0}
+                    lyricFontFamily={lyricFontFamily}
+                    lyricFontSize={lyricFontSize}
+                    lyricBold={lyricBold}
+                    lyricItalic={lyricItalic}
+                    lyricUnderline={lyricUnderline}
+                    lyricWeight={lyricWeight}
+                    lyricLineYOffset={lyricLineYOffset}
+                    lyricReserveHeight={lyricReserveHeight}
+                    onBeatClick={onHarmonyBeatClick}
+                    onSelectRepeatMark={onSelectRepeatMark}
+                    selectedRepeatMark={selectedRepeatMark}
+                    selectedRepeatMarks={selectedRepeatMarks}
+                    onJumpMarkPointerDown={onJumpMarkPointerDown}
+                    jumpMarkLayoutOverrides={jumpMarkLayoutOverrides}
+                    effectiveMeasures={instMeasures}
+                  />
+                );
+              }
+              if (harmonyFormMode) return null;
 
               return (
                 <g key={inst.id + staffIndex}>

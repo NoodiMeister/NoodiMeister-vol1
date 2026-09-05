@@ -2398,49 +2398,11 @@ export function FigurenotesView({
                               : chordFontSizeBase;
                           const chordRowTop =
                             sys.yOffset + melodyRowHeight + chordLineGap;
-                          const chordY =
-                            chordLineHeight > 0
-                              ? chordRowTop + chordLineHeight / 2
-                              : sys.yOffset + padVertical + 4;
 
+                          // Chord-block mode off (or no chord row): do not fall back to
+                          // overlaying chord names on the melody figures.
                           if (!chordBlocksEnabled || chordLineHeight <= 0) {
-                            return chordsInMeasure.map((chord) => {
-                              const chordX =
-                                beatContentLeft +
-                                (chord.beatPosition - measure.startBeat) *
-                                  beatWidth;
-                              return (
-                                <g key={chord.id}>
-                                  <text
-                                    x={chordX}
-                                    y={chordY}
-                                    textAnchor="start"
-                                    dominantBaseline="middle"
-                                    fontSize={chordFontSize}
-                                    fontWeight="bold"
-                                    fill="#1a1a1a"
-                                    fontFamily="sans-serif"
-                                  >
-                                    {chord.chord}
-                                  </text>
-                                  {chord.figuredBass && (
-                                    <text
-                                      x={chordX}
-                                      y={chordY + chordFontSize * 0.85}
-                                      textAnchor="start"
-                                      dominantBaseline="middle"
-                                      fontSize={Math.round(
-                                        chordFontSize * 0.75,
-                                      )}
-                                      fill="#555"
-                                      fontFamily="serif"
-                                    >
-                                      {chord.figuredBass}
-                                    </text>
-                                  )}
-                                </g>
-                              );
-                            });
+                            return null;
                           }
 
                           const rectGap = 2;

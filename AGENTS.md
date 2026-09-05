@@ -93,6 +93,23 @@ Kõik muudatused peavad hoidma kasutaja teekonnad tervena:
   - sisestusvoogudes ei tohi olla märgatavat lag'i, topeltsisestust, vahelejätmisi ega cursor-jitter'it
   - enne sisestusloogika muutmist võrdle käitumist MuseScore/Finale/Sibelius tüüpi töövoogudega
 
+- **Standard: Paigutus “Vahe: lai” vs lehe laius**
+  - `Vahe: tavaline` (85 px/löök) ja `Vahe: lai` (120 px/löök) on **soovitud** tihedus.
+  - Lukustatud taktide arv reas (nt 4 takti 4/4) peab **alati mahutama lehe sisu laiusesse**; ülejääv osa ei tohi minna `overflow: hidden` taha nähtamatuks.
+  - Figuurnotatsiooni rea `measureWidths` summa ≤ rea content-laius; vajadusel skaleeritakse px/löök alla.
+
+- **Standard: landscape / mitme lehe noodirida**
+  - Paigutus (`yOffset`) elab **sisemises** lehekastis (`scorePageInnerHeight`); ekraanil on iga A4 **täislehe** riba + lauavahe.
+  - Kui rida ei mahu lehele, peab `yOffset` minema **järgmise lehe algusesse** (mitte `yAcc = 0` ega lehepiiri sisse).
+  - **Lehe serv (kohustuslik):** iga lehe alaosas on tuntav varu (`PAGE_EDGE_RESERVE_MM`, vähemalt ~30% rea kõrgusest). Kui järgmine noodirida jääks sellesse ribasse, viiakse see automaatselt järgmisele lehele.
+  - Ekraaninihe: `layoutY + pageIndex * (deskGap + pagePaddingY)`. Ainult `deskGap` jätab rea kahe lehe tühja riba peale (eriti landscape, kus leht on madal).
+  - PDF/trükk (`disablePhysicalPageGaps`) jääb loogilisele Y-le; lauavahe on ainult ekraan.
+
+- **Standard: figuurnotatsiooni akordid (kuvamine vs andmed)**
+  - **Akordiplokid** (`figurenotesChordBlocks`) on **kuvamise** lüliti: sisse = värviline akordirida; välja = akorde **ei kuvata** (ei plokke ega akordinimesid meloodia peal).
+  - Lüliti **ei tohi** vaikimisi akorde failist kustutada; `chords[]` jääb alles, kuni kasutaja eemaldab akordi (Backspace/Delete akordireal) või **Eemalda kõik akordid**.
+  - **Regressioon:** akordiplokkide väljalülitamine ei tohi jätta “rippuvaid” D/A-tüüpi nimesid figuurnootide kohale.
+
 - **Standard: kursori ajamudel (cursor time model)**
   - **Kursori põhitõde on ajapositsioon** (`cursorBeat` / takt + löök + alamjaotus), mitte eraldiseisev “cursor rhythm”.
   - **Sisestusrütm** (`inputDuration`) on eraldi sisestusparameeter: see määrab lisatava/asendatava sündmuse kestuse, mitte kursori asukoha.

@@ -5,6 +5,8 @@
  */
 import { computeLayout, getStaffHeight, LAYOUT } from './LayoutManager';
 import { measureLengthInQuarterBeats } from '../musical/timeSignature';
+import { getNotationPageBodies, snapSystemYToPage } from '../utils/pageGeometry';
+import { fitWidthsToContentWidth } from './pageFitSpacing';
 
 /** Vaikimisi lehe mõõdud (px). A4 96 DPI: 794×1123 (portrait), 1123×794 (landscape); suhe 1 : 1.414. */
 export const PAGE_DIMENSIONS = {
@@ -52,6 +54,14 @@ const SYSTEM_GAP = 120;
 
 /** Vaikimisi laius ühe veerandnooti (1/4) kohta figuurnotatsioonis (px). */
 export const FIGURE_BASE_WIDTH = 28;
+
+export {
+  SPACING_PRESET_NORMAL_PX,
+  SPACING_PRESET_LOOSE_PX,
+  getFigureContentWidthPx,
+  maxPixelsPerBeatToFitPage,
+  clampPixelsPerBeatToPage,
+} from './pageFitSpacing';
 
 /** Height of one Figurenotes row (measure box row). Step between lines = FIGURE_ROW_HEIGHT + gap; same rule between every line. */
 export const FIGURE_ROW_HEIGHT = 80;
@@ -135,20 +145,9 @@ function calculateFigureGrid(data, availableWidth, availablePageHeight = 0) {
   const effectiveWidth = Math.max(200, rawEffectiveWidth - edgeSafetyPadPx);
 
   const pageHeight = availablePageHeight > 0 ? availablePageHeight : null;
-  /** Esimese lehe noodiala on lühem kui täisleht, kui pealkiri/autor on SVG-st eraldiseisev (vt noodimeister-complete). */
-  const headerReserveRaw = Number(data?.notationPageHeaderReservePx);
-  const headerReserve = (pageHeight != null && pageHeight > 0 && Number.isFinite(headerReserveRaw) && headerReserveRaw > 0)
-    ? Math.min(Math.max(0, headerReserveRaw), Math.max(0, pageHeight - 120))
-    : 0;
-  const firstPageBodyH = pageHeight != null ? Math.max(120, pageHeight - headerReserve) : 0;
-  const restPageH = pageHeight != null ? pageHeight : 0;
-  const pageContentBottomForY = (y) => {
-    if (pageHeight == null || pageHeight <= 0) return Infinity;
-    if (y < firstPageBodyH) return firstPageBodyH;
-    const rem = y - firstPageBodyH;
-    const idx = Math.floor(rem / restPageH);
-    return firstPageBodyH + (idx + 1) * restPageH;
-  };
+  const { firstBody: firstPageBodyH, restBody: restPageH } = pageHeight != null
+    ? getNotationPageBodies(pageHeight, data?.notationPageHeaderReservePx)
+    : { firstBody: 0, restBody: 0 };
 
   if (measures.length === 0) {
     return [{
@@ -176,9 +175,13 @@ function calculateFigureGrid(data, availableWidth, availablePageHeight = 0) {
     let measureWidths;
     let pixelsPerBeatForRow;
     if (pixelsPerBeatInput != null) {
-      measureWidths = rowIndices.map((i) => (measures[i].beatCount ?? beatsPerMeasure) * pixelsPerBeatInput);
+      measureWidths = fitWidthsToContentWidth(
+        rowIndices.map((i) => (measures[i].beatCount ?? beatsPerMeasure) * pixelsPerBeatInput),
+        effectiveWidth,
+      );
       const totalBeats = rowIndices.reduce((sum, i) => sum + (measures[i].beatCount ?? beatsPerMeasure), 0);
-      pixelsPerBeatForRow = totalBeats > 0 ? pixelsPerBeatInput : PIXELS_PER_BEAT_DEFAULT;
+      const rowWidth = measureWidths.reduce((a, b) => a + b, 0);
+      pixelsPerBeatForRow = totalBeats > 0 ? rowWidth / totalBeats : PIXELS_PER_BEAT_DEFAULT;
     } else {
       const boxWidth = effectiveWidth / rowIndices.length;
       measureWidths = rowIndices.map(() => boxWidth);
@@ -190,12 +193,18 @@ function calculateFigureGrid(data, availableWidth, availablePageHeight = 0) {
     let systemY = lastYOffset + staffSpacing;
     const userPageBreak = rowIndices.some((m) => pageBreakBefore.has(m + 1));
     let doPageBreak = userPageBreak;
-    if (pageHeight != null && pageHeight > 0 && sIndex > 0) {
-      const bottom = pageContentBottomForY(systemY);
-      if (systemY + staffSpacing > bottom) {
-        doPageBreak = true;
-        systemY = bottom;
-      }
+    if (pageHeight != null && pageHeight > 0) {
+      const placed = snapSystemYToPage({
+        proposedY: systemY,
+        occupyHeight: staffSpacing,
+        firstBody: firstPageBodyH,
+        restBody: restPageH,
+        forcePageBreak: userPageBreak && sIndex > 0,
+        isFirstSystem: sIndex === 0,
+        pageEdgeReservePx: data?.notationPageEdgeReservePx,
+      });
+      systemY = placed.y;
+      if (placed.pageBreak) doPageBreak = true;
     }
 
     lastYOffset = systemY;
