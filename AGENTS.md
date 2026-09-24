@@ -93,10 +93,11 @@ Kõik muudatused peavad hoidma kasutaja teekonnad tervena:
   - sisestusvoogudes ei tohi olla märgatavat lag'i, topeltsisestust, vahelejätmisi ega cursor-jitter'it
   - enne sisestusloogika muutmist võrdle käitumist MuseScore/Finale/Sibelius tüüpi töövoogudega
 
-- **Standard: Paigutus “Vahe: lai” vs lehe laius**
-  - `Vahe: tavaline` (85 px/löök) ja `Vahe: lai` (120 px/löök) on **soovitud** tihedus.
-  - Lukustatud taktide arv reas (nt 4 takti 4/4) peab **alati mahutama lehe sisu laiusesse**; ülejääv osa ei tohi minna `overflow: hidden` taha nähtamatuks.
-  - Figuurnotatsiooni rea `measureWidths` summa ≤ rea content-laius; vajadusel skaleeritakse px/löök alla.
+- **Standard: Paigutus “Vahe: lai” / laius löögi kohta vs lehe laius**
+  - `Vahe: tavaline` (85 px/löök), `Vahe: lai` (120 px/löök) ja “Laius löögi kohta” on **soovitud** tihedus — need peavad paigutust muutma (kitsam/laiem), mitte jääma vaikseks.
+  - **Ära** klambi `pixelsPerBeat` enne layout’i lehe max-fit väärtusele (see lukustab UI: kõik ≥ max näevad välja sama).
+  - Lehepiir kehtib **ainult ületäitumisel**: figuurnotatsiooni rea `measureWidths` summa ≤ content-laius (`fitWidthsToContentWidth`); ülejääv ei tohi minna `overflow: hidden` taha.
+  - Kui soovitud laius juba täidab lehe, laiemaks saamiseks vähenda taktide arvu reas.
 
 - **Standard: landscape / mitme lehe noodirida**
   - Paigutus (`yOffset`) elab **sisemises** lehekastis (`scorePageInnerHeight`); ekraanil on iga A4 **täislehe** riba + lauavahe.

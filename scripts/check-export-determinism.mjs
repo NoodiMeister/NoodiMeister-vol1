@@ -87,7 +87,12 @@ async function main() {
     pageFrameYPx: 113,
   });
   assert(deskY === firstBody + 28 + 113, 'Desk display Y must add desk gap plus full-A4 padding per crossed page.');
-  assert(app.includes('effectivePixelsPerBeat'), 'Loose/normal spacing must use page-clamped pixelsPerBeat.');
+  assert(app.includes('effectivePixelsPerBeat'), 'Layout must expose effectivePixelsPerBeat from the user setting.');
+  assert(
+    !app.includes('clampPixelsPerBeatToPage(pixelsPerBeat'),
+    'Do not pre-clamp pixelsPerBeat to page max before layout (locks the UI).'
+  );
+  assert(app.includes('spacingIsPageLimited'), 'UI must detect when desired spacing exceeds the page edge.');
 
   const pageWidth = 700;
   const contentW = getFigureContentWidthPx(pageWidth, 65);
@@ -96,14 +101,18 @@ async function main() {
     measuresPerLine: 4,
     beatsPerMeasure: 4,
   });
-  assert(clampPixelsPerBeatToPage(120, maxFit) <= maxFit + 1e-6, 'Loose spacing must clamp to 4 bars × 4 beats on the page.');
+  assert(maxFit > 0 && maxFit < 120, 'Page max px/beat for 4×4/4 must be below the loose preset.');
+  assert(clampPixelsPerBeatToPage(120, maxFit) <= maxFit + 1e-6, 'Helper still clamps when used explicitly.');
   const rawRow = [120 * 4, 120 * 4, 120 * 4, 120 * 4];
   const fittedRow = fitWidthsToContentWidth(rawRow, contentW);
   const fittedSum = fittedRow.reduce((a, b) => a + b, 0);
   assert(rawRow.reduce((a, b) => a + b, 0) > contentW, 'Test setup: loose 4×4/4 must overflow before fit.');
-  assert(fittedSum <= contentW + 0.51, 'A locked 4-bar row must not exceed the page content width.');
+  assert(fittedSum <= contentW + 0.51, 'Overflow rows must be scaled to the page content width only.');
+  const narrowRow = fitWidthsToContentWidth([20 * 4, 20 * 4, 20 * 4, 20 * 4], contentW);
+  const narrowSum = narrowRow.reduce((a, b) => a + b, 0);
+  assert(narrowSum < contentW - 1, 'Below-max spacing must keep the row narrower than the page (not force-fill).');
   const layoutEngine = await read('src/layout/LayoutEngine.jsx');
-  assert(layoutEngine.includes('fitWidthsToContentWidth'), 'Figurenotes layout must fit measure widths to the page.');
+  assert(layoutEngine.includes('fitWidthsToContentWidth'), 'Figurenotes layout must fit measure widths to the page on overflow.');
 
   // Regression check for all time signature digit glyphs 0..9.
   for (let digit = 0; digit <= 9; digit += 1) {

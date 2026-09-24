@@ -77,7 +77,7 @@ import {
   getTraditionalSystemTotalHeightPx,
   computeTraditionalVisibleStaffGeometry,
 } from './layout/traditionalMultiStaffGeometry';
-import { FIGURE_BASE_WIDTH, FIGURE_ROW_HEIGHT, calculateLayout, getFigureContentWidthPx, maxPixelsPerBeatToFitPage, clampPixelsPerBeatToPage, SPACING_PRESET_NORMAL_PX, SPACING_PRESET_LOOSE_PX } from './layout/LayoutEngine';
+import { FIGURE_BASE_WIDTH, FIGURE_ROW_HEIGHT, calculateLayout, getFigureContentWidthPx, maxPixelsPerBeatToFitPage, SPACING_PRESET_NORMAL_PX, SPACING_PRESET_LOOSE_PX } from './layout/LayoutEngine';
 import { transposeNotes } from './musical/transpose';
 import {
   measureLengthInQuarterBeats,
@@ -11474,18 +11474,28 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   });
   const traditionalPartsGapPx = getTraditionalInterStaffGapPx({ layoutPartsGapMm, pxPerMm });
   /**
-   * Figuurnotatsiooni "fit-to-row" kaitse:
-   * Lukustatud taktide arv reas (nt 4 takti 4/4) mahub lehe sisu laiusesse;
-   * vahe:lai / pixelsPerBeat ei tohi takte lehe servast välja lõigata.
+   * Figuurnotatsiooni lehepiir: `pixelsPerBeat` / Vahe:lai on SOOVITUD tihedus.
+   * Ära klambi väärtust enne layout’i (see lukustas UI 40–500 → sama max-fit).
+   * Üleääre kaitse: LayoutEngine `fitWidthsToContentWidth` skaleerib rea alla ainult siis,
+   * kui soovitud laius ületaks lehe sisu.
    */
   const effectiveFigurenotesSize = figurenotesSizeClamped;
+  const figureContentWidthPx = getFigureContentWidthPx(scoreContentWidth, effectiveFigurenotesSize);
+  const beatsPerMeasureForSpacing = measureLengthInQuarterBeats(timeSignature);
+  const measuresPerLineForSpacing = Math.max(1, Number(effectiveLayoutMeasuresPerLine) || 4);
   const maxPixelsPerBeatForPage = maxPixelsPerBeatToFitPage({
-    contentWidthPx: getFigureContentWidthPx(scoreContentWidth, effectiveFigurenotesSize),
-    measuresPerLine: effectiveLayoutMeasuresPerLine || 4,
-    beatsPerMeasure: measureLengthInQuarterBeats(timeSignature),
+    contentWidthPx: figureContentWidthPx,
+    measuresPerLine: measuresPerLineForSpacing,
+    beatsPerMeasure: beatsPerMeasureForSpacing,
   });
-  const effectivePixelsPerBeat = clampPixelsPerBeatToPage(pixelsPerBeat, maxPixelsPerBeatForPage);
-  const spacingIsPageLimited = effectivePixelsPerBeat + 0.5 < Number(pixelsPerBeat);
+  /** Kasutaja valik (40–500); layout kasutab seda otse. */
+  const effectivePixelsPerBeat = Math.max(12, Math.min(500, Number(pixelsPerBeat) || 85));
+  const spacingIsPageLimited =
+    effectivePixelsPerBeat * measuresPerLineForSpacing * beatsPerMeasureForSpacing
+    > figureContentWidthPx + 0.5;
+  const renderedPixelsPerBeatWhenLimited = spacingIsPageLimited
+    ? maxPixelsPerBeatForPage
+    : effectivePixelsPerBeat;
 
   /** Figurenotes row height (beat-box / line) scales with effective notation size so barlines and box match note size. */
   const figurenotesRowHeight = Math.max(FIGURE_ROW_HEIGHT, Math.round(FIGURE_ROW_HEIGHT * effectiveFigurenotesSize / 75));
@@ -16310,7 +16320,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                     <p className="px-2 mb-2 text-[11px] text-amber-800">{t('layout.spacingLooseHint')}</p>
                     {spacingIsPageLimited && (
                       <p className="px-2 mb-2 text-[11px] text-amber-900 font-medium">
-                        {t('layout.spacingPageLimited')} ({Math.round(effectivePixelsPerBeat)} px)
+                        {t('layout.spacingPageLimited')} ({Math.round(renderedPixelsPerBeatWhenLimited)} px). {t('layout.spacingPageLimitedHint')}
                       </p>
                     )}
                     <div className="mt-4 pt-4 border-t-2 border-amber-200">
@@ -16525,21 +16535,26 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                         <div className="flex items-center gap-2">
                           <input
                             type="number"
-                            min={40}
-                          max={500}
+                            min={12}
+                            max={500}
                             step={1}
                             value={pixelsPerBeat}
                             onChange={(e) => {
                               const v = parseInt(e.target.value, 10);
-                            if (!isNaN(v)) {
-                              dirtyRef.current = true;
-                              pixelsPerBeatLinkedToFigureSizeRef.current = false;
-                              setPixelsPerBeat(Math.max(40, Math.min(500, v)));
-                            }
+                              if (!isNaN(v)) {
+                                dirtyRef.current = true;
+                                pixelsPerBeatLinkedToFigureSizeRef.current = false;
+                                setPixelsPerBeat(Math.max(12, Math.min(500, v)));
+                              }
                             }}
                             className="w-20 px-2 py-1.5 rounded border-2 border-amber-200 bg-amber-50 text-amber-900"
                           />
                           <span className="text-sm font-medium text-amber-900">px</span>
+                          {spacingIsPageLimited && (
+                            <span className="text-[11px] text-amber-700 tabular-nums">
+                              → {Math.round(renderedPixelsPerBeatWhenLimited)} px
+                            </span>
+                          )}
                         </div>
                       </div>
                       {notationStyle === 'FIGURENOTES' && (
