@@ -105,6 +105,7 @@ import {
   isNoteLeftEndpointForSpanner,
 } from '../notation/tieSlurAnchors';
 import { HarmonyFormStaffLayer } from './HarmonyFormStaffLayer';
+import { getDisplayBarNumber } from '../notation/barNumberRestart';
 
 const LAYOUT = { MARGIN_LEFT: 60, CLEF_WIDTH: 45, MEASURE_MIN_WIDTH: 28 };
 
@@ -529,6 +530,7 @@ export function TraditionalNotationView({
   joClefFocused = false,
   onJoClefFocus,
   layoutLineBreakBefore = [],
+  layoutBarNumberRestartAt = [],
   showLayoutBreakIcons = false,
   onToggleLineBreakAfter,
   translateLabel,
@@ -631,10 +633,11 @@ export function TraditionalNotationView({
     : 1;
   const getSystemBarNumber = useCallback((system) => {
     const firstMeasureIndex = system?.measureIndices?.[0];
-    if (!Number.isInteger(firstMeasureIndex)) return null;
-    if (pickupEnabled && firstMeasureIndex === 0) return null;
-    return firstMeasureIndex + 1 - (pickupEnabled ? 1 : 0);
-  }, [pickupEnabled]);
+    return getDisplayBarNumber(firstMeasureIndex, {
+      pickupEnabled,
+      barNumberRestartAt: layoutBarNumberRestartAt,
+    });
+  }, [pickupEnabled, layoutBarNumberRestartAt]);
   const instrumentRangeMidi = React.useMemo(() => {
     return resolveInstrumentRangeMidi(instrument, keySignature, instrumentRange);
   }, [instrument, keySignature, instrumentRange]);
@@ -1221,6 +1224,8 @@ export function TraditionalNotationView({
                     measureWidths={adjustedMeasureWidthsForSys}
                     showBarNumbers={showBarNumbers}
                     barNumberSize={barNumberSize}
+                    layoutBarNumberRestartAt={layoutBarNumberRestartAt}
+                    pickupEnabled={pickupEnabled}
                     isFirstSystem={sys.systemIndex === 0}
                     lyricFontFamily={lyricFontFamily}
                     lyricFontSize={lyricFontSize}
@@ -1657,7 +1662,7 @@ export function TraditionalNotationView({
                     )}
                     {showLayoutBreakIcons && typeof onToggleLineBreakAfter === 'function' && (
                       <g className="cursor-pointer" onClick={(e) => { e.stopPropagation(); onToggleLineBreakAfter(measureIdx); }} style={{ pointerEvents: 'auto' }} title={translateLabel ? translateLabel('layout.lineBreakAfter') : 'Reavahetus'}>
-                        <rect x={measureX + measureWidth / 2 - 10} y={staffY - 18} width={20} height={16} rx={3} fill={layoutLineBreakBefore.includes(measureIdx + 1) ? '#f59e0b' : '#fef3c7'} stroke="#d97706" strokeWidth={1.2} />
+                        <rect x={measureX + measureWidth / 2 - 10} y={staffY - 18} width={20} height={16} rx={3} fill={layoutLineBreakBefore.includes(measureIdx) ? '#f59e0b' : '#fef3c7'} stroke="#d97706" strokeWidth={1.2} />
                         <path d={`M ${measureX + measureWidth / 2 - 4} ${staffY - 10} L ${measureX + measureWidth / 2} ${staffY - 14} L ${measureX + measureWidth / 2 + 4} ${staffY - 10}`} fill="none" stroke="#92400e" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
                       </g>
                     )}

@@ -8,6 +8,7 @@ import { RhythmSyllableLabel } from "../components/RhythmSyllableLabel";
 import { getRhythmSyllableForNote } from "../notation/rhythmSyllables";
 import { shouldDrawRestGlyph } from "../notation/restGlyphDedupe";
 import { getFigureNoteWidth, FIGURE_BASE_WIDTH } from "../layout/LayoutEngine";
+import { getDisplayBarNumber } from "../notation/barNumberRestart";
 import { SmuflGlyph } from "../notation/smufl/SmuflGlyph";
 import {
   smuflNoteheadForType,
@@ -525,6 +526,7 @@ export function FigurenotesView({
   timeSignature,
   timeSignatureMode,
   layoutLineBreakBefore = [],
+  layoutBarNumberRestartAt = [],
   showLayoutBreakIcons = false,
   onToggleLineBreakAfter,
   translateLabel,
@@ -726,10 +728,11 @@ export function FigurenotesView({
   ]);
   const getSystemBarNumber = useCallback((system) => {
     const firstMeasureIndex = system?.measureIndices?.[0];
-    if (!Number.isInteger(firstMeasureIndex)) return null;
-    if (pickupEnabled && firstMeasureIndex === 0) return null;
-    return firstMeasureIndex + 1 - (pickupEnabled ? 1 : 0);
-  }, [pickupEnabled]);
+    return getDisplayBarNumber(firstMeasureIndex, {
+      pickupEnabled,
+      barNumberRestartAt: layoutBarNumberRestartAt,
+    });
+  }, [pickupEnabled, layoutBarNumberRestartAt]);
   const getBeatFromPoint = useCallback((x, y) => {
     const layouts = systemMeasureLayouts;
     if (!layouts.length) return 0;
@@ -1805,7 +1808,7 @@ export function FigurenotesView({
                                 height={16}
                                 rx={3}
                                 fill={
-                                  layoutLineBreakBefore.includes(measureIdx + 1)
+                                  layoutLineBreakBefore.includes(measureIdx)
                                     ? "#f59e0b"
                                     : "#fef3c7"
                                 }

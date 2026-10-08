@@ -2254,6 +2254,8 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   const [layoutMeasuresPerLine, setLayoutMeasuresPerLine] = useState(4);
   const [layoutStrictMeasuresPerLine, setLayoutStrictMeasuresPerLine] = useState(true);
   const [layoutLineBreakBefore, setLayoutLineBreakBefore] = useState([]);
+  /** 0-põhised taktiindeksid, millest alates taktinumber taaskäivitatakse 1-le (uus lugu / harjutus). */
+  const [layoutBarNumberRestartAt, setLayoutBarNumberRestartAt] = useState([]);
   const [measureStretchFactors, setMeasureStretchFactors] = useState([]);
   const [systemYOffsets, setSystemYOffsets] = useState([]);
   const [systemXOffsets, setSystemXOffsets] = useState([]);
@@ -3316,6 +3318,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     setFigurenotesChordLineGap(6);
     setTextBoxes([]);
     setMeasureRepeatMarks({});
+    setLayoutBarNumberRestartAt([]);
     setPageDesignDataUrl(null);
     pageDesignAssetRef.current = null;
     pageDesignAssetDirtyRef.current = false;
@@ -3362,6 +3365,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     const ms = measuresRef.current || [];
     const minM = minMeasuresFromNotesRef.current || 1;
     const oldMeasureCount = Math.max(1, ms.length);
+    const prevLastIdx = oldMeasureCount - 1;
     const nextMeasureIndex = oldMeasureCount;
     let blocked = false;
     setAddedMeasures((prev) => {
@@ -3379,11 +3383,24 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       return;
     }
     dirtyRef.current = true;
+    // Eelmise loo lõpp: topelt lõpujoon (barlineFinal), ilma et eelmisele reale lisataks tühja takti.
+    if (prevLastIdx >= 0) {
+      setMeasureRepeatMarks((prev) => {
+        const normalized = normalizeRepeatMarksMap(prev, oldMeasureCount + 1);
+        const { nextMap } = applyRepeatMark(normalized, prevLastIdx, 'barlineFinal');
+        return nextMap;
+      });
+    }
+    // Uus takt ainult uuele reale (0-põhine lineBreakBefore).
     setLayoutLineBreakBefore((prev) => {
       if (prev.includes(nextMeasureIndex)) return prev;
       return [...prev, nextMeasureIndex].sort((a, b) => a - b);
     });
     setPartLayoutLineBreakBefore((prev) => {
+      if (prev.includes(nextMeasureIndex)) return prev;
+      return [...prev, nextMeasureIndex].sort((a, b) => a - b);
+    });
+    setLayoutBarNumberRestartAt((prev) => {
       if (prev.includes(nextMeasureIndex)) return prev;
       return [...prev, nextMeasureIndex].sort((a, b) => a - b);
     });
@@ -4741,6 +4758,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     layoutMeasuresPerLine,
     layoutStrictMeasuresPerLine,
     layoutLineBreakBefore,
+    layoutBarNumberRestartAt,
     layoutPageBreakBefore,
     layoutExtraPages,
     layoutDeskPageGapPx,
@@ -4864,7 +4882,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     lyricFontSize,
     noteheadShape,
     noteheadEmoji
-  }), [staves, activeStaffIndex, staffYOffsets, measureStretchFactors, systemYOffsets, systemXOffsets, visibleStaves, instrumentPartGroups, intermissionLabels, timeSignature, timeSignatureMode, keySignature, staffLines, notationStyle, pixelsPerBeat, notationMode, instrumentNotationVariant, linkedNotationByStaffId, tinWhistleLinkedFingeringScalePercent, cursorPosition, addedMeasures, measureRepeatMarks, setupCompleted, songTitle, author, pickupEnabled, pickupQuantity, pickupDuration, pageOrientation, paperSize, layoutMeasuresPerLine, layoutStrictMeasuresPerLine, layoutLineBreakBefore, layoutPageBreakBefore, layoutExtraPages, layoutDeskPageGapPx, partLayoutDeskPageGapPx, deskPageGapAdjustStepPx, layoutSystemGap, layoutPartsGap, layoutPartsGapMm, layoutSizeUnit, layoutConnectedBarlines, layoutGlobalSpacingMultiplier, notationCtx?.globalSpacingMultiplier, notationCtx?.staffSpacing, notationCtx?.measureWidthMultiplier, viewMode, partLayoutMeasuresPerLine, partLayoutStrictMeasuresPerLine, partLayoutLineBreakBefore, partLayoutPageBreakBefore, partLayoutExtraPages, showPageNavigator, showPedagogicalVideoRuler, pageFlowDirection, viewFitPage, viewSmartPage, visibleToolIds, tuningReferenceNote, tuningReferenceOctave, tuningReferenceHz, playNoteOnInsert, figurenotesSize, figurenotesStems, figurenotesChordLineGap, figurenotesChordBlocks, figurenotesChordBlocksShowTones, figurenotesMelodyShowNoteNames, timeSignatureSize, pedagogicalTimeSigDenominatorType, pedagogicalTimeSigDenominatorColor, pedagogicalTimeSigDenominatorInstrument, pedagogicalTimeSigDenominatorEmoji, singleLineBarlineHalfSpanPx, singleLineBarlineThicknessPx, showBarNumbers, barNumberSize, voltaNumberSize, showRhythmSyllables, showAllNoteLabels, enableEmojiOverlays, joClefStaffPosition, relativeNotationShowKeySignature, relativeNotationShowTraditionalClef, isPedagogicalProject, pedagogicalAudioBpm, pedagogicalAudioPlaybackRate, pedagogicalSyncMode, pedagogicalSyncStartBeat, pedagogicalSyncStartTimeSec, pedagogicalSyncEndBeat, pedagogicalSyncEndTimeSec, pedagogicalLoopEnabled, pedagogicalLoopCount, pedagogicalCues, pedagogicalRhythmStep, pedagogicalPlayheadStyle, pedagogicalPlayheadEmoji, pedagogicalPlayheadEmojiSize, cursorLineStrokeWidth, pedagogicalPlayheadMovement, rhythmCursorColor, rhythmCursorOpacity, rhythmCursorWidthMultiplier, rhythmCursorHighContrast, chords, textBoxes, documentFontFamily, lyricFontFamily, lyricBold, lyricItalic, lyricUnderline, lyricWeight, titleFontSize, authorFontSize, titleFontFamily, authorFontFamily, titleColor, authorColor, titleBold, titleItalic, titleUnderline, titleWeight, authorBold, authorItalic, authorUnderline, authorWeight, titleAlignment, authorAlignment, scoreHeaderTranslateYPx, staffRowAlignment, pageDesignDataUrl, pageDesignOpacity, pageDesignFit, pageDesignPositionX, pageDesignPositionY, pageDesignCrop, timeSignatureOffset, lyricLineIndex, lyricLineYOffset, lyricFontSize, noteheadShape, noteheadEmoji]);
+  }), [staves, activeStaffIndex, staffYOffsets, measureStretchFactors, systemYOffsets, systemXOffsets, visibleStaves, instrumentPartGroups, intermissionLabels, timeSignature, timeSignatureMode, keySignature, staffLines, notationStyle, pixelsPerBeat, notationMode, instrumentNotationVariant, linkedNotationByStaffId, tinWhistleLinkedFingeringScalePercent, cursorPosition, addedMeasures, measureRepeatMarks, setupCompleted, songTitle, author, pickupEnabled, pickupQuantity, pickupDuration, pageOrientation, paperSize, layoutMeasuresPerLine, layoutStrictMeasuresPerLine, layoutLineBreakBefore, layoutBarNumberRestartAt, layoutPageBreakBefore, layoutExtraPages, layoutDeskPageGapPx, partLayoutDeskPageGapPx, deskPageGapAdjustStepPx, layoutSystemGap, layoutPartsGap, layoutPartsGapMm, layoutSizeUnit, layoutConnectedBarlines, layoutGlobalSpacingMultiplier, notationCtx?.globalSpacingMultiplier, notationCtx?.staffSpacing, notationCtx?.measureWidthMultiplier, viewMode, partLayoutMeasuresPerLine, partLayoutStrictMeasuresPerLine, partLayoutLineBreakBefore, partLayoutPageBreakBefore, partLayoutExtraPages, showPageNavigator, showPedagogicalVideoRuler, pageFlowDirection, viewFitPage, viewSmartPage, visibleToolIds, tuningReferenceNote, tuningReferenceOctave, tuningReferenceHz, playNoteOnInsert, figurenotesSize, figurenotesStems, figurenotesChordLineGap, figurenotesChordBlocks, figurenotesChordBlocksShowTones, figurenotesMelodyShowNoteNames, timeSignatureSize, pedagogicalTimeSigDenominatorType, pedagogicalTimeSigDenominatorColor, pedagogicalTimeSigDenominatorInstrument, pedagogicalTimeSigDenominatorEmoji, singleLineBarlineHalfSpanPx, singleLineBarlineThicknessPx, showBarNumbers, barNumberSize, voltaNumberSize, showRhythmSyllables, showAllNoteLabels, enableEmojiOverlays, joClefStaffPosition, relativeNotationShowKeySignature, relativeNotationShowTraditionalClef, isPedagogicalProject, pedagogicalAudioBpm, pedagogicalAudioPlaybackRate, pedagogicalSyncMode, pedagogicalSyncStartBeat, pedagogicalSyncStartTimeSec, pedagogicalSyncEndBeat, pedagogicalSyncEndTimeSec, pedagogicalLoopEnabled, pedagogicalLoopCount, pedagogicalCues, pedagogicalRhythmStep, pedagogicalPlayheadStyle, pedagogicalPlayheadEmoji, pedagogicalPlayheadEmojiSize, cursorLineStrokeWidth, pedagogicalPlayheadMovement, rhythmCursorColor, rhythmCursorOpacity, rhythmCursorWidthMultiplier, rhythmCursorHighContrast, chords, textBoxes, documentFontFamily, lyricFontFamily, lyricBold, lyricItalic, lyricUnderline, lyricWeight, titleFontSize, authorFontSize, titleFontFamily, authorFontFamily, titleColor, authorColor, titleBold, titleItalic, titleUnderline, titleWeight, authorBold, authorItalic, authorUnderline, authorWeight, titleAlignment, authorAlignment, scoreHeaderTranslateYPx, staffRowAlignment, pageDesignDataUrl, pageDesignOpacity, pageDesignFit, pageDesignPositionX, pageDesignPositionY, pageDesignCrop, timeSignatureOffset, lyricLineIndex, lyricLineYOffset, lyricFontSize, noteheadShape, noteheadEmoji]);
 
   const saveToStorageSync = useCallback(() => {
     try {
@@ -5220,6 +5238,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       if (data.layoutMeasuresPerLine != null) setLayoutMeasuresPerLine(data.layoutMeasuresPerLine);
       if (data.layoutStrictMeasuresPerLine != null) setLayoutStrictMeasuresPerLine(!!data.layoutStrictMeasuresPerLine);
       if (Array.isArray(data.layoutLineBreakBefore)) setLayoutLineBreakBefore(data.layoutLineBreakBefore);
+      if (Array.isArray(data.layoutBarNumberRestartAt)) setLayoutBarNumberRestartAt(data.layoutBarNumberRestartAt);
       if (Array.isArray(data.layoutPageBreakBefore)) setLayoutPageBreakBefore(data.layoutPageBreakBefore);
       if (data.layoutExtraPages != null) setLayoutExtraPages(Math.max(0, Math.round(Number(data.layoutExtraPages) || 0)));
       if (data.layoutDeskPageGapPx != null) setLayoutDeskPageGapPx(Math.max(0, Math.min(600, Math.round(Number(data.layoutDeskPageGapPx) || 0))));
@@ -5648,6 +5667,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         if (data.layoutMeasuresPerLine != null) setLayoutMeasuresPerLine(data.layoutMeasuresPerLine);
         if (data.layoutStrictMeasuresPerLine != null) setLayoutStrictMeasuresPerLine(!!data.layoutStrictMeasuresPerLine);
         if (Array.isArray(data.layoutLineBreakBefore)) setLayoutLineBreakBefore(data.layoutLineBreakBefore);
+        if (Array.isArray(data.layoutBarNumberRestartAt)) setLayoutBarNumberRestartAt(data.layoutBarNumberRestartAt);
         if (Array.isArray(data.layoutPageBreakBefore)) setLayoutPageBreakBefore(data.layoutPageBreakBefore);
         if (data.layoutExtraPages != null) setLayoutExtraPages(Math.max(0, Math.round(Number(data.layoutExtraPages) || 0)));
         if (data.layoutDeskPageGapPx != null) setLayoutDeskPageGapPx(Math.max(0, Math.min(600, Math.round(Number(data.layoutDeskPageGapPx) || 0))));
@@ -6967,6 +6987,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       layoutMeasuresPerLine,
       layoutStrictMeasuresPerLine,
       layoutLineBreakBefore,
+      layoutBarNumberRestartAt,
       layoutPageBreakBefore,
       layoutExtraPages,
       layoutDeskPageGapPx,
@@ -6997,6 +7018,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     layoutMeasuresPerLine,
     layoutStrictMeasuresPerLine,
     layoutLineBreakBefore,
+    layoutBarNumberRestartAt,
     layoutPageBreakBefore,
     layoutExtraPages,
     layoutDeskPageGapPx,
@@ -7051,6 +7073,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
           if (layout.layoutMeasuresPerLine != null) setLayoutMeasuresPerLine(layout.layoutMeasuresPerLine);
           if (layout.layoutStrictMeasuresPerLine != null) setLayoutStrictMeasuresPerLine(!!layout.layoutStrictMeasuresPerLine);
           if (Array.isArray(layout.layoutLineBreakBefore)) setLayoutLineBreakBefore(layout.layoutLineBreakBefore);
+          if (Array.isArray(layout.layoutBarNumberRestartAt)) setLayoutBarNumberRestartAt(layout.layoutBarNumberRestartAt);
           if (Array.isArray(layout.layoutPageBreakBefore)) setLayoutPageBreakBefore(layout.layoutPageBreakBefore);
           if (layout.layoutExtraPages != null) setLayoutExtraPages(Math.max(0, Math.round(Number(layout.layoutExtraPages) || 0)));
           if (layout.layoutDeskPageGapPx != null) setLayoutDeskPageGapPx(Math.max(0, Math.min(600, Math.round(Number(layout.layoutDeskPageGapPx) || 0))));
@@ -7096,6 +7119,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         if (layout.layoutMeasuresPerLine != null) setLayoutMeasuresPerLine(layout.layoutMeasuresPerLine);
         if (layout.layoutStrictMeasuresPerLine != null) setLayoutStrictMeasuresPerLine(!!layout.layoutStrictMeasuresPerLine);
         if (Array.isArray(layout.layoutLineBreakBefore)) setLayoutLineBreakBefore(layout.layoutLineBreakBefore);
+        if (Array.isArray(layout.layoutBarNumberRestartAt)) setLayoutBarNumberRestartAt(layout.layoutBarNumberRestartAt);
         if (Array.isArray(layout.layoutPageBreakBefore)) setLayoutPageBreakBefore(layout.layoutPageBreakBefore);
         if (layout.layoutExtraPages != null) setLayoutExtraPages(Math.max(0, Math.round(Number(layout.layoutExtraPages) || 0)));
         if (layout.layoutDeskPageGapPx != null) setLayoutDeskPageGapPx(Math.max(0, Math.min(600, Math.round(Number(layout.layoutDeskPageGapPx) || 0))));
@@ -11345,6 +11369,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     setPartLayoutLineBreakBefore((prev) => remapBreakIndicesAfterMeasureDelete(prev, startIdx, endIdx));
     setLayoutPageBreakBefore((prev) => remapBreakIndicesAfterMeasureDelete(prev, startIdx, endIdx));
     setPartLayoutPageBreakBefore((prev) => remapBreakIndicesAfterMeasureDelete(prev, startIdx, endIdx));
+    setLayoutBarNumberRestartAt((prev) => remapBreakIndicesAfterMeasureDelete(prev, startIdx, endIdx));
     setMeasureStretchFactors((prev) => {
       if (!Array.isArray(prev) || prev.length === 0) return prev;
       const next = [...prev];
@@ -16619,7 +16644,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                         <button type="button" title={t('layout.compressMeasureShortcut')} onClick={() => { saveToHistory(notes); dirtyRef.current = true; setMeasureStretchFactors((prev) => { const next = [...(prev || [])]; while (next.length <= cursorMeasureIndex) next.push(1); next[cursorMeasureIndex] = Math.max(0.25, (next[cursorMeasureIndex] ?? 1) - 0.1); return next; }); }} className="py-1.5 px-2 rounded bg-slate-100 text-slate-800 hover:bg-slate-200 font-medium">{t('layout.compressMeasure')}</button>
                         <button type="button" title={t('layout.stretchMeasureShortcut')} onClick={() => { saveToHistory(notes); dirtyRef.current = true; setMeasureStretchFactors((prev) => { const next = [...(prev || [])]; while (next.length <= cursorMeasureIndex) next.push(1); next[cursorMeasureIndex] = Math.min(4, (next[cursorMeasureIndex] ?? 1) + 0.1); return next; }); }} className="py-1.5 px-2 rounded bg-slate-100 text-slate-800 hover:bg-slate-200 font-medium">{t('layout.stretchMeasure')}</button>
                       </div>
-                      <button type="button" onClick={() => { saveToHistory(notes); dirtyRef.current = true; (viewMode === 'score' ? setLayoutLineBreakBefore : setPartLayoutLineBreakBefore)([]); (viewMode === 'score' ? setLayoutPageBreakBefore : setPartLayoutPageBreakBefore)([]); (viewMode === 'score' ? setLayoutMeasuresPerLine : setPartLayoutMeasuresPerLine)(0); (viewMode === 'score' ? setLayoutStrictMeasuresPerLine : setPartLayoutStrictMeasuresPerLine)(true); (viewMode === 'score' ? setLayoutExtraPages : setPartLayoutExtraPages)(0); setMeasureStretchFactors([]); setSystemYOffsets([]); setSystemXOffsets([]); setLayoutSystemGap(15); setLayoutPartsGap(10); setLayoutDeskPageGapPx(LAYOUT.SCORE_DESK_PAGE_GAP_PX); setPartLayoutDeskPageGapPx(LAYOUT.SCORE_DESK_PAGE_GAP_PX); setDeskPageGapAdjustStepPx(4); setLayoutConnectedBarlines(true); setLayoutGlobalSpacingMultiplier(1); pixelsPerBeatLinkedToFigureSizeRef.current = true; setPixelsPerBeat(85); setFigurenotesSize(85); }} className="mt-3 w-full py-2 px-3 rounded-lg bg-slate-100 text-slate-800 text-sm font-semibold hover:bg-slate-200 border border-slate-300" title={t('layout.resetLayoutHint')}>{t('layout.resetLayout')}</button>
+                      <button type="button" onClick={() => { saveToHistory(notes); dirtyRef.current = true; (viewMode === 'score' ? setLayoutLineBreakBefore : setPartLayoutLineBreakBefore)([]); setLayoutBarNumberRestartAt([]); (viewMode === 'score' ? setLayoutPageBreakBefore : setPartLayoutPageBreakBefore)([]); (viewMode === 'score' ? setLayoutMeasuresPerLine : setPartLayoutMeasuresPerLine)(0); (viewMode === 'score' ? setLayoutStrictMeasuresPerLine : setPartLayoutStrictMeasuresPerLine)(true); (viewMode === 'score' ? setLayoutExtraPages : setPartLayoutExtraPages)(0); setMeasureStretchFactors([]); setSystemYOffsets([]); setSystemXOffsets([]); setLayoutSystemGap(15); setLayoutPartsGap(10); setLayoutDeskPageGapPx(LAYOUT.SCORE_DESK_PAGE_GAP_PX); setPartLayoutDeskPageGapPx(LAYOUT.SCORE_DESK_PAGE_GAP_PX); setDeskPageGapAdjustStepPx(4); setLayoutConnectedBarlines(true); setLayoutGlobalSpacingMultiplier(1); pixelsPerBeatLinkedToFigureSizeRef.current = true; setPixelsPerBeat(85); setFigurenotesSize(85); }} className="mt-3 w-full py-2 px-3 rounded-lg bg-slate-100 text-slate-800 text-sm font-semibold hover:bg-slate-200 border border-slate-300" title={t('layout.resetLayoutHint')}>{t('layout.resetLayout')}</button>
                     </div>
                     {pageDesignDataUrl && (
                       <>
@@ -18283,6 +18308,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                   notationStyle={notationStyle}
                   layoutMeasuresPerLine={effectiveLayoutMeasuresPerLine}
                   layoutLineBreakBefore={effectiveLayoutLineBreakBefore}
+                  layoutBarNumberRestartAt={layoutBarNumberRestartAt}
                   layoutPageBreakBefore={effectiveLayoutPageBreakBefore}
                   layoutSystemGap={notationStyle === 'FIGURENOTES' ? layoutSystemGap : effectiveTraditionalSystemGap}
                   layoutPartsGap={layoutPartsGap}
@@ -18803,7 +18829,11 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                         : null}
                       keySignature={keySignature}
                       keyboardPlaysPiano={pianoStripVisible && (notationStyle === 'FIGURENOTES' || notationMode === 'vabanotatsioon')}
-                      blockedShortcuts={[effectiveShortcutPrefs['app.noteInputToggle']]}
+                      blockedShortcuts={[
+                        effectiveShortcutPrefs['app.noteInputToggle'],
+                        effectiveShortcutPrefs['app.undo'],
+                        effectiveShortcutPrefs['app.redo'],
+                      ].filter(Boolean)}
                       ignoreKeyboardWhenModalOpen={newWorkSetupOpen || saveCloudDialogOpen || googleLoadPickerOpen || settingsOpen || shortcutsOpen || showPdfExportPreview || isInstrumentManagerOpen}
                     />
                   </div>
@@ -19298,7 +19328,7 @@ function getFingeringForNote(pitch, octave, instrumentId) {
 }
 
 // Timeline Component – multi-system layout (VexFlow loogika). (PAGE_BREAK_GAP on defineeritud üleval.)
-function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, pageWidth, cursorPosition, notationMode, staffLines, clefType, keySignature = 'C', relativeNotationShowKeySignature = false, relativeNotationShowTraditionalClef = false, onJoClefPositionChange, joClefFocused = false, onJoClefFocus, instrument = 'single-staff-treble', instrumentNotationVariant = 'standard', instrumentConfig = {}, showBarNumbers = true, barNumberSize = 11, voltaNumberSize = 16, showRhythmSyllables = false, joClefStaffPosition: joClefStaffPositionProp, showAllNoteLabels = false, enableEmojiOverlays = true, noteheadShape = 'oval', noteheadEmoji = '♪', onNoteTeacherLabelChange, onNoteLabelClick, chords = [], isDotted, isRest, selectedDuration, noteInputMode, selectedNoteIndex, isNoteSelected, notes: allNotes, onStaffAddNote, onNoteClick, onNoteMouseDown, onNoteMouseEnter, onNotePitchChange, onNoteBeatChange, canHandDragNotes = false, timeSignatureOffset = { x: 0, y: 0 }, onTimeSignatureOffsetChange, ghostPitch, ghostOctave, ghostAccidental = 0, ghostAccidentalIsExplicit = false, onFigureBeatClick, onChordLineMouseMove, onChordLineClick, notationStyle, layoutMeasuresPerLine = 4, layoutLineBreakBefore = [], layoutPageBreakBefore = [], layoutSystemGap = 120, layoutPartsGap, layoutConnectedBarlines = false, staffRowAlignment = 'center', staffIndexInScore = 0, systemTotalHeight, layoutGlobalSpacingMultiplier = 1, systems: systemsProp, baseYOffset = 0, isActiveStaff = true, staffCount = 1, staffHeight: staffHeightProp, figurenotesSize = 16, figurenotesStems = false, figurenotesChordLineGap = 6, figurenotesChordBlocks = false, figurenotesChordBlocksShowTones = true, figurenotesMelodyShowNoteNames = true, figurenotesRowHeight: figurenotesRowHeightProp, figurenotesChordLineHeight: figurenotesChordLineHeightProp, figurenotesLyricReserveHeight = 0, timeSignatureSize = 16, pedagogicalTimeSigDenominatorType = 'rhythm', pedagogicalTimeSigDenominatorColor = '#1a1a1a', pedagogicalTimeSigDenominatorInstrument = 'handbell', pedagogicalTimeSigDenominatorEmoji = '🥁', singleLineBarlineHalfSpanPx = 20, singleLineBarlineThicknessPx = 2, themeColors: themeColorsProp, pedagogicalPlayheadStyle = 'line', pedagogicalPlayheadEmoji = '🎵', pedagogicalPlayheadEmojiSize = 32, cursorSizePx, cursorLineStrokeWidth = 4, cursorSubRow = 0, pedagogicalPlayheadMovement = 'arch', rhythmCursorColor = '#0ea5e9', rhythmCursorOpacity = 0.55, rhythmCursorWidthMultiplier = 1, rhythmCursorHighContrast = false, isPedagogicalAudioPlaying = false, isExportingAnimation = false, exportCursorRef, scoreContainerRef, pageFlowDirection = 'vertical', pageOrientation = 'portrait', isFirstInBraceGroup = false, braceGroupSize = 0, lyricFontFamily = 'sans-serif', lyricFontSize = 12, lyricBold = false, lyricItalic = false, lyricUnderline = false, lyricWeight = 400, lyricLineYOffset = 0, translateLabel, showLayoutBreakIcons = false, showStaffSpacerHandles = false, showLyricSpacerHandles = false, onSystemYOffsetChange, onSystemXOffsetChange, systemXOffsets = [], onLyricLineYOffsetChange, onToggleLineBreakAfter, onRemoveRepeatMark, selectedRepeatMark = null, selectedRepeatMarks = [], onSelectRepeatMark, onJumpMarkPointerDown, jumpMarkLayoutOverrides = {}, clefHandOffset = { x: 0, y: 0 }, clefHandSizePx = null, onClefPointerDown, activeLyricNoteIndex = null, physicalPageGapPx = 3, physicalPageFrameYPx = 0, disablePhysicalPageGaps = false, hideCursorOverlay = false, exportNotationSvgRef = null, multiStaffInstruments = null, multiStaffMeasuresByInstrument = null, combinedCursorRowOffsetPx = 0, combinedActiveStaffRowIndex = 0, cursorStaffClefType = null, tinWhistleLinkedFingeringScale = 1, linkedNotationByStaffId = null, notationStaffSpace, activeLegatoSlurPair = null, onLegatoPathClick = undefined, onMeasureStartXChange = undefined, notationLayoutPageHeight = null, notationFirstPageBodyPx = null, pickupEnabled = false, harmonyFormMode = false, harmonyFormChordBeatStep = 4, harmonyFormLyricReserveHeight = 0, onHarmonyBeatClick }) {
+function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, pageWidth, cursorPosition, notationMode, staffLines, clefType, keySignature = 'C', relativeNotationShowKeySignature = false, relativeNotationShowTraditionalClef = false, onJoClefPositionChange, joClefFocused = false, onJoClefFocus, instrument = 'single-staff-treble', instrumentNotationVariant = 'standard', instrumentConfig = {}, showBarNumbers = true, barNumberSize = 11, voltaNumberSize = 16, showRhythmSyllables = false, joClefStaffPosition: joClefStaffPositionProp, showAllNoteLabels = false, enableEmojiOverlays = true, noteheadShape = 'oval', noteheadEmoji = '♪', onNoteTeacherLabelChange, onNoteLabelClick, chords = [], isDotted, isRest, selectedDuration, noteInputMode, selectedNoteIndex, isNoteSelected, notes: allNotes, onStaffAddNote, onNoteClick, onNoteMouseDown, onNoteMouseEnter, onNotePitchChange, onNoteBeatChange, canHandDragNotes = false, timeSignatureOffset = { x: 0, y: 0 }, onTimeSignatureOffsetChange, ghostPitch, ghostOctave, ghostAccidental = 0, ghostAccidentalIsExplicit = false, onFigureBeatClick, onChordLineMouseMove, onChordLineClick, notationStyle, layoutMeasuresPerLine = 4, layoutLineBreakBefore = [], layoutBarNumberRestartAt = [], layoutPageBreakBefore = [], layoutSystemGap = 120, layoutPartsGap, layoutConnectedBarlines = false, staffRowAlignment = 'center', staffIndexInScore = 0, systemTotalHeight, layoutGlobalSpacingMultiplier = 1, systems: systemsProp, baseYOffset = 0, isActiveStaff = true, staffCount = 1, staffHeight: staffHeightProp, figurenotesSize = 16, figurenotesStems = false, figurenotesChordLineGap = 6, figurenotesChordBlocks = false, figurenotesChordBlocksShowTones = true, figurenotesMelodyShowNoteNames = true, figurenotesRowHeight: figurenotesRowHeightProp, figurenotesChordLineHeight: figurenotesChordLineHeightProp, figurenotesLyricReserveHeight = 0, timeSignatureSize = 16, pedagogicalTimeSigDenominatorType = 'rhythm', pedagogicalTimeSigDenominatorColor = '#1a1a1a', pedagogicalTimeSigDenominatorInstrument = 'handbell', pedagogicalTimeSigDenominatorEmoji = '🥁', singleLineBarlineHalfSpanPx = 20, singleLineBarlineThicknessPx = 2, themeColors: themeColorsProp, pedagogicalPlayheadStyle = 'line', pedagogicalPlayheadEmoji = '🎵', pedagogicalPlayheadEmojiSize = 32, cursorSizePx, cursorLineStrokeWidth = 4, cursorSubRow = 0, pedagogicalPlayheadMovement = 'arch', rhythmCursorColor = '#0ea5e9', rhythmCursorOpacity = 0.55, rhythmCursorWidthMultiplier = 1, rhythmCursorHighContrast = false, isPedagogicalAudioPlaying = false, isExportingAnimation = false, exportCursorRef, scoreContainerRef, pageFlowDirection = 'vertical', pageOrientation = 'portrait', isFirstInBraceGroup = false, braceGroupSize = 0, lyricFontFamily = 'sans-serif', lyricFontSize = 12, lyricBold = false, lyricItalic = false, lyricUnderline = false, lyricWeight = 400, lyricLineYOffset = 0, translateLabel, showLayoutBreakIcons = false, showStaffSpacerHandles = false, showLyricSpacerHandles = false, onSystemYOffsetChange, onSystemXOffsetChange, systemXOffsets = [], onLyricLineYOffsetChange, onToggleLineBreakAfter, onRemoveRepeatMark, selectedRepeatMark = null, selectedRepeatMarks = [], onSelectRepeatMark, onJumpMarkPointerDown, jumpMarkLayoutOverrides = {}, clefHandOffset = { x: 0, y: 0 }, clefHandSizePx = null, onClefPointerDown, activeLyricNoteIndex = null, physicalPageGapPx = 3, physicalPageFrameYPx = 0, disablePhysicalPageGaps = false, hideCursorOverlay = false, exportNotationSvgRef = null, multiStaffInstruments = null, multiStaffMeasuresByInstrument = null, combinedCursorRowOffsetPx = 0, combinedActiveStaffRowIndex = 0, cursorStaffClefType = null, tinWhistleLinkedFingeringScale = 1, linkedNotationByStaffId = null, notationStaffSpace, activeLegatoSlurPair = null, onLegatoPathClick = undefined, onMeasureStartXChange = undefined, notationLayoutPageHeight = null, notationFirstPageBodyPx = null, pickupEnabled = false, harmonyFormMode = false, harmonyFormChordBeatStep = 4, harmonyFormLyricReserveHeight = 0, onHarmonyBeatClick }) {
   const themeColors = themeColorsProp || { staffLineColor: '#000', noteFill: '#1a1a1a', textColor: '#1a1a1a', isDark: false };
   const safeKey = keySignature ?? 'C';
   // Alati lõplik number (mitte NaN) — varajane `return null` enne hookide kasutamist rikkus Reacti hookide reeglid ja võis jätta noodiala tühjaks.
@@ -20036,6 +20066,7 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
           timeSignature={timeSignature}
           timeSignatureMode={timeSignatureMode}
           layoutLineBreakBefore={layoutLineBreakBefore}
+          layoutBarNumberRestartAt={layoutBarNumberRestartAt}
           showLayoutBreakIcons={showLayoutBreakIcons}
           onToggleLineBreakAfter={onToggleLineBreakAfter}
           translateLabel={translateLabel}
@@ -20121,6 +20152,7 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
           joClefFocused={joClefFocused}
           onJoClefFocus={onJoClefFocus}
           layoutLineBreakBefore={layoutLineBreakBefore}
+          layoutBarNumberRestartAt={layoutBarNumberRestartAt}
           showLayoutBreakIcons={showLayoutBreakIcons}
           onToggleLineBreakAfter={onToggleLineBreakAfter}
           translateLabel={translateLabel}

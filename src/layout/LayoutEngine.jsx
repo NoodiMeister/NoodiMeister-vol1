@@ -6,7 +6,7 @@
 import { computeLayout, getStaffHeight, LAYOUT } from './LayoutManager';
 import { measureLengthInQuarterBeats } from '../musical/timeSignature';
 import { getNotationPageBodies, snapSystemYToPage } from '../utils/pageGeometry';
-import { fitWidthsToContentWidth } from './pageFitSpacing';
+import { fitWidthsToContentWidth, minPixelsPerBeatForFigures } from './pageFitSpacing';
 
 /** Vaikimisi lehe mõõdud (px). A4 96 DPI: 794×1123 (portrait), 1123×794 (landscape); suhe 1 : 1.414. */
 export const PAGE_DIMENSIONS = {
@@ -61,6 +61,7 @@ export {
   getFigureContentWidthPx,
   maxPixelsPerBeatToFitPage,
   clampPixelsPerBeatToPage,
+  minPixelsPerBeatForFigures,
 } from './pageFitSpacing';
 
 /** Height of one Figurenotes row (measure box row). Step between lines = FIGURE_ROW_HEIGHT + gap; same rule between every line. */
@@ -118,7 +119,7 @@ export function calculateLayout(mode, orientation, data) {
 
 /**
  * Figuurnotatsioon: rütmikastid reas; võrdne laius takti kohta rea sees.
- * Kasutab bar layout tööriista: lineBreakBefore / pageBreakBefore (1-based measure index = break before that measure).
+ * Kasutab bar layout tööriista: lineBreakBefore / pageBreakBefore (0-põhine taktiindeks = break before that measure; sama mis LayoutManager).
  * Süsteemide Y: yOffset = systemIndex * staffSpacing (staffSpacing = rea kõrgus + vahe). A4: kui rida ei mahu lehele, pageBreakBefore.
  */
 function calculateFigureGrid(data, availableWidth, availablePageHeight = 0) {
@@ -126,6 +127,11 @@ function calculateFigureGrid(data, availableWidth, availablePageHeight = 0) {
   const mult = Math.max(0.25, Math.min(3, Number(data?.globalSpacingMultiplier) || 1));
   const figureSizeBase = Math.max(12, Math.min(96, Number(data?.figurenotesSize) || 85));
   const figureScale = Math.max(0.5, figureSizeBase / 75);
+  /** Floor so page-fit never crushes beat slots below figure diameter (overlap regression). */
+  const minPixelsPerBeat = Math.max(
+    FIGURE_BASE_WIDTH * figureScale,
+    minPixelsPerBeatForFigures(figureSizeBase),
+  );
   const rawBoxesPerRow = data?.boxesPerRow ?? DEFAULT_BOXES_PER_ROW;
   const boxesPerRow = Math.max(1, Math.round(rawBoxesPerRow / mult));
   const enforceMeasuresPerLine = data?.enforceMeasuresPerLine !== false;
@@ -166,26 +172,37 @@ function calculateFigureGrid(data, availableWidth, availablePageHeight = 0) {
   let currentRow = [];
   let currentRowMeasureCount = 0;
   const getMeasureCountWeight = (i) => (excludePickupFromMeasureCount && i === pickupMeasureIndex ? 0 : 1);
+  const getMeasureBeats = (i) => measures[i].beatCount ?? beatsPerMeasure;
 
   const pixelsPerBeatInput = typeof data?.pixelsPerBeat === 'number' && data.pixelsPerBeat > 0 ? data.pixelsPerBeat : null;
+  /** Desired density, but never below the figure-size floor used for reflow. */
+  const desiredPixelsPerBeat = pixelsPerBeatInput != null
+    ? Math.max(minPixelsPerBeat, pixelsPerBeatInput)
+    : null;
 
   const flushRow = (rowIndices) => {
     if (rowIndices.length === 0) return;
     const sIndex = systems.length;
     let measureWidths;
     let pixelsPerBeatForRow;
-    if (pixelsPerBeatInput != null) {
+    if (desiredPixelsPerBeat != null) {
       measureWidths = fitWidthsToContentWidth(
-        rowIndices.map((i) => (measures[i].beatCount ?? beatsPerMeasure) * pixelsPerBeatInput),
+        rowIndices.map((i) => getMeasureBeats(i) * desiredPixelsPerBeat),
         effectiveWidth,
       );
-      const totalBeats = rowIndices.reduce((sum, i) => sum + (measures[i].beatCount ?? beatsPerMeasure), 0);
+      const totalBeats = rowIndices.reduce((sum, i) => sum + getMeasureBeats(i), 0);
       const rowWidth = measureWidths.reduce((a, b) => a + b, 0);
       pixelsPerBeatForRow = totalBeats > 0 ? rowWidth / totalBeats : PIXELS_PER_BEAT_DEFAULT;
+      // Single-measure (or forced) overflow may still scale; keep floor when multiple measures slipped through.
+      if (rowIndices.length > 1 && pixelsPerBeatForRow < minPixelsPerBeat - 0.5) {
+        const floorWidths = rowIndices.map((i) => getMeasureBeats(i) * minPixelsPerBeat);
+        measureWidths = floorWidths;
+        pixelsPerBeatForRow = minPixelsPerBeat;
+      }
     } else {
       const boxWidth = effectiveWidth / rowIndices.length;
       measureWidths = rowIndices.map(() => boxWidth);
-      const totalBeats = rowIndices.reduce((sum, i) => sum + (measures[i].beatCount ?? beatsPerMeasure), 0);
+      const totalBeats = rowIndices.reduce((sum, i) => sum + getMeasureBeats(i), 0);
       pixelsPerBeatForRow = totalBeats > 0 ? (boxWidth * rowIndices.length) / totalBeats : PIXELS_PER_BEAT_DEFAULT;
     }
     const boxWidth = measureWidths[0] ?? effectiveWidth / rowIndices.length;
@@ -219,17 +236,27 @@ function calculateFigureGrid(data, availableWidth, availablePageHeight = 0) {
     });
   };
 
+  // Prefer reflow (fewer measures/line) over crushing beat width below figure size.
   const minMeasureWidth = Math.max(
     LAYOUT.MEASURE_MIN_WIDTH ?? 28,
-    beatsPerMeasure * (FIGURE_BASE_WIDTH * figureScale)
+    beatsPerMeasure * minPixelsPerBeat,
   );
 
   for (let i = 0; i < measures.length; i++) {
-    const breakBeforeThis = lineBreakBefore.has(i + 1) || pageBreakBefore.has(i + 1);
+    const breakBeforeThis = lineBreakBefore.has(i) || pageBreakBefore.has(i);
     const fullRow = enforceMeasuresPerLine && currentRowMeasureCount >= boxesPerRow;
-    const wouldBeCount = currentRow.length + 1;
-    const widthPerMeasure = effectiveWidth / wouldBeCount;
-    const overflowBreak = currentRow.length > 0 && widthPerMeasure < minMeasureWidth; // force new line when row would overflow
+    const wouldBeIndices = currentRow.length > 0 ? [...currentRow, i] : [i];
+    const wouldBeBeats = wouldBeIndices.reduce((sum, idx) => sum + getMeasureBeats(idx), 0);
+    const desiredRowWidth = desiredPixelsPerBeat != null
+      ? wouldBeBeats * desiredPixelsPerBeat
+      : wouldBeIndices.length * minMeasureWidth;
+    // Break before adding a measure that would force page-fit below the figure-size floor.
+    const wouldCrushFigures = currentRow.length > 0
+      && desiredRowWidth > effectiveWidth + 0.5
+      && wouldBeBeats * minPixelsPerBeat > effectiveWidth + 0.5;
+    const widthPerMeasure = effectiveWidth / wouldBeIndices.length;
+    const overflowBreak = currentRow.length > 0
+      && (widthPerMeasure < minMeasureWidth || wouldCrushFigures);
 
     if ((breakBeforeThis || fullRow || overflowBreak) && currentRow.length > 0) {
       flushRow(currentRow);

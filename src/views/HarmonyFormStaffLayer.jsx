@@ -26,6 +26,7 @@ import {
   getMeasureBeatCount,
   normalizeHarmonyChordBeatStep,
 } from '../notation/harmonyFormMode';
+import { getDisplayBarNumber } from '../notation/barNumberRestart';
 
 const BEAT_BOX_EDGE = '#c8c8c8';
 const BEAT_BOX_BEAT_LINE = '#e0e0e0';
@@ -153,6 +154,8 @@ export function HarmonyFormStaffLayer({
   measureWidths = [],
   showBarNumbers = true,
   barNumberSize = 11,
+  layoutBarNumberRestartAt = [],
+  pickupEnabled = false,
   isFirstSystem = false,
   lyricFontFamily = TEXT_FONT_FAMILY,
   lyricFontSize = 12,
@@ -262,17 +265,24 @@ export function HarmonyFormStaffLayer({
 
         return (
           <g key={`hf-m-${measureIdx}`}>
-            {showBarNumbers && (
-              <text
-                x={measureX + lanes.left + 4}
-                y={rowTop - 6}
-                fontSize={barNumberSize}
-                fill="#555"
-                fontFamily="sans-serif"
-              >
-                {measureIdx + 1}
-              </text>
-            )}
+            {showBarNumbers && (() => {
+              const barNumber = getDisplayBarNumber(measureIdx, {
+                pickupEnabled,
+                barNumberRestartAt: layoutBarNumberRestartAt,
+              });
+              if (barNumber == null) return null;
+              return (
+                <text
+                  x={measureX + lanes.left + 4}
+                  y={rowTop - 6}
+                  fontSize={barNumberSize}
+                  fill="#555"
+                  fontFamily="sans-serif"
+                >
+                  {barNumber}
+                </text>
+              );
+            })()}
 
             <g>
               <line x1={measureX} y1={rowTop} x2={measureRightX} y2={rowTop} stroke={BEAT_BOX_EDGE} strokeWidth={1.5} />

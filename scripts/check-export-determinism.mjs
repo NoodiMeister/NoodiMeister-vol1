@@ -7,6 +7,7 @@ import {
   maxPixelsPerBeatToFitPage,
   clampPixelsPerBeatToPage,
   fitWidthsToContentWidth,
+  minPixelsPerBeatForFigures,
 } from '../src/layout/pageFitSpacing.js';
 
 function assert(condition, message) {
@@ -113,6 +114,16 @@ async function main() {
   assert(narrowSum < contentW - 1, 'Below-max spacing must keep the row narrower than the page (not force-fill).');
   const layoutEngine = await read('src/layout/LayoutEngine.jsx');
   assert(layoutEngine.includes('fitWidthsToContentWidth'), 'Figurenotes layout must fit measure widths to the page on overflow.');
+  assert(
+    layoutEngine.includes('minPixelsPerBeatForFigures'),
+    'Figurenotes layout must reflow using a figure-size floor so notes do not overlap.'
+  );
+  assert(
+    layoutEngine.includes('wouldCrushFigures'),
+    'Figurenotes layout must break the row before page-fit would crush figures.'
+  );
+  assert(minPixelsPerBeatForFigures(85) >= 85, 'Figure floor must be at least figure diameter.');
+  assert(minPixelsPerBeatForFigures(85) > maxFit, 'Default figures must force fewer measures/line than a crushed 4×4/4 fit.');
 
   // Regression check for all time signature digit glyphs 0..9.
   for (let digit = 0; digit <= 9; digit += 1) {

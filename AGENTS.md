@@ -118,6 +118,12 @@ Kõik muudatused peavad hoidma kasutaja teekonnad tervena:
   - Kustutamine ei tohi ajatelge “auku” jätta: kustutatud aeg täidetakse pausidega vastavalt kestustele.
   - Selection, click, Shift+Arrow, Shift+drag peavad muutma ühtset kursori/valiku mudelit; UI ei tohi pidada paralleelset “salatõde”.
 
+- **Standard: uus lugu / uus harjutus (`addSongBlock`, Option+N)**
+  - Eelmise loo viimasele taktile pannakse `barlineFinal` (topelt lõpujoon).
+  - Uus takt kuulub **ainult uuele reale** (`layoutLineBreakBefore` uue takti **0-põhise** indeksi peale); eelmisele reale ei lisata tühja täite-takti ega nihutata eelmise loo viimast takti uuele reale.
+  - Uue loo esimene süsteem kuvab taktinumbri **1** (`layoutBarNumberRestartAt`).
+  - Sama käitumine `traditional` ja `figurenotes` vaates; paigutuse `lineBreakBefore` / `pageBreakBefore` on kõikjal 0-põhised.
+
 - **Standard: parooli taastamine (kohalik e-post + parool)**
   - **Ulatus:** kehtib **ainult** `provider: local` kontodele (e-post + parool brauseris). **Google/Microsoft** parooli ja identiteedi taastamine jääb vastavalt Google’ile ja Microsoftile; Noodimeister ei saada neile läbi oma e-kirja SSO parooli resetti.
   - **Server on tõde parooli räsi jaoks:** Vercel KV-s hoitakse `nm:auth:local:{email}` kirjet (scrypt räsi + sool). **Ülekirjutamine:** uus serverikirje luuakse `POST /api/auth/sync-local-account` kaudu **ainult kui** kirjet pole; olemasolevat ei tohi üle kirjutada ilma kehtiva parooli või kehtiva ühekordse taastamistokenita.

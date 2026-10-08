@@ -45,3 +45,13 @@ export function fitWidthsToContentWidth(widths, contentWidth) {
   const scale = limit / sum;
   return widths.map((w) => (Number(w) || 0) * scale);
 }
+
+/**
+ * Minimaalne px/löök figuurnotatsioonis, et ringid/ruudud ei kattuks horisontaalselt.
+ * Figuuride suurus (diameter) peab mahtuma löögikasti; väike varu hoiab servad eraldi.
+ */
+export function minPixelsPerBeatForFigures(figurenotesSize = 85, gapPx = 2) {
+  const size = Math.max(12, Math.min(96, Number(figurenotesSize) || 85));
+  const gap = Math.max(0, Number(gapPx) || 0);
+  return size + gap;
+}
