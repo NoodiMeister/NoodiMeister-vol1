@@ -46,10 +46,20 @@ export function buildNmPrintSvgPagesMarkup (pageModel, opts = {}) {
   return html;
 }
 
+/** Print-/PDF-failinimi brauseris: <title> peab olema loo pealkiri, mitte turunduslause. */
+function escapeHtmlText (raw) {
+  return String(raw ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
 /**
  * @param {string} pagesInnerHtml
- * @param {{ paperSize?: string, pageOrientation?: string }} layoutOpts — peab vastama pageModeli orientatsioonile,
+ * @param {{ paperSize?: string, pageOrientation?: string, documentTitle?: string }} layoutOpts — peab vastama pageModeli orientatsioonile,
  *   et @page size ei jääks vaikimisi portrait’iks (Chrome võib muidu Cmd/Ctrl+P eelvaates paberi püsti jätta).
+ *   documentTitle: brauseri Print → Salvesta PDF-ina soovituslik failinimi (ilma .pdf).
  */
 export function buildNmStandalonePrintDocumentHtml (pagesInnerHtml, layoutOpts = {}) {
   const paper = normalizePaperSize(layoutOpts.paperSize || 'a4');
@@ -62,8 +72,10 @@ export function buildNmStandalonePrintDocumentHtml (pagesInnerHtml, layoutOpts =
     } catch (_) {}
     return '/';
   })();
+  const docTitleRaw = String(layoutOpts.documentTitle || '').trim() || 'Noodimeister';
+  const docTitle = escapeHtmlText(docTitleRaw);
   const body = `<div class="nm-print-svg-pages">${pagesInnerHtml}</div>`;
-  return `<!DOCTYPE html><html lang="et"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><base href="${baseHref}"/><title>Noodimeister</title><style>${style}</style></head><body>${body}</body></html>`;
+  return `<!DOCTYPE html><html lang="et"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><base href="${baseHref}"/><title>${docTitle}</title><style>${style}</style></head><body>${body}</body></html>`;
 }
 
 /**

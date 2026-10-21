@@ -79,6 +79,7 @@ Kõik muudatused peavad hoidma kasutaja teekonnad tervena:
   - **Ühik:** kõik paigutuskonstandid peavad olema väljendatud `staffSpace` suhtes; väldi “paljaid px” väärtusi renderi keskloogikas.
   - **Renderi jaotus:** geomeetrilised objektid (`line`/`path`) jäävad geomeetriaks; SMuFL sümbolid jäävad glüüfideks — kuid nende `x/y/size` arvutatakse samast raamistikust.
   - **Kordusmärgid (kohustuslik):** `repeatStart/repeatEnd` ei tohi “hõljuda” ega dubleeruda lõpujoonega; kui taktil on `repeatEnd`, ei tohi sama ankru peal lisaks tekkida fallback-final-barline.
+  - **Lõpujoon / topeltjoon (MuseScore UX):** kasutaja klikib topeltjoonele → sinine valikukast; Backspace/Delete eemaldab topeltjoone ja asendab üksiktaktijoonega (`barlineSingle` peidab ka skoori lõpu auto-final’i). Tööriistakasti „Lõpujoon (||)“ taastab topeltjoone.
   - **Avaankur (kohustuslik):** kui rea alguses on kordusmärk, peab taktimõõt/helistik jääma loetavaks; kattumine (`repeatStart` vs `time signature`/`key signature`) on regressioon.
   - **Drift-lävi:** sama sisendi korral peab paigutus olema deterministlik; sama tüüpi glüüfide ankrud eri ridades/režiimides ei tohi lahkneda rohkem kui kokkulepitud optiline kalibratsioon (`kx/ky/ks`).
   - **Kalibratsioon:** optilised parandused on lubatud ainult nimega konstantidena (nt `*_INSET_STAFF_SPACES`, `*_HEIGHT_MULTIPLIER`) ühes kohas; ära dubleeri samu “magic numbreid” view failides.
@@ -117,6 +118,19 @@ Kõik muudatused peavad hoidma kasutaja teekonnad tervena:
   - Sama sisend peab olema deterministlik: `cursorBeat + inputDuration + mode` -> sama notatsiooni tulemus.
   - Kustutamine ei tohi ajatelge “auku” jätta: kustutatud aeg täidetakse pausidega vastavalt kestustele.
   - Selection, click, Shift+Arrow, Shift+drag peavad muutma ühtset kursori/valiku mudelit; UI ei tohi pidada paralleelset “salatõde”.
+
+- **Standard: pedagoogilised kuvarežiimid A/B/C**
+  - Kehtib ainult pedagoogilise faili sees (`notationMode` / `vabanotatsioon`); `sourceNotationMode` jääb lukku.
+  - `pedagogicalDisplayMode`: **A** `joStaff` (JO-võti + noodid), **B** `joStaffHandSigns` (JO + käemärgid noodi all enne laulusõnu), **C** `handSignLyrics` (7 astmejoont, käemärgid glüüfide asemel, laulusõnad all).
+  - A/B/C on **sama loo vaated** (`notes`, lyrics, taktimõõt, JO-ankur) — vahetus ei dubleeri ega kustuta andmeid.
+  - C: alumine joon = JO … ülemine = DI; taktijooned 1.–7. jooneni; X = beat/taktimõõt (ti-ti lähestikku); käemärk RTL peegel ainult renderdamisel (uTheory ND).
+  - Detailid: `docs/PEDAGOGICAL-NOTATION-REQUIREMENTS.md` §5.
+
+- **Standard: noodipea tööriistakast (notehead toolbox)**
+  - **Mõiste:** tööriist muudab **noodipea kujutist** (`note head`), mitte rütmi/kestust. Rütmitööriistakast jääb kestuste ja mustrite jaoks.
+  - **Sisu:** kasutaja valib MuseScore/SMuFL inspireeritud glüüfe: ovaal, X, kolmnurk üles, kolmnurk alla, romb, ruut (+ valikuline emoji). Igal valikul on glüüfi eelvaade.
+  - **Render:** traditsiooniline joonestik peab rakendama valitud kujundit (ei tohi sundida X/ruut/kolmnurk tagasi ovaaliks).
+  - **Eraldus rütmist:** kui noodipea kast on avatud, ei tohi UI näidata rütmitööriista ikoone/seadeid samas ribas.
 
 - **Standard: uus lugu / uus harjutus (`addSongBlock`, Option+N)**
   - Eelmise loo viimasele taktile pannakse `barlineFinal` (topelt lõpujoon).

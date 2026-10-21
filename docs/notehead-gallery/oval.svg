@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="128" height="128" role="img" aria-label="Ovaal notehead">
+  <title>oval  SMuFL noteheadBlack U+E0A4</title>
+  <rect width="64" height="64" fill="#fffbeb"/>
+  <!-- Classic filled oval notehead (slightly rotated like music fonts) -->
+  <ellipse cx="32" cy="32" rx="16" ry="11" transform="rotate(-20 32 32)" fill="#1a1a1a"/>
+</svg>

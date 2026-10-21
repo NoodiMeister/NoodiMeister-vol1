@@ -12,7 +12,7 @@ import {
   TEXT_FONT_FAMILY,
 } from '../notation/musescoreStyle';
 import { getTraditionalTimeSignaturePreferredX } from '../notation/TimeSignatureLayout';
-import { getRepeatMarkPlacement } from '../notation/repeatMarksEngine';
+import { getRepeatMarkPlacement, shouldShowFinalDoubleBarline } from '../notation/repeatMarksEngine';
 import {
   getLeftBarlineRepeatRender,
   shouldDrawRepeatEndGlyphOnRight,
@@ -247,7 +247,7 @@ export function HarmonyFormStaffLayer({
         const drawRepeatEnd = shouldDrawRepeatEndGlyphOnRight(measure, nextMeasure);
         const isLastMeasureInSystem = mi === sys.measureIndices.length - 1;
         const isLastMeasureOfScore = measureIdx === effectiveMeasures.length - 1;
-        const showFinalBar = (isLastMeasureOfScore || measure.barlineFinal) && !measure.repeatEnd;
+        const showFinalBar = shouldShowFinalDoubleBarline(measure, { isLastMeasureOfScore });
         const measureRightX = measureX + measureWidth;
 
         const chordsInMeasure = chords
@@ -426,14 +426,28 @@ export function HarmonyFormStaffLayer({
             ) : showFinalBar ? (
               (() => {
                 const { thinCx, thickCx, thinW, thickW } = getFinalDoubleBarlineCentersX(measureRightX, STAFF_SPACE);
+                const hitX = thinCx - STAFF_SPACE * 1.2;
+                const hitW = (thickCx - thinCx) + STAFF_SPACE * 2.4 + thickW;
                 return (
-                  <g>
+                  <g
+                    onClick={onSelectRepeatMark ? (e) => {
+                      e.stopPropagation();
+                      onSelectRepeatMark(measureIdx, 'barlineFinal', { toggle: !!(e.metaKey || e.ctrlKey) });
+                    } : undefined}
+                    style={{ cursor: onSelectRepeatMark ? 'pointer' : undefined }}
+                  >
                     <line x1={thinCx} y1={rowTop} x2={thinCx} y2={rowBottom} stroke="#1a1a1a" strokeWidth={thinW} />
                     <line x1={thickCx} y1={rowTop} x2={thickCx} y2={rowBottom} stroke="#1a1a1a" strokeWidth={thickW} />
+                    {isRepeatMarkSelected(measureIdx, 'barlineFinal') && (
+                      <rect x={hitX} y={rowTop - 4} width={hitW} height={boxHeight + 8} fill="#93c5fd" opacity={0.32} rx={3} />
+                    )}
+                    {onSelectRepeatMark && (
+                      <rect x={hitX} y={rowTop - 4} width={hitW} height={boxHeight + 8} fill="transparent" />
+                    )}
                   </g>
                 );
               })()
-            ) : !isLastMeasureInSystem ? (
+            ) : (
               <line
                 x1={measureRightX}
                 y1={rowTop}
@@ -442,7 +456,7 @@ export function HarmonyFormStaffLayer({
                 stroke={BEAT_BOX_EDGE}
                 strokeWidth={1.5}
               />
-            ) : null}
+            )}
 
             {measure.segno && (
               <SmuflGlyph

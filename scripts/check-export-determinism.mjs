@@ -33,6 +33,9 @@ async function main() {
   assert(scoreDocumentModel.includes('describeScoreDocumentBlocksForExport'), 'Unified score document block model is missing.');
   assert(scoreDocumentModel.includes('buildScoreTextBoxesExportMarkup'), 'Text box export markup must live in score document model.');
   assert(scoreToSvg.includes('describeScoreDocumentBlocksForExport'), 'scoreToSvg must wire document block metadata.');
+  assert(scoreToSvg.includes('measureScoreExportHeaderFromContainer'), 'Export must measure DOM header height for container parity.');
+  assert(scoreToSvg.includes('pageOverlayTransform'), 'Text boxes must share notation export overlay transform.');
+  assert(scoreToSvg.includes('getScoreNotationExportTransform'), 'Export overlay transform must derive from layout snapshot.');
   assert(app.includes('textBoxes,'), 'Export snapshot must pass textBoxes into scoreToSvg for unified document parity.');
   assert(!scoreToSvg.includes('local("serif")'), 'Export defs still depend on local serif fallback.');
   assert(app.includes('scoreToSvg(containerEl,'), 'Preview/PDF path is not using scoreToSvg snapshot builder.');
@@ -49,7 +52,23 @@ async function main() {
   assert(app.includes('validateSmuflTimeSigExport({ defsString: pdfPreviewSvgData.defsString, contentString: pdfPreviewSvgData.contentString })'), 'Print export is missing SMuFL preflight validation.');
   assert(app.includes('registerSmuflFontsForJsPdf'), 'PDF/print path must register SMuFL (Bravura) with jsPDF before svg2pdf.');
   assert(smuflGlyphs.includes("export const SMUFL_MUSIC_FONT_FAMILY = 'Leland';"), 'Canonical SMuFL font family constant is missing.');
+  assert(smuflGlyphs.includes('noteheadTriangleDownBlack'), 'SMuFL notehead catalog must include triangle-down (MuseScore group).');
+  assert(smuflGlyphs.includes('noteheadDiamondBlack'), 'SMuFL notehead catalog must include diamond (MuseScore group).');
+  assert(smuflGlyphs.includes('smuflNoteheadForDurationLabel'), 'Duration-aware notehead glyph helper is missing.');
+  const noteheadCatalog = await read('src/notation/noteheadShapeCatalog.js');
+  assert(noteheadCatalog.includes('triangleUp') && noteheadCatalog.includes('triangleDown') && noteheadCatalog.includes('diamond'), 'Notehead shape catalog must expose MuseScore-inspired shapes.');
+  assert(app.includes('NOTEHEAD_SHAPE_DEFS'), 'Notehead toolbox must be driven by NOTEHEAD_SHAPE_DEFS.');
+  assert(app.includes('noteInputMode && !activeToolbox'), 'N-mode must not show rhythm strip when another toolbox (e.g. notehead) is open.');
+  assert(!app.includes("noteheadShape === 'x' || noteheadShape === 'square' || noteheadShape === 'triangle' ? 'oval'"), 'Traditional staff must not force shaped noteheads back to oval.');
   assert(figurenotesView.includes('fontFamily={SMUFL_MUSIC_FONT_FAMILY}'), 'Figurenotes time signature is not forced to canonical SMuFL font family.');
+  assert(
+    figurenotesView.includes('className="nm-export-omit"') && scoreToSvg.includes('.nm-export-omit'),
+    'Figurenotes pedagogical SMuFL underlayer must be marked nm-export-omit and stripped in scoreToSvg (svg2pdf ghost stem/flag).'
+  );
+  assert(
+    scoreToSvg.includes('hardenExportSvgPaints') || scoreToSvg.includes('resolveCssVarPaint'),
+    'Export SVG must resolve CSS var() paints for svg2pdf.'
+  );
   assert(
     /if\s*\(\s*!chordBlocksEnabled\s*\|\|\s*chordLineHeight\s*<=\s*0\s*\)\s*\{\s*return null;/.test(figurenotesView),
     'Figurenotes must hide chord names when chord blocks are off (no melody overlay fallback).'

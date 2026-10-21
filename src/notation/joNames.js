@@ -40,4 +40,15 @@ export function getJoName(pitch, octave, keySignature = 'C', joStaffPosition) {
   return JO_NAMES[degree] ?? 'JO';
 }
 
+/**
+ * Diatooniline aste 0…6 (JO…DI) JO-ankrust.
+ * Kasutatakse nt käemärkide 7-joonelise vaate (C) vertikaalseks paigutuseks.
+ */
+export function getJoDegreeIndex(pitch, octave, keySignature = 'C', joStaffPosition) {
+  const joAnchor = resolveJoAnchorStaffPosition(keySignature, joStaffPosition);
+  return getDiatonicDegreeFromAnchor(pitch, octave, joAnchor);
+}
+
+export { JO_NAMES };
+
 export default getJoName;

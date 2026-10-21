@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="et">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Käemärgid — teksti test (ilma noodijoonestikuta)</title>
+  <style>
+    @font-face {
+      font-family: "uTheory Solfege";
+      src: url("./utheory-solfege-0.1.6.woff2") format("woff2"),
+           url("./utheory-solfege-0.1.6.woff") format("woff"),
+           url("./utheory-solfege-0.1.6.ttf") format("truetype");
+      font-weight: normal;
+      font-style: normal;
+      font-display: swap;
+    }
+
+    :root {
+      --ink: #111;
+      --muted: #555;
+      --line: #ddd;
+      --bg: #f7f6f3;
+      --panel: #fff;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+      color: var(--ink);
+      background:
+        radial-gradient(1200px 600px at 10% -10%, #e8efe8 0%, transparent 55%),
+        radial-gradient(900px 500px at 100% 0%, #efe8e0 0%, transparent 50%),
+        var(--bg);
+      min-height: 100vh;
+      padding: 2rem clamp(1rem, 4vw, 3rem) 3rem;
+    }
+
+    h1 {
+      font-size: clamp(1.6rem, 3vw, 2.2rem);
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      margin: 0 0 0.35rem;
+    }
+    .lead {
+      color: var(--muted);
+      max-width: 42rem;
+      margin: 0 0 1.75rem;
+      line-height: 1.45;
+    }
+
+    .map {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin: 0 0 1.25rem;
+    }
+    .map span {
+      display: inline-flex;
+      align-items: baseline;
+      gap: 0.35rem;
+      padding: 0.35rem 0.65rem;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      font-size: 0.9rem;
+    }
+    .map kbd {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-weight: 700;
+      font-size: 1rem;
+    }
+    .map .hand {
+      font-family: "uTheory Solfege", sans-serif;
+      font-size: 1.75rem;
+      line-height: 1;
+      /* Eesti RTL peegel (render-time; fonte ei muudeta) */
+      transform: scaleX(-1);
+      display: inline-block;
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 1rem 1.1rem 1.25rem;
+      max-width: 52rem;
+      box-shadow: 0 1px 0 rgba(0,0,0,0.04);
+    }
+    label {
+      display: block;
+      font-size: 0.85rem;
+      color: var(--muted);
+      margin-bottom: 0.5rem;
+    }
+    #editor {
+      width: 100%;
+      min-height: 7rem;
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      padding: 0.85rem 1rem;
+      font-family: "uTheory Solfege", sans-serif;
+      font-size: 4.5rem;
+      line-height: 1.15;
+      letter-spacing: 0.06em;
+      resize: vertical;
+      transform: scaleX(-1);
+      direction: ltr;
+      background: #fff;
+      color: #111;
+    }
+    #editor:focus {
+      outline: 2px solid #2a6;
+      outline-offset: 2px;
+    }
+
+    .hint {
+      margin-top: 0.85rem;
+      font-size: 0.85rem;
+      color: var(--muted);
+      line-height: 1.4;
+    }
+    .links {
+      margin-top: 1.5rem;
+      font-size: 0.9rem;
+    }
+    .links a { color: #145; }
+  </style>
+</head>
+<body>
+  <h1>Käemärgid tekstina</h1>
+  <p class="lead">
+    Pooliku projekti kiirtest: <strong>uTheory Solfege</strong> font + Eesti JO–LE–MI mapping.
+    Siin <em>ei ole</em> noodijoonestikku — ainult käemärgid kirjutades (nagu tekst).
+    Peegelpilt (RTL) on CSS-iga; originaalfonte ei muudeta (CC BY-NC-ND 4.0).
+  </p>
+
+  <div class="map" aria-label="Tähe → aste mapping">
+    <span><kbd>d</kbd> → JO <span class="hand" aria-hidden="true">d</span></span>
+    <span><kbd>r</kbd> → LE <span class="hand" aria-hidden="true">r</span></span>
+    <span><kbd>m</kbd> → MI <span class="hand" aria-hidden="true">m</span></span>
+    <span><kbd>f</kbd> → NA <span class="hand" aria-hidden="true">f</span></span>
+    <span><kbd>s</kbd> → SO <span class="hand" aria-hidden="true">s</span></span>
+    <span><kbd>l</kbd> → RA <span class="hand" aria-hidden="true">l</span></span>
+    <span><kbd>t</kbd> → DI <span class="hand" aria-hidden="true">t</span></span>
+  </div>
+
+  <div class="panel">
+    <label for="editor">Kirjuta siia (väiketähed = self / first-person; suurtähed D R M … = teacher)</label>
+    <textarea id="editor" spellcheck="false" autocomplete="off" autocorrect="off">drmfs ltd</textarea>
+    <p class="hint">
+      Proovi nt <code>drm</code> või <code>drmsld</code>. Tühikud on lubatud.
+      See leht on ainult demo — editori scorepage’i pedagoogilisse režiimi pole käemärgi-tekstivoogu veel ühendatud.
+    </p>
+  </div>
+
+  <p class="links">
+    Mapping: <a href="./JO-LE-MI-MAPPING.md">JO-LE-MI-MAPPING.md</a> ·
+    Rida SVG: <a href="./hand-signs-row-jo-le-mi.svg">hand-signs-row-jo-le-mi.svg</a> ·
+    Eesti RTL: <a href="../kaemargid-eesti-rtl.svg">kaemargid-eesti-rtl.svg</a>
+  </p>
+</body>
+</html>

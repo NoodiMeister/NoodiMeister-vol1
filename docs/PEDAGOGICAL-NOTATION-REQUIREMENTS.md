@@ -76,6 +76,40 @@ Märkused:\n+
 
 ---
 
+---
+
+## 5. Pedagoogilised kuvarežiimid A / B / C
+
+**Nõue:** Pedagoogilise notatsiooni (`sourceNotationMode` / `vabanotatsioon`) **sees** peab olema valitav kuvarežiim `pedagogicalDisplayMode`. See on **vaade sama loo andmete peal**, mitte uus fail ega eraldi nootide koopia.
+
+| Kood | Väärtus | Sisuliselt |
+|------|---------|------------|
+| **A** | `joStaff` | JO-võti + noodijoonestik + noodiglüüfid (praegune vaikimisi pedagoogiline vaade) |
+| **B** | `joStaffHandSigns` | JO-võti + noodijooned; käemärgid **noodi all**, **enne** laulusõnu |
+| **C** | `handSignLyrics` | **7 astmejoont** (JO…DI); käemärgid **noodi glüüfide asemel**; laulusõnad joonte all |
+
+### 5.1 Ühine andmemudel (A ↔ B ↔ C)
+
+- Samad `notes[]` (pitch, duration, beat), `lyric*`, `timeSignature`, `keySignature`, `joClefStaffPosition`.
+- Režiimivahetus ei tohi muuta ega dubleerida nootide andmeid.
+- Sisestus võib jääda peamiselt A-s; C on esmalt kuvamise/testi vaade.
+
+### 5.2 Režiim C (testprototüüp) – fikseeritud reeglid
+
+- **7 horisontaalset joont** üksteise kohal/all; alumine = JO, ülemine = DI (üks diatooniline oktaav).
+- Iga joon = üks aste; vertikaalne asukoht tuleb JO-ankru diatoonilisest astmest (`getJoName` / degree index 0…6).
+- **Taktijooned** ulatuvad selgelt **1. joonest 7. jooneni**.
+- Noodipea asemel **käemärk** (uTheory teacher; RTL peegel **ainult renderdamisel**).
+- **X-paigutus** järgib taktimõõtu / beat’i (`measureWidths` / beatWidth, sh slotid löögis): ti-ti (1/8+1/8) = käemärgid **lähestikku**.
+- Laulusõnad: üks rida **7 joone all**.
+- Oktaavinihe väljaspool JO…DI: prototüübis clamp 0…6 (märkida UI-s).
+
+### 5.3 Režiim B
+
+Spetsifikatsioon olemas; täielik implementatsioon pärast C smoke’i.
+
+---
+
 ## Kokkuvõte
 
 | Nr | Funktsioon | Eraldus figuurnotatsioonist |
@@ -84,5 +118,6 @@ Märkused:\n+
 | 2  | Oma värvikombinatsioonid (JO suhtes) | Värvid tulevad pedagoogilise notatsiooni konfiguratsioonist, mitte figuurnotatsiooni konstantidest. |
 | 3  | Erisugused kujundid (kellad, torud, Orff) | Kujundid tulevad pedagoogilise notatsiooni / Orff konfiguratsioonist, mitte figuurnotatsiooni kujundite loogikast. |
 | 4  | Astme trepp ja käemärgid: eritasandiline JO-LE-MI (ruududega) | Oma vaate tüüp; ruudud tähistavad astme trepi tasandeid, mitte figuurnotatsiooni kujundeid. |
+| 5  | Kuvarežiimid A / B / C | Pedagoogilise faili sisene vaade; sama note/lyric tõde; C = 7 astmejoont + käemärgid. |
 
-Kõik neli nõuet on mõeldud **pedagoogilise notatsiooni** jaoks ja peavad olema implementeeritud nii, et figuurnotatsiooni süsteem jääb eraldi; ühine võib olla ainult tehniline abikiht (nt ühine joonistusmootor), mitte andmemudel ega äriline loogika.
+Kõik nõuded on mõeldud **pedagoogilise notatsiooni** jaoks ja peavad olema implementeeritud nii, et figuurnotatsiooni süsteem jääb eraldi; ühine võib olla ainult tehniline abikiht (nt ühine joonistusmootor), mitte andmemudel ega äriline loogika.

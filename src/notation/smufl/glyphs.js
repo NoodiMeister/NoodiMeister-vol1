@@ -23,9 +23,21 @@ export const SMUFL_GLYPH = Object.freeze({
   noteheadWhole: '\uE0A2',
   noteheadHalf: '\uE0A3',
   noteheadBlack: '\uE0A4',
+  // MuseScore / SMuFL notehead groups (black + hollow for half/whole where available)
+  noteheadXWhole: '\uE0A7',
+  noteheadXHalf: '\uE0A8',
   noteheadXBlack: '\uE0A9',
+  noteheadSquareWhite: '\uE0B8',
   noteheadSquareBlack: '\uE0B9',
+  noteheadTriangleUpWhole: '\uE0BB',
+  noteheadTriangleUpHalf: '\uE0BC',
   noteheadTriangleUpBlack: '\uE0BE',
+  noteheadTriangleDownWhole: '\uE0C3',
+  noteheadTriangleDownHalf: '\uE0C4',
+  noteheadTriangleDownBlack: '\uE0C7',
+  noteheadDiamondWhole: '\uE0D8',
+  noteheadDiamondHalf: '\uE0D9',
+  noteheadDiamondBlack: '\uE0DB',
 
   /** Augmentation dot (SMuFL noteheads supplement U+E1E7). */
   augmentationDot: '\uE1E7',
@@ -99,28 +111,78 @@ export function smuflTimeSigDigitsForNumber(num) {
   return s.split('').map((c) => smuflTimeSigDigit(parseInt(c, 10))).filter(Boolean);
 }
 
-/** Shape key for notehead (oval, x, square, triangle). Used by toolbox and rendering. */
+/**
+ * Shape key → black (quarter+) glyph for toolbox previews and filled heads.
+ * `triangle` is a legacy alias for `triangleUp`.
+ */
 export const NOTEHEAD_SHAPE_GLYPH = {
   oval: SMUFL_GLYPH.noteheadBlack,
-  x: SMUFL_GLYPH.noteheadXBlack,
+  /** X ei kasuta SMuFL glüüfi — render: FigurenotesCrossNotehead (FIGURENOTES_CROSS_PATHS). */
+  x: null,
   square: SMUFL_GLYPH.noteheadSquareBlack,
   triangle: SMUFL_GLYPH.noteheadTriangleUpBlack,
+  triangleUp: SMUFL_GLYPH.noteheadTriangleUpBlack,
+  triangleDown: SMUFL_GLYPH.noteheadTriangleDownBlack,
+  diamond: SMUFL_GLYPH.noteheadDiamondBlack,
 };
 
+/** Per-duration SMuFL noteheads by MuseScore-style shape group (null = use oval defaults). */
+const NOTEHEAD_SHAPE_BY_DURATION = Object.freeze({
+  oval: {
+    whole: SMUFL_GLYPH.noteheadWhole,
+    half: SMUFL_GLYPH.noteheadHalf,
+    black: SMUFL_GLYPH.noteheadBlack,
+  },
+  // x: intentionally omitted — use FigurenotesCrossNotehead, not SMuFL noteheadX*
+  square: {
+    whole: SMUFL_GLYPH.noteheadSquareWhite,
+    half: SMUFL_GLYPH.noteheadSquareWhite,
+    black: SMUFL_GLYPH.noteheadSquareBlack,
+  },
+  triangle: {
+    whole: SMUFL_GLYPH.noteheadTriangleUpWhole,
+    half: SMUFL_GLYPH.noteheadTriangleUpHalf,
+    black: SMUFL_GLYPH.noteheadTriangleUpBlack,
+  },
+  triangleUp: {
+    whole: SMUFL_GLYPH.noteheadTriangleUpWhole,
+    half: SMUFL_GLYPH.noteheadTriangleUpHalf,
+    black: SMUFL_GLYPH.noteheadTriangleUpBlack,
+  },
+  triangleDown: {
+    whole: SMUFL_GLYPH.noteheadTriangleDownWhole,
+    half: SMUFL_GLYPH.noteheadTriangleDownHalf,
+    black: SMUFL_GLYPH.noteheadTriangleDownBlack,
+  },
+  diamond: {
+    whole: SMUFL_GLYPH.noteheadDiamondWhole,
+    half: SMUFL_GLYPH.noteheadDiamondHalf,
+    black: SMUFL_GLYPH.noteheadDiamondBlack,
+  },
+});
+
 export function smuflNoteheadForType(type, shapeKey = 'oval') {
-  const shapeGlyph = NOTEHEAD_SHAPE_GLYPH[shapeKey];
-  const defaultGlyph = shapeGlyph || SMUFL_GLYPH.noteheadBlack;
+  const key = shapeKey === 'triangle' ? 'triangleUp' : (shapeKey || 'oval');
+  const group = NOTEHEAD_SHAPE_BY_DURATION[key] || NOTEHEAD_SHAPE_BY_DURATION.oval;
   switch (type) {
     case 'whole':
-      return SMUFL_GLYPH.noteheadWhole;
+      return group.whole;
     case 'half':
-      return SMUFL_GLYPH.noteheadHalf;
+      return group.half;
     case 'quarter':
     case 'eighth':
     case 'sixteenth':
     default:
-      return defaultGlyph;
+      return group.black;
   }
+}
+
+/** Duration label (`1/1` …) → SMuFL notehead for the active shape. */
+export function smuflNoteheadForDurationLabel(durationLabel, shapeKey = 'oval') {
+  const dur = durationLabel || '1/4';
+  if (dur === '1/1') return smuflNoteheadForType('whole', shapeKey);
+  if (dur === '1/2') return smuflNoteheadForType('half', shapeKey);
+  return smuflNoteheadForType('quarter', shapeKey);
 }
 
 export function smuflRestForDurationLabel(durationLabel) {

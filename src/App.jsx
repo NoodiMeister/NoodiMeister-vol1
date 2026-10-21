@@ -39,6 +39,7 @@ const DEPRECATED_PRODUCTION_HOSTS = new Set([
 function EscapeLogoutHandler() {
   const navigate = useNavigate();
   const store = useNoodimeisterOptional();
+  const logout = store?.logout;
   useEffect(() => {
     const onKeyDown = (e) => {
       if (e.key !== 'Escape') return;
@@ -49,13 +50,13 @@ function EscapeLogoutHandler() {
       const isTypingTarget = tag === 'INPUT' || tag === 'TEXTAREA' || el?.isContentEditable;
       if (isTypingTarget) return;
       if (!authStorage.isLoggedIn()) return;
-      if (store) store.logout();
+      if (logout) logout();
       else authStorage.clearAuth();
-      navigate('/', { replace: true });
+      navigate('/avaleht', { replace: true });
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [navigate, store]);
+  }, [navigate, logout]);
   return null;
 }
 

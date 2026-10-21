@@ -35,6 +35,7 @@ import {
   getLeftBarlineRepeatRender,
   shouldDrawRepeatEndGlyphOnRight,
 } from "../notation/repeatBarlineResolve";
+import { shouldShowFinalDoubleBarline } from "../notation/repeatMarksEngine";
 import {
   getBarlineFrame,
   getRepeatRightGlyphX,
@@ -1500,13 +1501,16 @@ export function FigurenotesView({
                         <g>
                           {/* Long-duration bar: rectangle at bottom of beat box, slightly under figure layer */}
                           {longDurationRectEl}
-                          {/* Pedagoogiline aluskiht: SMuFL notehead (Leland) */}
+                          {/* Pedagoogiline aluskiht: SMuFL notehead (ekraanil peaaegu nähtamatu).
+                              PDF (svg2pdf) ei austa opacity/CSS var/dominant-baseline usaldusväärselt →
+                              jääb “kummitus” noodivars/lipp. Klass nm-export-omit eemaldatakse ekspordis. */}
                           <SmuflGlyph
+                            className="nm-export-omit"
                             x={figureCenterX}
                             y={y}
                             glyph={smuflNoteheadForType(smuflType)}
                             fontSize={size * 1.35}
-                            fill="var(--note-fill, #1a1a1a)"
+                            fill="#1a1a1a"
                             style={{ opacity: 0.18 }}
                           />
                           {haloEl}
@@ -1866,9 +1870,9 @@ export function FigurenotesView({
                               sys.measureIndices[sys.measureIndices.length - 1];
                             const isLastMeasureOfScore =
                               measureIdx === layoutSourceMeasures.length - 1;
-                            const showFinalBar =
-                              (isLastMeasureOfScore || mBar.barlineFinal) &&
-                              !mBar.repeatEnd;
+                            const showFinalBar = shouldShowFinalDoubleBarline(mBar, {
+                              isLastMeasureOfScore,
+                            });
                             const xRight = measureX + measureWidth;
                             const finalGeom = showFinalBar
                               ? getFinalDoubleBarlineGeometry({
@@ -2174,7 +2178,22 @@ export function FigurenotesView({
                                   )
                                 )}
                                 {showFinalBar && finalGeom && (
-                                  <g>
+                                  <g
+                                    onClick={
+                                      typeof onSelectRepeatMark === "function"
+                                        ? (e) => {
+                                            e.stopPropagation();
+                                            onSelectRepeatMark(measureIdx, "barlineFinal", {
+                                              toggle: !!(e.metaKey || e.ctrlKey),
+                                            });
+                                          }
+                                        : undefined
+                                    }
+                                    style={{
+                                      cursor: onSelectRepeatMark ? "pointer" : undefined,
+                                    }}
+                                    pointerEvents={onSelectRepeatMark ? "auto" : "none"}
+                                  >
                                     <line
                                       x1={finalGeom.thinX}
                                       y1={finalGeom.topY}
@@ -2191,6 +2210,44 @@ export function FigurenotesView({
                                       stroke="#1a1a1a"
                                       strokeWidth={finalGeom.thickW}
                                     />
+                                    {isRepeatMarkSelected(measureIdx, "barlineFinal") && (
+                                      <rect
+                                        x={finalGeom.thinX - barLineWidth * 2}
+                                        y={finalGeom.topY - barLineWidth}
+                                        width={
+                                          finalGeom.thickX -
+                                          finalGeom.thinX +
+                                          barLineWidth * 4 +
+                                          finalGeom.thickW
+                                        }
+                                        height={
+                                          finalGeom.bottomY -
+                                          finalGeom.topY +
+                                          barLineWidth * 2
+                                        }
+                                        fill="#93c5fd"
+                                        opacity="0.32"
+                                        rx={3}
+                                      />
+                                    )}
+                                    {onSelectRepeatMark && (
+                                      <rect
+                                        x={finalGeom.thinX - barLineWidth * 2}
+                                        y={finalGeom.topY - barLineWidth}
+                                        width={
+                                          finalGeom.thickX -
+                                          finalGeom.thinX +
+                                          barLineWidth * 4 +
+                                          finalGeom.thickW
+                                        }
+                                        height={
+                                          finalGeom.bottomY -
+                                          finalGeom.topY +
+                                          barLineWidth * 2
+                                        }
+                                        fill="transparent"
+                                      />
+                                    )}
                                   </g>
                                 )}
                                 {(() => {
@@ -3220,9 +3277,9 @@ export function FigurenotesView({
                         sys.measureIndices[sys.measureIndices.length - 1];
                       const isLastMeasureOfScore =
                         measureIdx === layoutSourceMeasures.length - 1;
-                      const showFinalBar =
-                        (isLastMeasureOfScore || measureBar.barlineFinal) &&
-                        !measureBar.repeatEnd;
+                      const showFinalBar = shouldShowFinalDoubleBarline(measureBar, {
+                        isLastMeasureOfScore,
+                      });
                       const xRight = measureX + measureWidth;
                       const finalGeom = showFinalBar
                         ? getFinalDoubleBarlineGeometry({
@@ -3446,7 +3503,22 @@ export function FigurenotesView({
                             </g>
                           )}
                           {showFinalBar && finalGeom && (
-                            <g>
+                            <g
+                              onClick={
+                                typeof onSelectRepeatMark === "function"
+                                  ? (e) => {
+                                      e.stopPropagation();
+                                      onSelectRepeatMark(measureIdx, "barlineFinal", {
+                                        toggle: !!(e.metaKey || e.ctrlKey),
+                                      });
+                                    }
+                                  : undefined
+                              }
+                              style={{
+                                cursor: onSelectRepeatMark ? "pointer" : undefined,
+                              }}
+                              pointerEvents={onSelectRepeatMark ? "auto" : "none"}
+                            >
                               <line
                                 x1={finalGeom.thinX}
                                 y1={finalGeom.topY}
@@ -3463,6 +3535,44 @@ export function FigurenotesView({
                                 stroke="#1a1a1a"
                                 strokeWidth={finalGeom.thickW}
                               />
+                              {isRepeatMarkSelected(measureIdx, "barlineFinal") && (
+                                <rect
+                                  x={finalGeom.thinX - barLineWidth * 2}
+                                  y={finalGeom.topY - barLineWidth}
+                                  width={
+                                    finalGeom.thickX -
+                                    finalGeom.thinX +
+                                    barLineWidth * 4 +
+                                    finalGeom.thickW
+                                  }
+                                  height={
+                                    finalGeom.bottomY -
+                                    finalGeom.topY +
+                                    barLineWidth * 2
+                                  }
+                                  fill="#93c5fd"
+                                  opacity="0.32"
+                                  rx={3}
+                                />
+                              )}
+                              {onSelectRepeatMark && (
+                                <rect
+                                  x={finalGeom.thinX - barLineWidth * 2}
+                                  y={finalGeom.topY - barLineWidth}
+                                  width={
+                                    finalGeom.thickX -
+                                    finalGeom.thinX +
+                                    barLineWidth * 4 +
+                                    finalGeom.thickW
+                                  }
+                                  height={
+                                    finalGeom.bottomY -
+                                    finalGeom.topY +
+                                    barLineWidth * 2
+                                  }
+                                  fill="transparent"
+                                />
+                              )}
                             </g>
                           )}
                           {(() => {
@@ -3588,66 +3698,7 @@ export function FigurenotesView({
               );
             });
             })()}
-            {/* Fallback: draw final double bar at end of score if last measure is in this system (in case it was skipped in the loop). */}
-            {Array.isArray(layoutSourceMeasures) &&
-              layoutSourceMeasures.length > 0 &&
-              (() => {
-                const lastIdx = layoutSourceMeasures.length - 1;
-                const lastMeasure = layoutSourceMeasures[lastIdx];
-                if (lastMeasure?.repeatEnd) return null;
-                const j = sys.measureIndices.indexOf(lastIdx);
-                if (j < 0) return null;
-                const mw =
-                  sys.measureWidths ??
-                  sys.measureIndices.map(
-                    () => sys.measureWidth ?? beatsPerMeasure * 80,
-                  );
-                const mwDefault = sys.measureWidth ?? beatsPerMeasure * 80;
-                const xRight =
-                  marginLeft +
-                  mw.slice(0, j + 1).reduce((a, _b, idxInSlice) => {
-                    const bi = mw[idxInSlice] ?? mwDefault;
-                    const li = computeRepeatLaneWidths({
-                      sys,
-                      layoutSourceMeasures,
-                      measureIndexInSystem: idxInSlice,
-                      notationScale,
-                    });
-                    return a + bi + li.total;
-                  }, 0);
-                const fg = getFinalDoubleBarlineGeometry({
-                  measureRightX: xRight,
-                  notationScale,
-                  figurenotesSize,
-                  yOffset: sys.yOffset,
-                  melodyRowHeight,
-                  padVertical,
-                  chordLineHeight,
-                  chordLineGap,
-                  combinedStaffRowCount: combinedRows ? instruments.length : 1,
-                  combinedRowStepPx: combinedRows ? rowStepPx : 0,
-                });
-                return (
-                  <g>
-                    <line
-                      x1={fg.thinX}
-                      y1={fg.topY}
-                      x2={fg.thinX}
-                      y2={fg.bottomY}
-                      stroke="#1a1a1a"
-                      strokeWidth={fg.thinW}
-                    />
-                    <line
-                      x1={fg.thickX}
-                      y1={fg.topY}
-                      x2={fg.thickX}
-                      y2={fg.bottomY}
-                      stroke="#1a1a1a"
-                      strokeWidth={fg.thickW}
-                    />
-                  </g>
-                );
-              })()}
+            {/* Final double bar is drawn in the measure loop (selectable). No separate fallback — avoids double-draw and respects barlineSingle. */}
             </g>
           </g>
         );

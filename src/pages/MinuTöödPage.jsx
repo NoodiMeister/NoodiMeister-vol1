@@ -879,12 +879,12 @@ export default function MinuTöödPage() {
     >
       <header className="flex-shrink-0 border-b border-amber-200/60 dark:border-white/20 bg-white/70 dark:bg-black/90 backdrop-blur-sm">
         <div className="max-w-4xl mx-auto px-6 py-4 flex items-center justify-between flex-wrap gap-2">
-          <Link to="/" className="flex items-center">
+          <Link to="/avaleht" className="flex items-center">
             <AppLogo variant="header" alt="NoodiMeister" />
           </Link>
-          <nav className="flex items-center gap-3 flex-wrap" ref={settingsRef}>
+          <nav className="flex items-center gap-3 flex-wrap">
             {/* Seaded – keel ja värvirežiim */}
-            <div className="relative">
+            <div className="relative" ref={settingsRef}>
               <button
                 type="button"
                 onClick={() => setSettingsOpen((v) => !v)}
@@ -935,7 +935,7 @@ export default function MinuTöödPage() {
             <Link to="/konto" className="text-amber-700 dark:text-white hover:text-amber-900 dark:hover:text-white/90 p-1.5 rounded-lg hover:bg-amber-100 dark:hover:bg-white/10 transition-colors flex items-center gap-1" title={t['user.myAccount']}>
               <User className="w-5 h-5" /> {t['user.myAccount']}
             </Link>
-            <Link to="/" className="text-amber-700 dark:text-white hover:text-amber-900 dark:hover:text-white/90 font-medium">{t['account.home']}</Link>
+            <Link to="/avaleht" className="text-amber-700 dark:text-white hover:text-amber-900 dark:hover:text-white/90 font-medium">{t['account.home']}</Link>
           </nav>
         </div>
       </header>

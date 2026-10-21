@@ -15,7 +15,7 @@ import { SmuflGlyph } from '../notation/smufl/SmuflGlyph';
 import { SmuflStemFlags } from '../notation/smufl/SmuflStemFlags';
 import {
   SMUFL_GLYPH,
-  NOTEHEAD_SHAPE_GLYPH,
+  smuflNoteheadForDurationLabel,
   smuflRestForDurationLabel,
   smuflTimeSigDigitsForNumber,
   smuflPrecomposedNote,
@@ -23,6 +23,7 @@ import {
   SMUFL_MUSIC_FONT_FAMILY,
 } from '../notation/smufl/glyphs';
 import { smuflArticulationGlyph } from '../notation/articulationCatalog';
+import { FigurenotesCrossNotehead, figurenotesCrossNoteheadSizeForStaff } from '../notation/FigurenotesCrossNotehead';
 import {
   TIME_SIG_LAYOUT,
   TIME_SIG_SPACING,
@@ -88,7 +89,7 @@ import {
   toNoteMidi,
   isMidiOutOfInstrumentRange,
 } from '../notation/instrumentRangeRules';
-import { getRepeatMarkPlacement } from '../notation/repeatMarksEngine';
+import { getRepeatMarkPlacement, shouldShowFinalDoubleBarline } from '../notation/repeatMarksEngine';
 import {
   getLeftBarlineRepeatRender,
   shouldDrawRepeatEndGlyphOnRight,
@@ -153,13 +154,6 @@ function getKeySignatureVerticalDyPx(clef, kind, idx, staffSpace) {
 }
 
 
-// SMuFL noteheads (Leland)
-const SMUFL = {
-  noteheadWhole: '\uE0A2',
-  noteheadHalf: '\uE0A3',
-  noteheadBlack: '\uE0A4',
-};
-
 function StaffClefSymbol({ x, y, height, clefType, fill = '#000', staffSpace = 10 }) {
   if (clefType === 'treble') return <TrebleClefSymbol x={x} y={y} height={height} fill={fill} />;
   if (clefType === 'bass') return <BassClefSymbol x={x} y={y} height={height} fill={fill} staffSpace={staffSpace} />;
@@ -179,14 +173,10 @@ function StaffClefSymbol({ x, y, height, clefType, fill = '#000', staffSpace = 1
 }
 
 
-/** Returns Leland glyph for notehead, or null when shape is 'emoji' (caller draws noteheadEmoji as text). */
-function getNoteheadGlyph(durationLabel, noteheadShape = 'oval', noteheadEmoji = '♪') {
-  if (noteheadShape === 'emoji') return null;
-  const dur = durationLabel || '1/4';
-  if (dur === '1/1') return SMUFL.noteheadWhole;
-  if (dur === '1/2') return SMUFL.noteheadHalf;
-  const shapeGlyph = NOTEHEAD_SHAPE_GLYPH[noteheadShape];
-  return shapeGlyph || SMUFL.noteheadBlack;
+/** Returns Leland glyph for notehead, or null when shape is 'emoji'/'x' (caller draws custom). */
+function getNoteheadGlyph(durationLabel, noteheadShape = 'oval') {
+  if (noteheadShape === 'emoji' || noteheadShape === 'x') return null;
+  return smuflNoteheadForDurationLabel(durationLabel, noteheadShape);
 }
 
 function getFlagCount(durationLabel) {
@@ -1779,15 +1769,27 @@ export function TraditionalNotationView({
                             )}
                           </g>
                         ) : drawConnectedBarlinesHere && measureIdx === sys.measureIndices[sys.measureIndices.length - 1] ? (
-                          (measureIdx === instMeasures.length - 1 || measure.barlineFinal) ? (
+                          shouldShowFinalDoubleBarline(measure, {
+                            isLastMeasureOfScore: measureIdx === instMeasures.length - 1,
+                          }) ? (
                             (() => {
                               const { thinCx, thickCx, thinW, thickW } = getFinalDoubleBarlineCentersX(measureX + measureWidth, spacing);
                               const resolvedThinW = getStaffBarlineWidth(spacing);
                               const resolvedThickW = staffLines === 1 ? Math.max(resolvedThinW + 1, singleLineBarThicknessSetting + 1) : thickW;
                               const y1b = barY1;
                               const y2b = barY2;
+                              const selPad = spacing * 1.1;
+                              const hitX = thinCx - spacing * 1.2;
+                              const hitW = (thickCx - thinCx) + spacing * 2.4 + resolvedThickW;
                               return (
-                            <g>
+                            <g
+                              onClick={typeof onSelectRepeatMark === 'function' ? (e) => {
+                                e.stopPropagation();
+                                onSelectRepeatMark(measureIdx, 'barlineFinal', { toggle: !!(e.metaKey || e.ctrlKey) });
+                              } : undefined}
+                              style={{ cursor: onSelectRepeatMark ? 'pointer' : undefined }}
+                              pointerEvents={onSelectRepeatMark ? 'auto' : 'none'}
+                            >
                               <line
                                 x1={thinCx}
                                 y1={y1b}
@@ -1804,6 +1806,26 @@ export function TraditionalNotationView({
                                 stroke="#1a1a1a"
                                 strokeWidth={resolvedThickW}
                               />
+                              {isRepeatMarkSelected(measureIdx, 'barlineFinal') && (
+                                <rect
+                                  x={hitX}
+                                  y={y1b - selPad}
+                                  width={hitW}
+                                  height={y2b - y1b + selPad * 2}
+                                  fill="#93c5fd"
+                                  opacity="0.32"
+                                  rx={3}
+                                />
+                              )}
+                              {onSelectRepeatMark && (
+                                <rect
+                                  x={hitX}
+                                  y={y1b - spacing}
+                                  width={hitW}
+                                  height={y2b - y1b + spacing * 2}
+                                  fill="transparent"
+                                />
+                              )}
                             </g>
                               );
                             })()
@@ -1817,15 +1839,25 @@ export function TraditionalNotationView({
                               strokeWidth={getStaffBarlineWidth(spacing)}
                             />
                           )
-                        ) : drawConnectedBarlinesHere && measure.barlineFinal ? (
+                        ) : drawConnectedBarlinesHere && shouldShowFinalDoubleBarline(measure, { isLastMeasureOfScore: false }) ? (
                           (() => {
                             const { thinCx, thickCx, thinW, thickW } = getFinalDoubleBarlineCentersX(measureX + measureWidth, spacing);
                             const resolvedThinW = getStaffBarlineWidth(spacing);
                             const resolvedThickW = staffLines === 1 ? Math.max(resolvedThinW + 1, singleLineBarThicknessSetting + 1) : thickW;
                             const y1b = barY1;
                             const y2b = barY2;
+                            const selPad = spacing * 1.1;
+                            const hitX = thinCx - spacing * 1.2;
+                            const hitW = (thickCx - thinCx) + spacing * 2.4 + resolvedThickW;
                             return (
-                          <g>
+                          <g
+                            onClick={typeof onSelectRepeatMark === 'function' ? (e) => {
+                              e.stopPropagation();
+                              onSelectRepeatMark(measureIdx, 'barlineFinal', { toggle: !!(e.metaKey || e.ctrlKey) });
+                            } : undefined}
+                            style={{ cursor: onSelectRepeatMark ? 'pointer' : undefined }}
+                            pointerEvents={onSelectRepeatMark ? 'auto' : 'none'}
+                          >
                             <line
                               x1={thinCx}
                               y1={y1b}
@@ -1842,6 +1874,26 @@ export function TraditionalNotationView({
                               stroke="#1a1a1a"
                               strokeWidth={resolvedThickW}
                             />
+                            {isRepeatMarkSelected(measureIdx, 'barlineFinal') && (
+                              <rect
+                                x={hitX}
+                                y={y1b - selPad}
+                                width={hitW}
+                                height={y2b - y1b + selPad * 2}
+                                fill="#93c5fd"
+                                opacity="0.32"
+                                rx={3}
+                              />
+                            )}
+                            {onSelectRepeatMark && (
+                              <rect
+                                x={hitX}
+                                y={y1b - spacing}
+                                width={hitW}
+                                height={y2b - y1b + spacing * 2}
+                                fill="transparent"
+                              />
+                            )}
                           </g>
                             );
                           })()
@@ -2111,7 +2163,8 @@ export function TraditionalNotationView({
                       const noteFillColor = isOutOfRange ? OUT_OF_RANGE_COLOR : (isHandbellsInstrument ? handbellColor : 'var(--note-fill, #1a1a1a)');
                       const ledgerHalfWidth = getLedgerHalfWidth(spacing);
                       const { above: nLedgerAbove, below: nLedgerBelow } = getLedgerLineCountExact(pitchY, firstLineY, lastLineY, spacing);
-                      const glyph = getNoteheadGlyph(note.durationLabel, noteheadShape, noteheadEmoji);
+                      const isFigurenotesXHead = noteheadShape === 'x';
+                      const glyph = isFigurenotesXHead ? null : getNoteheadGlyph(note.durationLabel, noteheadShape);
                       const stemLenDefault = getStemLength(spacing);
                       const stemStrokeW = getStemThickness(spacing);
                       const stemX = getStemCenterXFromNoteCenter(noteX, spacing, stemUp);
@@ -2153,6 +2206,14 @@ export function TraditionalNotationView({
                             <>
                               {isHandbellsInstrument ? (
                                 <HandbellIcon x={noteX} y={noteY} size={Math.max(14, spacing * 1.75)} fill={noteFillColor} />
+                              ) : isFigurenotesXHead ? (
+                                <FigurenotesCrossNotehead
+                                  x={noteX}
+                                  y={noteY}
+                                  size={figurenotesCrossNoteheadSizeForStaff(spacing)}
+                                  fill={noteFillColor}
+                                  hollow={note.durationLabel === '1/1' || note.durationLabel === '1/2'}
+                                />
                               ) : glyph ? (
                                 <SmuflGlyph
                                   x={noteX}

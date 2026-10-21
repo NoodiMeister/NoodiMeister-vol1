@@ -7,6 +7,15 @@
 /* Optional fingering fonts are loaded at runtime only when the files actually exist.
    This avoids build-time broken asset warnings and keeps fallback rendering deterministic. */
 
+/* uTheory Kodály/Curwen hand signs (pedagogical display mode C). CC BY-NC-ND — do not modify glyph files. */
+@font-face {
+  font-family: 'uTheory Solfege';
+  src: url('/fonts/utheory-solfege.woff2') format('woff2');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
 html, body, #root {
   margin: 0;
   padding: 0;

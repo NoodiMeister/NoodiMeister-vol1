@@ -56,15 +56,16 @@ export function describeScoreDocumentBlocksForExport ({ songTitle, author, textB
 }
 
 /**
- * Tekstikastide SVG märgend (sama koordinaadistik kui scoreContainer: x,y absoluutselt).
+ * Tekstikastide SVG märgend (scoreContainer x,y + valikuline pageOverlayTransform = noodikihi ankur).
  *
  * @param {unknown[]} textBoxes
- * @param {{ defaultFontFamily?: string, defaultFill?: string }} options
+ * @param {{ defaultFontFamily?: string, defaultFill?: string, pageOverlayTransform?: { anchorX: number, anchorY: number, scale: number } | null }} options
  */
 export function buildScoreTextBoxesExportMarkup (textBoxes, options = {}) {
   if (!Array.isArray(textBoxes) || textBoxes.length === 0) return '';
   return buildTextBoxesSvgMarkup(textBoxes, {
     defaultFontFamily: options.defaultFontFamily,
     defaultFill: options.defaultFill,
+    pageOverlayTransform: options.pageOverlayTransform || null,
   });
 }

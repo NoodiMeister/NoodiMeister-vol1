@@ -2,7 +2,7 @@
  * Ühtne Store/Context süsteem – sisselogimine ja faili andmed säilivad.
  * Kõik moodulid suhtlevad läbi selle Contexti (auth, teema, praegune fail).
  */
-import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect, useMemo } from 'react';
 import * as authStorage from '../services/authStorage';
 
 const NoodimeisterContext = createContext(null);
@@ -49,7 +49,18 @@ export function NoodimeisterProvider({ children }) {
   const hasFullAccess = isLoggedIn;
 
   const setUser = useCallback((u) => {
-    setUserState(u);
+    setUserState((prev) => {
+      if (prev === u) return prev;
+      if (!prev && !u) return prev;
+      if (
+        prev?.email === u?.email &&
+        prev?.provider === u?.provider &&
+        prev?.name === u?.name
+      ) {
+        return prev;
+      }
+      return u;
+    });
   }, []);
 
   const logout = useCallback(() => {
@@ -83,20 +94,34 @@ export function NoodimeisterProvider({ children }) {
   /** Viimase salvestatud partituuri andmed (localStorage võti) – võimaldab taastamist ja sünkroniseerimist. */
   const getPersistedScoreKey = useCallback(() => STORAGE_KEY, []);
 
-  const value = {
-    user,
-    setUser,
-    isLoggedIn,
-    hasFullAccess,
-    logout,
-    theme,
-    setTheme,
-    currentFileId,
-    setCurrentFileId,
-    currentFileName,
-    setCurrentFileName,
-    getPersistedScoreKey,
-  };
+  const value = useMemo(
+    () => ({
+      user,
+      setUser,
+      isLoggedIn,
+      hasFullAccess,
+      logout,
+      theme,
+      setTheme,
+      currentFileId,
+      setCurrentFileId,
+      currentFileName,
+      setCurrentFileName,
+      getPersistedScoreKey,
+    }),
+    [
+      user,
+      setUser,
+      isLoggedIn,
+      hasFullAccess,
+      logout,
+      theme,
+      setTheme,
+      currentFileId,
+      currentFileName,
+      getPersistedScoreKey,
+    ]
+  );
 
   return (
     <NoodimeisterContext.Provider value={value}>

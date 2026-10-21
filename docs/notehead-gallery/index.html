@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="et">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Noodipea galerii — SVG</title>
+  <style>
+    @font-face {
+      font-family: 'Bravura';
+      font-style: normal;
+      font-weight: 400;
+      src: url('../../node_modules/@fontsource/bravura/files/bravura-latin-400-normal.woff2') format('woff2');
+    }
+    :root {
+      --ink: #1c1917;
+      --paper: #fffbeb;
+      --card: #ffffff;
+      --line: #fcd34d;
+      --muted: #78716c;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Georgia, 'Times New Roman', serif;
+      color: var(--ink);
+      background: linear-gradient(160deg, #fef3c7 0%, #fff7ed 45%, #fafaf9 100%);
+      min-height: 100vh;
+      padding: 2rem 1.25rem 3rem;
+    }
+    h1 { margin: 0 0 0.35rem; font-size: 1.75rem; }
+    .lead { margin: 0 0 1.5rem; color: var(--muted); max-width: 42rem; line-height: 1.45; }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+      gap: 1rem;
+      max-width: 56rem;
+    }
+    .card {
+      background: var(--card);
+      border: 1.5px solid var(--line);
+      border-radius: 10px;
+      padding: 0.85rem;
+      box-shadow: 0 1px 0 rgba(120, 53, 15, 0.06);
+    }
+    .card img, .card .smufl-box {
+      display: block;
+      width: 100%;
+      aspect-ratio: 1;
+      border-radius: 6px;
+      background: var(--paper);
+      border: 1px solid #fde68a;
+    }
+    .smufl-box {
+      display: grid;
+      place-items: center;
+      font-family: Bravura, Leland, serif;
+      font-size: 3.4rem;
+      line-height: 1;
+      color: #1a1a1a;
+    }
+    /* Figurenotes X: paksud täidetud harud (mitte peen SMuFL joon-X). ~pool kaardi laiusest. */
+    .smufl-box .fn-cross {
+      width: 52%;
+      height: 52%;
+      display: block;
+    }
+    .smufl-box .fn-cross path {
+      fill: #1a1a1a;
+    }
+    .label { margin: 0.65rem 0 0.15rem; font-weight: 700; font-size: 1rem; }
+    .meta { margin: 0; font-size: 0.78rem; color: var(--muted); font-family: ui-monospace, Menlo, monospace; }
+    .file { margin: 0.35rem 0 0; font-size: 0.8rem; }
+    .file a { color: #92400e; }
+    section { margin-top: 2rem; max-width: 56rem; }
+    h2 { font-size: 1.2rem; margin: 0 0 0.75rem; }
+    code { font-size: 0.9em; }
+  </style>
+</head>
+<body>
+  <h1>Noodipea galerii (SVG)</h1>
+  <p class="lead">
+    Failid kaustas <code>docs/notehead-gallery/</code>.
+    Noodipea <strong>X</strong> = ainult figuurnoti rist (SMuFL <code>U+E0A9</code> on asendatud).
+    Teised kujundid = Bravura SMuFL. Rakenduses: <code>/gallery?i=17</code>.
+  </p>
+
+  <h2>1) SVG failid (path / shape)</h2>
+  <div class="grid" id="path-grid"></div>
+
+  <section>
+    <h2>2) Galerii eelvaade (SMuFL + Figurenotes X)</h2>
+    <div class="grid" id="smufl-grid"></div>
+  </section>
+
+  <script>
+    /** Sama mis FigureNotesLibrary FIGURENOTES_CROSS_PATHS */
+    const FIGURENOTES_CROSS_PATHS = [
+      'M10 10 L30 10 L90 70 L90 90 L70 90 L10 30 Z',
+      'M90 10 L70 10 L10 70 L10 90 L30 90 L90 30 Z',
+    ];
+    const fnCrossSvg = `<svg class="fn-cross" viewBox="0 0 100 100" aria-hidden="true">${
+      FIGURENOTES_CROSS_PATHS.map((d) => `<path d="${d}" fill="#1a1a1a"/>`).join('')
+    }</svg>`;
+
+    const items = [
+      { id: 'oval', file: 'oval.svg', et: 'Ovaal (tavaline)', smufl: 'U+E0A4', glyph: '\uE0A4' },
+      { id: 'x', file: 'x.svg', et: 'X (Figurenotes — paks rist)', smufl: 'FIGURENOTES_CROSS', render: 'figurenotes-cross' },
+      { id: 'triangleUp', file: 'triangle-up.svg', et: 'Kolmnurk üles', smufl: 'U+E0BE', glyph: '\uE0BE' },
+      { id: 'triangleDown', file: 'triangle-down.svg', et: 'Kolmnurk alla', smufl: 'U+E0C7', glyph: '\uE0C7' },
+      { id: 'diamond', file: 'diamond.svg', et: 'Romb', smufl: 'U+E0DB', glyph: '\uE0DB' },
+      { id: 'square', file: 'square.svg', et: 'Ruut', smufl: 'U+E0B9', glyph: '\uE0B9' },
+      { id: 'emoji', file: 'emoji.svg', et: 'Emoji', smufl: '♪', glyph: '♪' },
+    ];
+
+    const pathGrid = document.getElementById('path-grid');
+    const smuflGrid = document.getElementById('smufl-grid');
+
+    for (const item of items) {
+      {
+        const card = document.createElement('article');
+        card.className = 'card';
+        card.innerHTML = `
+          <img src="${item.file}" alt="${item.et}" />
+          <p class="label">${item.et}</p>
+          <p class="meta">${item.id} · ${item.smufl}</p>
+          <p class="file"><a href="${item.file}">${item.file}</a></p>
+        `;
+        pathGrid.appendChild(card);
+      }
+
+      const smuflCard = document.createElement('article');
+      smuflCard.className = 'card';
+      let previewHtml;
+      if (item.render === 'figurenotes-cross') {
+        previewHtml = fnCrossSvg;
+      } else if (item.id === 'emoji') {
+        previewHtml = `<span style="font-family:Georgia,serif">${item.glyph}</span>`;
+      } else {
+        previewHtml = item.glyph;
+      }
+      smuflCard.innerHTML = `
+        <div class="smufl-box">${previewHtml}</div>
+        <p class="label">${item.et}</p>
+        <p class="meta">${item.smufl}</p>
+      `;
+      smuflGrid.appendChild(smuflCard);
+    }
+  </script>
+</body>
+</html>

@@ -14,13 +14,20 @@ export default function UserDashboard() {
   const store = useNoodimeisterOptional();
   const [showWelcome, setShowWelcome] = useState(false);
 
-  // Pärast sisselogimist (redirect /tood) uuenda store authStorageist enne redirecti kontrolli
+  // Sync auth once on mount. Do not depend on whole `store` (new context object every
+  // render) + getLoggedInUser() (new object every call) — that causes an infinite setUser loop
+  // and freezes Minu tööd / blocks navigation to Minu konto and Esileht.
   useEffect(() => {
-    if (store) {
-      const user = authStorage.getLoggedInUser();
-      if (user?.email) store.setUser(user);
-    }
-  }, [store]);
+    if (!store?.setUser) return;
+    const user = authStorage.getLoggedInUser();
+    if (!user?.email) return;
+    const same =
+      store.user?.email === user.email &&
+      store.user?.provider === user.provider;
+    if (!same) store.setUser(user);
+    // intentionally mount-only
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Tere tulemast / õnnestumise teade pärast sisselogimist või registreerumist
   useEffect(() => {

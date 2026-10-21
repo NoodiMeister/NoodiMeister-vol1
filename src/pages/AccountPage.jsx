@@ -459,11 +459,11 @@ export default function AccountPage() {
     <div className="account-page min-h-screen flex flex-col">
       <header className="flex-shrink-0 border-b border-amber-200/60 dark:border-white/20 bg-white/70 dark:bg-black/90 backdrop-blur-sm">
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
-          <Link to="/" className="flex items-center">
+          <Link to="/avaleht" className="flex items-center">
             <AppLogo variant="header" alt="NoodiMeister" />
           </Link>
-          <nav className="flex items-center gap-3 flex-wrap" ref={settingsRef}>
-            <div className="relative">
+          <nav className="flex items-center gap-3 flex-wrap">
+            <div className="relative" ref={settingsRef}>
               <button
                 type="button"
                 onClick={() => setSettingsOpen((v) => !v)}
@@ -523,7 +523,7 @@ export default function AccountPage() {
             <Link to="/tood" className="text-amber-700 dark:text-white hover:text-amber-900 dark:hover:text-white/90 font-medium">
               {t['account.myWork']}
             </Link>
-            <Link to="/" className="text-amber-700 dark:text-white hover:text-amber-900 dark:hover:text-white/90 font-medium">
+            <Link to="/avaleht" className="text-amber-700 dark:text-white hover:text-amber-900 dark:hover:text-white/90 font-medium">
               {t['account.home']}
             </Link>
           </nav>

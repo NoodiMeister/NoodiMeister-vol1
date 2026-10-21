@@ -2,6 +2,11 @@
 
 This folder holds the music notation fonts used by the app.
 
+## uTheory Solfege (pedagogical hand signs)
+
+- **File:** `utheory-solfege.woff2` (from `docs/utheory-solfege/`, CC BY-NC-ND 4.0).
+- Used by pedagogical display mode **C** (hand signs on 7 degree lines). Do not modify the font file; RTL mirroring is render-time only.
+
 ## Leland
 
 - **Leland** is the primary SMuFL font for traditional notation (clefs, noteheads, rests).

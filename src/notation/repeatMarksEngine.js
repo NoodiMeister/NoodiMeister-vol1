@@ -6,6 +6,8 @@ export const REPEAT_MARK_TYPES = [
   'segno',
   'coda',
   'barlineFinal',
+  /** MuseScore-like: force single barline (suppresses score-end auto final). */
+  'barlineSingle',
 ];
 
 export function normalizeRepeatMarksMap(raw, measureCount = 0) {
@@ -25,6 +27,25 @@ export function normalizeRepeatMarksMap(raw, measureCount = 0) {
   return out;
 }
 
+/**
+ * Kas kuvada thin+thick lõpujoon (topeltjoon).
+ * `barlineSingle` peidab auto-lõpu ka loo viimasel taktil (MuseScore: delete final → single).
+ */
+export function shouldShowFinalDoubleBarline(measure, { isLastMeasureOfScore = false } = {}) {
+  if (!measure || measure.repeatEnd || measure.barlineSingle) return false;
+  return !!(isLastMeasureOfScore || measure.barlineFinal);
+}
+
+/**
+ * Topelt lõpujoon → üksiktaktijoon (valik + Backspace/Delete).
+ * Salvestab `barlineSingle`, et skoori lõpu auto-final ei tuleks tagasi.
+ */
+export function convertFinalDoubleBarlineToSingle(prevMap, measureIndex) {
+  let next = removeRepeatMark(prevMap, measureIndex, 'barlineFinal');
+  const { nextMap } = applyRepeatMark(next, measureIndex, 'barlineSingle');
+  return nextMap;
+}
+
 export function applyRepeatMark(prevMap, measureIndex, markType) {
   const next = { ...(prevMap || {}) };
   const marks = { ...(next[measureIndex] || {}) };
@@ -33,6 +54,8 @@ export function applyRepeatMark(prevMap, measureIndex, markType) {
   }
   if (markType === 'volta1') delete marks.volta2;
   if (markType === 'volta2') delete marks.volta1;
+  if (markType === 'barlineFinal') delete marks.barlineSingle;
+  if (markType === 'barlineSingle') delete marks.barlineFinal;
   marks[markType] = true;
   next[measureIndex] = marks;
   const issues = validateRepeatMarks(next);

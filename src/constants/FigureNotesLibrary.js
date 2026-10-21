@@ -31,11 +31,18 @@ export const FIGURE_NOTE_NAMES = {
   B: 'B',
 };
 
-/** Octave 2: X-shape (two hexagons, viewBox 0 0 100 100). */
-const OCTAVE_2_PATHS = [
+/**
+ * Octave 2: X-shape (two hexagons, viewBox 0 0 100 100).
+ * Arm thickness = 20 units → 20% of figure size (shared with notehead “X” when linked).
+ */
+export const FIGURENOTES_SHAPE_VIEWBOX = 100;
+/** Figuurnoti X-harude paksus suhtena figuuri läbimõõtu (path: 20 / 100). */
+export const FIGURENOTES_CROSS_ARM_THICKNESS_RATIO = 20 / FIGURENOTES_SHAPE_VIEWBOX;
+export const FIGURENOTES_CROSS_PATHS = Object.freeze([
   'M10 10 L30 10 L90 70 L90 90 L70 90 L10 30 Z',
   'M90 10 L70 10 L10 70 L10 90 L30 90 L90 30 Z',
-];
+]);
+const OCTAVE_2_PATHS = FIGURENOTES_CROSS_PATHS;
 /** Octave 3: square. */
 const OCTAVE_3_PATH = 'M5,5 h90 v90 h-90 z';
 /** Octave 4: circle. */

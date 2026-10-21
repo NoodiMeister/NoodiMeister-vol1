@@ -23,10 +23,15 @@ import {
   ThirtySecondRestSymbol,
 } from '../notation/RestSymbols';
 import { SmuflGlyph } from '../notation/smufl/SmuflGlyph';
-import { SMUFL_GLYPH } from '../notation/smufl/glyphs';
+import { SMUFL_GLYPH, NOTEHEAD_SHAPE_GLYPH } from '../notation/smufl/glyphs';
+import { FigurenotesCrossNotehead, figurenotesCrossNoteheadSizeForStaff } from '../notation/FigurenotesCrossNotehead';
+import { FIGURENOTES_CROSS_ARM_THICKNESS_RATIO } from '../constants/FigureNotesLibrary';
 
 const SP = 18; // staff space – large enough to inspect
 const VIEW_SIZE = 120; // SVG viewBox size for one symbol
+const NOTEHEAD_FS = SP * 2.2;
+/** Notehead-scale figurenotes X (chunky filled arms, not thin SMuFL strokes). */
+const CROSS_SIZE = figurenotesCrossNoteheadSizeForStaff(NOTEHEAD_FS / 4) * 1.15;
 
 function symbolFilename(id, ext) {
   const safe = String(id).replace(/[^a-zA-Z0-9-_]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '') || 'symbol';
@@ -72,6 +77,38 @@ function buildSymbolList() {
   list.push({ id: 'note-16th-down', title: 'Note: 16th (stem down)', el: <SixteenthNoteSymbol cx={c.x} cy={c.y} staffSpace={SP} stemUp={false} /> });
   list.push({ id: 'note-32nd-up', title: 'Note: 32nd (stem up)', el: <ThirtySecondNoteSymbol cx={c.x} cy={c.y} staffSpace={SP} stemUp /> });
   list.push({ id: 'note-32nd-down', title: 'Note: 32nd (stem down)', el: <ThirtySecondNoteSymbol cx={c.x} cy={c.y} staffSpace={SP} stemUp={false} /> });
+
+  // Noteheads: SMuFL gallery + figurenotes-linked X (toolbox “Noodipea”)
+  list.push({
+    id: 'notehead-oval',
+    title: 'Notehead: Oval (SMuFL noteheadBlack U+E0A4)',
+    el: <SmuflGlyph x={c.x} y={c.y} glyph={NOTEHEAD_SHAPE_GLYPH.oval} fontSize={NOTEHEAD_FS} fill="#1a1a1a" />,
+  });
+  list.push({
+    id: 'notehead-x',
+    title: `Notehead: X Figurenotes (arm ${Math.round(FIGURENOTES_CROSS_ARM_THICKNESS_RATIO * 100)}% — asendab SMuFL U+E0A9)`,
+    el: <FigurenotesCrossNotehead x={c.x} y={c.y} size={CROSS_SIZE} fill="#1a1a1a" />,
+  });
+  list.push({
+    id: 'notehead-triangle-up',
+    title: 'Notehead: Triangle up (SMuFL U+E0BE)',
+    el: <SmuflGlyph x={c.x} y={c.y} glyph={NOTEHEAD_SHAPE_GLYPH.triangleUp} fontSize={NOTEHEAD_FS} fill="#1a1a1a" />,
+  });
+  list.push({
+    id: 'notehead-triangle-down',
+    title: 'Notehead: Triangle down (SMuFL U+E0C7)',
+    el: <SmuflGlyph x={c.x} y={c.y} glyph={NOTEHEAD_SHAPE_GLYPH.triangleDown} fontSize={NOTEHEAD_FS} fill="#1a1a1a" />,
+  });
+  list.push({
+    id: 'notehead-diamond',
+    title: 'Notehead: Diamond (SMuFL U+E0DB)',
+    el: <SmuflGlyph x={c.x} y={c.y} glyph={NOTEHEAD_SHAPE_GLYPH.diamond} fontSize={NOTEHEAD_FS} fill="#1a1a1a" />,
+  });
+  list.push({
+    id: 'notehead-square',
+    title: 'Notehead: Square (SMuFL U+E0B9)',
+    el: <SmuflGlyph x={c.x} y={c.y} glyph={NOTEHEAD_SHAPE_GLYPH.square} fontSize={NOTEHEAD_FS} fill="#1a1a1a" />,
+  });
 
   list.push({ id: 'rest-whole', title: 'Rest: Whole', el: <WholeRestSymbol x={c.x} y={c.y} staffSpace={SP} /> });
   list.push({ id: 'rest-half', title: 'Rest: Half', el: <HalfRestSymbol x={c.x} y={c.y} staffSpace={SP} /> });

@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="240" height="240" role="img" aria-label="Figurenotes X notehead">
+  <title>X = Figurenotes CROSS (SMuFL U+E0A9 asendatud)</title>
+  <rect width="120" height="120" fill="#fffbeb"/>
+  <g transform="translate(60,55) scale(0.55) translate(-50,-50)">
+    <path d="M10 10 L30 10 L90 70 L90 90 L70 90 L10 30 Z" fill="#1a1a1a"/>
+    <path d="M90 10 L70 10 L10 70 L10 90 L30 90 L90 30 Z" fill="#1a1a1a"/>
+  </g>
+  <text x="60" y="108" text-anchor="middle" font-size="11" fill="#78716c" font-family="system-ui,sans-serif">Figurenotes X</text>
+</svg>

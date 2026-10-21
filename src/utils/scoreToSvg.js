@@ -6,6 +6,7 @@
 import { getExportOrientation, getPageCount, getPageMetrics } from './pageGeometry';
 import { getCanonicalSmuflFontMeta, getExportFontFaceCss, resolveExportTextFamily } from '../export/exportFontAssets';
 import { buildScoreTextBoxesExportMarkup, describeScoreDocumentBlocksForExport } from '../document/scoreDocumentModel';
+import { getScoreNotationExportTransform } from '../export/scorePageOverlayTransform';
 
 const XMLNS = 'http://www.w3.org/2000/svg';
 const DEFAULT_PAGE_MARGIN_PX = 0;
@@ -277,7 +278,43 @@ const EXPORT_STRIP_SELECTORS = [
   '.lyric-spacer-handle',
   '.nm-selection-highlight',
   '.nm-note-selection-glow',
+  // Figuurnootide pedagoogiline SMuFL-aluskiht: ekraanil opacity 0.18, svg2pdf-is “kummitus” vars/lipp
+  '.nm-export-omit',
 ];
+
+/** svg2pdf ei lahenda CSS var(--x, #hex) fill’e — asenda fallback-hexiga. */
+function resolveCssVarPaint (value) {
+  const s = String(value || '').trim();
+  if (!s || !/var\s*\(/i.test(s)) return s;
+  const m = s.match(/var\s*\(\s*--[^,)]+\s*,\s*([^)]+)\)/i);
+  return (m ? String(m[1]).trim() : '') || '#1a1a1a';
+}
+
+function hardenExportSvgPaints (root) {
+  if (!root?.querySelectorAll) return;
+  root.querySelectorAll('[fill], [stroke], [style]').forEach((el) => {
+    try {
+      const fillAttr = el.getAttribute('fill');
+      if (fillAttr && /var\s*\(/i.test(fillAttr)) {
+        el.setAttribute('fill', resolveCssVarPaint(fillAttr));
+      }
+      const strokeAttr = el.getAttribute('stroke');
+      if (strokeAttr && /var\s*\(/i.test(strokeAttr)) {
+        el.setAttribute('stroke', resolveCssVarPaint(strokeAttr));
+      }
+      const style = el.getAttribute('style');
+      if (style && /var\s*\(/i.test(style)) {
+        el.setAttribute(
+          'style',
+          style.replace(/((?:^|;)\s*(?:fill|stroke)\s*:\s*)([^;]+)/gi, (_, prefix, val) => {
+            const next = resolveCssVarPaint(val);
+            return `${prefix}${next || val.trim()}`;
+          })
+        );
+      }
+    } catch (_) { /* ignore per-node */ }
+  });
+}
 
 function stripExportUiFromSvgInnerHtml (innerHtml) {
   const raw = innerHtml == null ? '' : String(innerHtml);
@@ -285,7 +322,8 @@ function stripExportUiFromSvgInnerHtml (innerHtml) {
     const token = sel.slice(1);
     return raw.includes(token);
   });
-  if (!needsStrip) return raw;
+  const needsPaint = /var\s*\(\s*--/i.test(raw);
+  if (!needsStrip && !needsPaint) return raw;
   try {
     const doc = new DOMParser().parseFromString(
       `<svg xmlns="${XMLNS}">${raw}</svg>`,
@@ -295,6 +333,7 @@ function stripExportUiFromSvgInnerHtml (innerHtml) {
     EXPORT_STRIP_SELECTORS.forEach((sel) => {
       root.querySelectorAll(sel).forEach((el) => el.remove());
     });
+    hardenExportSvgPaints(root);
     return Array.from(root.childNodes).map((n) => new XMLSerializer().serializeToString(n)).join('');
   } catch (_) {
     return raw;
@@ -401,6 +440,47 @@ function buildLayoutSnapshot ({
   };
 }
 
+/**
+ * Mõõdab ekraanipealkirja asukoha scoreContainer suhtes, et PDF/print ei kasutaks teistsugust
+ * headerHeight väärtust (mille tõttu noodid nihkuvad tekstikastide suhtes).
+ */
+function measureScoreExportHeaderFromContainer (container, pageWidth, options = {}) {
+  const headerEl = container?.querySelector?.('[data-score-export-header]');
+  if (!headerEl || !container) return null;
+  const headerBottomPx = getElementBottomRelativeToContainer(container, headerEl);
+  if (!(headerBottomPx > 0)) return null;
+  const inputs = headerEl.querySelectorAll('input');
+  const titleInput = inputs[0] || null;
+  const authorInput = inputs[1] || null;
+  const titleFontSize = Math.max(8, Number(options.titleFontSize) || 55);
+  const authorFontSize = Math.max(8, Number(options.authorFontSize) || 14);
+  const titleAlignment = options.titleAlignment === 'right' ? 'right' : options.titleAlignment === 'left' ? 'left' : 'center';
+  const authorAlignment = options.authorAlignment === 'right' ? 'right' : options.authorAlignment === 'left' ? 'left' : 'center';
+  const titlePos = titleInput ? getRelativePosition(container, titleInput) : { x: 0, y: 24 };
+  const authorPos = authorInput ? getRelativePosition(container, authorInput) : { x: 0, y: titlePos.y + 40 };
+  const titleWidth = titleInput?.offsetWidth || pageWidth;
+  const authorWidth = authorInput?.offsetWidth || pageWidth;
+  const titleX = titleAlignment === 'left'
+    ? titlePos.x + 8
+    : titleAlignment === 'right'
+      ? titlePos.x + Math.max(0, titleWidth - 8)
+      : titlePos.x + titleWidth / 2;
+  const authorX = authorAlignment === 'left'
+    ? authorPos.x + 8
+    : authorAlignment === 'right'
+      ? authorPos.x + Math.max(0, authorWidth - 8)
+      : authorPos.x + authorWidth / 2;
+  const titleY = titlePos.y + titleFontSize * 0.85;
+  const authorY = authorPos.y + authorFontSize * 0.85;
+  return {
+    headerHeight: headerBottomPx,
+    titleX,
+    titleY,
+    authorX,
+    authorY,
+  };
+}
+
 function buildScoreTextMarkup (pageWidth, options = {}) {
   const {
     songTitle = '',
@@ -418,20 +498,35 @@ function buildScoreTextMarkup (pageWidth, options = {}) {
     authorColor = '#000000',
     titleAlignment = 'center',
     authorAlignment = 'center',
+    exportHeaderMetrics = null,
   } = options;
   const anchor = titleAlignment === 'right' ? 'end' : titleAlignment === 'left' ? 'start' : 'middle';
   const authorAnchor = authorAlignment === 'right' ? 'end' : authorAlignment === 'left' ? 'start' : 'middle';
-  const titleX = titleAlignment === 'left' ? 40 : titleAlignment === 'right' ? pageWidth - 40 : pageWidth / 2;
-  const authorX = authorAlignment === 'left' ? 40 : authorAlignment === 'right' ? pageWidth - 40 : pageWidth / 2;
   const titleFamily = resolveExportTextFamily(titleFontFamily || documentFontFamily, 'ExportTitle');
   const authorFamily = resolveExportTextFamily(authorFontFamily || documentFontFamily, 'ExportBody');
   const titleStyle = `font-family: ${titleFamily}; font-size: ${titleFontSize}px; font-weight: ${titleBold ? '700' : '400'}; font-style: ${titleItalic ? 'italic' : 'normal'}; fill: ${titleColor || '#000000'};`;
   const authorStyle = `font-family: ${authorFamily}; font-size: ${authorFontSize}px; font-weight: ${authorBold ? '700' : '400'}; font-style: ${authorItalic ? 'italic' : 'normal'}; fill: ${authorColor || '#000000'};`;
+  const measured = exportHeaderMetrics && Number(exportHeaderMetrics.headerHeight) > 0
+    ? exportHeaderMetrics
+    : null;
+  const titleX = measured
+    ? measured.titleX
+    : (titleAlignment === 'left' ? 40 : titleAlignment === 'right' ? pageWidth - 40 : pageWidth / 2);
+  const authorX = measured
+    ? measured.authorX
+    : (authorAlignment === 'left' ? 40 : authorAlignment === 'right' ? pageWidth - 40 : pageWidth / 2);
   // Avoid dominant-baseline clipping differences across SVG/PDF engines.
-  const titleY = Math.max(56, 24 + Number(titleFontSize || 55));
-  const authorY = titleY + Math.max(26, Number(authorFontSize || 14) + 16);
+  const titleY = measured
+    ? measured.titleY
+    : Math.max(56, 24 + Number(titleFontSize || 55));
+  const authorY = measured
+    ? measured.authorY
+    : titleY + Math.max(26, Number(authorFontSize || 14) + 16);
+  const headerHeight = measured
+    ? measured.headerHeight
+    : Math.max(160, authorY + 36);
   return {
-    headerHeight: Math.max(160, authorY + 36),
+    headerHeight,
     titleText: `<text x="${titleX}" y="${titleY}" text-anchor="${anchor}" style="${titleStyle}">${escapeXml(songTitle) || 'Nimetu'}</text>`,
     authorText: `<text x="${authorX}" y="${authorY}" text-anchor="${authorAnchor}" style="${authorStyle}">${escapeXml(author)}</text>`,
   };
@@ -489,10 +584,12 @@ export function buildScoreSceneSnapshot (options = {}) {
   const sceneSvg = sceneMarkup
     ? `<g transform="translate(${snapshot.content.xPx + snapshot.score.offsetXPx}, ${snapshot.content.yPx + snapshot.score.offsetYPx}) scale(${snapshot.score.scale})"><svg xmlns="${XMLNS}" x="0" y="0" width="${sceneW}" height="${sceneH}" viewBox="${viewBox}" preserveAspectRatio="xMidYMin meet" overflow="visible">${sceneMarkup}</svg></g>`
     : '';
-  /** Tekstikastid: absoluutsed xy (scoreContainer), peavad olema noodiploki järel (z-order nagu ekraanil). */
+  /** Tekstikastid: scoreContainer xy + sama ankur-transform mis noodistiku stseenil. */
+  const pageOverlayTransform = getScoreNotationExportTransform(snapshot);
   const textBoxesSvg = buildScoreTextBoxesExportMarkup(options.textBoxes, {
     defaultFontFamily: options.documentFontFamily,
     defaultFill: '#78350f',
+    pageOverlayTransform,
   });
   const contentString = `<g id="scoreContent">${textMarkup.titleText}${textMarkup.authorText}${sceneSvg}${textBoxesSvg}${overlayMarkup || ''}</g>`;
   const documentBlocks = describeScoreDocumentBlocksForExport({
@@ -585,11 +682,13 @@ export function scoreToSvg (container, options = {}) {
   const sceneY = headerBottomPx > 0
     ? Math.max(0, ty - headerBottomPx - chromeH)
     : ty;
+  const exportHeaderMetrics = measureScoreExportHeaderFromContainer(container, pageWidth, options);
   const { width, height, viewBox } = getSvgIntrinsicDimensions(notationSvg, pageWidth);
   const sourceContentWidth = container.scrollWidth || pageWidth;
   const sourceContentHeight = container.scrollHeight || pageHeight;
   return buildScoreSceneSnapshot({
     ...options,
+    exportHeaderMetrics,
     pageDesignDataUrl,
     pageDesignOpacity,
     songTitle,

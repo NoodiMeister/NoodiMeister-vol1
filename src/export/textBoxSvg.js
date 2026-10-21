@@ -1,4 +1,5 @@
 import { resolveExportTextFamily } from './exportFontAssets';
+import { buildContainerOverlayGroupTransform } from './scorePageOverlayTransform';
 import { resolveTextBoxLineHeightPx } from '../utils/textBoxLayoutModel';
 
 function escapeXml(str) {
@@ -36,6 +37,7 @@ function getBoxTextLayout(box) {
 export function buildTextBoxesSvgMarkup(textBoxes = [], options = {}) {
   const fallbackFamily = resolveExportTextFamily(options.defaultFontFamily, 'ExportBody');
   const defaultFill = escapeXml(options.defaultFill || '#000000');
+  const overlayTransform = options.pageOverlayTransform || null;
   return textBoxes.map((box) => {
     if (!box || box.x == null || box.y == null) return '';
     const { width, height, fontSize, lineHeight, columns, anchor, startY, clipId } = getBoxTextLayout(box);
@@ -48,7 +50,12 @@ export function buildTextBoxesSvgMarkup(textBoxes = [], options = {}) {
         `<tspan x="${column.x}" y="${startY + idx * lineHeight}">${escapeXml(line)}</tspan>`
       )).join('')
     )).join('');
-    return `<g transform="translate(${Number(box.x) || 0}, ${Number(box.y) || 0})">
+    const bx = Number(box.x) || 0;
+    const by = Number(box.y) || 0;
+    const outerTransform = overlayTransform
+      ? buildContainerOverlayGroupTransform(bx, by, overlayTransform)
+      : `translate(${bx}, ${by})`;
+    return `<g transform="${outerTransform}">
   <defs><clipPath id="${clipId}"><rect x="8" y="6" width="${Math.max(1, width - 16)}" height="${Math.max(1, height - 10)}"/></clipPath></defs>
   <rect x="0" y="0" width="${width}" height="${height}" rx="4" fill="rgba(255,255,255,0.95)" stroke="#fcd34d" stroke-width="1.5"/>
   <text x="0" y="${startY}" text-anchor="${anchor}" font-family="${fontFamily}" font-size="${fontSize}" fill="${fillColor}" clip-path="url(#${clipId})"${fontWeight}${fontStyle}>${text}</text>
