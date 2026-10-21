@@ -1,4 +1,4 @@
-import { getAccidentalForPitchInKey } from '../utils/notationConstants';
+import { getAccidentalForPitchInKey } from '../utils/notationConstants.js';
 
 /**
  * Kõrguse sisestuse loogika: klaviatuuri klahv (MIDI) → noodimeistri noot (pitch, octave, accidental).

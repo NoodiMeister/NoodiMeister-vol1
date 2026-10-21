@@ -78,21 +78,23 @@ Märkused:\n+
 
 ---
 
-## 5. Pedagoogilised kuvarežiimid A / B / C
+## 5. Pedagoogilised kuvarežiimid A / B / C / D
 
 **Nõue:** Pedagoogilise notatsiooni (`sourceNotationMode` / `vabanotatsioon`) **sees** peab olema valitav kuvarežiim `pedagogicalDisplayMode`. See on **vaade sama loo andmete peal**, mitte uus fail ega eraldi nootide koopia.
 
 | Kood | Väärtus | Sisuliselt |
 |------|---------|------------|
-| **A** | `joStaff` | JO-võti + noodijoonestik + noodiglüüfid (praegune vaikimisi pedagoogiline vaade) |
+| **A** | `joStaff` | JO-võti + noodijoonestik + noodiglüüfid (praegune vaikimisi pedagoogiline vaade; **sisestus**) |
 | **B** | `joStaffHandSigns` | JO-võti + noodijooned; käemärgid **noodi all**, **enne** laulusõnu |
 | **C** | `handSignLyrics` | **7 astmejoont** (JO…DI); käemärgid **noodi glüüfide asemel**; laulusõnad joonte all |
+| **D** | `interactive` | **Interaktiivne / playback**: taustheli, cue’d, playhead, meedia-toolbar, animatsiooni eksport |
 
-### 5.1 Ühine andmemudel (A ↔ B ↔ C)
+### 5.1 Ühine andmemudel (A ↔ B ↔ C ↔ D)
 
 - Samad `notes[]` (pitch, duration, beat), `lyric*`, `timeSignature`, `keySignature`, `joClefStaffPosition`.
 - Režiimivahetus ei tohi muuta ega dubleerida nootide andmeid.
-- Sisestus võib jääda peamiselt A-s; C on esmalt kuvamise/testi vaade.
+- Sisestus ja korrastus toimuvad peamiselt **A**-s (ka B/C kuvana); **D ei tohi** olla vaikimisi peal ega segada nootide loomist.
+- Playbacki andmed (audio, cue’d, sync) võivad failis olla olemas ka A/B/C ajal, kuid nende **UI ja runtime** on ainult D-s.
 
 ### 5.2 Režiim C (testprototüüp) – fikseeritud reeglid
 
@@ -108,6 +110,12 @@ Märkused:\n+
 
 Spetsifikatsioon olemas; täielik implementatsioon pärast C smoke’i.
 
+### 5.4 Režiim D (interaktiivne)
+
+- D on **eraldi režiim** pedagoogilise all: playback, stseenid (cue), playhead-stiilid, alumine meedia-toolbar, video ruler, animatsiooni eksport.
+- A/B/C-s neid süsteeme **ei kuvata** ega käivitata; D-st lahkudes peatatakse taasesitus.
+- Score’i geomeetria D-s järgib A-d (`resolvePedagogicalRenderMode`); overlay’d on D-spetsiifilised.
+
 ---
 
 ## Kokkuvõte
@@ -118,6 +126,6 @@ Spetsifikatsioon olemas; täielik implementatsioon pärast C smoke’i.
 | 2  | Oma värvikombinatsioonid (JO suhtes) | Värvid tulevad pedagoogilise notatsiooni konfiguratsioonist, mitte figuurnotatsiooni konstantidest. |
 | 3  | Erisugused kujundid (kellad, torud, Orff) | Kujundid tulevad pedagoogilise notatsiooni / Orff konfiguratsioonist, mitte figuurnotatsiooni kujundite loogikast. |
 | 4  | Astme trepp ja käemärgid: eritasandiline JO-LE-MI (ruududega) | Oma vaate tüüp; ruudud tähistavad astme trepi tasandeid, mitte figuurnotatsiooni kujundeid. |
-| 5  | Kuvarežiimid A / B / C | Pedagoogilise faili sisene vaade; sama note/lyric tõde; C = 7 astmejoont + käemärgid. |
+| 5  | Kuvarežiimid A / B / C / D | Pedagoogilise faili sisene vaade; A–C noodistus; D interaktiivne playback; sama note/lyric tõde. |
 
 Kõik nõuded on mõeldud **pedagoogilise notatsiooni** jaoks ja peavad olema implementeeritud nii, et figuurnotatsiooni süsteem jääb eraldi; ühine võib olla ainult tehniline abikiht (nt ühine joonistusmootor), mitte andmemudel ega äriline loogika.

@@ -119,10 +119,12 @@ Kõik muudatused peavad hoidma kasutaja teekonnad tervena:
   - Kustutamine ei tohi ajatelge “auku” jätta: kustutatud aeg täidetakse pausidega vastavalt kestustele.
   - Selection, click, Shift+Arrow, Shift+drag peavad muutma ühtset kursori/valiku mudelit; UI ei tohi pidada paralleelset “salatõde”.
 
-- **Standard: pedagoogilised kuvarežiimid A/B/C**
+- **Standard: pedagoogilised kuvarežiimid A/B/C/D**
   - Kehtib ainult pedagoogilise faili sees (`notationMode` / `vabanotatsioon`); `sourceNotationMode` jääb lukku.
-  - `pedagogicalDisplayMode`: **A** `joStaff` (JO-võti + noodid), **B** `joStaffHandSigns` (JO + käemärgid noodi all enne laulusõnu), **C** `handSignLyrics` (7 astmejoont, käemärgid glüüfide asemel, laulusõnad all).
-  - A/B/C on **sama loo vaated** (`notes`, lyrics, taktimõõt, JO-ankur) — vahetus ei dubleeri ega kustuta andmeid.
+  - `pedagogicalDisplayMode`: **A** `joStaff` (JO-võti + noodid), **B** `joStaffHandSigns` (JO + käemärgid noodi all enne laulusõnu), **C** `handSignLyrics` (7 astmejoont, käemärgid glüüfide asemel, laulusõnad all), **D** `interactive` (interaktiivne playback: taustheli, cue’d, playhead, meedia-toolbar, animatsiooni eksport).
+  - A/B/C/D on **sama loo vaated** (`notes`, lyrics, taktimõõt, JO-ankur) — vahetus ei dubleeri ega kustuta andmeid.
+  - **A/B/C = noodistus** (sisestus, korrastus, kuvamine). Playbacki UI ja süsteemid **ei tohi** A/B/C-s olla peal ega segada sisestust.
+  - **D = interaktiivne režiim**: kogu pedagoogiline playback (heli, cue, playhead-stiilid, alumine meedia-toolbar, video ruler, animatsiooni eksport) elab **ainult** D all. D-st lahkudes peatatakse taasesitus.
   - C: alumine joon = JO … ülemine = DI; taktijooned 1.–7. jooneni; X = beat/taktimõõt (ti-ti lähestikku); käemärk RTL peegel ainult renderdamisel (uTheory ND).
   - Detailid: `docs/PEDAGOGICAL-NOTATION-REQUIREMENTS.md` §5.
 
@@ -161,6 +163,16 @@ Kõik muudatused peavad hoidma kasutaja teekonnad tervena:
   - **Kohustuslik visuaalne tagasiside:** igal selection type’il on oma nähtav marker (single highlight, range rectangle, measure highlight, object highlight). Kui state on aktiivne ja markerit ei kuvata, loetakse see bugiks.
   - **Kopeeri-kleebi reegel:** `objectList` = merge-käitumine, `noteRange/measureRange` = ajavahemiku overwrite-käitumine. Käitumine peab olema ühtlane kõikides režiimides ja sama sisendi korral deterministlik.
   - **Smoke enne merge’i:** testi minimaalselt: (1) click single -> highlight, (2) shift-extend -> range marker, (3) cmd/ctrl-click toggle list, (4) selected repeat mark delete, (5) esc clear, (6) copy/paste vastab selection type’ile.
+
+- **Standard: pointer click selection (score hit → selection → toolbox)**
+  - **Poliitika:** `src/orchestrator/pointerClickPolicy.js` — üks kaart `selection → activeToolbox`. Ära dubleeri “mis toolbox avaneb” loogikat view failides.
+  - **1) Tühi takt:** klikk takti tühjale alale → `measureRange` (üks takt) + `layout` toolbox. Lubatud: reavahetus järgmisele reale / kui takt on rea alguses, ühendus eelmise reaga (`connectNextSystem` / `connectPreviousSystem`). Kursor liigub valitud takti algusesse, et layout-nupud töötaksid.
+  - **2) Taktijoon / topeltjoon / kordusmärk:** klikk → `singleObject` + `repeatsJumps` toolbox. Backspace/Delete: topeltjoon või kordusmärk → tavaline taktijoon (`barlineSingle` / `removeRepeatMark`). Ka tavaline üksiktaktijoon peab olema valitav.
+  - **3) Tekst:** klikk tekstikastile / pealkirjale / autorile → tekstivalik + tekstimuutmise tööriistad (`textBox` / floating text tool). Note/repeat valik puhastatakse.
+  - **4) Võti (clef):** klikk võtme glüüfile → `singleObject` (clef) + `clefs` toolbox. Võtme vahetus peab uuendama noodigraafikat vastavalt võtmereeglitele (`setClefType` / JO-režiim).
+  - **5) Noot / paus:** klikk → `singleNote` (runtime `kind: 'note'`) + N-mode + primaarne notatsioonitööriist (`rhythm`). Lubatud: kestus, artikulatsioon, kõrgus; Shift+Click jääb range’iks ilma N-mode sundita. Enharmooniline asendus: valitud noodil peab olema selge tee (tulevikus / olemasolev accidental-töövoog).
+  - **Deselect (kohustuslik):** `Esc`, **teine klikk** samale taktile/taktijoonele/võtmele, või **tühi lehe/laua pind** → `clearPointerSelection` (`none` + markerid kaovad). Selection-driven toolbox (layout / repeatsJumps / clefs / textBox) sulgub; N-mode + `rhythm` jääb alles, kui kasutaja on N-režiimis.
+  - **Regressioon:** selection ilma nähtava markerita või toolbox, mis ei reageeri valitud objektile, on P0 UX-bug. Aktiivne valik, mida Esc ei puhasta, on samuti P0.
 
 ### Filosoofia vs regressioonid (AI jaoks kohustuslik eristus)
 

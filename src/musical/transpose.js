@@ -1,7 +1,8 @@
 /**
  * Transponeerimise loogika: noodid pooltoonide võrra, helistik.
  */
-import { getSemitonesFromKey, KEY_TO_SEMITONE } from '../utils/notationConstants';
+import { getAccidentalForPitchInKey, getSemitonesFromKey, KEY_TO_SEMITONE } from '../utils/notationConstants.js';
+import { getPitchFromMidi } from './PitchInputLogic.js';
 
 const PITCH_TO_SEMI = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
 const PITCH_NAME_TO_NATURAL = {
@@ -36,15 +37,76 @@ export function midiToNoteWithAccidental(midiNumber) {
 }
 
 /**
- * Transponeerib noodid etteantud pooltoonide võrra. Pausid jäävad muutmata.
+ * Efektiivne alteratsioon: eksplitsiitne accidental, muidu helistiku diatooniline märk.
+ * Nt D-duuris `{ pitch: 'F' }` ilma accidentalita = F# (1), mitte F♮.
  */
-export function transposeNotes(notes, semitones) {
+export function getEffectiveAccidental(note, keySignature = 'C') {
+  if (!note || note.isRest) return 0;
+  if (note.accidental !== undefined && note.accidental !== null) {
+    const n = Number(note.accidental);
+    return Number.isFinite(n) ? n : 0;
+  }
+  return getAccidentalForPitchInKey(note.pitch, keySignature);
+}
+
+/**
+ * Eemaldab liigsed eksplitsiitsed alteratsioonid, mis kattuvad helistikuga.
+ * Säilitab bekaarid/dieesid, mis tühistavad võtmemärki (nt F♮ D-duuris).
+ */
+export function normalizeAccidentalsForKey(noteList, targetKey) {
+  if (!Array.isArray(noteList) || noteList.length === 0) return noteList;
+  return noteList.map((note) => {
+    if (!note || note.isRest) return note;
+    const keyAcc = getAccidentalForPitchInKey(note.pitch, targetKey);
+    const effectiveAcc = getEffectiveAccidental(note, targetKey);
+    if (effectiveAcc === keyAcc) {
+      if (note.accidental === undefined || note.accidental === null) return note;
+      const { accidental: _drop, ...rest } = note;
+      return rest;
+    }
+    return { ...note, accidental: effectiveAcc };
+  });
+}
+
+function applySpellingToNote(note, spelled) {
+  const next = { ...note, pitch: spelled.pitch, octave: spelled.octave };
+  if (spelled.accidental === undefined || spelled.accidental === null) {
+    if (next.accidental !== undefined) {
+      const { accidental: _drop, ...rest } = next;
+      return rest;
+    }
+    return next;
+  }
+  return { ...next, accidental: spelled.accidental };
+}
+
+/**
+ * Transponeerib noodid etteantud pooltoonide võrra. Pausid jäävad muutmata.
+ * @param {object[]} notes
+ * @param {number} semitones
+ * @param {string|{ fromKey?: string, toKey?: string }} [fromKeyOrOpts] - lähtehelistik (diatooniliste #/♭ jaoks) või opts
+ * @param {string} [maybeToKey] - sihthelistik (key-aware spelling); kui puudub, sharp-põhine fallback
+ */
+export function transposeNotes(notes, semitones, fromKeyOrOpts, maybeToKey) {
   if (!semitones) return notes;
+  let fromKey = 'C';
+  let toKey = null;
+  if (fromKeyOrOpts && typeof fromKeyOrOpts === 'object') {
+    fromKey = fromKeyOrOpts.fromKey ?? 'C';
+    toKey = fromKeyOrOpts.toKey ?? null;
+  } else if (typeof fromKeyOrOpts === 'string') {
+    fromKey = fromKeyOrOpts;
+    toKey = typeof maybeToKey === 'string' ? maybeToKey : null;
+  }
+
   return notes.map((note) => {
-    if (note.isRest) return { ...note };
-    const acc = note.accidental ?? 0;
+    if (!note || note.isRest) return note ? { ...note } : note;
+    const acc = getEffectiveAccidental(note, fromKey);
     const midi = pitchOctaveToMidi(note.pitch, note.octave) + acc;
     const newMidi = Math.max(0, Math.min(127, midi + semitones));
+    if (toKey) {
+      return applySpellingToNote(note, getPitchFromMidi(newMidi, toKey));
+    }
     const { pitch, octave, accidental } = midiToNoteWithAccidental(newMidi);
     return { ...note, pitch, octave, accidental };
   });

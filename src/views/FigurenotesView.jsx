@@ -583,6 +583,10 @@ export function FigurenotesView({
   onSelectRepeatMark, // (measureIndex, markType) => void
   onJumpMarkPointerDown,
   jumpMarkLayoutOverrides = {},
+  /** { start, end } | null — aktiivne taktivalik. */
+  measureSelection = null,
+  /** (measureIndex, event) => void — klikk takti tühjale alale (SEL). */
+  onMeasureClick,
   /** Mitme rea ühendatud figuurisüsteem (orchestration): instrumentide read + taktid iga rea jaoks. */
   instruments = [],
   effectiveMeasuresPerInstrument = {},
@@ -1780,6 +1784,27 @@ export function FigurenotesView({
                               );
                             },
                           )}
+                        {(() => {
+                          const isMeasureSelected = !!(
+                            measureSelection
+                            && Number.isInteger(measureSelection.start)
+                            && Number.isInteger(measureSelection.end)
+                            && measureIdx >= Math.min(measureSelection.start, measureSelection.end)
+                            && measureIdx <= Math.max(measureSelection.start, measureSelection.end)
+                          );
+                          if (!isMeasureSelected && typeof onMeasureClick !== "function") return null;
+                          return (
+                            <rect
+                              x={measureX}
+                              y={sys.yOffset + padVertical}
+                              width={Math.max(1, measureWidth)}
+                              height={melodyRowHeight - 2 * padVertical}
+                              fill={isMeasureSelected ? "#93c5fd" : "transparent"}
+                              opacity={isMeasureSelected ? 0.22 : 1}
+                              pointerEvents="none"
+                            />
+                          );
+                        })()}
                         {measureWidth < (LAYOUT.MEASURE_MIN_WIDTH || 28) && (
                           <rect
                             x={measureX - 1}

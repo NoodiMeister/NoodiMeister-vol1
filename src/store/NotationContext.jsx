@@ -4,7 +4,7 @@
  * RhythmToolbox valikud jõuavad siia; NoteSymbols ja vaated loevad siit.
  */
 import React, { createContext, useContext, useState, useCallback, useMemo } from 'react';
-import { transposeNotes, getTransposeSemitones } from '../musical/transpose';
+import { transposeNotes, getTransposeSemitones, normalizeAccidentalsForKey } from '../musical/transpose';
 
 const NotationContext = createContext(null);
 
@@ -246,16 +246,25 @@ export function NotationProvider({ children }) {
   const transposeScore = useCallback((semitones) => {
     if (!semitones) return;
     setInstrumentsState((prev) =>
-      prev.map((inst) => ({ ...inst, notes: transposeNotes(inst.notes, semitones) }))
+      prev.map((inst) => ({
+        ...inst,
+        notes: transposeNotes(inst.notes, semitones, { fromKey: keySignature }),
+      }))
     );
-  }, []);
+  }, [keySignature]);
 
   /** Transponeerib partituuri uude helistikku (värskendab ka keySignature). */
   const transposeToKey = useCallback((newKey) => {
     const semitones = getTransposeSemitones(keySignature, newKey);
     if (!semitones) return;
     setInstrumentsState((prev) =>
-      prev.map((inst) => ({ ...inst, notes: transposeNotes(inst.notes, semitones) }))
+      prev.map((inst) => ({
+        ...inst,
+        notes: normalizeAccidentalsForKey(
+          transposeNotes(inst.notes, semitones, { fromKey: keySignature, toKey: newKey }),
+          newKey
+        ),
+      }))
     );
     setKeySignatureState(newKey);
   }, [keySignature]);

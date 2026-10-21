@@ -600,6 +600,13 @@ export function TraditionalNotationView({
   clefHandOffset = { x: 0, y: 0 },
   clefHandSizePx = null,
   onClefPointerDown,
+  /** Pointer-click: võti valitud (sinine highlight). */
+  clefSelected = false,
+  onSelectClef,
+  /** { start, end } | null — aktiivne taktivalik. */
+  measureSelection = null,
+  /** (measureIndex, event) => void — klikk takti tühjale alale. */
+  onMeasureClick,
   /** { startId, endId } | null — valitud legato kaar (kaare ots) → sinine joon + nool. */
   activeLegatoSlurPair = null,
   /** (endGlobalNoteIndex) => void — klõps valitud (sinisel) legato kaarel: vali lõppnoot. */
@@ -1282,9 +1289,20 @@ export function TraditionalNotationView({
                           (
                             <g
                               key={`clef-${sys.systemIndex}-${staffIndex}-${instClef}`}
-                              onMouseDown={typeof onClefPointerDown === 'function' ? (e) => onClefPointerDown(e) : undefined}
-                              style={typeof onClefPointerDown === 'function' ? { cursor: 'grab' } : undefined}
+                              onMouseDown={typeof onClefPointerDown === 'function' ? (e) => { e.stopPropagation(); onClefPointerDown(e); } : (typeof onSelectClef === 'function' ? (e) => { e.stopPropagation(); onSelectClef(); } : undefined)}
+                              style={(onClefPointerDown || onSelectClef) ? { cursor: 'pointer' } : undefined}
                             >
+                              {clefSelected && (
+                                <rect
+                                  x={clefX - spacing * 0.6}
+                                  y={clefY - clefFontSize * 0.85}
+                                  width={spacing * 3.2}
+                                  height={clefFontSize * 1.5}
+                                  fill="#93c5fd"
+                                  opacity="0.32"
+                                  rx={3}
+                                />
+                              )}
                               <StaffClefSymbol
                                 x={clefX}
                                 y={clefY}
@@ -1395,9 +1413,20 @@ export function TraditionalNotationView({
                       symbols.push(
                         <g
                           key={`clef-${sys.systemIndex}-${staffIndex}-${clefType}`}
-                          onMouseDown={typeof onClefPointerDown === 'function' ? (e) => onClefPointerDown(e) : undefined}
-                          style={typeof onClefPointerDown === 'function' ? { cursor: 'grab' } : undefined}
+                          onMouseDown={typeof onClefPointerDown === 'function' ? (e) => { e.stopPropagation(); onClefPointerDown(e); } : (typeof onSelectClef === 'function' ? (e) => { e.stopPropagation(); onSelectClef(); } : undefined)}
+                          style={(onClefPointerDown || onSelectClef) ? { cursor: 'pointer' } : undefined}
                         >
+                          {clefSelected && (
+                            <rect
+                              x={clefX - spacing * 0.6}
+                              y={clefY - clefFontSize * 0.85}
+                              width={spacing * 3.2}
+                              height={clefFontSize * 1.5}
+                              fill="#93c5fd"
+                              opacity="0.32"
+                              rx={3}
+                            />
+                          )}
                           <StaffClefSymbol
                             x={clefX}
                             y={clefY}
@@ -1666,8 +1695,42 @@ export function TraditionalNotationView({
                   ? rightBarFrame.x
                   : repeatRightGlyphX;
 
+                const isMeasureSelected = !!(
+                  measureSelection
+                  && Number.isInteger(measureSelection.start)
+                  && Number.isInteger(measureSelection.end)
+                  && measureIdx >= Math.min(measureSelection.start, measureSelection.end)
+                  && measureIdx <= Math.max(measureSelection.start, measureSelection.end)
+                );
+
                 return (
                   <g key={measureIdx}>
+                    {typeof onMeasureClick === 'function' && (
+                      <rect
+                        x={measureX}
+                        y={staffY + staffBarTopY - spacing * 0.5}
+                        width={Math.max(1, measureWidth)}
+                        height={staffBarBottomY - staffBarTopY + spacing}
+                        fill={isMeasureSelected ? '#93c5fd' : 'transparent'}
+                        opacity={isMeasureSelected ? 0.22 : 1}
+                        style={{ cursor: 'pointer', pointerEvents: 'auto' }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onMeasureClick(measureIdx, e);
+                        }}
+                      />
+                    )}
+                    {!onMeasureClick && isMeasureSelected && (
+                      <rect
+                        x={measureX}
+                        y={staffY + staffBarTopY - spacing * 0.5}
+                        width={Math.max(1, measureWidth)}
+                        height={staffBarBottomY - staffBarTopY + spacing}
+                        fill="#93c5fd"
+                        opacity={0.22}
+                        pointerEvents="none"
+                      />
+                    )}
                     {measureWidth < (LAYOUT.MEASURE_MIN_WIDTH || 28) && (
                       <rect x={measureX - 1} y={staffY + staffBarTopY - 2} width={measureWidth + 2} height={staffBarBottomY - staffBarTopY + 4} fill="none" stroke="#dc2626" strokeWidth={2} strokeDasharray="4 2" rx={2} />
                     )}
@@ -1724,14 +1787,43 @@ export function TraditionalNotationView({
                             )}
                           </g>
                         ) : leftBarlineRepeat.variant === 'barline' && drawConnectedBarlinesHere ? (
-                          <line
-                            x1={measureX}
-                            y1={barY1}
-                            x2={measureX}
-                            y2={barY2}
-                            stroke="#1a1a1a"
-                            strokeWidth={getStaffBarlineWidth(spacing)}
-                          />
+                          <g
+                            onClick={typeof onSelectRepeatMark === 'function' ? (e) => {
+                              e.stopPropagation();
+                              onSelectRepeatMark(measureIdx, 'barlineSingle', { toggle: !!(e.metaKey || e.ctrlKey), edge: 'left' });
+                            } : undefined}
+                            style={{ cursor: onSelectRepeatMark ? 'pointer' : undefined }}
+                            pointerEvents={onSelectRepeatMark ? 'auto' : 'none'}
+                          >
+                            <line
+                              x1={measureX}
+                              y1={barY1}
+                              x2={measureX}
+                              y2={barY2}
+                              stroke="#1a1a1a"
+                              strokeWidth={getStaffBarlineWidth(spacing)}
+                            />
+                            {isRepeatMarkSelected(measureIdx, 'barlineSingle') && (
+                              <rect
+                                x={measureX - spacing * 1.2}
+                                y={barY1 - spacing * 1.1}
+                                width={spacing * 2.4}
+                                height={barY2 - barY1 + spacing * 2.2}
+                                fill="#93c5fd"
+                                opacity="0.32"
+                                rx={3}
+                              />
+                            )}
+                            {onSelectRepeatMark && (
+                              <rect
+                                x={measureX - spacing}
+                                y={barY1 - spacing}
+                                width={spacing * 2}
+                                height={barY2 - barY1 + spacing * 2}
+                                fill="transparent"
+                              />
+                            )}
+                          </g>
                         ) : null}
                         {/* Right barline: E041 kui pole ühendatud E042-ga järgmise takti vasakul */}
                         {measure.repeatEnd && drawRepeatEndGlyphRight ? (
@@ -1830,14 +1922,43 @@ export function TraditionalNotationView({
                               );
                             })()
                           ) : (
-                            <line
-                              x1={measureX + measureWidth}
-                              y1={barY1}
-                              x2={measureX + measureWidth}
-                              y2={barY2}
-                              stroke="#1a1a1a"
-                              strokeWidth={getStaffBarlineWidth(spacing)}
-                            />
+                            <g
+                              onClick={typeof onSelectRepeatMark === 'function' ? (e) => {
+                                e.stopPropagation();
+                                onSelectRepeatMark(measureIdx, 'barlineSingle', { toggle: !!(e.metaKey || e.ctrlKey), edge: 'right' });
+                              } : undefined}
+                              style={{ cursor: onSelectRepeatMark ? 'pointer' : undefined }}
+                              pointerEvents={onSelectRepeatMark ? 'auto' : 'none'}
+                            >
+                              <line
+                                x1={measureX + measureWidth}
+                                y1={barY1}
+                                x2={measureX + measureWidth}
+                                y2={barY2}
+                                stroke="#1a1a1a"
+                                strokeWidth={getStaffBarlineWidth(spacing)}
+                              />
+                              {isRepeatMarkSelected(measureIdx, 'barlineSingle') && (
+                                <rect
+                                  x={measureX + measureWidth - spacing * 1.2}
+                                  y={barY1 - spacing * 1.1}
+                                  width={spacing * 2.4}
+                                  height={barY2 - barY1 + spacing * 2.2}
+                                  fill="#93c5fd"
+                                  opacity="0.32"
+                                  rx={3}
+                                />
+                              )}
+                              {onSelectRepeatMark && (
+                                <rect
+                                  x={measureX + measureWidth - spacing}
+                                  y={barY1 - spacing}
+                                  width={spacing * 2}
+                                  height={barY2 - barY1 + spacing * 2}
+                                  fill="transparent"
+                                />
+                              )}
+                            </g>
                           )
                         ) : drawConnectedBarlinesHere && shouldShowFinalDoubleBarline(measure, { isLastMeasureOfScore: false }) ? (
                           (() => {
