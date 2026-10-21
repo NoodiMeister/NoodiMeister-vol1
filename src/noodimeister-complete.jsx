@@ -9988,7 +9988,11 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
             const semitones = (KEY_TO_SEMITONE[newKey] ?? getSemitonesFromKey(newKey)) - (KEY_TO_SEMITONE[keySignature] ?? getSemitonesFromKey(keySignature));
             if (semitones !== 0) {
               saveToHistory(notes);
-              setStaves((prev) => prev.map((staff) => ({ ...staff, notes: transposeNotes(staff.notes || [], semitones) })));
+              // Pedagoogiline JO-transpositsioon: neela helistiku diatoonilised alteratsioonid (juhuslikud märgid ei kehti).
+              setStaves((prev) => prev.map((staff) => ({
+                ...staff,
+                notes: normalizeAccidentalsForKey(transposeNotes(staff.notes || [], semitones), newKey),
+              })));
               const preferFlats = FLAT_KEYS.has(newKey);
               setChords((prev) => prev.map((c) => ({
                 ...c,
@@ -18057,7 +18061,8 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                     if (semitones < 0) semitones += 12;
                     if (semitones !== 0) {
                       saveToHistory(notes);
-                      setNotes(transposeNotes(notes, semitones));
+                      // Pedagoogiline: JO-põhine transpose — juhuslikud märgid ei kehti (normaliseeri helistikku).
+                      setNotes(normalizeAccidentalsForKey(transposeNotes(notes, semitones), newKey));
                       const preferFlats = FLAT_KEYS.has(newKey);
                       setChords((prev) => prev.map((c) => ({
                         ...c,

@@ -268,6 +268,12 @@ function resolveVisibleAccidentalForTraditional(note, keySignature) {
   return note.accidental === keyAccidental ? null : note.accidental;
 }
 
+/** Pedagoogiline / JO: juhuslikud alteratsioonimärgid ei kehti (helistik = JO asukoht). */
+function resolveVisibleAccidentalForDisplay(note, keySignature, isPedagogical) {
+  if (isPedagogical) return null;
+  return resolveVisibleAccidentalForTraditional(note, keySignature);
+}
+
 /** Vars alla + tala: min vahe (px) tala alumise serva ja ülemise sõrmestusringi ülemise serva vahel (nt 3. joon + beam). */
 const TIN_WHISTLE_BEAM_TO_RING_GAP_MIN_PX = 5;
 
@@ -665,23 +671,31 @@ export function TraditionalNotationView({
   const keySigStepPx = getKeySignatureStepPx(ksFontForLayout);
   const actualTraditionalKeySigCount = isVabanotatsioon ? 0 : keySignatureInfo.count;
   const keySigWidthWorstCase = estimateKeySignatureWidthPx(actualTraditionalKeySigCount, ksFontForLayout);
-  const pedagogicalLeftPrefixWorstCase =
-    LAYOUT.CLEF_WIDTH +
-    getPedagogicalRelativeKeySignatureWidthPx(7, ksFontForLayout) +
-    getJoClefPixelWidth(spacing);
   const traditionalLeftPrefixWorstCase =
     LAYOUT.CLEF_WIDTH +
     keySigWidthWorstCase +
     (keySigWidthWorstCase > 0 ? TIME_SIG_SPACING.GAP_AFTER_KEY_SIG_BEFORE_TIME_SIG_PX : 0);
-  /** Clef + key (+ pedagoogiline JO) — enne taktimõõtu; sama kõikidel süsteemidel. */
-  const prefixCoreNonSingle = staffLeft + 1 + (isVabanotatsioon ? pedagogicalLeftPrefixWorstCase : traditionalLeftPrefixWorstCase);
   /** Vahe võtmemärgi ja esimese takti sisu vahel, kui taktimõõtu pole joonistatud (2.+ süsteem). */
   const continuationGapBeforeMeasuresPx = ensureMinGlyphHorizontalGapPx(TIME_SIG_SPACING.BEFORE_FIRST_MEASURE_PX);
   const gapBeforeFirstMeasureContent = ensureMinGlyphHorizontalGapPx(TIME_SIG_SPACING.BEFORE_FIRST_MEASURE_PX);
   const beatsTs = Number(timeSignature?.beats) === Number(timeSignature?.beats) ? timeSignature.beats : 4;
   const beatUnitTs = Number(timeSignature?.beatUnit) === Number(timeSignature?.beatUnit) ? timeSignature.beatUnit : 4;
   const showTraditionalKeySignatureForLayout = !isVabanotatsioon && !!keySignature && keySignature !== 'C';
+  /**
+   * Pedagoogiline invariant: võtmemärke ei ole (JO on helistiku ankur).
+   * Ära reserveeri fantom-7 märki jätkuridadel — see tekitas tühja augu + üle lehe mineku.
+   * (Legacy lüliti relativeNotationShowKeySignature: ainult tegelik count, kui sisse lülitatud.)
+   */
   const showRelativeKeySignatureForLayout = isVabanotatsioon && relativeNotationShowKeySignature && !!keySignature && keySignature !== 'C';
+  /** Pedagoogiline eesliide = ainult joonistatavad glüüfid (mitte worst-case 7 võtmemärki). */
+  const pedagogicalLeftPrefixActual =
+    (relativeNotationShowTraditionalClef ? LAYOUT.CLEF_WIDTH : 0) +
+    (showRelativeKeySignatureForLayout
+      ? getPedagogicalRelativeKeySignatureWidthPx(keySignatureInfo.count, ksFontForLayout)
+      : 0) +
+    getJoClefPixelWidth(spacing);
+  /** Clef + key (+ pedagoogiline JO) — enne taktimõõtu; sama kõikidel süsteemidel. */
+  const prefixCoreNonSingle = staffLeft + 1 + (isVabanotatsioon ? pedagogicalLeftPrefixActual : traditionalLeftPrefixWorstCase);
   const minContentStartFirstSystem = isSingleLineRhythmStaff
     ? staffLeft + 1 + singleLineTimeSigBoxWidth + singleLineTimeSigGapPx
     : isVabanotatsioon
@@ -2106,7 +2120,7 @@ export function TraditionalNotationView({
                         precomposedGlyph != null;
                       const glyphFontSize = getGlyphFontSize(spacing);
 
-                      const visibleAccidental = resolveVisibleAccidentalForTraditional(note, keySignature);
+                      const visibleAccidental = resolveVisibleAccidentalForDisplay(note, keySignature, isVabanotatsioon);
                       return (
                         <g key={noteIdx} {...noteGroupProps}>
                           {nLedgerAbove > 0 && Array.from({ length: nLedgerAbove }, (_, i) => (
