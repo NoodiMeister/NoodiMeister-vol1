@@ -518,6 +518,8 @@ export function TraditionalNotationView({
   pageWidth,
   timeSignature,
   timeSignatureMode,
+  /** Kui true: taktimõõdu glüüfi ei joonistata; taktistruktuur jääb kehtima. */
+  hideTimeSignature = false,
   pedagogicalTimeSigDenominatorType = 'rhythm',
   pedagogicalTimeSigDenominatorColor = '#1a1a1a',
   pedagogicalTimeSigDenominatorInstrument = 'handbell',
@@ -722,8 +724,11 @@ export function TraditionalNotationView({
   const minContentStartContinuation = isSingleLineRhythmStaff
     ? staffLeft + 1 + Math.max(12, Math.round(spacing * 2.4))
     : prefixCoreNonSingle + continuationGapBeforeMeasuresPx;
-  const effectiveMarginLeftFirstSystem = Math.max(marginLeft, minContentStartFirstSystem);
   const effectiveMarginLeftContinuation = Math.max(marginLeft, minContentStartContinuation);
+  /** Peidetud taktimõõt: esimese süsteemi vasak äär nagu jätkusüsteemil (ilma glüüfi ruumita). */
+  const effectiveMarginLeftFirstSystem = hideTimeSignature
+    ? effectiveMarginLeftContinuation
+    : Math.max(marginLeft, minContentStartFirstSystem);
 
   const firstSystemTimeSignatureCenterX = React.useMemo(() => {
     if (isSingleLineRhythmStaff) {
@@ -864,7 +869,7 @@ export function TraditionalNotationView({
   }, [noteDrag, onNotePitchChange, getPitchFromY, timelineSvgRef]);
 
   useEffect(() => {
-    if (!timeSigDrag || typeof onTimeSignatureOffsetChange !== 'function') return;
+    if (hideTimeSignature || !timeSigDrag || typeof onTimeSignatureOffsetChange !== 'function') return;
     const gap = ensureMinGlyphHorizontalGapPx(TIME_SIG_SPACING.BEFORE_FIRST_MEASURE_PX);
     const maxOffsetX = effectiveMarginLeftFirstSystem - gap - firstSystemTimeSignatureRightExtent - firstSystemTimeSignatureCenterX;
     const onMove = (e) => {
@@ -882,6 +887,7 @@ export function TraditionalNotationView({
       window.removeEventListener('mouseup', onUp);
     };
   }, [
+    hideTimeSignature,
     timeSigDrag,
     onTimeSignatureOffsetChange,
     effectiveMarginLeftFirstSystem,
@@ -891,7 +897,7 @@ export function TraditionalNotationView({
 
   /** Salvestatud / imporditud offset: ära luba taktimõõdul ulatuda esimese takti sisu alla (sh pärast laadimist). */
   useEffect(() => {
-    if (timeSigDrag || typeof onTimeSignatureOffsetChange !== 'function') return;
+    if (hideTimeSignature || timeSigDrag || typeof onTimeSignatureOffsetChange !== 'function') return;
     const gap = ensureMinGlyphHorizontalGapPx(TIME_SIG_SPACING.BEFORE_FIRST_MEASURE_PX);
     const maxOffsetX = effectiveMarginLeftFirstSystem - gap - firstSystemTimeSignatureRightExtent - firstSystemTimeSignatureCenterX;
     if (!Number.isFinite(maxOffsetX)) return;
@@ -901,6 +907,7 @@ export function TraditionalNotationView({
     if (ox <= maxOffsetX + 0.25) return;
     onTimeSignatureOffsetChange({ x: maxOffsetX, y: Number.isFinite(oy) ? oy : 0 });
   }, [
+    hideTimeSignature,
     timeSigDrag,
     onTimeSignatureOffsetChange,
     timeSignatureOffset?.x,
@@ -1459,7 +1466,7 @@ export function TraditionalNotationView({
                   })()}
 
                   {/* Time signature only on first system (first bar); after clef and key marks */}
-                  {sys.systemIndex === 0 && staffIndex === 0 && (
+                  {!hideTimeSignature && sys.systemIndex === 0 && staffIndex === 0 && (
                     (() => {
                       const timeSigX = firstSystemTimeSignatureCenterX;
                       return (

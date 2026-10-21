@@ -537,6 +537,8 @@ export function FigurenotesView({
   figurenotesSize = 16,
   figurenotesStems = false,
   timeSignatureSize = 36,
+  /** Kui true: taktimõõdu glüüfi ei joonistata; taktistruktuur jääb kehtima. */
+  hideTimeSignature = false,
   keySignature = "C",
   isNoteSelected,
   onNoteClick,
@@ -794,7 +796,7 @@ export function FigurenotesView({
   }, [noteBeatDrag, onNoteBeatChange, getBeatFromPoint, timelineSvgRef]);
 
   useEffect(() => {
-    if (!timeSigDrag || typeof onTimeSignatureOffsetChange !== "function") return;
+    if (hideTimeSignature || !timeSigDrag || typeof onTimeSignatureOffsetChange !== "function") return;
     const gap = ensureMinGlyphHorizontalGapPx(TIME_SIG_SPACING.BEFORE_FIRST_MEASURE_PX);
     const maxOffsetX =
       figureFirstSystemTimeSigBaseX != null && Number.isFinite(marginLeft)
@@ -815,6 +817,7 @@ export function FigurenotesView({
       window.removeEventListener("mouseup", onUp);
     };
   }, [
+    hideTimeSignature,
     timeSigDrag,
     onTimeSignatureOffsetChange,
     marginLeft,
@@ -823,7 +826,7 @@ export function FigurenotesView({
   ]);
 
   useEffect(() => {
-    if (timeSigDrag || typeof onTimeSignatureOffsetChange !== "function") return;
+    if (hideTimeSignature || timeSigDrag || typeof onTimeSignatureOffsetChange !== "function") return;
     if (figureFirstSystemTimeSigBaseX == null || !Number.isFinite(marginLeft)) return;
     const gap = ensureMinGlyphHorizontalGapPx(TIME_SIG_SPACING.BEFORE_FIRST_MEASURE_PX);
     const maxOffsetX =
@@ -835,6 +838,7 @@ export function FigurenotesView({
     if (ox <= maxOffsetX + 0.25) return;
     onTimeSignatureOffsetChange({ x: maxOffsetX, y: Number.isFinite(oy) ? oy : 0 });
   }, [
+    hideTimeSignature,
     timeSigDrag,
     onTimeSignatureOffsetChange,
     timeSignatureOffset?.x,
@@ -1102,7 +1106,7 @@ export function FigurenotesView({
               );
             })()}
 
-            {sys.systemIndex === 0 && (
+            {!hideTimeSignature && sys.systemIndex === 0 && (
               <g transform={`translate(0, ${sys.yOffset})`}>
                 {(() => {
                   const firstMeasureIdx = sys.measureIndices?.[0];
