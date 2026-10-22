@@ -65,6 +65,7 @@ import {
   PEDAGOGICAL_DISPLAY_D,
   normalizePedagogicalDisplayMode,
   isHandSignLyricsDisplayMode,
+  isJoStaffHandSignsDisplayMode,
   isPedagogicalInteractiveDisplayMode,
   resolvePedagogicalRenderMode,
 } from './notation/handSigns/pedagogicalDisplayModes';
@@ -14593,7 +14594,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                     <div className="flex flex-wrap gap-2">
                       {[
                         { id: PEDAGOGICAL_DISPLAY_A, label: t('settings.pedagogicalDisplayA') },
-                        { id: PEDAGOGICAL_DISPLAY_B, label: t('settings.pedagogicalDisplayB'), disabled: true },
+                        { id: PEDAGOGICAL_DISPLAY_B, label: t('settings.pedagogicalDisplayB') },
                         { id: PEDAGOGICAL_DISPLAY_C, label: t('settings.pedagogicalDisplayC') },
                         { id: PEDAGOGICAL_DISPLAY_D, label: t('settings.pedagogicalDisplayD') },
                       ].map((opt) => {
@@ -14602,10 +14603,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                           <button
                             key={opt.id}
                             type="button"
-                            disabled={!!opt.disabled}
-                            title={opt.disabled ? t('settings.comingSoon') : undefined}
                             onClick={() => {
-                              if (opt.disabled) return;
                               dirtyRef.current = true;
                               if (opt.id === PEDAGOGICAL_DISPLAY_D) setIsPedagogicalProject(true);
                               setPedagogicalDisplayMode(opt.id);
@@ -14615,9 +14613,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                                 ? opt.id === PEDAGOGICAL_DISPLAY_D
                                   ? 'bg-violet-600 text-white border-violet-700'
                                   : 'bg-amber-600 text-white border-amber-700'
-                                : opt.disabled
-                                  ? 'bg-amber-50 text-amber-400 border-amber-200 cursor-not-allowed'
-                                  : 'bg-white text-amber-900 border-amber-300 hover:bg-amber-50'
+                                : 'bg-white text-amber-900 border-amber-300 hover:bg-amber-50'
                             }`}
                           >
                             {opt.label}
@@ -20874,6 +20870,8 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
           lyricUnderline={lyricUnderline}
           lyricWeight={lyricWeight}
           lyricLineYOffset={lyricLineYOffset}
+          showHandSignsUnderNotes={notationMode === 'vabanotatsioon' && isJoStaffHandSignsDisplayMode(pedagogicalDisplayMode)}
+          handSignStyle={handSignStyle}
           isHorizontal={isHorizontal}
           a4PageHeight={a4PageHeight}
           horizontalPageGapPx={horizontalPageGapPx}

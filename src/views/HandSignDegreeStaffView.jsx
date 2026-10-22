@@ -63,6 +63,7 @@ export function HandSignDegreeStaffView({
   const ink = themeColors?.textColor || '#1a1a1a';
   const staffLineColor = themeColors?.staffLineColor || '#333';
   const metrics = resolveHandSignGlyphMetrics(handSignStyle, { ink });
+  const showDegreeLines = handSignStyle?.showDegreeLines !== false;
   const geom = getHandSignStaffGeometry({
     lineSpacing: metrics.lineSpacing,
     lyricReserve: Math.max(20, (Number(lyricFontSize) || 12) + 12),
@@ -106,8 +107,8 @@ export function HandSignDegreeStaffView({
 
         return (
           <g key={`hs-sys-${sys.systemIndex}`}>
-            {/* 7 degree lines */}
-            {JO_NAMES.map((_, degreeIndex) => {
+            {/* 7 degree lines (optional — hand signs already sit on degree heights) */}
+            {showDegreeLines && JO_NAMES.map((_, degreeIndex) => {
               const y = sys.yOffset + getDegreeLineY(degreeIndex, geom.topLineY, geom.lineSpacing);
               const rowWidth = measureWidths.reduce((a, b) => a + (b || 0), 0);
               return (

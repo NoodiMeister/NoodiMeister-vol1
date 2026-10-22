@@ -36,17 +36,21 @@ export function isHandSignLyricsDisplayMode(mode) {
   return normalizePedagogicalDisplayMode(mode) === PEDAGOGICAL_DISPLAY_C;
 }
 
+export function isJoStaffHandSignsDisplayMode(mode) {
+  return normalizePedagogicalDisplayMode(mode) === PEDAGOGICAL_DISPLAY_B;
+}
+
 export function isPedagogicalInteractiveDisplayMode(mode) {
   return normalizePedagogicalDisplayMode(mode) === PEDAGOGICAL_DISPLAY_D;
 }
 
 /**
- * Score render mapping: B (not fully implemented) and D (interactive overlays)
- * fall back to A geometry. C keeps its own 7-line hand-sign layout.
+ * Score render mapping: D (interactive overlays) uses A staff geometry.
+ * B keeps its id (A staff + hand signs under notes). C = 7-line hand-sign layout.
  */
 export function resolvePedagogicalRenderMode(mode) {
   const normalized = normalizePedagogicalDisplayMode(mode);
-  if (normalized === PEDAGOGICAL_DISPLAY_B || normalized === PEDAGOGICAL_DISPLAY_D) {
+  if (normalized === PEDAGOGICAL_DISPLAY_D) {
     return PEDAGOGICAL_DISPLAY_A;
   }
   return normalized;

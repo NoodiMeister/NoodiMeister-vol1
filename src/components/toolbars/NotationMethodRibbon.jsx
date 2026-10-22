@@ -28,7 +28,7 @@ const METHOD_OPTIONS = [
 
 const PED_OPTIONS = [
   { id: PEDAGOGICAL_DISPLAY_A, short: 'A', titleKey: 'settings.pedagogicalDisplayA', hintKey: 'toolbar.pedVariantAHint' },
-  { id: PEDAGOGICAL_DISPLAY_B, short: 'B', titleKey: 'settings.pedagogicalDisplayB', hintKey: 'toolbar.pedVariantBHint', disabled: true },
+  { id: PEDAGOGICAL_DISPLAY_B, short: 'B', titleKey: 'settings.pedagogicalDisplayB', hintKey: 'toolbar.pedVariantBHint' },
   { id: PEDAGOGICAL_DISPLAY_C, short: 'C', titleKey: 'settings.pedagogicalDisplayC', hintKey: 'toolbar.pedVariantCHint' },
   { id: PEDAGOGICAL_DISPLAY_D, short: 'D', titleKey: 'settings.pedagogicalDisplayD', hintKey: 'toolbar.pedVariantDHint' },
 ];
@@ -191,6 +191,20 @@ export function NotationMethodRibbon({
               aria-label={t('toolbar.handSignContrast')}
             />
             <span className="text-amber-600">{t('toolbar.handSignContrastThick')}</span>
+          </label>
+
+          <label
+            className="inline-flex items-center gap-1.5 text-[10px] text-amber-800 ml-2 cursor-pointer"
+            title={t('toolbar.handSignDegreeLinesHint')}
+          >
+            <input
+              type="checkbox"
+              checked={!!style.showDegreeLines}
+              onChange={(e) => commitStyle({ showDegreeLines: !!e.target.checked })}
+              className="rounded border-amber-400 text-amber-700"
+              aria-label={t('toolbar.handSignDegreeLines')}
+            />
+            <span className="font-semibold">{t('toolbar.handSignDegreeLines')}</span>
           </label>
         </div>
       )}

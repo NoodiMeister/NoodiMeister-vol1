@@ -7,7 +7,9 @@
 import React, { useState, useEffect, useRef, Fragment, useCallback } from 'react';
 import { JoClefSymbol, TrebleClefSymbol, BassClefSymbol, getJoClefPixelWidth, getJoClefJoStripeBounds } from '../components/ClefSymbols';
 import { RhythmSyllableLabel } from '../components/RhythmSyllableLabel';
-import { getJoName } from '../notation/joNames';
+import { getJoName, getJoDegreeIndex, JO_NAMES } from '../notation/joNames';
+import { HandSignGlyph } from '../notation/handSigns/HandSignGlyph';
+import { resolveHandSignGlyphMetrics } from '../notation/handSigns/handSignMapping';
 import { getRhythmSyllableForNote } from '../notation/rhythmSyllables';
 import { shouldDrawRestGlyph } from '../notation/restGlyphDedupe';
 import { expandEmojiShortcuts } from '../utils/emojiShortcuts';
@@ -565,6 +567,9 @@ export function TraditionalNotationView({
   lyricUnderline = false,
   lyricWeight = 400,
   lyricLineYOffset = 0,
+  /** B-režiim: käemärk noodi all, enne laulusõnu. */
+  showHandSignsUnderNotes = false,
+  handSignStyle = null,
   isHorizontal = false,
   a4PageHeight = 400,
   /** Horisontaalvoos lehtede vahe (px); lükkab järgmise lehe süsteeme X-suunas. */
@@ -625,6 +630,13 @@ export function TraditionalNotationView({
   const centerY = timelineHeight / 2;
   const timeSigTextColor = themeColors?.textColor ?? '#333';
   const timeSigNoteFill = themeColors?.noteFill ?? '#333';
+  const handSignInk = themeColors?.textColor || '#1a1a1a';
+  const handSignMetrics = showHandSignsUnderNotes
+    ? resolveHandSignGlyphMetrics(handSignStyle, { ink: handSignInk })
+    : null;
+  const handSignLyricExtraPx = handSignMetrics
+    ? Math.round(handSignMetrics.fontSize * 1.05)
+    : 0;
   const [, setOptionalFontVersion] = useState(0);
   const [noteDrag, setNoteDrag] = useState(null); // { noteIndex, staffY } when dragging a note to change pitch
   const [noteBeatDrag, setNoteBeatDrag] = useState(null); // { noteIndex, startClientX } when hand tool dragging note to new beat
@@ -2449,13 +2461,36 @@ export function TraditionalNotationView({
                               />
                             );
                           })()}
+                          {showHandSignsUnderNotes && handSignMetrics && !note.isRest && note.pitch && typeof note.octave === 'number' && (() => {
+                            const degreeIndex = getJoDegreeIndex(
+                              note.pitch,
+                              note.octave,
+                              keySignature,
+                              joClefStaffPosition,
+                            );
+                            const degreeName = JO_NAMES[degreeIndex] ?? 'JO';
+                            const handY = noteY + handSignMetrics.fontSize * 0.62;
+                            return (
+                              <HandSignGlyph
+                                key="hand-sign-under"
+                                degreeName={degreeName}
+                                x={noteX}
+                                y={handY}
+                                fontSize={Math.max(14, Math.round(handSignMetrics.fontSize * 0.72))}
+                                fill={handSignMetrics.fill}
+                                stroke={handSignMetrics.stroke}
+                                strokeWidth={handSignMetrics.strokeWidth}
+                              />
+                            );
+                          })()}
                           {Array.from({ length: 10 }, (_, lyricIdx) => {
                             const lyricKey = lyricIdx === 0 ? 'lyric' : `lyric${lyricIdx + 1}`;
                             const lyricColorKey = lyricIdx === 0 ? 'lyricColor' : `lyric${lyricIdx + 1}Color`;
                             const lyricText = note?.[lyricKey];
                             if (lyricText == null || String(lyricText).trim() === '') return null;
                             const fs = Math.max(1, Number(lyricFontSize)) || 12;
-                            const lyricLineY = staffY + lastLineY + fs * (1.5 + lyricIdx * 1.3) + (lyricLineYOffset || 0);
+                            // B: käemärgid noodi all → laulusõnad käemärkide alla (enne = prioriteet ülemisel real)
+                            const lyricLineY = staffY + lastLineY + handSignLyricExtraPx + fs * (1.5 + lyricIdx * 1.3) + (lyricLineYOffset || 0);
                             return (
                               <text
                                 key={lyricKey}

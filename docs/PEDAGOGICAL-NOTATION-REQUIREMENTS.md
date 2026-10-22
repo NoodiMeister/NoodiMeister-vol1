@@ -112,13 +112,9 @@ Märkused:\n+
 - **X-paigutus** järgib taktimõõtu / beat’i (`measureWidths` / beatWidth, sh slotid löögis): ti-ti (1/8+1/8) = käemärgid **lähestikku**.
 - Laulusõnad: üks rida **7 joone all**.
 - Oktaavinihe väljaspool JO…DI: prototüübis clamp 0…6 (märkida UI-s).
-- **Style** (ülemine Režiim/meetod riba, ainult C): `handSignStyle.sizePercent` 50…200 (vektorskaala; 200% = 2×) ja `handSignStyle.contrast` 0…1 (joone paksus peenike → väga paks). Fontifaile ei muudeta (CC BY-NC-ND).
+- **Style** (ülemine Režiim/meetod riba, ainult C): `handSignStyle.sizePercent` 50…200 (vektorskaala; 200% = 2×), `handSignStyle.contrast` 0…1 (joone paksus peenike → väga paks), `handSignStyle.showDegreeLines` (vaikimisi true) — linnuke peidab/näitab 7 horisontaalset astmejoont; käemärgid jäävad astmekõrgusele. Fontifaile ei muudeta (CC BY-NC-ND).
 
-### 5.3 Režiim B (`joStaffHandSigns`) — spetsifikatsioon (implementatsioon pärast C smoke’i)
-
-B on **kirjeldatud ja koodis olemas** (`PEDAGOGICAL_DISPLAY_B`), kuid UI-s teadlikult **lukus** („Tulekul“); `resolvePedagogicalRenderMode(B)` renderdab ajutiselt A geomeetriat.
-
-**Sihtkäitumine (kui B avatakse):**
+### 5.3 Režiim B (`joStaffHandSigns`)
 
 - **Sama staff mis A:** JO-võti + 5-jooneline noodijoonestik + noodiglüüfid (pitch Y nagu A).
 - **Käemärk iga noodi all** (uTheory teacher; RTL peegel ainult renderdamisel), **enne** laulusõnarida.

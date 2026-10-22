@@ -133,7 +133,7 @@ Kõik muudatused peavad hoidma kasutaja teekonnad tervena:
   - A/B/C/D on **sama loo vaated** (`notes`, lyrics, taktimõõt, JO-ankur) — vahetus ei dubleeri ega kustuta andmeid.
   - **A/B/C = noodistus** (sisestus, korrastus, kuvamine). Playbacki UI ja süsteemid **ei tohi** A/B/C-s olla peal ega segada sisestust.
   - **D = interaktiivne režiim**: kogu pedagoogiline playback (heli, cue, playhead-stiilid, alumine meedia-toolbar, video ruler, animatsiooni eksport) elab **ainult** D all. D-st lahkudes peatatakse taasesitus.
-  - C: alumine joon = JO … ülemine = DI; taktijooned 1.–7. jooneni; X = beat/taktimõõt (ti-ti lähestikku); käemärk RTL peegel ainult renderdamisel (uTheory ND).
+  - C: alumine joon = JO … ülemine = DI; taktijooned 1.–7. jooneni; X = beat/taktimõõt (ti-ti lähestikku); käemärk RTL peegel ainult renderdamisel (uTheory ND); `handSignStyle.showDegreeLines` võib horisontaalsed astmejooned peita.
   - Ülemine **Režiim/meetod** riba: T/F/P → (kui P) A/B/C/D → (kui C) Style; A–D ei dubleerita teacher-paneelis.
   - Detailid: `docs/PEDAGOGICAL-NOTATION-REQUIREMENTS.md` §5.
 

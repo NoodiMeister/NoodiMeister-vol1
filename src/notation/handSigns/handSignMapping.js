@@ -50,6 +50,8 @@ export const HAND_SIGN_CONTRAST_STROKE_FRAC = 0.1;
 export const DEFAULT_HAND_SIGN_STYLE = Object.freeze({
   sizePercent: 100,
   contrast: 0,
+  /** C-režiim: 7 horisontaalset astmejoont (käemärgid on kõrguselt juba astmete järgi). */
+  showDegreeLines: true,
 });
 
 function clamp(n, min, max) {
@@ -60,7 +62,7 @@ function clamp(n, min, max) {
  * Normalize persisted / UI hand-sign style. Does not alter font files (CC BY-NC-ND).
  * Accepts legacy `{ sizeScale, contrast: 'normal'|'strong' }` and maps to continuous fields.
  * @param {unknown} value
- * @returns {{ sizePercent: number, contrast: number }}
+ * @returns {{ sizePercent: number, contrast: number, showDegreeLines: boolean }}
  */
 export function normalizeHandSignStyle(value) {
   const raw = value && typeof value === 'object' ? value : {};
@@ -87,7 +89,10 @@ export function normalizeHandSignStyle(value) {
   // Keep one decimal for stable slider/persist (0.0 … 1.0)
   contrast = Math.round(contrast * 100) / 100;
 
-  return { sizePercent, contrast };
+  // Default true: omit / null / undefined → show lines; only explicit false hides.
+  const showDegreeLines = raw.showDegreeLines !== false;
+
+  return { sizePercent, contrast, showDegreeLines };
 }
 
 /**
