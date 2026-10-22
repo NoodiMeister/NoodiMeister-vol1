@@ -47,8 +47,9 @@ Kõik muudatused peavad hoidma kasutaja teekonnad tervena:
 ### Testimise ja lingid (õige aadress OAuth jaoks)
 
 - **Ametlik toodang (kasutajad, Google/Microsoft OAuth):** `https://noodimeister.ee` ja `https://www.noodimeister.ee` — need peavad olema **Google Cloud Console** (ja Azure/Microsoft) **Authorized JavaScript origins** + **redirect URI** nimekirjas. Üksikasjad: `docs/GOOGLE-SETUP.md`, `docs/ONEDRIVE-JUHEND.md`.
-- **Verceli tootmise tehniline URL (üks projekt, vt `docs/VERCEL-GITHUB.md`):** `https://noodi-meister-vol1-la-stravaganza.vercel.app` — ära kasuta teist `*.vercel.app` projekti tootmise asemel.
-- **Iga juhuslik Verceli preview URL** (`…-hash-haru.vercel.app`) on **uus päritolu**; Google/Microsoft ei tööta seal, kuni see on **sama käsitsi** konsooli lisatud. Täieliku pilve/auth testi jaoks eelista **noodimeister.ee** või lisa **täpne** preview URL konsooli.
+- **Tootmise deploy = Cloudflare** (Workers / Pages; `wrangler.toml`, käsk `npm run deploy:cf`). **Ära deploy’i Vercelit** ega käivita Verceli CLI deploy’d, kui kasutaja seda eraldi ei palu. Domeen `noodimeister.ee` peab viitama Cloudflare’i deploy’ile. Üksikasjad: `DEPLOY.md`.
+- **Verceli tehniline URL (ainult legacy / API viide, vt `docs/VERCEL-GITHUB.md`):** `https://noodi-meister-vol1-la-stravaganza.vercel.app` — ei ole esmane toodangu host; ära kasuta teist `*.vercel.app` projekti ega eelda, et push = Vercel deploy.
+- **Iga juhuslik Verceli preview URL** (`…-hash-haru.vercel.app`) on **uus päritolu**; Google/Microsoft ei tööta seal. Täieliku pilve/auth testi jaoks eelista **noodimeister.ee**.
 - **Kohalik dev (fikseeritud):** `http://127.0.0.1:5197` — **`npm run dev`** avab vaikimisi **demo intro**: `http://127.0.0.1:5197/demo-intro`. Preview pärast build’i: `http://127.0.0.1:4177` (vt `npm run preview:full`). OAuth (Google/Microsoft) jaoks lisa konsooli need päritolud, kui testid kohapeal.
 
 ### Noodimeistri standardid (elav dokument)

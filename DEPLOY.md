@@ -2,11 +2,24 @@
 
 **Üks kujundus:** Rakendusel on üks paigutus ja kujundus (see, mida näed Cursoris kohalikult). Deploy peab kasutama **sama** repositooriumi ja haru, et veebiversioon oleks identne Cursoriga. Enne deploy’i: `npm run build` ja `npm run preview` – kujundus peab kohalikult olema õige.
 
+**Tootmise host = Cloudflare** (`wrangler.toml`, `npm run deploy:cf`). `noodimeister.ee` / `www.noodimeister.ee` käivad Cloudflare’i kaudu. **Ära deploy’i Vercelit**, kui seda eraldi ei paluta.
+
 ---
 
-## Alternatiivid Vercel’ile (Netlify, Cloudflare Pages)
+## Cloudflare (esmane toodang)
 
-Kui Vercel’iga tekib probleeme (kujundus ei uuene, cache jms), võid kasutada **Netlify** või **Cloudflare Pages**. Mõlemad ehitavad sama repost ja kujundus ühtib Cursoriga.
+1. Build + deploy: `npm run deploy:cf` (= `npm run build && wrangler deploy`).
+2. Või Git-ühendus: [dash.cloudflare.com](https://dash.cloudflare.com) → **Workers & Pages** → projekt → Production branch `main`.
+3. SPA: `wrangler.toml` → `not_found_handling = "single-page-application"`; ka `public/_redirects` → `dist/`.
+4. Custom domain: `noodimeister.ee` / `www` Cloudflare’i projekti Domains all.
+
+**Uuendused:** Cloudflare Pages Git-ühenduse korral iga `git push origin main`; käsitsi: `npm run deploy:cf` (ainult kui kasutaja palub).
+
+---
+
+## Alternatiivid (Netlify, legacy Vercel)
+
+Netlify või Vercel ainult erandina. Vercel ei ole esmane toodangu host.
 
 ### Variant A: Netlify
 
