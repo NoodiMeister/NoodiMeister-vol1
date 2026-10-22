@@ -134,7 +134,13 @@ Kõik muudatused peavad hoidma kasutaja teekonnad tervena:
   - **A/B/C = noodistus** (sisestus, korrastus, kuvamine). Playbacki UI ja süsteemid **ei tohi** A/B/C-s olla peal ega segada sisestust.
   - **D = interaktiivne režiim**: kogu pedagoogiline playback (heli, cue, playhead-stiilid, alumine meedia-toolbar, video ruler, animatsiooni eksport) elab **ainult** D all. D-st lahkudes peatatakse taasesitus.
   - C: alumine joon = JO … ülemine = DI; taktijooned 1.–7. jooneni; X = beat/taktimõõt (ti-ti lähestikku); käemärk RTL peegel ainult renderdamisel (uTheory ND).
+  - Ülemine **Režiim/meetod** riba: T/F/P → (kui P) A/B/C/D → (kui C) Style; A–D ei dubleerita teacher-paneelis.
   - Detailid: `docs/PEDAGOGICAL-NOTATION-REQUIREMENTS.md` §5.
+
+- **Standard: käemärkide nähtavus (C)**
+  - `handSignStyle`: `sizePercent` (50…200; 100 = vaikimisi, 200 = 2× vektorskaala) ja `contrast` (0…1; peenike → väga paks SVG stroke).
+  - Sama uTheory font; glüüfifaile ei muudeta (CC BY-NC-ND). Suurem suurus skaleerib ka astmejoonte vahet.
+  - Ekraan, PDF ja print kasutavad sama `handSignStyle` (persist projektifailis).
 
 - **Standard: noodipea tööriistakast (notehead toolbox)**
   - **Mõiste:** tööriist muudab **noodipea kujutist** (`note head`), mitte rütmi/kestust. Rütmitööriistakast jääb kestuste ja mustrite jaoks.

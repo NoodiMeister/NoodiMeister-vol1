@@ -7,6 +7,7 @@ import {
 
 /**
  * Single Kodály/Curwen hand sign (uTheory font). RTL mirror via scaleX(-1) at render time.
+ * Optional stroke thickens the glyph for contrast without modifying font files (CC BY-NC-ND).
  */
 export function HandSignGlyph({
   degreeName = 'JO',
@@ -14,6 +15,8 @@ export function HandSignGlyph({
   y = 0,
   fontSize = HAND_SIGN_GLYPH_FONT_SIZE_PX,
   fill = '#111',
+  stroke = 'none',
+  strokeWidth = 0,
   perspective = 'teacher',
   selected = false,
   onClick,
@@ -21,6 +24,7 @@ export function HandSignGlyph({
   onMouseEnter,
 }) {
   const char = getHandSignCharForDegreeName(degreeName, { perspective });
+  const hasStroke = stroke && stroke !== 'none' && Number(strokeWidth) > 0;
   return (
     <g
       transform={`translate(${x}, ${y})`}
@@ -48,6 +52,9 @@ export function HandSignGlyph({
           textAnchor="middle"
           dominantBaseline="middle"
           fill={fill}
+          stroke={hasStroke ? stroke : undefined}
+          strokeWidth={hasStroke ? strokeWidth : undefined}
+          paintOrder={hasStroke ? 'stroke fill' : undefined}
           fontSize={fontSize}
           fontFamily={`'${UTHEORY_SOLFEGE_FONT_FAMILY}', sans-serif`}
           style={{ userSelect: 'none' }}

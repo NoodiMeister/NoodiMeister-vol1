@@ -7,10 +7,9 @@ import React from 'react';
 import { getJoDegreeIndex, JO_NAMES } from '../notation/joNames';
 import { HandSignGlyph } from '../notation/handSigns/HandSignGlyph';
 import {
-  HAND_SIGN_DEGREE_LINE_SPACING_PX,
-  HAND_SIGN_GLYPH_FONT_SIZE_PX,
   getDegreeLineY,
   getHandSignStaffGeometry,
+  resolveHandSignGlyphMetrics,
 } from '../notation/handSigns/handSignMapping';
 import { measureLengthInQuarterBeats } from '../musical/timeSignature';
 
@@ -59,11 +58,13 @@ export function HandSignDegreeStaffView({
   barNumberSize = 11,
   layoutBarNumberRestartAt = [],
   pickupEnabled = false,
+  handSignStyle = null,
 }) {
   const ink = themeColors?.textColor || '#1a1a1a';
   const staffLineColor = themeColors?.staffLineColor || '#333';
+  const metrics = resolveHandSignGlyphMetrics(handSignStyle, { ink });
   const geom = getHandSignStaffGeometry({
-    lineSpacing: HAND_SIGN_DEGREE_LINE_SPACING_PX,
+    lineSpacing: metrics.lineSpacing,
     lyricReserve: Math.max(20, (Number(lyricFontSize) || 12) + 12),
   });
   const beatsPerMeasure = measureLengthInQuarterBeats(timeSignature) || 4;
@@ -198,8 +199,10 @@ export function HandSignDegreeStaffView({
                           degreeName={degreeName}
                           x={x}
                           y={y}
-                          fontSize={HAND_SIGN_GLYPH_FONT_SIZE_PX}
-                          fill={ink}
+                          fontSize={metrics.fontSize}
+                          fill={metrics.fill}
+                          stroke={metrics.stroke}
+                          strokeWidth={metrics.strokeWidth}
                           selected={!!selected}
                           onClick={onNoteClick ? (e) => { e.stopPropagation(); onNoteClick(globalNoteIndex, e); } : undefined}
                           onMouseDown={onNoteMouseDown ? (e) => { e.stopPropagation(); onNoteMouseDown(globalNoteIndex, e); } : undefined}

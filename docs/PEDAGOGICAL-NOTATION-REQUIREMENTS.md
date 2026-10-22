@@ -112,6 +112,7 @@ Märkused:\n+
 - **X-paigutus** järgib taktimõõtu / beat’i (`measureWidths` / beatWidth, sh slotid löögis): ti-ti (1/8+1/8) = käemärgid **lähestikku**.
 - Laulusõnad: üks rida **7 joone all**.
 - Oktaavinihe väljaspool JO…DI: prototüübis clamp 0…6 (märkida UI-s).
+- **Style** (ülemine Režiim/meetod riba, ainult C): `handSignStyle.sizePercent` 50…200 (vektorskaala; 200% = 2×) ja `handSignStyle.contrast` 0…1 (joone paksus peenike → väga paks). Fontifaile ei muudeta (CC BY-NC-ND).
 
 ### 5.3 Režiim B (`joStaffHandSigns`) — spetsifikatsioon (implementatsioon pärast C smoke’i)
 

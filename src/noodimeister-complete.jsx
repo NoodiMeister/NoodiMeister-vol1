@@ -68,6 +68,12 @@ import {
   isPedagogicalInteractiveDisplayMode,
   resolvePedagogicalRenderMode,
 } from './notation/handSigns/pedagogicalDisplayModes';
+import {
+  DEFAULT_HAND_SIGN_STYLE,
+  normalizeHandSignStyle,
+  resolveHandSignGlyphMetrics,
+} from './notation/handSigns/handSignMapping';
+import { NotationMethodRibbon } from './components/toolbars/NotationMethodRibbon';
 import { HARMONY_FORM_ROW_HEIGHT } from './views/HarmonyFormStaffLayer';
 import {
   HARMONY_FORM_INSTRUMENT_ID,
@@ -1579,7 +1585,7 @@ const TOOLBOX_HELP_TEXTS = {
     layout: 'Muuda lehe paigutust, vahekaugusi ja joonestiku stiili.',
     textBox: 'Lisa vabateksti või tempomärke noodilehele.',
     chords: 'Lisa akorde ja kohanda akorditeksti.',
-    pedagogical: 'Ava või peida õpetaja tööriist (kuvarežiimid A–D, nimed, emojid).',
+    pedagogical: 'Ava või peida õpetaja tööriist (nimed, emojid, annotatsioonid). A–D on Režiim/meetod ribal.',
   },
   en: {
     rhythm: 'Choose note/rest durations and rhythm patterns.',
@@ -1596,7 +1602,7 @@ const TOOLBOX_HELP_TEXTS = {
     layout: 'Adjust spacing, page flow, and score layout behavior.',
     textBox: 'Insert free text boxes and tempo markings.',
     chords: 'Add chords and customize chord symbols.',
-    pedagogical: 'Show or hide the teacher panel (display modes A–D, names, emojis).',
+    pedagogical: 'Show or hide the teacher panel (names, emojis, annotations). A–D live on the Mode/method ribbon.',
   },
   fi: {
     rhythm: 'Valitse nuotti- ja taukokestot sekä rytmikuviot.',
@@ -1613,7 +1619,7 @@ const TOOLBOX_HELP_TEXTS = {
     layout: 'Säädä asettelua, välejä ja sivun virtausta.',
     textBox: 'Lisää vapaata tekstiä ja tempomerkintöjä.',
     chords: 'Lisää sointuja ja muokkaa sointumerkkejä.',
-    pedagogical: 'Näytä tai piilota opettajatyökalu (näyttötilat A–D, nimet, emojit).',
+    pedagogical: 'Näytä tai piilota opettajatyökalu (nimet, emojit, annotaatiot). A–D on Tila/metodi-nauhasa.',
   }
 };
 
@@ -3023,6 +3029,8 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   const [relativeNotationShowTraditionalClef, setRelativeNotationShowTraditionalClef] = useState(false);
   /** Pedagoogiline kuvarežiim A/B/C/D (sama loo vaade; vt pedagogicalDisplayModes.js). D = interaktiivne/playback. */
   const [pedagogicalDisplayMode, setPedagogicalDisplayMode] = useState(DEFAULT_PEDAGOGICAL_DISPLAY_MODE);
+  /** C-režiimi käemärkide suurus/kontrast (sama uTheory font; ND — faile ei muudeta). */
+  const [handSignStyle, setHandSignStyle] = useState(() => ({ ...DEFAULT_HAND_SIGN_STYLE }));
   const [chords, setChords] = useState([]); // { id, beatPosition, chord, figuredBass?, durationBeats? } – traditsiooniline ja figuurnotatsioon
   const [customChordInput, setCustomChordInput] = useState('');
   const [customFiguredBassInput, setCustomFiguredBassInput] = useState('');
@@ -5167,6 +5175,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     relativeNotationShowKeySignature,
     relativeNotationShowTraditionalClef,
     pedagogicalDisplayMode,
+    handSignStyle,
     isPedagogicalProject,
     pedagogicalAudioBpm,
     pedagogicalAudioPlaybackRate,
@@ -5237,7 +5246,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     lyricFontSize,
     noteheadShape,
     noteheadEmoji
-  }), [staves, activeStaffIndex, staffYOffsets, measureStretchFactors, systemYOffsets, systemXOffsets, visibleStaves, instrumentPartGroups, intermissionLabels, timeSignature, timeSignatureMode, keySignature, staffLines, notationStyle, pixelsPerBeat, notationMode, instrumentNotationVariant, linkedNotationByStaffId, tinWhistleLinkedFingeringScalePercent, cursorPosition, addedMeasures, measureRepeatMarks, setupCompleted, songTitle, author, pickupEnabled, pickupQuantity, pickupDuration, pageOrientation, paperSize, layoutMeasuresPerLine, layoutStrictMeasuresPerLine, layoutLineBreakBefore, layoutBarNumberRestartAt, layoutPageBreakBefore, layoutExtraPages, layoutDeskPageGapPx, partLayoutDeskPageGapPx, deskPageGapAdjustStepPx, layoutSystemGap, layoutPartsGap, layoutPartsGapMm, layoutSizeUnit, layoutConnectedBarlines, layoutGlobalSpacingMultiplier, notationCtx?.globalSpacingMultiplier, notationCtx?.staffSpacing, notationCtx?.measureWidthMultiplier, viewMode, partLayoutMeasuresPerLine, partLayoutStrictMeasuresPerLine, partLayoutLineBreakBefore, partLayoutPageBreakBefore, partLayoutExtraPages, showPageNavigator, showPedagogicalVideoRuler, pageFlowDirection, viewFitPage, viewSmartPage, visibleToolIds, tuningReferenceNote, tuningReferenceOctave, tuningReferenceHz, playNoteOnInsert, figurenotesSize, figurenotesStems, figurenotesChordLineGap, figurenotesChordBlocks, figurenotesChordBlocksShowTones, figurenotesMelodyShowNoteNames, timeSignatureSize, hideTimeSignature, pedagogicalTimeSigDenominatorType, pedagogicalTimeSigDenominatorColor, pedagogicalTimeSigDenominatorInstrument, pedagogicalTimeSigDenominatorEmoji, singleLineBarlineHalfSpanPx, singleLineBarlineThicknessPx, showBarNumbers, barNumberSize, voltaNumberSize, showRhythmSyllables, showAllNoteLabels, enableEmojiOverlays, joClefStaffPosition, relativeNotationShowKeySignature, relativeNotationShowTraditionalClef, pedagogicalDisplayMode, isPedagogicalProject, pedagogicalAudioBpm, pedagogicalAudioPlaybackRate, pedagogicalSyncMode, pedagogicalSyncStartBeat, pedagogicalSyncStartTimeSec, pedagogicalSyncEndBeat, pedagogicalSyncEndTimeSec, pedagogicalLoopEnabled, pedagogicalLoopCount, pedagogicalCues, pedagogicalRhythmStep, pedagogicalPlayheadStyle, pedagogicalPlayheadEmoji, pedagogicalPlayheadEmojiSize, cursorLineStrokeWidth, pedagogicalPlayheadMovement, rhythmCursorColor, rhythmCursorOpacity, rhythmCursorWidthMultiplier, rhythmCursorHighContrast, chords, textBoxes, documentFontFamily, lyricFontFamily, lyricBold, lyricItalic, lyricUnderline, lyricWeight, titleFontSize, authorFontSize, titleFontFamily, authorFontFamily, titleColor, authorColor, titleBold, titleItalic, titleUnderline, titleWeight, authorBold, authorItalic, authorUnderline, authorWeight, titleAlignment, authorAlignment, scoreHeaderTranslateYPx, staffRowAlignment, pageDesignDataUrl, pageDesignOpacity, pageDesignFit, pageDesignPositionX, pageDesignPositionY, pageDesignCrop, timeSignatureOffset, lyricLineIndex, lyricLineYOffset, lyricFontSize, noteheadShape, noteheadEmoji]);
+  }), [staves, activeStaffIndex, staffYOffsets, measureStretchFactors, systemYOffsets, systemXOffsets, visibleStaves, instrumentPartGroups, intermissionLabels, timeSignature, timeSignatureMode, keySignature, staffLines, notationStyle, pixelsPerBeat, notationMode, instrumentNotationVariant, linkedNotationByStaffId, tinWhistleLinkedFingeringScalePercent, cursorPosition, addedMeasures, measureRepeatMarks, setupCompleted, songTitle, author, pickupEnabled, pickupQuantity, pickupDuration, pageOrientation, paperSize, layoutMeasuresPerLine, layoutStrictMeasuresPerLine, layoutLineBreakBefore, layoutBarNumberRestartAt, layoutPageBreakBefore, layoutExtraPages, layoutDeskPageGapPx, partLayoutDeskPageGapPx, deskPageGapAdjustStepPx, layoutSystemGap, layoutPartsGap, layoutPartsGapMm, layoutSizeUnit, layoutConnectedBarlines, layoutGlobalSpacingMultiplier, notationCtx?.globalSpacingMultiplier, notationCtx?.staffSpacing, notationCtx?.measureWidthMultiplier, viewMode, partLayoutMeasuresPerLine, partLayoutStrictMeasuresPerLine, partLayoutLineBreakBefore, partLayoutPageBreakBefore, partLayoutExtraPages, showPageNavigator, showPedagogicalVideoRuler, pageFlowDirection, viewFitPage, viewSmartPage, visibleToolIds, tuningReferenceNote, tuningReferenceOctave, tuningReferenceHz, playNoteOnInsert, figurenotesSize, figurenotesStems, figurenotesChordLineGap, figurenotesChordBlocks, figurenotesChordBlocksShowTones, figurenotesMelodyShowNoteNames, timeSignatureSize, hideTimeSignature, pedagogicalTimeSigDenominatorType, pedagogicalTimeSigDenominatorColor, pedagogicalTimeSigDenominatorInstrument, pedagogicalTimeSigDenominatorEmoji, singleLineBarlineHalfSpanPx, singleLineBarlineThicknessPx, showBarNumbers, barNumberSize, voltaNumberSize, showRhythmSyllables, showAllNoteLabels, enableEmojiOverlays, joClefStaffPosition, relativeNotationShowKeySignature, relativeNotationShowTraditionalClef, pedagogicalDisplayMode, handSignStyle, isPedagogicalProject, pedagogicalAudioBpm, pedagogicalAudioPlaybackRate, pedagogicalSyncMode, pedagogicalSyncStartBeat, pedagogicalSyncStartTimeSec, pedagogicalSyncEndBeat, pedagogicalSyncEndTimeSec, pedagogicalLoopEnabled, pedagogicalLoopCount, pedagogicalCues, pedagogicalRhythmStep, pedagogicalPlayheadStyle, pedagogicalPlayheadEmoji, pedagogicalPlayheadEmojiSize, cursorLineStrokeWidth, pedagogicalPlayheadMovement, rhythmCursorColor, rhythmCursorOpacity, rhythmCursorWidthMultiplier, rhythmCursorHighContrast, chords, textBoxes, documentFontFamily, lyricFontFamily, lyricBold, lyricItalic, lyricUnderline, lyricWeight, titleFontSize, authorFontSize, titleFontFamily, authorFontFamily, titleColor, authorColor, titleBold, titleItalic, titleUnderline, titleWeight, authorBold, authorItalic, authorUnderline, authorWeight, titleAlignment, authorAlignment, scoreHeaderTranslateYPx, staffRowAlignment, pageDesignDataUrl, pageDesignOpacity, pageDesignFit, pageDesignPositionX, pageDesignPositionY, pageDesignCrop, timeSignatureOffset, lyricLineIndex, lyricLineYOffset, lyricFontSize, noteheadShape, noteheadEmoji]);
 
   const saveToStorageSync = useCallback(() => {
     try {
@@ -5646,6 +5655,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       if (data.relativeNotationShowKeySignature != null) setRelativeNotationShowKeySignature(data.relativeNotationShowKeySignature);
       if (data.relativeNotationShowTraditionalClef != null) setRelativeNotationShowTraditionalClef(data.relativeNotationShowTraditionalClef);
       if (data.pedagogicalDisplayMode != null) setPedagogicalDisplayMode(normalizePedagogicalDisplayMode(data.pedagogicalDisplayMode));
+      if (data.handSignStyle != null) setHandSignStyle(normalizeHandSignStyle(data.handSignStyle));
       if (data.isPedagogicalProject != null) setIsPedagogicalProject(!!data.isPedagogicalProject);
       if (Array.isArray(data.chords)) setChords(normalizeLoadedChords(data.chords));
       if ('pageDesignDataUrl' in data) {
@@ -6077,6 +6087,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         if (data.relativeNotationShowKeySignature != null) setRelativeNotationShowKeySignature(data.relativeNotationShowKeySignature);
         if (data.relativeNotationShowTraditionalClef != null) setRelativeNotationShowTraditionalClef(data.relativeNotationShowTraditionalClef);
         if (data.pedagogicalDisplayMode != null) setPedagogicalDisplayMode(normalizePedagogicalDisplayMode(data.pedagogicalDisplayMode));
+        if (data.handSignStyle != null) setHandSignStyle(normalizeHandSignStyle(data.handSignStyle));
         if (data.isPedagogicalProject != null) setIsPedagogicalProject(!!data.isPedagogicalProject);
         if (data.pedagogicalAudioBpm != null) setPedagogicalAudioBpm(Math.max(20, Math.min(300, data.pedagogicalAudioBpm)));
         if (data.pedagogicalSyncMode === 'bpm' || data.pedagogicalSyncMode === 'anchors') setPedagogicalSyncMode(data.pedagogicalSyncMode);
@@ -12097,7 +12108,9 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   const focusStaffHeightScaled = notationStyle !== 'FIGURENOTES'
     ? Math.max(120, Math.min(560, Math.round(FOCUS_STAFF_HEIGHT * (traditionalScoredHeightPx / baseStaffBlockHeightPx))))
     : FOCUS_STAFF_HEIGHT;
-  const handSignDegreeStaffHeightPx = getHandSignStaffGeometry().height;
+  const handSignDegreeStaffHeightPx = getHandSignStaffGeometry({
+    lineSpacing: resolveHandSignGlyphMetrics(handSignStyle).lineSpacing,
+  }).height;
   const useHandSignLyricsView = notationMode === 'vabanotatsioon'
     && isHandSignLyricsDisplayMode(resolvePedagogicalRenderMode(pedagogicalDisplayMode));
   const effectiveStaffHeight = useHandSignLyricsView
@@ -15045,52 +15058,6 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
             </button>
           </div>
           <div className="flex flex-wrap items-center gap-3 px-3 py-2.5">
-            <div className="flex flex-wrap items-center gap-1 border-r border-amber-300 pr-3" title={t('settings.pedagogicalDisplayModeHint')}>
-              <span className="text-[10px] font-semibold text-amber-700 uppercase mr-1">{t('settings.pedagogicalDisplayModeShort')}</span>
-              {[
-                { id: PEDAGOGICAL_DISPLAY_A, label: 'A' },
-                { id: PEDAGOGICAL_DISPLAY_B, label: 'B', disabled: true },
-                { id: PEDAGOGICAL_DISPLAY_C, label: 'C' },
-                { id: PEDAGOGICAL_DISPLAY_D, label: 'D' },
-              ].map((opt) => {
-                const active = normalizePedagogicalDisplayMode(pedagogicalDisplayMode) === opt.id;
-                return (
-                  <button
-                    key={opt.id}
-                    type="button"
-                    disabled={!!opt.disabled}
-                    title={
-                      opt.disabled
-                        ? t('settings.comingSoon')
-                        : opt.id === PEDAGOGICAL_DISPLAY_A
-                          ? t('settings.pedagogicalDisplayA')
-                          : opt.id === PEDAGOGICAL_DISPLAY_B
-                            ? t('settings.pedagogicalDisplayB')
-                            : opt.id === PEDAGOGICAL_DISPLAY_C
-                              ? t('settings.pedagogicalDisplayC')
-                              : t('settings.pedagogicalDisplayD')
-                    }
-                    onClick={() => {
-                      if (opt.disabled) return;
-                      dirtyRef.current = true;
-                      if (opt.id === PEDAGOGICAL_DISPLAY_D) setIsPedagogicalProject(true);
-                      setPedagogicalDisplayMode(opt.id);
-                    }}
-                    className={`min-w-[1.75rem] px-1.5 py-0.5 rounded text-xs font-bold border ${
-                      active
-                        ? opt.id === PEDAGOGICAL_DISPLAY_D
-                          ? 'bg-violet-600 text-white border-violet-700'
-                          : 'bg-amber-600 text-white border-amber-700'
-                        : opt.disabled
-                          ? 'bg-amber-50 text-amber-400 border-amber-200 cursor-not-allowed'
-                          : 'bg-white text-amber-900 border-amber-300 hover:bg-amber-100'
-                    }`}
-                  >
-                    {opt.label}
-                  </button>
-                );
-              })}
-            </div>
             <label className="flex items-center gap-2 cursor-pointer">
               <input type="checkbox" checked={showAllNoteLabels} onChange={(e) => { dirtyRef.current = true; setShowAllNoteLabels(e.target.checked); }} className="rounded border-amber-400 text-amber-600" />
               <span className="text-sm text-amber-900">{t('teacher.showAllLabels')}</span>
@@ -15459,29 +15426,6 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                       className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-amber-50 hover:bg-slate-600"
                     >
                       <CloudDownload className="w-4 h-4" /> {t('file.loadCloud')}
-                    </button>
-                    <div className="my-1 border-t border-slate-600" />
-                    <div className="px-3 py-1.5 text-xs font-semibold text-amber-200 uppercase tracking-wider">{t('file.documentMode')}</div>
-                    <button
-                      type="button"
-                      onClick={() => { dirtyRef.current = true; setDocumentNotationMode('traditional'); setHeaderMenuOpen(null); }}
-                      className={`w-full flex items-center gap-2 px-3 py-2 text-left text-sm ${notationMode === 'traditional' ? 'bg-amber-600 text-white' : 'text-amber-50 hover:bg-slate-600'}`}
-                    >
-                      {t('toolbar.traditional')}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => { dirtyRef.current = true; setDocumentNotationMode('figurenotes'); setHeaderMenuOpen(null); }}
-                      className={`w-full flex items-center gap-2 px-3 py-2 text-left text-sm ${notationMode === 'figurenotes' ? 'bg-amber-600 text-white' : 'text-amber-50 hover:bg-slate-600'}`}
-                    >
-                      {t('toolbar.figurenotes')}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => { dirtyRef.current = true; setDocumentNotationMode('vabanotatsioon'); setHeaderMenuOpen(null); }}
-                      className={`w-full flex items-center gap-2 px-3 py-2 text-left text-sm ${notationMode === 'vabanotatsioon' ? 'bg-amber-600 text-white' : 'text-amber-50 hover:bg-slate-600'}`}
-                    >
-                      {t('toolbar.vabanotatsioon')}
                     </button>
                     <div className="my-1 border-t border-slate-600" />
                     <button
@@ -16248,6 +16192,26 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
           </div>
         </div>
       </header>
+
+      <NotationMethodRibbon
+        t={t}
+        notationMode={notationMode}
+        onNotationModeChange={(nextMode) => {
+          dirtyRef.current = true;
+          setDocumentNotationMode(nextMode);
+        }}
+        pedagogicalDisplayMode={pedagogicalDisplayMode}
+        onPedagogicalDisplayModeChange={(nextMode) => {
+          dirtyRef.current = true;
+          if (nextMode === PEDAGOGICAL_DISPLAY_D) setIsPedagogicalProject(true);
+          setPedagogicalDisplayMode(nextMode);
+        }}
+        handSignStyle={handSignStyle}
+        onHandSignStyleChange={(nextStyle) => {
+          dirtyRef.current = true;
+          setHandSignStyle(normalizeHandSignStyle(nextStyle));
+        }}
+      />
 
       {/* Tööriistavalikud seadete riba all – nähtav kui mõni tööriist on aktiivne või klaviatuuri riba on avatud */}
       {(() => {
@@ -18669,6 +18633,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                   relativeNotationShowKeySignature={relativeNotationShowKeySignature}
                   relativeNotationShowTraditionalClef={relativeNotationShowTraditionalClef}
                   pedagogicalDisplayMode={pedagogicalDisplayMode}
+                  handSignStyle={handSignStyle}
                   onJoClefPositionChange={notationMode === 'vabanotatsioon' ? (newKey) => {
                     dirtyRef.current = true;
                     const fromSemi = KEY_TO_SEMITONE[keySignature] ?? getSemitonesFromKey(keySignature);
@@ -20014,7 +19979,7 @@ function getFingeringForNote(pitch, octave, instrumentId) {
 }
 
 // Timeline Component – multi-system layout (VexFlow loogika). (PAGE_BREAK_GAP on defineeritud üleval.)
-function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, pageWidth, cursorPosition, notationMode, staffLines, clefType, keySignature = 'C', relativeNotationShowKeySignature = false, relativeNotationShowTraditionalClef = false, pedagogicalDisplayMode = DEFAULT_PEDAGOGICAL_DISPLAY_MODE, onJoClefPositionChange, joClefFocused = false, onJoClefFocus, instrument = 'single-staff-treble', instrumentNotationVariant = 'standard', instrumentConfig = {}, showBarNumbers = true, barNumberSize = 11, voltaNumberSize = 16, showRhythmSyllables = false, joClefStaffPosition: joClefStaffPositionProp, showAllNoteLabels = false, enableEmojiOverlays = true, noteheadShape = 'oval', noteheadEmoji = '♪', onNoteTeacherLabelChange, onNoteLabelClick, chords = [], isDotted, isRest, selectedDuration, noteInputMode, selectedNoteIndex, isNoteSelected, notes: allNotes, onStaffAddNote, onNoteClick, onNoteMouseDown, onNoteMouseEnter, onNotePitchChange, onNoteBeatChange, canHandDragNotes = false, timeSignatureOffset = { x: 0, y: 0 }, onTimeSignatureOffsetChange, ghostPitch, ghostOctave, ghostAccidental = 0, ghostAccidentalIsExplicit = false, onFigureBeatClick, onChordLineMouseMove, onChordLineClick, notationStyle, layoutMeasuresPerLine = 4, layoutLineBreakBefore = [], layoutBarNumberRestartAt = [], layoutPageBreakBefore = [], layoutSystemGap = 120, layoutPartsGap, layoutConnectedBarlines = false, staffRowAlignment = 'center', staffIndexInScore = 0, systemTotalHeight, layoutGlobalSpacingMultiplier = 1, systems: systemsProp, baseYOffset = 0, isActiveStaff = true, staffCount = 1, staffHeight: staffHeightProp, figurenotesSize = 16, figurenotesStems = false, figurenotesChordLineGap = 6, figurenotesChordBlocks = false, figurenotesChordBlocksShowTones = true, figurenotesMelodyShowNoteNames = true, figurenotesRowHeight: figurenotesRowHeightProp, figurenotesChordLineHeight: figurenotesChordLineHeightProp, figurenotesLyricReserveHeight = 0, timeSignatureSize = 16, hideTimeSignature = false, pedagogicalTimeSigDenominatorType = 'rhythm', pedagogicalTimeSigDenominatorColor = '#1a1a1a', pedagogicalTimeSigDenominatorInstrument = 'handbell', pedagogicalTimeSigDenominatorEmoji = '🥁', singleLineBarlineHalfSpanPx = 20, singleLineBarlineThicknessPx = 2, themeColors: themeColorsProp, pedagogicalPlayheadStyle = 'line', pedagogicalPlayheadEmoji = '🎵', pedagogicalPlayheadEmojiSize = 32, cursorSizePx, cursorLineStrokeWidth = 4, cursorSubRow = 0, pedagogicalPlayheadMovement = 'arch', rhythmCursorColor = '#0ea5e9', rhythmCursorOpacity = 0.55, rhythmCursorWidthMultiplier = 1, rhythmCursorHighContrast = false, isPedagogicalAudioPlaying = false, isExportingAnimation = false, exportCursorRef, scoreContainerRef, pageFlowDirection = 'vertical', pageOrientation = 'portrait', isFirstInBraceGroup = false, braceGroupSize = 0, lyricFontFamily = 'sans-serif', lyricFontSize = 12, lyricBold = false, lyricItalic = false, lyricUnderline = false, lyricWeight = 400, lyricLineYOffset = 0, translateLabel, showLayoutBreakIcons = false, showStaffSpacerHandles = false, showLyricSpacerHandles = false, onSystemYOffsetChange, onSystemXOffsetChange, systemXOffsets = [], onLyricLineYOffsetChange, onToggleLineBreakAfter, onRemoveRepeatMark, selectedRepeatMark = null, selectedRepeatMarks = [], onSelectRepeatMark, onJumpMarkPointerDown, jumpMarkLayoutOverrides = {}, clefHandOffset = { x: 0, y: 0 }, clefHandSizePx = null, onClefPointerDown, clefSelected = false, onSelectClef, measureSelection = null, onMeasureClick, activeLyricNoteIndex = null, physicalPageGapPx = 3, physicalPageFrameYPx = 0, disablePhysicalPageGaps = false, hideCursorOverlay = false, exportNotationSvgRef = null, multiStaffInstruments = null, multiStaffMeasuresByInstrument = null, combinedCursorRowOffsetPx = 0, combinedActiveStaffRowIndex = 0, cursorStaffClefType = null, tinWhistleLinkedFingeringScale = 1, linkedNotationByStaffId = null, notationStaffSpace, activeLegatoSlurPair = null, onLegatoPathClick = undefined, onMeasureStartXChange = undefined, notationLayoutPageHeight = null, notationFirstPageBodyPx = null, pickupEnabled = false, harmonyFormMode = false, harmonyFormChordBeatStep = 4, harmonyFormLyricReserveHeight = 0, onHarmonyBeatClick }) {
+function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, pageWidth, cursorPosition, notationMode, staffLines, clefType, keySignature = 'C', relativeNotationShowKeySignature = false, relativeNotationShowTraditionalClef = false, pedagogicalDisplayMode = DEFAULT_PEDAGOGICAL_DISPLAY_MODE, handSignStyle = DEFAULT_HAND_SIGN_STYLE, onJoClefPositionChange, joClefFocused = false, onJoClefFocus, instrument = 'single-staff-treble', instrumentNotationVariant = 'standard', instrumentConfig = {}, showBarNumbers = true, barNumberSize = 11, voltaNumberSize = 16, showRhythmSyllables = false, joClefStaffPosition: joClefStaffPositionProp, showAllNoteLabels = false, enableEmojiOverlays = true, noteheadShape = 'oval', noteheadEmoji = '♪', onNoteTeacherLabelChange, onNoteLabelClick, chords = [], isDotted, isRest, selectedDuration, noteInputMode, selectedNoteIndex, isNoteSelected, notes: allNotes, onStaffAddNote, onNoteClick, onNoteMouseDown, onNoteMouseEnter, onNotePitchChange, onNoteBeatChange, canHandDragNotes = false, timeSignatureOffset = { x: 0, y: 0 }, onTimeSignatureOffsetChange, ghostPitch, ghostOctave, ghostAccidental = 0, ghostAccidentalIsExplicit = false, onFigureBeatClick, onChordLineMouseMove, onChordLineClick, notationStyle, layoutMeasuresPerLine = 4, layoutLineBreakBefore = [], layoutBarNumberRestartAt = [], layoutPageBreakBefore = [], layoutSystemGap = 120, layoutPartsGap, layoutConnectedBarlines = false, staffRowAlignment = 'center', staffIndexInScore = 0, systemTotalHeight, layoutGlobalSpacingMultiplier = 1, systems: systemsProp, baseYOffset = 0, isActiveStaff = true, staffCount = 1, staffHeight: staffHeightProp, figurenotesSize = 16, figurenotesStems = false, figurenotesChordLineGap = 6, figurenotesChordBlocks = false, figurenotesChordBlocksShowTones = true, figurenotesMelodyShowNoteNames = true, figurenotesRowHeight: figurenotesRowHeightProp, figurenotesChordLineHeight: figurenotesChordLineHeightProp, figurenotesLyricReserveHeight = 0, timeSignatureSize = 16, hideTimeSignature = false, pedagogicalTimeSigDenominatorType = 'rhythm', pedagogicalTimeSigDenominatorColor = '#1a1a1a', pedagogicalTimeSigDenominatorInstrument = 'handbell', pedagogicalTimeSigDenominatorEmoji = '🥁', singleLineBarlineHalfSpanPx = 20, singleLineBarlineThicknessPx = 2, themeColors: themeColorsProp, pedagogicalPlayheadStyle = 'line', pedagogicalPlayheadEmoji = '🎵', pedagogicalPlayheadEmojiSize = 32, cursorSizePx, cursorLineStrokeWidth = 4, cursorSubRow = 0, pedagogicalPlayheadMovement = 'arch', rhythmCursorColor = '#0ea5e9', rhythmCursorOpacity = 0.55, rhythmCursorWidthMultiplier = 1, rhythmCursorHighContrast = false, isPedagogicalAudioPlaying = false, isExportingAnimation = false, exportCursorRef, scoreContainerRef, pageFlowDirection = 'vertical', pageOrientation = 'portrait', isFirstInBraceGroup = false, braceGroupSize = 0, lyricFontFamily = 'sans-serif', lyricFontSize = 12, lyricBold = false, lyricItalic = false, lyricUnderline = false, lyricWeight = 400, lyricLineYOffset = 0, translateLabel, showLayoutBreakIcons = false, showStaffSpacerHandles = false, showLyricSpacerHandles = false, onSystemYOffsetChange, onSystemXOffsetChange, systemXOffsets = [], onLyricLineYOffsetChange, onToggleLineBreakAfter, onRemoveRepeatMark, selectedRepeatMark = null, selectedRepeatMarks = [], onSelectRepeatMark, onJumpMarkPointerDown, jumpMarkLayoutOverrides = {}, clefHandOffset = { x: 0, y: 0 }, clefHandSizePx = null, onClefPointerDown, clefSelected = false, onSelectClef, measureSelection = null, onMeasureClick, activeLyricNoteIndex = null, physicalPageGapPx = 3, physicalPageFrameYPx = 0, disablePhysicalPageGaps = false, hideCursorOverlay = false, exportNotationSvgRef = null, multiStaffInstruments = null, multiStaffMeasuresByInstrument = null, combinedCursorRowOffsetPx = 0, combinedActiveStaffRowIndex = 0, cursorStaffClefType = null, tinWhistleLinkedFingeringScale = 1, linkedNotationByStaffId = null, notationStaffSpace, activeLegatoSlurPair = null, onLegatoPathClick = undefined, onMeasureStartXChange = undefined, notationLayoutPageHeight = null, notationFirstPageBodyPx = null, pickupEnabled = false, harmonyFormMode = false, harmonyFormChordBeatStep = 4, harmonyFormLyricReserveHeight = 0, onHarmonyBeatClick }) {
   const themeColors = themeColorsProp || { staffLineColor: '#000', noteFill: '#1a1a1a', textColor: '#1a1a1a', isDark: false };
   const safeKey = keySignature ?? 'C';
   // Alati lõplik number (mitte NaN) — varajane `return null` enne hookide kasutamist rikkus Reacti hookide reeglid ja võis jätta noodiala tühjaks.
@@ -20845,6 +20810,7 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
           barNumberSize={barNumberSize}
           layoutBarNumberRestartAt={layoutBarNumberRestartAt}
           pickupEnabled={pickupEnabled}
+          handSignStyle={handSignStyle}
         />
       ) : (
         <TraditionalNotationView
