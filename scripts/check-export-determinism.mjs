@@ -162,6 +162,30 @@ async function main() {
     'Multi-digit time signature mapper is missing or changed unexpectedly.'
   );
 
+  // Traditional staff pitch anchors: SMuFL alphabetic baseline + treble G line (index 3).
+  // Regression: dominantBaseline middle/central shifted noteheads ~1 diatonic step (E→below line, F→on E line).
+  const smuflGlyphComponent = await read('src/notation/smufl/SmuflGlyph.jsx');
+  const traditionalView = await read('src/views/TraditionalNotationView.jsx');
+  const clefSymbols = await read('src/components/ClefSymbols.jsx');
+  assert(
+    smuflGlyphComponent.includes("dominantBaseline = 'alphabetic'"),
+    'SmuflGlyph must default to alphabetic baseline (SMuFL scoring registration).'
+  );
+  assert(
+    /const TREBLE_CLEF_LINE_INDEX = 3/.test(traditionalView),
+    'Treble clef must anchor on G4 line (staffLinePositions index 3), not B line.'
+  );
+  assert(
+    traditionalView.includes('dominantBaseline="alphabetic"') &&
+      !/precomposedGlyph[\s\S]{0,120}dominantBaseline="central"/.test(traditionalView),
+    'Traditional noteheads must use alphabetic SMuFL baseline, not central.'
+  );
+  assert(
+    clefSymbols.includes('dominantBaseline="alphabetic"') &&
+      !clefSymbols.includes('spiralAlignDy'),
+    'Treble/bass clefs must use alphabetic baseline without spiralAlignDy offset.'
+  );
+
   console.log('Export determinism smoke checks passed.');
 }
 

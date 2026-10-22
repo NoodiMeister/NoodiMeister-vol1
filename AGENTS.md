@@ -119,6 +119,13 @@ Kõik muudatused peavad hoidma kasutaja teekonnad tervena:
   - Kustutamine ei tohi ajatelge “auku” jätta: kustutatud aeg täidetakse pausidega vastavalt kestustele.
   - Selection, click, Shift+Arrow, Shift+drag peavad muutma ühtset kursori/valiku mudelit; UI ei tohi pidada paralleelset “salatõde”.
 
+- **Standard: pedagoogiline C4-põhi (kirjutamispiirkond)**
+  - Pedagoogilises režiimis (`vabanotatsioon` / kuvarežiimid A–C) on sisestuse **alumine ankur absoluutne C4** (MIDI ≥ 60).
+  - Vaikimisi ghost = C4; oktaavi nihutus lubab 4…6, mitte alla 4.
+  - Tähekäsk A–G ei tohi valida oktavit, mis annaks noodi alla C4 (nt C4 + `B` → B4, mitte B3).
+  - Käemärgid (režiim C) loetakse samast `notes[]`; C4-põhi hoiab JO…DI põhioktaavi stabiilsena.
+  - Vt `docs/PEDAGOGICAL-NOTATION-REQUIREMENTS.md` §5.1.
+
 - **Standard: pedagoogilised kuvarežiimid A/B/C/D**
   - Kehtib ainult pedagoogilise faili sees (`notationMode` / `vabanotatsioon`); `sourceNotationMode` jääb lukku.
   - `pedagogicalDisplayMode`: **A** `joStaff` (JO-võti + noodid), **B** `joStaffHandSigns` (JO + käemärgid noodi all enne laulusõnu), **C** `handSignLyrics` (7 astmejoont, käemärgid glüüfide asemel, laulusõnad all), **D** `interactive` (interaktiivne playback: taustheli, cue’d, playhead, meedia-toolbar, animatsiooni eksport).

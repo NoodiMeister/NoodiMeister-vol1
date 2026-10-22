@@ -116,7 +116,7 @@ export function JoClefSymbol({
 }
 
 // ——— Viiulivõti (Treble Clef) U+E050 ———
-// Leland: y = G-joone asukoht (altpoolt teine noodijoon). Nihutusega viime spiraali keskpunkti täpselt selle joonega ühtima.
+// Leland/SMuFL: y = G-joone asukoht (altpoolt teine noodijoon); alphabetic baseline = G-pitch ankur.
 
 export function TrebleClefSymbol({
   x,
@@ -127,15 +127,14 @@ export function TrebleClefSymbol({
 }) {
   const staffSpace = staffSpaceProp ?? (height != null ? height / 4 : 10);
   const fontSize = getGlyphFontSize(staffSpace); // MuseScore/SMuFL: 4 sp
-  const spiralAlignDy = staffSpace * 0.35; // Leland gClef: spiraal veidi allapoole glyph keskpunktist
   return (
     <SmuflGlyph
       x={x}
-      y={y + spiralAlignDy}
+      y={y}
       glyph={SMUFL_GLYPH.gClef}
       fontSize={fontSize}
       fill={fill}
-      dominantBaseline="middle"
+      dominantBaseline="alphabetic"
     />
   );
 }
@@ -177,7 +176,7 @@ export function BassClefSymbol({
       glyph={SMUFL_GLYPH.fClef}
       fontSize={fontSize}
       fill={fill}
-      dominantBaseline="middle"
+      dominantBaseline="alphabetic"
     />
   );
 }

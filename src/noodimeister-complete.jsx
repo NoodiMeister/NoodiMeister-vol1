@@ -356,6 +356,43 @@ function noteToMidi(n) {
   return (n.octave + 1) * 12 + (PITCH_TO_SEMI[n.pitch] ?? 0) + (n.accidental ?? 0);
 }
 
+/** Pedagoogiline kirjutamispiirkond: alumine ankur C4 (MIDI 60); üles oktav 4–6. */
+const PEDAGOGICAL_WRITING_MIN_MIDI = 60;
+const PEDAGOGICAL_WRITING_MIN_OCTAVE = 4;
+const PEDAGOGICAL_WRITING_MAX_OCTAVE = 6;
+
+function isPedagogicalNotationMode(mode) {
+  return mode === 'vabanotatsioon';
+}
+
+function pedagogicalLetterOctaveOptions(notationMode) {
+  if (!isPedagogicalNotationMode(notationMode)) return {};
+  return {
+    minMidi: PEDAGOGICAL_WRITING_MIN_MIDI,
+    minOctave: PEDAGOGICAL_WRITING_MIN_OCTAVE,
+    maxOctave: PEDAGOGICAL_WRITING_MAX_OCTAVE,
+  };
+}
+
+/**
+ * Tõsta oktavi seni, kuni MIDI ≥ minMidi (pedagoogiline C4-põhi).
+ * Tagastab { ...noteFields, octave }.
+ */
+function clampPitchFieldsToMinMidi(fields, minMidi = PEDAGOGICAL_WRITING_MIN_MIDI) {
+  if (!fields || fields.isRest) return fields;
+  const pitch = fields.pitch || 'C';
+  let octave = typeof fields.octave === 'number' && Number.isFinite(fields.octave) ? fields.octave : 4;
+  const acc = fields.accidental !== undefined && fields.accidental !== null ? fields.accidental : 0;
+  let midi = toNoteMidi(pitch, octave, acc);
+  if (midi == null || !Number.isFinite(midi)) return { ...fields, octave };
+  while (midi < minMidi && octave < 8) {
+    octave += 1;
+    midi = toNoteMidi(pitch, octave, acc);
+    if (midi == null) break;
+  }
+  return { ...fields, octave };
+}
+
 /**
  * Viimase sisestus-ghost'i MIDI (helistik + oktav + alteratsioon), et tähekäsk valida oktav MuseScore-stiilis.
  */
@@ -370,31 +407,44 @@ function ghostReferenceMidi(keySignature, notationStyle, ghostPitch, ghostOctave
 }
 
 /**
- * Tähekäsk (ainult traditsiooniline / pedagoogiline noodijoonestik): vali oktav (2–6) lähima MIDI järgi.
+ * Tähekäsk (ainult traditsiooniline / pedagoogiline noodijoonestik): vali oktav lähima MIDI järgi.
  * Figuurnotatsioonis kasutatakse ghost-oktavi — kuju määrab kõrguse konteksti.
+ * options.minMidi (nt 60 = C4): ära vali oktavit, mille tulemus jääb alla selle (B C4 juures → B4).
  */
-function resolveOctaveForPitchLetter(targetPitch, refMidi, keySignature, notationStyle, ghostAccidentalIsExplicit, ghostAccidental) {
+function resolveOctaveForPitchLetter(targetPitch, refMidi, keySignature, notationStyle, ghostAccidentalIsExplicit, ghostAccidental, options = {}) {
   const keyAccNew = getAccidentalForPitchInKey(targetPitch, keySignature);
   const newAcc = notationStyle === 'FIGURENOTES'
     ? keyAccNew
     : (ghostAccidentalIsExplicit ? (ghostAccidental ?? 0) : keyAccNew);
+  const minOctave = typeof options.minOctave === 'number' ? options.minOctave : 2;
+  const maxOctave = typeof options.maxOctave === 'number' ? options.maxOctave : 6;
+  const minMidi = typeof options.minMidi === 'number' ? options.minMidi : null;
   let reference = refMidi;
   if (reference == null || !Number.isFinite(reference)) {
     const rk = getAccidentalForPitchInKey('C', keySignature);
     reference = toNoteMidi('C', 4, notationStyle === 'FIGURENOTES' ? rk : (ghostAccidentalIsExplicit ? (ghostAccidental ?? 0) : rk));
   }
-  if (reference == null) reference = 60;
-  let bestOct = 4;
+  if (reference == null) reference = PEDAGOGICAL_WRITING_MIN_MIDI;
+  let bestOct = Math.max(minOctave, Math.min(maxOctave, 4));
   let bestDist = Infinity;
   let bestMidi = -1;
-  for (let o = 2; o <= 6; o++) {
+  let found = false;
+  for (let o = minOctave; o <= maxOctave; o++) {
     const m = toNoteMidi(targetPitch, o, newAcc);
     if (m == null) continue;
+    if (minMidi != null && m < minMidi) continue;
+    found = true;
     const d = Math.abs(m - reference);
     if (d < bestDist || (d === bestDist && m > bestMidi)) {
       bestDist = d;
       bestOct = o;
       bestMidi = m;
+    }
+  }
+  if (!found && minMidi != null) {
+    for (let o = minOctave; o <= 8; o++) {
+      const m = toNoteMidi(targetPitch, o, newAcc);
+      if (m != null && m >= minMidi) return o;
     }
   }
   return bestOct;
@@ -3474,13 +3524,19 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     // Backward-compatible guard: old state could still contain 'vabanotatsioon'.
     const pedagogical = !harmonyForm && (wizardNotationMethod === 'pedagogical' || wizardNotationMethod === 'vabanotatsioon');
     setIsPedagogicalProject(pedagogical);
-    // Pedagoogiline notatsioon kasutab JO võtit (vabanotatsioon) ja võib näidata võtmemärki ning traditsioonilist võtit
+    // Pedagoogiline: JO on kohustuslik. Viiuli-/bassivõti ja võtmemärk vaikimisi väljas
+    // (saab Võtmete / Võtmemärkide tööriistakastist linnukesega sisse lülitada).
     if (pedagogical) {
       setNotationMode('vabanotatsioon');
-      setRelativeNotationShowKeySignature(true);
-      setRelativeNotationShowTraditionalClef(true);
+      setRelativeNotationShowKeySignature(false);
+      setRelativeNotationShowTraditionalClef(false);
       // New pedagogical works open in A (editing), not D (interactive/playback).
       setPedagogicalDisplayMode(DEFAULT_PEDAGOGICAL_DISPLAY_MODE);
+      // Kirjutamispiirkond C4+: ghost ei tohi alustada bassi oktavis.
+      setGhostPitch('C');
+      setGhostOctave(PEDAGOGICAL_WRITING_MIN_OCTAVE);
+      setGhostAccidental(0);
+      setGhostAccidentalIsExplicit(false);
     } else {
       setNotationMode(wizardNotationMethod === 'figurenotes' ? 'figurenotes' : 'traditional');
     }
@@ -7556,8 +7612,10 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     return { pitch: pitchOrder[newIndex], octave: newOctave };
   }, []);
 
-  const shiftOctave = useCallback((currentOctave, direction) => {
-    return Math.max(2, Math.min(6, currentOctave + direction));
+  const shiftOctave = useCallback((currentOctave, direction, bounds = {}) => {
+    const minOct = typeof bounds.minOctave === 'number' ? bounds.minOctave : 2;
+    const maxOct = typeof bounds.maxOctave === 'number' ? bounds.maxOctave : 6;
+    return Math.max(minOct, Math.min(maxOct, currentOctave + direction));
   }, []);
 
   // Noodi kestus neljandikühikutes (sama mis note.duration; sõltumata taktimõõdu kirjest).
@@ -8284,7 +8342,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     const isUnpitchedSingleLineInstrument = isSingleLineUnpitchedPercussion(currentInstrumentId, currentInstrumentCfg);
     const singleLinePitch = isUnpitchedSingleLineInstrument ? getSingleLineStaffPitch(currentInstrumentId, currentInstrumentCfg) : null;
     const effectivePitch = singleLinePitch?.pitch ?? pitch;
-    const oct = singleLinePitch?.octave ?? (octave ?? ghostOctave);
+    let oct = singleLinePitch?.octave ?? (octave ?? ghostOctave);
     // Figuurnotatsioonis kasutaja ei näe võtmemärke – kui accidental pole ette antud, võta helistikust (nt G-duur → F#).
     const keyAccForPitch = getAccidentalForPitchInKey(effectivePitch, keySignature);
     const accResolvedRaw = accidental !== undefined
@@ -8293,6 +8351,13 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         ? getAccidentalForPitchInKey(effectivePitch, keySignature)
         : (ghostAccidentalIsExplicit ? ghostAccidental : keyAccForPitch));
     const accResolved = isUnpitchedSingleLineInstrument ? 0 : accResolvedRaw;
+    // Pedagoogiline C4-põhi: ära luba sisestust alla MIDI 60 (nt B ghost C4 juures ei tohi minna B3-ks).
+    if (isPedagogicalNotationMode(notationMode) && !isUnpitchedSingleLineInstrument) {
+      oct = clampPitchFieldsToMinMidi(
+        { pitch: effectivePitch, octave: oct, accidental: accResolved },
+        PEDAGOGICAL_WRITING_MIN_MIDI
+      ).octave;
+    }
     const currentInstrumentRange = currentInstrumentCfg?.range;
     const currentRangeMidi = resolveInstrumentRangeMidi(currentInstrumentId, keySignature, currentInstrumentRange);
     const currentNoteMidi = toNoteMidi(effectivePitch, oct, accResolved);
@@ -8462,7 +8527,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       const semitones = accResolved === 1 ? 1 : accResolved === -1 ? -1 : 0;
       playPianoNote(pitch, oct, semitones);
     }
-  }, [cursorPosition, selectedDuration, getEffectiveDuration, isDotted, isRest, notes, saveToHistory, ghostOctave, ghostAccidental, ghostAccidentalIsExplicit, playPianoNote, playNoteOnInsert, tupletMode, durations, staves, activeStaffIndex, notesWithExplicitBeats, noteDurationInQuarterBeats, notationStyle, keySignature, instrument, t, noteInputMode, expandScoreForNoteInputAdvance, timeSignature, pickupEnabled, pickupQuantity, pickupDuration, assertCursorTimeModelInputs, throwCursorModelError, pendingArticulation]);
+  }, [cursorPosition, selectedDuration, getEffectiveDuration, isDotted, isRest, notes, saveToHistory, ghostOctave, ghostAccidental, ghostAccidentalIsExplicit, playPianoNote, playNoteOnInsert, tupletMode, durations, staves, activeStaffIndex, notesWithExplicitBeats, noteDurationInQuarterBeats, notationStyle, notationMode, keySignature, instrument, t, noteInputMode, expandScoreForNoteInputAdvance, timeSignature, pickupEnabled, pickupQuantity, pickupDuration, assertCursorTimeModelInputs, throwCursorModelError, pendingArticulation]);
 
   // Add a note on top of the note at cursor (chord input). Traditional or Pedagogical only. Shift+Letter.
   const addNoteOnTopOfCursor = useCallback((pitch, octave, accidental, options = {}) => {
@@ -8895,7 +8960,8 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
               keySignature,
               notationStyle,
               ghostAccidentalIsExplicit,
-              ghostAccidental ?? 0
+              ghostAccidental ?? 0,
+              pedagogicalLetterOctaveOptions(notationMode)
             );
             addNoteAtCursor(option.value, octN);
           }
@@ -8915,6 +8981,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       case 'clefs':
         if (option.value === 'jo') {
           setNotationMode('vabanotatsioon');
+          setGhostOctave((prev) => Math.max(PEDAGOGICAL_WRITING_MIN_OCTAVE, Number(prev) || PEDAGOGICAL_WRITING_MIN_OCTAVE));
         } else {
           setNotationMode('traditional');
           setClefType(option.value);
@@ -10635,18 +10702,26 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
           const firstIdx = selectionStart >= 0 && selectionEnd >= 0 ? Math.min(selectionStart, selectionEnd) : selectedNoteIndex;
           const firstNote = notes[firstIdx];
           // Arrow Up/Down = one note up/down (pitch class in key, same octave). Shift+Arrow = octave change.
+          const pedOctBounds = isPedagogicalNotationMode(notationMode)
+            ? { minOctave: PEDAGOGICAL_WRITING_MIN_OCTAVE, maxOctave: PEDAGOGICAL_WRITING_MAX_OCTAVE }
+            : {};
           if (e.shiftKey || modKey) {
-            applyToSelectedNotes(n => ({ octave: shiftOctave(n.octave, dir) }));
+            applyToSelectedNotes(n => ({ octave: shiftOctave(n.octave, dir, pedOctBounds) }));
             if (firstNote && !firstNote.isRest && playNoteOnInsert) {
-              playPianoNote(firstNote.pitch, shiftOctave(firstNote.octave, dir), firstNote.accidental ?? 0);
+              playPianoNote(firstNote.pitch, shiftOctave(firstNote.octave, dir, pedOctBounds), firstNote.accidental ?? 0);
             }
           } else {
             applyToSelectedNotes((n) => {
               const next = shiftPitchClassSameOctave(n.pitch, n.octave, n.accidental, step, keySignature);
-              return { ...next };
+              return isPedagogicalNotationMode(notationMode)
+                ? clampPitchFieldsToMinMidi(next, PEDAGOGICAL_WRITING_MIN_MIDI)
+                : { ...next };
             });
             if (firstNote && !firstNote.isRest && playNoteOnInsert) {
-              const newNote = shiftPitchClassSameOctave(firstNote.pitch, firstNote.octave, firstNote.accidental, step, keySignature);
+              let newNote = shiftPitchClassSameOctave(firstNote.pitch, firstNote.octave, firstNote.accidental, step, keySignature);
+              if (isPedagogicalNotationMode(notationMode)) {
+                newNote = clampPitchFieldsToMinMidi(newNote, PEDAGOGICAL_WRITING_MIN_MIDI);
+              }
               const playAcc = getEffectiveAccidental(newNote, keySignature);
               playPianoNote(newNote.pitch, newNote.octave, playAcc);
             }
@@ -10696,7 +10771,8 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                 keySignature,
                 notationStyle,
                 ghostAccidentalIsExplicit,
-                ghostAccidental ?? 0
+                ghostAccidental ?? 0,
+                pedagogicalLetterOctaveOptions(notationMode)
               );
             })();
           applyToSelectedNotes(n => ({
@@ -10999,7 +11075,10 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         if ((e.code === 'ArrowUp' || e.code === 'ArrowDown') && (e.shiftKey || modKey)) {
           e.preventDefault();
           const dir = e.code === 'ArrowUp' ? 1 : -1;
-          setGhostOctave(shiftOctave(ghostOctave, dir));
+          const pedOctBounds = isPedagogicalNotationMode(notationMode)
+            ? { minOctave: PEDAGOGICAL_WRITING_MIN_OCTAVE, maxOctave: PEDAGOGICAL_WRITING_MAX_OCTAVE }
+            : {};
+          setGhostOctave(shiftOctave(ghostOctave, dir, pedOctBounds));
           return;
         }
         // Cursor on a note: Arrow Up/Down = one note up/down (pitch class). Akordireal (cursorSubRow === 1) mõjutame ainult akordi.
@@ -11021,7 +11100,10 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
             const dir = e.code === 'ArrowUp' ? 1 : -1;
             saveToHistory(notes);
             const note = notes[noteIdx];
-            const updated = shiftPitchClassSameOctave(note.pitch, note.octave, note.accidental, dir, keySignature);
+            let updated = shiftPitchClassSameOctave(note.pitch, note.octave, note.accidental, dir, keySignature);
+            if (isPedagogicalNotationMode(notationMode)) {
+              updated = clampPitchFieldsToMinMidi(updated, PEDAGOGICAL_WRITING_MIN_MIDI);
+            }
             setNotes((prev) => prev.map((n, i) => {
               if (i !== noteIdx) return n;
               const merged = { ...n, ...updated };
@@ -11077,7 +11159,8 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
               keySignature,
               notationStyle,
               ghostAccidentalIsExplicit,
-              ghostAccidental ?? 0
+              ghostAccidental ?? 0,
+              pedagogicalLetterOctaveOptions(notationMode)
             );
           addNoteAtCursor(letterUp, octForMelody);
           return;
@@ -11395,19 +11478,32 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         if (arrowOctave) {
           e.preventDefault();
           const dir = e.code === 'ArrowUp' ? 1 : -1;
-          applyToSelectedNotes(n => ({ octave: shiftOctave(n.octave, dir) }));
+          const pedOctBounds = isPedagogicalNotationMode(notationMode)
+            ? { minOctave: PEDAGOGICAL_WRITING_MIN_OCTAVE, maxOctave: PEDAGOGICAL_WRITING_MAX_OCTAVE }
+            : {};
+          applyToSelectedNotes(n => ({ octave: shiftOctave(n.octave, dir, pedOctBounds) }));
           return;
         }
 
         if (e.code === 'ArrowUp' && selectedNoteIndex >= 0 && !e.shiftKey && !modKey) {
           e.preventDefault();
-          applyToSelectedNotes((n) => shiftPitchClassSameOctave(n.pitch, n.octave, n.accidental, 1, keySignature));
+          applyToSelectedNotes((n) => {
+            const next = shiftPitchClassSameOctave(n.pitch, n.octave, n.accidental, 1, keySignature);
+            return isPedagogicalNotationMode(notationMode)
+              ? clampPitchFieldsToMinMidi(next, PEDAGOGICAL_WRITING_MIN_MIDI)
+              : next;
+          });
           return;
         }
 
         if (e.code === 'ArrowDown' && selectedNoteIndex >= 0 && !e.shiftKey && !modKey) {
           e.preventDefault();
-          applyToSelectedNotes((n) => shiftPitchClassSameOctave(n.pitch, n.octave, n.accidental, -1, keySignature));
+          applyToSelectedNotes((n) => {
+            const next = shiftPitchClassSameOctave(n.pitch, n.octave, n.accidental, -1, keySignature);
+            return isPedagogicalNotationMode(notationMode)
+              ? clampPitchFieldsToMinMidi(next, PEDAGOGICAL_WRITING_MIN_MIDI)
+              : next;
+          });
           return;
         }
 
@@ -11461,7 +11557,8 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                 keySignature,
                 notationStyle,
                 ghostAccidentalIsExplicit,
-                ghostAccidental ?? 0
+                ghostAccidental ?? 0,
+                pedagogicalLetterOctaveOptions(notationMode)
               );
             })();
           applyToSelectedNotes(n => ({
@@ -11502,11 +11599,17 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
 
       // Normal input mode (when N is ON) – Ghost note + add
       if (!activeToolbox && noteInputMode) {
+        const pedOctBoundsGhost = isPedagogicalNotationMode(notationMode)
+          ? { minOctave: PEDAGOGICAL_WRITING_MIN_OCTAVE, maxOctave: PEDAGOGICAL_WRITING_MAX_OCTAVE }
+          : {};
         // Arrow Up/Down = one note up/down (pitch class in key). Shift+Arrow = octave change.
         if (e.code === 'ArrowUp' && !e.shiftKey) {
           e.preventDefault();
           const ghostAccArg = ghostAccidentalIsExplicit ? ghostAccidental : undefined;
-          const next = shiftPitchClassSameOctave(ghostPitch, ghostOctave, ghostAccArg, 1, keySignature);
+          let next = shiftPitchClassSameOctave(ghostPitch, ghostOctave, ghostAccArg, 1, keySignature);
+          if (isPedagogicalNotationMode(notationMode)) {
+            next = clampPitchFieldsToMinMidi(next, PEDAGOGICAL_WRITING_MIN_MIDI);
+          }
           setGhostPitch(next.pitch);
           setGhostOctave(next.octave);
           const playAcc = getEffectiveAccidental(next, keySignature);
@@ -11518,7 +11621,10 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         if (e.code === 'ArrowDown' && !e.shiftKey) {
           e.preventDefault();
           const ghostAccArg = ghostAccidentalIsExplicit ? ghostAccidental : undefined;
-          const next = shiftPitchClassSameOctave(ghostPitch, ghostOctave, ghostAccArg, -1, keySignature);
+          let next = shiftPitchClassSameOctave(ghostPitch, ghostOctave, ghostAccArg, -1, keySignature);
+          if (isPedagogicalNotationMode(notationMode)) {
+            next = clampPitchFieldsToMinMidi(next, PEDAGOGICAL_WRITING_MIN_MIDI);
+          }
           setGhostPitch(next.pitch);
           setGhostOctave(next.octave);
           const playAcc = getEffectiveAccidental(next, keySignature);
@@ -11530,7 +11636,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         // Shift+Arrow Up/Down – octave jump on ghost note (traditional)
         if (e.code === 'ArrowUp' && e.shiftKey) {
           e.preventDefault();
-          const newOct = shiftOctave(ghostOctave, 1);
+          const newOct = shiftOctave(ghostOctave, 1, pedOctBoundsGhost);
           setGhostOctave(newOct);
           if (playNoteOnInsert) {
             const keyA = getAccidentalForPitchInKey(ghostPitch, keySignature);
@@ -11541,7 +11647,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         }
         if (e.code === 'ArrowDown' && e.shiftKey) {
           e.preventDefault();
-          const newOct = shiftOctave(ghostOctave, -1);
+          const newOct = shiftOctave(ghostOctave, -1, pedOctBoundsGhost);
           setGhostOctave(newOct);
           if (playNoteOnInsert) {
             const keyA = getAccidentalForPitchInKey(ghostPitch, keySignature);
@@ -15992,7 +16098,8 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                                 keySignature,
                                 notationStyle,
                                 ghostAccidentalIsExplicit,
-                                ghostAccidental ?? 0
+                                ghostAccidental ?? 0,
+                                pedagogicalLetterOctaveOptions(notationMode)
                               );
                               addNoteAtCursor(opt.value, octN);
                             }
@@ -18159,6 +18266,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                     <span className="text-[10px] font-semibold text-amber-700 uppercase mr-1">{t('settings.pedagogicalDisplayModeShort')}</span>
                     {[
                       { id: PEDAGOGICAL_DISPLAY_A, label: 'A' },
+                      { id: PEDAGOGICAL_DISPLAY_B, label: 'B', disabled: true },
                       { id: PEDAGOGICAL_DISPLAY_C, label: 'C' },
                       { id: PEDAGOGICAL_DISPLAY_D, label: 'D' },
                     ].map((opt) => {
@@ -18167,7 +18275,20 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                         <button
                           key={opt.id}
                           type="button"
+                          disabled={!!opt.disabled}
+                          title={
+                            opt.disabled
+                              ? t('settings.comingSoon')
+                              : opt.id === PEDAGOGICAL_DISPLAY_A
+                                ? t('settings.pedagogicalDisplayA')
+                                : opt.id === PEDAGOGICAL_DISPLAY_B
+                                  ? t('settings.pedagogicalDisplayB')
+                                  : opt.id === PEDAGOGICAL_DISPLAY_C
+                                    ? t('settings.pedagogicalDisplayC')
+                                    : t('settings.pedagogicalDisplayD')
+                          }
                           onClick={() => {
+                            if (opt.disabled) return;
                             dirtyRef.current = true;
                             if (opt.id === PEDAGOGICAL_DISPLAY_D) setIsPedagogicalProject(true);
                             setPedagogicalDisplayMode(opt.id);
@@ -18177,13 +18298,10 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                               ? opt.id === PEDAGOGICAL_DISPLAY_D
                                 ? 'bg-violet-600 text-white border-violet-700'
                                 : 'bg-amber-600 text-white border-amber-700'
-                              : 'bg-white text-amber-900 border-amber-300 hover:bg-amber-100'
+                              : opt.disabled
+                                ? 'bg-amber-50 text-amber-400 border-amber-200 cursor-not-allowed'
+                                : 'bg-white text-amber-900 border-amber-300 hover:bg-amber-100'
                           }`}
-                          title={
-                            opt.id === PEDAGOGICAL_DISPLAY_A ? t('settings.pedagogicalDisplayA')
-                              : opt.id === PEDAGOGICAL_DISPLAY_C ? t('settings.pedagogicalDisplayC')
-                                : t('settings.pedagogicalDisplayD')
-                          }
                         >
                           {opt.label}
                         </button>
@@ -21003,7 +21121,7 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
                           glyph={SMUFL_GLYPH.augmentationDot}
                           fontSize={getGlyphFontSize(spacing)}
                           fill="#f59e0b"
-                          dominantBaseline="central"
+                          dominantBaseline="alphabetic"
                         />
                       </g>
                     )}

@@ -96,6 +96,13 @@ Märkused:\n+
 - Sisestus ja korrastus toimuvad peamiselt **A**-s (ka B/C kuvana); **D ei tohi** olla vaikimisi peal ega segada nootide loomist.
 - Playbacki andmed (audio, cue’d, sync) võivad failis olla olemas ka A/B/C ajal, kuid nende **UI ja runtime** on ainult D-s.
 
+#### Kirjutamispiirkond: C4+ (kohustuslik A-s ja seega B/C andmetes)
+
+- Pedagoogilise sisestuse **alumine ankur on absoluutne C4** (MIDI ≥ 60).
+- Vaikimisi ghost = **C4**; oktaavi nihutus (`Shift+↑/↓`) lubab **4…6**, mitte alla 4.
+- Tähekäsk A–G valib oktavi nii, et tulemus ei jää alla C4 (nt ghost C4 + klahv `B` → **B4**, mitte B3).
+- Käemärkide (C) 7 joont JO…DI loetakse samast `notes[]` andmest; C4-põhi hoiab põhioktaavi bassi libisemast.
+
 ### 5.2 Režiim C (testprototüüp) – fikseeritud reeglid
 
 - **7 horisontaalset joont** üksteise kohal/all; alumine = JO, ülemine = DI (üks diatooniline oktaav).
@@ -106,9 +113,19 @@ Märkused:\n+
 - Laulusõnad: üks rida **7 joone all**.
 - Oktaavinihe väljaspool JO…DI: prototüübis clamp 0…6 (märkida UI-s).
 
-### 5.3 Režiim B
+### 5.3 Režiim B (`joStaffHandSigns`) — spetsifikatsioon (implementatsioon pärast C smoke’i)
 
-Spetsifikatsioon olemas; täielik implementatsioon pärast C smoke’i.
+B on **kirjeldatud ja koodis olemas** (`PEDAGOGICAL_DISPLAY_B`), kuid UI-s teadlikult **lukus** („Tulekul“); `resolvePedagogicalRenderMode(B)` renderdab ajutiselt A geomeetriat.
+
+**Sihtkäitumine (kui B avatakse):**
+
+- **Sama staff mis A:** JO-võti + 5-jooneline noodijoonestik + noodiglüüfid (pitch Y nagu A).
+- **Käemärk iga noodi all** (uTheory teacher; RTL peegel ainult renderdamisel), **enne** laulusõnarida.
+- **X** = sama beat/taktimõõt kui A (ti-ti lähestikku).
+- **Y käemärgil** = fikseeritud offset noodipea all (mitte 7-astejooneline C-layout).
+- Laulusõnad: üks rida käemärkide **all**.
+- Andmed: sama `notes[]` / lyrics mis A; režiimivahetus ei dubleeri noote.
+- Sisestus eelistatult A-s; B on peamiselt **kuvamine** (õpetaja vaade).
 
 ### 5.4 Režiim D (interaktiivne)
 

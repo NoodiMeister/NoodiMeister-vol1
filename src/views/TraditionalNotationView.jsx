@@ -116,8 +116,8 @@ const STAFF_SPACE = 10;
 const STAFF_LEFT_WITH_BRACE = 44;
 const STAFF_LEFT_WITHOUT_BRACE = 10;
 const GAP_BEFORE_CLEF_PX = 6;
-/** Treble clef anchor moved one staff line upward for current score alignment. */
-const TREBLE_CLEF_LINE_INDEX = 2; // 0=top line ... 4=bottom line
+/** Treble clef (gClef) SMuFL anchor = G4 line = 2nd from bottom (index 3). */
+const TREBLE_CLEF_LINE_INDEX = 3; // 0=top(F5) ... 3=G4 ... 4=bottom(E4)
 const OUT_OF_RANGE_COLOR = '#dc2626';
 const UNPITCHED_PERCUSSION_IDS = new Set([
   'triangle', 'claves', 'woodblock', 'temple-blocks', 'castanets', 'shakers', 'maracas', 'guiro',
@@ -493,7 +493,7 @@ function renderStandardRest(note, x, y, staffSpace) {
       glyph={glyph}
       fontSize={getRestFontSize(staffSpace)}
       fill="var(--note-fill, #1a1a1a)"
-      dominantBaseline="central"
+      dominantBaseline="alphabetic"
     />
   );
 }
@@ -996,7 +996,7 @@ export function TraditionalNotationView({
     [getStaffBarlineWidth, singleLineBarThicknessSetting, staffLines],
   );
   const staffLinePositions = getStaffLinePositions(centerY, staffLines, spacing);
-  // Leland: Treble on B line (traditional-method placement). Bass: F line (index 1).
+  // Leland/SMuFL: treble gClef baseline on G4 line (index 3). Bass: F line (index 1).
   const trebleGLine = staffLinePositions[TREBLE_CLEF_LINE_INDEX];
   const bassFLine = staffLinePositions[1];    // F3
   const middleLineY = getMiddleStaffLineY(centerY, staffLines, spacing);
@@ -2256,7 +2256,7 @@ export function TraditionalNotationView({
                                 glyph={SMUFL_GLYPH.augmentationDot}
                                 fontSize={getGlyphFontSize(spacing)}
                                 fill="var(--note-fill, #1a1a1a)"
-                                dominantBaseline="central"
+                                dominantBaseline="alphabetic"
                               />
                             )}
                             {restSyllable && <RhythmSyllableLabel x={noteX} y={restLabelY} text={restSyllable} staffSpace={spacing} />}
@@ -2321,7 +2321,7 @@ export function TraditionalNotationView({
                               glyph={precomposedGlyph}
                               fontSize={glyphFontSize}
                               fill={noteFillColor}
-                              dominantBaseline="central"
+                              dominantBaseline="alphabetic"
                             />
                           ) : (
                             <>
@@ -2342,7 +2342,7 @@ export function TraditionalNotationView({
                                   glyph={glyph}
                                   fontSize={glyphFontSize}
                                   fill={noteFillColor}
-                                  dominantBaseline="central"
+                                  dominantBaseline="alphabetic"
                                 />
                               ) : (
                                 <text x={noteX} y={noteY} textAnchor="middle" dominantBaseline="central" fontSize={Math.max(18, glyphFontSize)} fill={noteFillColor}>{noteheadEmoji}</text>
@@ -2428,7 +2428,7 @@ export function TraditionalNotationView({
                                 glyph={SMUFL_GLYPH.augmentationDot}
                                 fontSize={glyphFontSize}
                                 fill={noteFillColor}
-                                dominantBaseline="central"
+                                dominantBaseline="alphabetic"
                               />
                             );
                           })()}
@@ -2445,7 +2445,7 @@ export function TraditionalNotationView({
                                 glyph={ag}
                                 fontSize={afs}
                                 fill={noteFillColor}
-                                dominantBaseline="central"
+                                dominantBaseline="alphabetic"
                               />
                             );
                           })()}

@@ -8,7 +8,7 @@
  * on täpselt W kaugusel (1 staff space); 5 joont → 4×W vertikaalne samm.
  *
  * Võtmed: sama ankur kui src/components/ClefSymbols.jsx + TraditionalNotationView.jsx
- *   — treble: y = G/B ankur @ staffLinePositions[TREBLE_CLEF_LINE_INDEX] + spiralAlignDy (0.35 sp)
+ *   — treble: y = G4 @ staffLinePositions[TREBLE_CLEF_LINE_INDEX=3] (SMuFL alphabetic)
  *   — bass: y = F-joon @ staffLinePositions[1]
  *   — fontSize = 4× staff-space (musescoreStyle GLYPH_FONT_SIZE_SP)
  *
@@ -30,7 +30,7 @@ const WM_MEASURED_JSON = path.join(__dirname, 'wikimedia-measured-key-positions.
 /** @see src/views/TraditionalNotationView.jsx */
 const GAP_BEFORE_CLEF_PX = 6;
 const CLEF_WIDTH = 45;
-const TREBLE_CLEF_LINE_INDEX = 2;
+const TREBLE_CLEF_LINE_INDEX = 3;
 
 /** @see src/notation/musescoreStyle.js — Leland engravingDefaults */
 const STAFF_LINE_WIDTH_SP = 0.11;
@@ -43,7 +43,6 @@ const KEY_SIG_SHARP_FONT_SP = 2.75;
 const KEY_SIG_DX_SP = 1.0;
 
 const STAFF_SPACE = 10;
-const SPIRAL_ALIGN_DY = STAFF_SPACE * 0.35;
 
 const SMUFL = {
   gClef: '\uE050',
@@ -205,8 +204,7 @@ function drawStaff(x0, yTop, width, centerYLocal) {
 
 /**
  * clefX = võtme horisontaalankur (keskpunkt), nagu SmuflGlyph textAnchor middle.
- * Treble: ClefSymbols — y = G-ankur + spiralAlignDy
- * Bass: y = F-joon
+ * Treble/Bass: SMuFL alphabetic baseline on G/F pitch line.
  */
 function drawClef(clef, clefX, yTop, centerYLocal, staffLinesY) {
   const fs = STAFF_SPACE * GLYPH_FONT_SIZE_SP;
@@ -215,9 +213,9 @@ function drawClef(clef, clefX, yTop, centerYLocal, staffLinesY) {
   const bassFLine = staffLinesY[1];
   const y =
     clef === 'treble'
-      ? yTop + trebleGLine + SPIRAL_ALIGN_DY
+      ? yTop + trebleGLine
       : yTop + bassFLine;
-  return `<text x="${clefX}" y="${y}" font-family="Bravura,serif" font-size="${fs}" fill="#1a1a1a" text-anchor="middle" dominant-baseline="middle">${ch}</text>`;
+  return `<text x="${clefX}" y="${y}" font-family="Bravura,serif" font-size="${fs}" fill="#1a1a1a" text-anchor="middle" dominant-baseline="alphabetic">${ch}</text>`;
 }
 
 function drawKeySignature(positions, count, kind, keySigStartX, yTop, centerYLocal) {
