@@ -19,4 +19,6 @@ alwaysApply: true
 - Backspace/Delete valikuga -> pausid, mitte ajatelje auk
 - N-mode ja SEL-mode käituvad samade ajareeglite järgi
 - Arrow/Home/End liigutavad cursorBeat'i ennustatavalt
+- ArrowRight loo lõpus (maxCursor) jääb paigale; ei rända “suvalisse takti”
+- Tühi ala peidab nähtava caret'i; noodi klikk viib caret'i selle noodi beat'ile
 - Build ja olemasolevad smoke-kontrollid läbivad

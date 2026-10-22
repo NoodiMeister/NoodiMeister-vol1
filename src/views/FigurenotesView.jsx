@@ -587,6 +587,8 @@ export function FigurenotesView({
   measureSelection = null,
   /** (measureIndex, event) => void — klikk takti tühjale alale (SEL). */
   onMeasureClick,
+  /** (measureIndex, event) => void — paremklikk / kontekstimenüü taktil. */
+  onMeasureContextMenu,
   /** Mitme rea ühendatud figuurisüsteem (orchestration): instrumentide read + taktid iga rea jaoks. */
   instruments = [],
   effectiveMeasuresPerInstrument = {},
@@ -1792,17 +1794,45 @@ export function FigurenotesView({
                             && measureIdx >= Math.min(measureSelection.start, measureSelection.end)
                             && measureIdx <= Math.max(measureSelection.start, measureSelection.end)
                           );
-                          if (!isMeasureSelected && typeof onMeasureClick !== "function") return null;
+                          // Visuaalne highlight (pointerEvents none), et beat-box / noodi klikid ei blokeeruks.
+                          // Paremklikk: peenike hit-riba takti ülaservas + kontekstimenüü.
+                          if (!isMeasureSelected && typeof onMeasureContextMenu !== "function") return null;
                           return (
-                            <rect
-                              x={measureX}
-                              y={sys.yOffset + padVertical}
-                              width={Math.max(1, measureWidth)}
-                              height={melodyRowHeight - 2 * padVertical}
-                              fill={isMeasureSelected ? "#93c5fd" : "transparent"}
-                              opacity={isMeasureSelected ? 0.22 : 1}
-                              pointerEvents="none"
-                            />
+                            <g>
+                              {isMeasureSelected && (
+                                <rect
+                                  x={measureX}
+                                  y={sys.yOffset + padVertical}
+                                  width={Math.max(1, measureWidth)}
+                                  height={melodyRowHeight - 2 * padVertical}
+                                  fill="#93c5fd"
+                                  fillOpacity={0.28}
+                                  stroke="#3b82f6"
+                                  strokeWidth={2}
+                                  pointerEvents="none"
+                                />
+                              )}
+                              {typeof onMeasureContextMenu === "function" && (
+                                <rect
+                                  x={measureX}
+                                  y={sys.yOffset + padVertical}
+                                  width={Math.max(1, measureWidth)}
+                                  height={10}
+                                  fill="transparent"
+                                  style={{ cursor: "context-menu", pointerEvents: "all" }}
+                                  onContextMenu={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    onMeasureContextMenu(measureIdx, e);
+                                  }}
+                                  onClick={(e) => {
+                                    if (typeof onMeasureClick !== "function") return;
+                                    e.stopPropagation();
+                                    onMeasureClick(measureIdx, e);
+                                  }}
+                                />
+                              )}
+                            </g>
                           );
                         })()}
                         {measureWidth < (LAYOUT.MEASURE_MIN_WIDTH || 28) && (

@@ -119,6 +119,18 @@ Kõik muudatused peavad hoidma kasutaja teekonnad tervena:
   - Sama sisend peab olema deterministlik: `cursorBeat + inputDuration + mode` -> sama notatsiooni tulemus.
   - Kustutamine ei tohi ajatelge “auku” jätta: kustutatud aeg täidetakse pausidega vastavalt kestustele.
   - Selection, click, Shift+Arrow, Shift+drag peavad muutma ühtset kursori/valiku mudelit; UI ei tohi pidada paralleelset “salatõde”.
+  - **Caret vs beat:** `cursorBeat` võib layout’i jaoks jääda; **nähtav caret** peidetakse tühja ala (leht/laud/takt ilma noodita) klikil (`scoreCursorVisible=false`) ja tuuakse tagasi noodi klikil või nooleklahvidega.
+  - **Noodi klikk:** caret viiakse **täpselt** selle noodi beat’ile (mitte ennustatud/naaber-taktile).
+  - **Caret + ghost sama X:** ghost-preview ei tohi olla kestuse pooliku võrra nihutatud; muidu tundub kursor “laiali”. Olemasoleval noodil ainult caret (ghost peidus); tühjal pesal ghost sama ankruga.
+  - **Loo lõpp:** kui `cursorBeat >= maxCursor` (viimase takti lõpp), `ArrowRight` jätab kursori sinna; autopikendus ainult reaalse noodi/patterni sisestusel, mitte nooleliikumisel.
+  - **Renderi ankur:** `findSystemAtBeat` peab lõpu-beat’i kinnitama **viimasele** süsteemile (mitte kukkuma esimesele reale).
+
+- **Standard: eeltakt / poolik takt pärast dokumendi alustamist**
+  - Eeltakti (pickup) ja pooliku viimase takti saab muuta ka pärast setup’i (`Teose andmed` / Seaded), mitte ainult uue töö viisardis.
+  - **Lisamine olemasolevale skoorile** = MuseScore’i “insert at start”: tühi eeltakt ette + kogu sisu (noodid, akordid, vaheajamärgised, kursor) nihkub edasi eeltakti pikkuse võrra; olemasolev muusika ei “pigistu” esimesse lühikesse takti.
+  - Eeltakti pikkuse muutmine nihutab ajatelge delta võrra; väljalülitus nihutab tagasi (eeltakti sisse jäänud sündmused, mis läheksid negatiivseks, eemaldatakse).
+  - **Poolik viimane takt** (valikuline): eeltakt + viimane takt = üks täistakt; taktinumber eeltaktil puudub (vt taktinumbrite standard).
+  - Domeeniloogika elab `src/musical/pickup.js`; UI ainult kutsub `applyPickupSettingsChange`.
 
 - **Standard: pedagoogiline C4-põhi (kirjutamispiirkond)**
   - Pedagoogilises režiimis (`vabanotatsioon` / kuvarežiimid A–C) on sisestuse **alumine ankur absoluutne C4** (MIDI ≥ 60).
@@ -180,12 +192,12 @@ Kõik muudatused peavad hoidma kasutaja teekonnad tervena:
 
 - **Standard: pointer click selection (score hit → selection → toolbox)**
   - **Poliitika:** `src/orchestrator/pointerClickPolicy.js` — üks kaart `selection → activeToolbox`. Ära dubleeri “mis toolbox avaneb” loogikat view failides.
-  - **1) Tühi takt:** klikk takti tühjale alale → `measureRange` (üks takt) + `layout` toolbox. Lubatud: reavahetus järgmisele reale / kui takt on rea alguses, ühendus eelmise reaga (`connectNextSystem` / `connectPreviousSystem`). Kursor liigub valitud takti algusesse, et layout-nupud töötaksid.
+  - **1) Tühi takt:** left-click → `measureRange` + sinine kast + `layout` toolbox (**alati select**; teine left-click samale taktile ei deselecti). Paremklikk → kontekstimenüü (Taktiomadused, Lisa enne/pärast, Kustuta, Copy/Paste). Taktiomadused: Actual kestus **ainult sellele taktile** (`measurePropsByIndex`; Nominal/taktimõõt ei muutu); **Salvesta ja sulge**. `cursorBeat` nihkub takti algusesse layout-nuppude jaoks, caret peidetakse (tühi ala ≠ noodi ankru).
   - **2) Taktijoon / topeltjoon / kordusmärk:** klikk → `singleObject` + `repeatsJumps` toolbox. Backspace/Delete: topeltjoon või kordusmärk → tavaline taktijoon (`barlineSingle` / `removeRepeatMark`). Ka tavaline üksiktaktijoon peab olema valitav.
   - **3) Tekst:** klikk tekstikastile / pealkirjale / autorile → tekstivalik + tekstimuutmise tööriistad (`textBox` / floating text tool). Note/repeat valik puhastatakse.
   - **4) Võti (clef):** klikk võtme glüüfile → `singleObject` (clef) + `clefs` toolbox. Võtme vahetus peab uuendama noodigraafikat vastavalt võtmereeglitele (`setClefType` / JO-režiim).
-  - **5) Noot / paus:** klikk → `singleNote` (runtime `kind: 'note'`) + N-mode + primaarne notatsioonitööriist (`rhythm`). Lubatud: kestus, artikulatsioon, kõrgus; Shift+Click jääb range’iks ilma N-mode sundita. Enharmooniline asendus: valitud noodil peab olema selge tee (tulevikus / olemasolev accidental-töövoog).
-  - **Deselect (kohustuslik):** `Esc`, **teine klikk** samale taktile/taktijoonele/võtmele, või **tühi lehe/laua pind** → `clearPointerSelection` (`none` + markerid kaovad). Selection-driven toolbox (layout / repeatsJumps / clefs / textBox) sulgub; N-mode + `rhythm` jääb alles, kui kasutaja on N-režiimis.
+  - **5) Noot / paus:** klikk → `singleNote` (runtime `kind: 'note'`) + N-mode + primaarne notatsioonitööriist (`rhythm`) + **caret selle noodi beat’il**. Lubatud: kestus, artikulatsioon, kõrgus; Shift+Click jääb range’iks ilma N-mode sundita. Enharmooniline asendus: valitud noodil peab olema selge tee (tulevikus / olemasolev accidental-töövoog).
+  - **Deselect (kohustuslik):** `Esc`, **teine klikk** samale **taktijoonele/võtmele**, või **tühi lehe/laua pind** → `clearPointerSelection` (`none` + markerid kaovad + **caret peidus**). **Taktivalik:** deselect ainult Esc / tühjal pinnal (mitte teine left-click taktile). Selection-driven toolbox sulgub; N-mode + `rhythm` jääb alles, kui kasutaja on N-režiimis.
   - **Regressioon:** selection ilma nähtava markerita või toolbox, mis ei reageeri valitud objektile, on P0 UX-bug. Aktiivne valik, mida Esc ei puhasta, on samuti P0.
 
 ### Filosoofia vs regressioonid (AI jaoks kohustuslik eristus)

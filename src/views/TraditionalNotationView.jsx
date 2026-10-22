@@ -12,6 +12,14 @@ import { HandSignGlyph } from '../notation/handSigns/HandSignGlyph';
 import { resolveHandSignGlyphMetrics } from '../notation/handSigns/handSignMapping';
 import { getRhythmSyllableForNote } from '../notation/rhythmSyllables';
 import { shouldDrawRestGlyph } from '../notation/restGlyphDedupe';
+import {
+  getWindFingeringHoleMetrics,
+  getRecorderThumbOffset,
+  getWindFingeringColumnHeightFromTopCenter,
+  WIND_FINGERING_TIN_WHISTLE_HOLES,
+  WIND_FINGERING_RECORDER_HOLES,
+} from '../notation/windFingeringDiagram';
+import { getRecorderFingeringPattern } from '../notation/recorderFingering';
 import { expandEmojiShortcuts } from '../utils/emojiShortcuts';
 import { SmuflGlyph } from '../notation/smufl/SmuflGlyph';
 import { SmuflStemFlags } from '../notation/smufl/SmuflStemFlags';
@@ -324,15 +332,9 @@ function getTinWhistleStructuralBottomGlobalY({
 }
 
 function TinWhistleFingeringSvg({ x, y, staffSpace, pattern, scale = 1 }) {
-  if (!pattern?.holes || pattern.holes.length !== 6) return null;
-  const s = typeof scale === 'number' && Number.isFinite(scale) && scale > 0 ? scale : 1;
-  const ss = staffSpace * s;
-  const radius = Math.max(1.6, ss * 0.22);
-  const gap = Math.max(3, ss * 0.75);
-  const fontSize = Math.max(7, ss * 0.9);
-  /** Lokaalne Y gruppis (0 = ülemise augu keskpunkt): viimane auk on i=5, alumine äär ≈ 5*gap+radius. Ära lisa välise `y` — grupp on juba translate(x,y). */
-  const bottomOfLastHole = 5 * gap + radius;
-  /** Vahe tulba ja "+" vahel: veidi skaleerub, aga ülempiir, et suure skaalaga ei läheks märk kaugele. */
+  if (!pattern?.holes || pattern.holes.length !== WIND_FINGERING_TIN_WHISTLE_HOLES) return null;
+  const { radius, gap, strokeWidth, fontSize, ss } = getWindFingeringHoleMetrics(staffSpace, scale);
+  const bottomOfLastHole = (WIND_FINGERING_TIN_WHISTLE_HOLES - 1) * gap + radius;
   const gapBelowColumn = Math.min(0.35 * gap, 10 + ss * 0.06);
   const plusLocalY = bottomOfLastHole + gapBelowColumn + fontSize * 0.35;
   return (
@@ -345,7 +347,7 @@ function TinWhistleFingeringSvg({ x, y, staffSpace, pattern, scale = 1 }) {
           r={radius}
           fill={covered ? '#111' : '#fff'}
           stroke="#111"
-          strokeWidth={Math.max(0.8, radius * 0.3)}
+          strokeWidth={strokeWidth}
         />
       ))}
       {pattern.overblow && (
@@ -366,12 +368,81 @@ function TinWhistleFingeringSvg({ x, y, staffSpace, pattern, scale = 1 }) {
   );
 }
 
-/** Recorder (soprano C) fingering: note name for RecorderFont finger table (C, D, E, F, G, A, B, C#, etc.). */
-function getRecorderFingeringChar(pitch, octave) {
-  if (!pitch || typeof octave !== 'number') return '';
-  const letter = pitch.replace(/[#b]/, '');
-  const base = { C: 'C', D: 'D', E: 'E', F: 'F', G: 'G', A: 'A', B: 'B' }[letter] || 'C';
-  return pitch.includes('#') ? base + '#' : pitch.includes('b') ? base + 'b' : base;
+function RecorderHoleCircle({ cx, cy, radius, covered, strokeWidth }) {
+  if (covered === 'half') {
+    return (
+      <g>
+        <circle cx={cx} cy={cy} r={radius} fill="#fff" stroke="#111" strokeWidth={strokeWidth} />
+        <path
+          d={`M ${cx - radius} ${cy} A ${radius} ${radius} 0 0 0 ${cx + radius} ${cy} Z`}
+          fill="#111"
+        />
+      </g>
+    );
+  }
+  return (
+    <circle
+      cx={cx}
+      cy={cy}
+      r={radius}
+      fill={covered ? '#111' : '#fff'}
+      stroke="#111"
+      strokeWidth={strokeWidth}
+    />
+  );
+}
+
+/**
+ * Plokkflöödi SVG (pikem kui iirivile):
+ * 1) pöidlaauk ülemise (1.) sõrmeaugu kõrval vasakul
+ * 2) seejärel 7 sõrmeauku ülevalt alla
+ * overblow = "+" tulba all
+ */
+function RecorderFingeringSvg({ x, y, staffSpace, pattern, scale = 1 }) {
+  if (!pattern?.holes || pattern.holes.length !== WIND_FINGERING_RECORDER_HOLES) return null;
+  const { radius, gap, strokeWidth, fontSize, ss } = getWindFingeringHoleMetrics(staffSpace, scale);
+  const thumb = getRecorderThumbOffset(radius, ss);
+  const columnBottom = getWindFingeringColumnHeightFromTopCenter('recorder', staffSpace, scale, {
+    includeOverblow: false,
+  });
+  const gapBelowColumn = Math.min(0.35 * gap, 10 + ss * 0.06);
+  const plusLocalY = columnBottom + gapBelowColumn + fontSize * 0.35;
+  return (
+    <g transform={`translate(${x}, ${y})`} aria-hidden="true">
+      {/* Pöial: sama kõrgus kui 1. sõrmeauk, vasakul kõrval */}
+      <RecorderHoleCircle
+        cx={thumb.cx}
+        cy={thumb.cy}
+        radius={radius}
+        covered={pattern.thumb === undefined ? true : pattern.thumb}
+        strokeWidth={strokeWidth}
+      />
+      {pattern.holes.map((covered, i) => (
+        <RecorderHoleCircle
+          key={i}
+          cx={0}
+          cy={i * gap}
+          radius={radius}
+          covered={covered}
+          strokeWidth={strokeWidth}
+        />
+      ))}
+      {pattern.overblow && (
+        <text
+          x={0}
+          y={plusLocalY}
+          textAnchor="middle"
+          dominantBaseline="middle"
+          fontFamily="sans-serif"
+          fontWeight="700"
+          fontSize={fontSize}
+          fill="#111"
+        >
+          +
+        </text>
+      )}
+    </g>
+  );
 }
 
 /** Leland SMuFL time signature digits centered at (x, y). Multi-digit (e.g. 12) laid out horizontally. */
@@ -612,6 +683,8 @@ export function TraditionalNotationView({
   measureSelection = null,
   /** (measureIndex, event) => void — klikk takti tühjale alale. */
   onMeasureClick,
+  /** (measureIndex, event) => void — paremklikk / kontekstimenüü taktil. */
+  onMeasureContextMenu,
   /** { startId, endId } | null — valitud legato kaar (kaare ots) → sinine joon + nool. */
   activeLegatoSlurPair = null,
   /** (endGlobalNoteIndex) => void — klõps valitud (sinisel) legato kaarel: vali lõppnoot. */
@@ -1717,29 +1790,38 @@ export function TraditionalNotationView({
 
                 return (
                   <g key={measureIdx}>
-                    {typeof onMeasureClick === 'function' && (
+                    {(typeof onMeasureClick === 'function' || typeof onMeasureContextMenu === 'function') && (
                       <rect
                         x={measureX}
                         y={staffY + staffBarTopY - spacing * 0.5}
                         width={Math.max(1, measureWidth)}
                         height={staffBarBottomY - staffBarTopY + spacing}
                         fill={isMeasureSelected ? '#93c5fd' : 'transparent'}
-                        opacity={isMeasureSelected ? 0.22 : 1}
-                        style={{ cursor: 'pointer', pointerEvents: 'auto' }}
+                        fillOpacity={isMeasureSelected ? 0.28 : 0}
+                        stroke={isMeasureSelected ? '#3b82f6' : 'none'}
+                        strokeWidth={isMeasureSelected ? 2 : 0}
+                        style={{ cursor: 'pointer', pointerEvents: 'all' }}
                         onClick={(e) => {
                           e.stopPropagation();
-                          onMeasureClick(measureIdx, e);
+                          onMeasureClick?.(measureIdx, e);
+                        }}
+                        onContextMenu={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          onMeasureContextMenu?.(measureIdx, e);
                         }}
                       />
                     )}
-                    {!onMeasureClick && isMeasureSelected && (
+                    {!onMeasureClick && !onMeasureContextMenu && isMeasureSelected && (
                       <rect
                         x={measureX}
                         y={staffY + staffBarTopY - spacing * 0.5}
                         width={Math.max(1, measureWidth)}
                         height={staffBarBottomY - staffBarTopY + spacing}
                         fill="#93c5fd"
-                        opacity={0.22}
+                        fillOpacity={0.28}
+                        stroke="#3b82f6"
+                        strokeWidth={2}
                         pointerEvents="none"
                       />
                     )}
@@ -2601,21 +2683,58 @@ export function TraditionalNotationView({
                             );
                           })()}
                           {showRecorderLinkedFingeringForInst(inst) && note.pitch && typeof note.octave === 'number' && (() => {
-                            const char = getRecorderFingeringChar(note.pitch, note.octave);
-                            if (!char) return null;
-                            const fingeringLabelY = staffY + lastLineY + spacing * (showRhythmSyllables ? 2.6 : 1.8);
+                            const effectivePitch = pitchWithAccidental(note.pitch, resolvedAccidental);
+                            const fingeringPattern = getRecorderFingeringPattern(effectivePitch, note.octave);
+                            const baseRecorderFingeringY = staffY + lastLineY + spacing * (showRhythmSyllables ? 2.35 : 1.55);
+                            const recorderStructuralBottom = getTinWhistleStructuralBottomGlobalY({
+                              noteY,
+                              staffY,
+                              spacing,
+                              stemUp,
+                              stemY2,
+                              durationLabel: note.durationLabel,
+                              beamGroup,
+                              noteIdx,
+                            });
+                            const hasBeamBelow =
+                              beamGroup &&
+                              noteIdx >= beamGroup.start &&
+                              noteIdx <= beamGroup.end &&
+                              !beamGroup.stemUp;
+                            const fingeringLabelY = Math.max(
+                              baseRecorderFingeringY,
+                              getTinWhistleTopHoleCenterYMinFromStructuralBottom(
+                                recorderStructuralBottom,
+                                spacing,
+                                tinWhistleFingeringScale,
+                                hasBeamBelow ? TIN_WHISTLE_BEAM_TO_RING_GAP_MIN_PX : undefined,
+                              ),
+                            );
+                            if (fingeringPattern) {
+                              return (
+                                <RecorderFingeringSvg
+                                  key="recorder-fingering-svg"
+                                  x={noteX}
+                                  y={fingeringLabelY}
+                                  staffSpace={spacing}
+                                  pattern={fingeringPattern}
+                                  scale={tinWhistleFingeringScale}
+                                />
+                              );
+                            }
+                            const fallbackName = `${effectivePitch}${note.octave}`;
                             return (
                               <text
-                                key="recorder-fingering"
+                                key="recorder-fingering-fallback"
                                 x={noteX}
                                 y={fingeringLabelY}
                                 textAnchor="middle"
                                 dominantBaseline="auto"
-                                fontSize={Math.max(12, spacing * 1.4)}
+                                fontSize={Math.max(10, spacing * 1.1 * tinWhistleFingeringScale)}
                                 fill="var(--note-fill, #1a1a1a)"
                                 fontFamily={recorderFontFamily}
                               >
-                                {char}
+                                {fallbackName}
                               </text>
                             );
                           })()}

@@ -171,7 +171,11 @@ function calculateFigureGrid(data, availableWidth, availablePageHeight = 0) {
   let lastYOffset = -staffSpacing;
   let currentRow = [];
   let currentRowMeasureCount = 0;
-  const getMeasureCountWeight = (i) => (excludePickupFromMeasureCount && i === pickupMeasureIndex ? 0 : 1);
+  const getMeasureCountWeight = (i) => {
+    if (measures[i]?.excludeFromCount === true) return 0;
+    if (measures[i]?.excludeFromCount === false) return 1;
+    return (excludePickupFromMeasureCount && i === pickupMeasureIndex ? 0 : 1);
+  };
   const getMeasureBeats = (i) => measures[i].beatCount ?? beatsPerMeasure;
 
   const pixelsPerBeatInput = typeof data?.pixelsPerBeat === 'number' && data.pixelsPerBeat > 0 ? data.pixelsPerBeat : null;

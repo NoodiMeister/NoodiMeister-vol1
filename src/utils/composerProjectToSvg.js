@@ -6,6 +6,12 @@
 import { calculateLayout, FIGURE_ROW_HEIGHT, PAGE_DIMENSIONS } from '../layout/LayoutEngine';
 import { LAYOUT } from '../layout/LayoutManager';
 import { measureLengthInQuarterBeats } from '../musical/timeSignature';
+import {
+  getPickupQuarterBeats,
+  getLastMeasureQuarterBeats,
+  getMeasureBoundsAtIndex,
+  minMeasuresForEndBeat,
+} from '../musical/pickup';
 import { getShapePathsByOctave, getFigureColor, getFigureStyle } from '../constants/FigureNotesLibrary';
 import { computeBeamGroups } from '../notation/BeamCalculation';
 import { shouldDrawRestGlyph } from '../notation/restGlyphDedupe';
@@ -67,28 +73,17 @@ function normalizeStaves(project) {
   return [{ id: '1', name: '', notes: [] }];
 }
 
-function getMeasureBounds(measureIndex, timeSignature, pickup) {
-  const measureQuarters = measureLengthInQuarterBeats(timeSignature);
-  let firstMeasureBeats = measureQuarters;
-  if (pickup?.enabled && pickup.quantity > 0 && pickup.duration) {
-    const onePickup = durationLabelToQuarterBeats(pickup.duration);
-    firstMeasureBeats = pickup.quantity * onePickup;
-    firstMeasureBeats = Math.max(0.25, Math.min(firstMeasureBeats, measureQuarters - 0.25));
-  }
-  if (measureIndex === 0) {
-    return { startBeat: 0, endBeat: firstMeasureBeats, beatCount: firstMeasureBeats };
-  }
-  const startBeat = firstMeasureBeats + (measureIndex - 1) * measureQuarters;
-  return { startBeat, endBeat: startBeat + measureQuarters, beatCount: measureQuarters };
-}
-
 function buildMeasures(project, staves) {
   const timeSignature = project.timeSignature || { beats: 4, beatUnit: 4 };
-  const pickup = {
+  const measureQuarters = measureLengthInQuarterBeats(timeSignature);
+  const pickupBeats = getPickupQuarterBeats({
     enabled: !!project.pickupEnabled,
     quantity: Number(project.pickupQuantity) || 0,
     duration: project.pickupDuration,
-  };
+    timeSignature,
+  });
+  const firstMeasureBeats = pickupBeats > 0 ? pickupBeats : measureQuarters;
+  const incompleteLast = !!project.incompleteLastMeasure && pickupBeats > 0;
 
   let maxEndBeat = 0;
   for (const staff of staves) {
@@ -97,16 +92,42 @@ function buildMeasures(project, staves) {
     }
   }
 
-  let totalMeasures = Math.max(1, 1 + (Number(project.addedMeasures) || 0));
+  let totalMeasures = Math.max(
+    1,
+    1 + (Number(project.addedMeasures) || 0),
+    minMeasuresForEndBeat(maxEndBeat, { measureQuarters, pickupBeats, incompleteLast }),
+  );
   while (totalMeasures < 512) {
-    const bounds = getMeasureBounds(totalMeasures - 1, timeSignature, pickup);
+    const lastMeasureBeats = getLastMeasureQuarterBeats({
+      measureQuarters,
+      pickupBeats,
+      incompleteLast,
+      measureCount: totalMeasures,
+    });
+    const bounds = getMeasureBoundsAtIndex(totalMeasures - 1, {
+      measureQuarters,
+      firstMeasureBeats,
+      lastMeasureBeats,
+      totalMeasures,
+    });
     if (bounds.endBeat >= maxEndBeat - 1e-6) break;
     totalMeasures += 1;
   }
 
+  const lastMeasureBeats = getLastMeasureQuarterBeats({
+    measureQuarters,
+    pickupBeats,
+    incompleteLast,
+    measureCount: totalMeasures,
+  });
   const measures = [];
   for (let i = 0; i < totalMeasures; i += 1) {
-    measures.push(getMeasureBounds(i, timeSignature, pickup));
+    measures.push(getMeasureBoundsAtIndex(i, {
+      measureQuarters,
+      firstMeasureBeats,
+      lastMeasureBeats,
+      totalMeasures,
+    }));
   }
   return measures;
 }

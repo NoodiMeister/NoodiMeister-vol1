@@ -128,7 +128,11 @@ export function computeLayout(measures, timeSignature, pixelsPerBeat, pageWidth,
   const getFactor = (i) => (Array.isArray(measureStretchFactors) && typeof measureStretchFactors[i] === 'number')
     ? measureStretchFactors[i]
     : 1;
-  const getMeasureCountWeight = (i) => (excludePickupFromMeasureCount && i === pickupMeasureIndex ? 0 : 1);
+  const getMeasureCountWeight = (i) => {
+    if (measures[i]?.excludeFromCount === true) return 0;
+    if (measures[i]?.excludeFromCount === false) return 1;
+    return (excludePickupFromMeasureCount && i === pickupMeasureIndex ? 0 : 1);
+  };
 
   const buildSystem = (rowIndices, systemIndex, nextPageBreak) => {
     if (rowIndices.length === 0) return null;

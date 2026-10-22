@@ -41,7 +41,12 @@ Poliitika: `src/orchestrator/pointerClickPolicy.js` (`toolboxIdForSelection`).
 | Click noot | any | `note` (+ N-mode) | noodi sinine highlight | Delete→rest, Copy; rhythm toolbox |
 | Shift+Click noot | `note`/`range` | `range` | range highlight | Delete→rest, Copy |
 | Shift+Arrow Left/Right | `note`/`range` | `range` | range highlight | Copy |
-| Click tühi takt | any | `measureRange` | takti highlight | layout line/page break |
+| Click tühi takt | any | `measureRange` | sinine takti kast | layout; paremklikk → kontekstimenüü |
+| Right-click takt | any | `measureRange` (+ menüü) | sinine kast + menüü | properties / insert / delete / copy / paste |
+| Teine left-click samale taktile | `measureRange` | `measureRange` (sama) | kast jääb | **ei** deselecti (erinevalt taktijoonest/võtmest) |
+| Shift+Arrow Left/Right (taktivalik aktiivne) | `measureRange` | `measureRange` (focus nihkub) | sinine kast laieneb/kahaneb | MuseScore: anchor fikseeritud, focus liigub |
+| Cmd/Ctrl+C (taktivalik) | `measureRange` | unchanged | unchanged | kopeerib taktid measureClipboard'ile |
+| Left-click teisele taktile (kui measureClipboard täis) | any | `measureRange` siht | siht valitud | **paste overwrite** (eelmine sisu kaob ulatuses) |
 | Shift+Arrow (SEL taktis) | any | `measureRange` | takti highlight | Delete measure range, Copy |
 | Click taktijoon / repeat / jump | any | `singleObject` | märgi sinine highlight | Delete → single / remove; repeatsJumps |
 | Click clef | any | `singleObject` (clef) | clef highlight | clefs toolbox |
@@ -50,7 +55,8 @@ Poliitika: `src/orchestrator/pointerClickPolicy.js` (`toolboxIdForSelection`).
 | Backspace/Delete | `note`/`range` | sama ulatus (noodid → paus) | jääb või puhastub | replaceSelectedNotesWithRests |
 | Cmd/Ctrl+C | `note`/`range`/`measureRange` | unchanged | unchanged | copy |
 | Esc | any | `none` | kõik markerid kaovad | deselect + sulge selection-driven toolbox |
-| Teine klikk samale objektile (takt / taktijoon / võti) | sama `singleObject`/`measureRange` | `none` | marker kaob | toggle deselect |
+| Teine klikk samale taktijoonle / võtmele | sama `singleObject` | `none` | marker kaob | toggle deselect |
+| Teine left-click samale taktile | `measureRange` | `measureRange` | kast jääb | ei deselecti |
 | Klikk tühjale lehe/laua pinnale | any | `none` | markerid kaovad | deselect (`clearPointerSelection`) |
 
 ## Deselect (deaktiveerimine)
@@ -60,7 +66,8 @@ Poliitika: `src/orchestrator/pointerClickPolicy.js` (`toolboxIdForSelection`).
 | Tee | Käitumine |
 |---|---|
 | **Esc** | Puhasta note/range/measure/object/text/clef valik; sulge layout / repeatsJumps / clefs / textBox. N-mode + rhythm jääb alles. |
-| **Teine klikk** samale taktile / taktijoonele / võtmele | Toggle → `none` + sama toolbox-sulgumine. |
+| **Teine klikk** samale taktijoonele / võtmele | Toggle → `none` + sama toolbox-sulgumine. |
+| **Teine left-click samale taktile** | **Ei** deselecti (deselect = Esc / tühi pind). |
 | **Tühi pind** (score padding / lehe konteiner, kui `target === currentTarget`) | Sama mis Esc. |
 | **Delete** pärast objekti eemaldust | Valik puhastatakse automaatselt. |
 
