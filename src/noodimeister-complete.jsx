@@ -256,7 +256,7 @@ function buildDemoVisibilityProject({ figurenotes, grandStaff }) {
 
 // Graafika ja app konstandid var'iga faili alguses (GLOBAL_NOTATION_CONFIG on noodijoonestiku seaded)
 var LUCIDE_ICONS = [
-  'Music2', 'Clock', 'Hash', 'Type', 'Piano', 'Palette', 'Layout', 'Check', 'Save', 'FolderOpen',
+  'Music2', 'Clock', 'Hash', 'Type', 'Piano', 'Palette', 'Layout', 'Check', 'Save', 'FolderOpen', 'BookOpen',
   'Plus', 'Settings', 'Key', 'Repeat', 'Cloud', 'LogOut', 'LogIn', 'UserPlus', 'User', 'CloudUpload', 'CloudDownload', 'FolderPlus', 'ChevronDown',
   'Play', 'Pause', 'Video', 'Eye', 'ArrowDown', 'ArrowRight', 'ArrowUpDown', 'X', 'Printer', 'FileDown',
   'Hand', 'MousePointer', 'Keyboard', 'ExternalLink'
@@ -348,7 +348,7 @@ var RHYTHM_SYLLABLE_IMAGES = {
 
 var VALID_DENOMINATORS = [1, 2, 4, 8, 16, 32, 64, 128];
 var MAX_NUMERATOR = 99;
-var TOOLBOX_ORDER = ['rhythm', 'timeSignature', 'clefs', 'keySignatures', 'transpose', 'pitchInput', 'pianoKeyboard', 'timelinePanel', 'notehead', 'instruments', 'repeatsJumps', 'layout', 'textBox', 'chords'];
+var TOOLBOX_ORDER = ['rhythm', 'timeSignature', 'clefs', 'keySignatures', 'transpose', 'pitchInput', 'pianoKeyboard', 'timelinePanel', 'notehead', 'instruments', 'repeatsJumps', 'layout', 'textBox', 'chords', 'pedagogical'];
 var PITCH_TO_SEMI = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
 /** Noodi täis MIDI väärtus (pitch + oktav + accidental), akordi „kõrgeima“ noodi võrdlemiseks. */
 function noteToMidi(n) {
@@ -1550,7 +1550,16 @@ function getToolboxes(t, instrumentConfig, shortcutLabels = {}) {
         { id: 'chord-Am7', label: 'Am7', value: 'Am7' },
         { id: 'chord-custom', label: t('chords.custom'), value: 'custom' }
       ]
-    }
+    },
+    pedagogical: {
+      id: 'pedagogical',
+      name: t('toolbox.pedagogical'),
+      icon: 'BookOpen',
+      shortcut: shortcutLabels['toolbox.pedagogical'] || '',
+      options: [
+        { id: 'teacher-panel', label: t('toolbox.pedagogicalOpenTeacher'), value: 'openTeacher', key: '1' },
+      ],
+    },
   };
 }
 
@@ -1569,7 +1578,8 @@ const TOOLBOX_HELP_TEXTS = {
     repeatsJumps: 'Lisa kordusmärgid, hüpped ja lõputaktijooned.',
     layout: 'Muuda lehe paigutust, vahekaugusi ja joonestiku stiili.',
     textBox: 'Lisa vabateksti või tempomärke noodilehele.',
-    chords: 'Lisa akorde ja kohanda akorditeksti.'
+    chords: 'Lisa akorde ja kohanda akorditeksti.',
+    pedagogical: 'Ava või peida õpetaja tööriist (kuvarežiimid A–D, nimed, emojid).',
   },
   en: {
     rhythm: 'Choose note/rest durations and rhythm patterns.',
@@ -1585,7 +1595,8 @@ const TOOLBOX_HELP_TEXTS = {
     repeatsJumps: 'Insert repeats, jumps, and final barlines.',
     layout: 'Adjust spacing, page flow, and score layout behavior.',
     textBox: 'Insert free text boxes and tempo markings.',
-    chords: 'Add chords and customize chord symbols.'
+    chords: 'Add chords and customize chord symbols.',
+    pedagogical: 'Show or hide the teacher panel (display modes A–D, names, emojis).',
   },
   fi: {
     rhythm: 'Valitse nuotti- ja taukokestot sekä rytmikuviot.',
@@ -1601,7 +1612,8 @@ const TOOLBOX_HELP_TEXTS = {
     repeatsJumps: 'Lisää kertausmerkit, hypyt ja lopputahtiviivat.',
     layout: 'Säädä asettelua, välejä ja sivun virtausta.',
     textBox: 'Lisää vapaata tekstiä ja tempomerkintöjä.',
-    chords: 'Lisää sointuja ja muokkaa sointumerkkejä.'
+    chords: 'Lisää sointuja ja muokkaa sointumerkkejä.',
+    pedagogical: 'Näytä tai piilota opettajatyökalu (näyttötilat A–D, nimet, emojit).',
   }
 };
 
@@ -2041,6 +2053,11 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   const [scoreDragOver, setScoreDragOver] = useState(false);
   // Nähtavad tööriistad: millised tööriistakastid on külgribas nähtavad (seotud notatsiooni sisestusmeetodiga)
   const [visibleToolIds, setVisibleToolIds] = useState(() => TOOLBOX_ORDER.slice());
+  // Pedagoogilises režiimis hoia „Pedagoogiline / Õpetaja“ paletis (ka vanade failide visibleToolIds korral).
+  useEffect(() => {
+    if (notationMode !== 'vabanotatsioon') return;
+    setVisibleToolIds((prev) => (prev.includes('pedagogical') ? prev : [...prev, 'pedagogical']));
+  }, [notationMode]);
   const [visibleToolsMenuOpen, setVisibleToolsMenuOpen] = useState(false);
   const [toolboxPaletteVisible, setToolboxPaletteVisible] = useState(() => {
     try { return localStorage.getItem('noodimeister-toolbox-palette-visible') !== 'false'; } catch (_) { return true; }
@@ -3054,6 +3071,11 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   const scorePlayerPopupRef = useRef(null);
   const scorePlayerPopupDragRef = useRef(null); // { startX, startY, startTop, startLeft }
   const [scorePlayerPopupPosition, setScorePlayerPopupPosition] = useState(null); // { top, left } | null
+  /** Pedagoogiline õpetaja tööriist: lohistatav hüpik (X peidab; taasava paleti tööriistakastist). */
+  const [teacherPanelOpen, setTeacherPanelOpen] = useState(true);
+  const teacherPanelRef = useRef(null);
+  const teacherPanelDragRef = useRef(null);
+  const [teacherPanelPosition, setTeacherPanelPosition] = useState(null); // { top, left } | null
   const [pedagogicalAudioPlaybackRate, setPedagogicalAudioPlaybackRate] = useState(1.0); // 0.5–2.0
   const [pedagogicalAudioCurrentTime, setPedagogicalAudioCurrentTime] = useState(0);
   const [pedagogicalSyncMode, setPedagogicalSyncMode] = useState('bpm'); // 'bpm' | 'anchors'
@@ -3537,6 +3559,11 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       setGhostOctave(PEDAGOGICAL_WRITING_MIN_OCTAVE);
       setGhostAccidental(0);
       setGhostAccidentalIsExplicit(false);
+      setTeacherPanelOpen(true);
+      setTeacherPanelPosition(null);
+      setVisibleToolIds((prev) => (
+        prev.includes('pedagogical') ? prev : [...prev, 'pedagogical']
+      ));
     } else {
       setNotationMode(wizardNotationMethod === 'figurenotes' ? 'figurenotes' : 'traditional');
     }
@@ -8982,6 +9009,9 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         if (option.value === 'jo') {
           setNotationMode('vabanotatsioon');
           setGhostOctave((prev) => Math.max(PEDAGOGICAL_WRITING_MIN_OCTAVE, Number(prev) || PEDAGOGICAL_WRITING_MIN_OCTAVE));
+          setTeacherPanelOpen(true);
+          setTeacherPanelPosition(null);
+          setVisibleToolIds((prev) => (prev.includes('pedagogical') ? prev : [...prev, 'pedagogical']));
         } else {
           setNotationMode('traditional');
           setClefType(option.value);
@@ -9105,6 +9135,12 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       case 'chords':
         applyChordToolboxOptionAtIndex(optionIndex);
         return;
+      case 'pedagogical':
+        if (option.value === 'openTeacher' || option.id === 'teacher-panel') {
+          setTeacherPanelOpen(true);
+          setTeacherPanelPosition(null);
+        }
+        break;
     }
     setActiveToolbox(null);
     setSelectedOptionIndex(0);
@@ -12873,6 +12909,83 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     return () => window.removeEventListener('resize', onResize);
   }, [scorePlayerPopupOpen, clampScorePlayerPopupPosition]);
 
+  const clampTeacherPanelPosition = useCallback((candidate) => {
+    const viewportMargin = 8;
+    const popupRect = teacherPanelRef.current?.getBoundingClientRect?.();
+    const popupWidth = Math.max(280, Math.round(popupRect?.width || 520));
+    const popupHeight = Math.max(80, Math.round(popupRect?.height || 160));
+    const viewportWidth = typeof window !== 'undefined' ? window.innerWidth : 1920;
+    const viewportHeight = typeof window !== 'undefined' ? window.innerHeight : 1080;
+    const top = Math.max(viewportMargin, Math.min(Number(candidate?.top) || viewportMargin, viewportHeight - popupHeight - viewportMargin));
+    const left = Math.max(viewportMargin, Math.min(Number(candidate?.left) || viewportMargin, viewportWidth - popupWidth - viewportMargin));
+    return { top, left };
+  }, []);
+
+  const placeTeacherPanelDefault = useCallback(() => {
+    const viewportWidth = typeof window !== 'undefined' ? window.innerWidth : 1920;
+    const popupRect = teacherPanelRef.current?.getBoundingClientRect?.();
+    const popupWidth = Math.max(280, Math.round(popupRect?.width || 520));
+    const left = Math.max(8, Math.min(Math.round((viewportWidth - popupWidth) / 2), viewportWidth - popupWidth - 8));
+    setTeacherPanelPosition(clampTeacherPanelPosition({ top: 88, left }));
+  }, [clampTeacherPanelPosition]);
+
+  const handleTeacherPanelDragStart = useCallback((e) => {
+    if (e.button !== 0) return;
+    if (e.target?.closest?.('button, input, select, label, a')) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const current = teacherPanelPosition || clampTeacherPanelPosition({ top: e.clientY - 12, left: e.clientX - 40 });
+    teacherPanelDragRef.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      startTop: current.top,
+      startLeft: current.left,
+    };
+  }, [teacherPanelPosition, clampTeacherPanelPosition]);
+
+  useEffect(() => {
+    const onMouseMove = (e) => {
+      const drag = teacherPanelDragRef.current;
+      if (!drag) return;
+      setTeacherPanelPosition(clampTeacherPanelPosition({
+        top: drag.startTop + (e.clientY - drag.startY),
+        left: drag.startLeft + (e.clientX - drag.startX),
+      }));
+    };
+    const onMouseUp = () => {
+      if (!teacherPanelDragRef.current) return;
+      teacherPanelDragRef.current = null;
+    };
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+    return () => {
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+    };
+  }, [clampTeacherPanelPosition]);
+
+  useEffect(() => {
+    if (!(notationMode === 'vabanotatsioon' && teacherPanelOpen)) {
+      teacherPanelDragRef.current = null;
+      return;
+    }
+    if (!teacherPanelPosition) {
+      // Wait a frame so ref has size, then place near top center.
+      const id = requestAnimationFrame(() => placeTeacherPanelDefault());
+      return () => cancelAnimationFrame(id);
+    }
+    return undefined;
+  }, [notationMode, teacherPanelOpen, teacherPanelPosition, placeTeacherPanelDefault]);
+
+  useEffect(() => {
+    if (!(notationMode === 'vabanotatsioon' && teacherPanelOpen)) return;
+    const onResize = () => {
+      setTeacherPanelPosition((prev) => clampTeacherPanelPosition(prev || { top: 88, left: 16 }));
+    };
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, [notationMode, teacherPanelOpen, clampTeacherPanelPosition]);
+
   useLayoutEffect(() => {
     if (!activeTextLineType && !selectedTextboxId) return;
     updateTextToolPosition();
@@ -14880,6 +14993,150 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                   </button>
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {notationMode === 'vabanotatsioon' && teacherPanelOpen && (
+        <div
+          ref={teacherPanelRef}
+          data-score-export-chrome
+          role="dialog"
+          aria-label={t('teacher.panelTitle')}
+          className="fixed z-[120] max-w-[min(96vw,42rem)] rounded-xl border-2 border-amber-300 bg-amber-50 shadow-2xl"
+          style={teacherPanelPosition
+            ? { top: teacherPanelPosition.top, left: teacherPanelPosition.left }
+            : { top: 88, left: 24, visibility: 'hidden' }}
+        >
+          <div
+            className="flex items-center justify-between gap-2 border-b border-amber-200 bg-amber-100 px-3 py-2 rounded-t-xl cursor-grab active:cursor-grabbing select-none"
+            onMouseDown={handleTeacherPanelDragStart}
+            title={t('teacher.panelDragHint')}
+          >
+            <span className="text-xs font-bold text-amber-900 uppercase tracking-wider">{t('teacher.panelTitle')}</span>
+            <button
+              type="button"
+              aria-label={t('teacher.panelClose')}
+              title={t('teacher.panelClose')}
+              onClick={(e) => {
+                e.stopPropagation();
+                setTeacherPanelOpen(false);
+                setActiveToolbox((prev) => (prev === 'pedagogical' ? null : prev));
+              }}
+              onMouseDown={(e) => e.stopPropagation()}
+              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-amber-300 bg-white text-amber-900 hover:bg-amber-200"
+            >
+              {icons?.X ? <icons.X className="h-4 w-4" /> : <span className="text-sm font-bold">×</span>}
+            </button>
+          </div>
+          <div className="flex flex-wrap items-center gap-3 px-3 py-2.5">
+            <div className="flex flex-wrap items-center gap-1 border-r border-amber-300 pr-3" title={t('settings.pedagogicalDisplayModeHint')}>
+              <span className="text-[10px] font-semibold text-amber-700 uppercase mr-1">{t('settings.pedagogicalDisplayModeShort')}</span>
+              {[
+                { id: PEDAGOGICAL_DISPLAY_A, label: 'A' },
+                { id: PEDAGOGICAL_DISPLAY_B, label: 'B', disabled: true },
+                { id: PEDAGOGICAL_DISPLAY_C, label: 'C' },
+                { id: PEDAGOGICAL_DISPLAY_D, label: 'D' },
+              ].map((opt) => {
+                const active = normalizePedagogicalDisplayMode(pedagogicalDisplayMode) === opt.id;
+                return (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    disabled={!!opt.disabled}
+                    title={
+                      opt.disabled
+                        ? t('settings.comingSoon')
+                        : opt.id === PEDAGOGICAL_DISPLAY_A
+                          ? t('settings.pedagogicalDisplayA')
+                          : opt.id === PEDAGOGICAL_DISPLAY_B
+                            ? t('settings.pedagogicalDisplayB')
+                            : opt.id === PEDAGOGICAL_DISPLAY_C
+                              ? t('settings.pedagogicalDisplayC')
+                              : t('settings.pedagogicalDisplayD')
+                    }
+                    onClick={() => {
+                      if (opt.disabled) return;
+                      dirtyRef.current = true;
+                      if (opt.id === PEDAGOGICAL_DISPLAY_D) setIsPedagogicalProject(true);
+                      setPedagogicalDisplayMode(opt.id);
+                    }}
+                    className={`min-w-[1.75rem] px-1.5 py-0.5 rounded text-xs font-bold border ${
+                      active
+                        ? opt.id === PEDAGOGICAL_DISPLAY_D
+                          ? 'bg-violet-600 text-white border-violet-700'
+                          : 'bg-amber-600 text-white border-amber-700'
+                        : opt.disabled
+                          ? 'bg-amber-50 text-amber-400 border-amber-200 cursor-not-allowed'
+                          : 'bg-white text-amber-900 border-amber-300 hover:bg-amber-100'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                );
+              })}
+            </div>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" checked={showAllNoteLabels} onChange={(e) => { dirtyRef.current = true; setShowAllNoteLabels(e.target.checked); }} className="rounded border-amber-400 text-amber-600" />
+              <span className="text-sm text-amber-900">{t('teacher.showAllLabels')}</span>
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" checked={enableEmojiOverlays} onChange={(e) => { dirtyRef.current = true; setEnableEmojiOverlays(e.target.checked); }} className="rounded border-amber-400 text-amber-600" />
+              <span className="text-sm text-amber-900">{t('teacher.enableEmojiOverlays')}</span>
+            </label>
+            <button type="button" onClick={() => { clearAllNoteLabels(); }} className="px-2 py-1 rounded text-sm bg-amber-200 text-amber-900 hover:bg-amber-300 border border-amber-300">
+              {t('teacher.clearAllAnnotations')}
+            </button>
+            {staves.length > 1 && (
+              <div className="flex flex-wrap items-center gap-2 border-l border-amber-300 pl-3">
+                <span className="text-xs font-semibold text-amber-800">{t('teacher.showStaves')}:</span>
+                {staves.map((_, i) => (
+                  <label key={i} className="flex items-center gap-1 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={visibleStaves[i] !== false}
+                      onChange={(e) => {
+                        dirtyRef.current = true;
+                        setVisibleStaves((prev) => {
+                          const next = [...(prev.length === staves.length ? prev : staves.map(() => true))];
+                          next[i] = e.target.checked;
+                          if (!next[i] && activeStaffIndex === i) setActiveStaffIndex(Math.max(0, i - 1));
+                          return next;
+                        });
+                      }}
+                      className="rounded border-amber-400 text-amber-600"
+                    />
+                    <span className="text-sm text-amber-900">{i + 1}</span>
+                  </label>
+                ))}
+              </div>
+            )}
+            <div className="flex flex-wrap items-start gap-2 border-l border-amber-300 pl-3 w-full">
+              <span className="text-xs font-semibold text-amber-800">{t('teacher.intermissionLabels')}</span>
+              <button
+                type="button"
+                onClick={() => {
+                  dirtyRef.current = true;
+                  const totalBeats = Math.max(0, ...staves.map((s) => s.notes.reduce((a, n) => a + n.duration, 0)));
+                  setIntermissionLabels((prev) => [...prev, { id: (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `int-${Date.now()}`, startBeat: Math.max(0, totalBeats - 4), endBeat: totalBeats + 2, text: t('intermission.placeholder') }]);
+                }}
+                className="px-2 py-1 rounded text-sm bg-amber-200 text-amber-900 hover:bg-amber-300 border border-amber-300"
+              >
+                {t('teacher.addIntermission')}
+              </button>
+              {intermissionLabels.length > 0 && (
+                <div className="flex flex-col gap-1.5 w-full">
+                  {intermissionLabels.map((lab) => (
+                    <div key={lab.id} className="flex flex-wrap items-center gap-2 p-2 rounded bg-amber-100/80 border border-amber-200">
+                      <input type="number" min={0} step={0.5} value={lab.startBeat} onChange={(e) => { dirtyRef.current = true; setIntermissionLabels((prev) => prev.map((l) => l.id === lab.id ? { ...l, startBeat: Number(e.target.value) || 0 } : l)); }} className="w-14 rounded border border-amber-400 px-1 text-xs" title={t('intermission.startBeat')} />
+                      <span className="text-amber-700">–</span>
+                      <input type="number" min={0} step={0.5} value={lab.endBeat} onChange={(e) => { dirtyRef.current = true; setIntermissionLabels((prev) => prev.map((l) => l.id === lab.id ? { ...l, endBeat: Number(e.target.value) || 0 } : l)); }} className="w-14 rounded border border-amber-400 px-1 text-xs" title={t('intermission.endBeat')} />
+                      <input type="text" value={lab.text} onChange={(e) => { dirtyRef.current = true; setIntermissionLabels((prev) => prev.map((l) => l.id === lab.id ? { ...l, text: e.target.value } : l)); }} placeholder={t('intermission.placeholder')} className="flex-1 min-w-[8rem] rounded border border-amber-400 px-2 py-0.5 text-sm" />
+                      <button type="button" onClick={() => { dirtyRef.current = true; setIntermissionLabels((prev) => prev.filter((l) => l.id !== lab.id)); }} className="text-red-600 hover:text-red-700 font-bold text-lg leading-none" title={t('teacher.clearAllAnnotations')}>×</button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -17454,6 +17711,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                 <div className="absolute left-0 right-0 top-full mt-1 py-2 rounded-lg bg-white dark:bg-black border-2 border-amber-300 dark:border-white/20 shadow-lg z-50 max-h-64 overflow-auto">
                   {TOOLBOX_ORDER.map((id) => {
                     if (id === 'pianoKeyboard' && isActiveUnpitchedPercussion) return null;
+                    if (id === 'pedagogical' && notationMode !== 'vabanotatsioon') return null;
                     const tb = toolboxes[id];
                     if (!tb) return null;
                     const isVisible = visibleToolIds.includes(id);
@@ -17479,6 +17737,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
 
             {TOOLBOX_ORDER.filter((id) => visibleToolIds.includes(id)).map((id) => {
               if (id === 'pianoKeyboard' && isActiveUnpitchedPercussion) return null;
+              if (id === 'pedagogical' && notationMode !== 'vabanotatsioon') return null;
               const toolbox = toolboxes[id];
               if (!toolbox) return null;
               const helpText = getToolboxHelpText(locale, id, toolbox.name);
@@ -17486,7 +17745,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
               if (toolbox.shortcut) {
                 tooltipLines.push(`${getShortcutLabelText(locale)}: ${toolbox.shortcut}`);
               }
-              if (noteInputMode && !N_MODE_PRIMARY_TOOL_IDS.includes(id)) {
+              if (noteInputMode && id !== 'pedagogical' && !N_MODE_PRIMARY_TOOL_IDS.includes(id)) {
                 tooltipLines.push('N-reziimis on aktiivsed Rhythm, Pitch, Klaviatuur ja Akordid');
               }
               const renderIcon = () => {
@@ -17506,6 +17765,10 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                   case 'instruments': return <InstrumentIcon instrument="violin" />;
                   case 'repeatsJumps': return <Repeat className="w-5 h-5" />;
                   case 'chords': return <ChordIcon />;
+                  case 'pedagogical': {
+                    const BookOpen = icons?.BookOpen;
+                    return BookOpen ? <BookOpen className="w-5 h-5" /> : <span className="text-sm font-bold">Õ</span>;
+                  }
                   default: {
                     const Icon = typeof toolbox?.icon === 'string' ? icons?.[toolbox.icon] : toolbox?.icon;
                     return Icon ? <Icon className="w-5 h-5" /> : null;
@@ -17517,6 +17780,17 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                 <button
                   key={id}
                   onClick={() => {
+                    if (id === 'pedagogical') {
+                      if (notationMode !== 'vabanotatsioon') return;
+                      setTeacherPanelOpen((prev) => {
+                        const next = !prev;
+                        if (next) setTeacherPanelPosition(null);
+                        return next;
+                      });
+                      setActiveToolbox(null);
+                      setSelectedOptionIndex(0);
+                      return;
+                    }
                     if (noteInputMode && !N_MODE_PRIMARY_TOOL_IDS.includes(id)) return;
                     if (id === 'instruments') {
                       setIsInstrumentManagerOpen((prev) => !prev);
@@ -17541,9 +17815,13 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                     }
                   }}
                   className={`w-full rounded-lg text-left transition-all flex items-center justify-between ${
-                    (id === 'pianoKeyboard' ? pianoStripVisible : activeToolbox === id)
+                    (id === 'pianoKeyboard'
+                      ? pianoStripVisible
+                      : id === 'pedagogical'
+                        ? teacherPanelOpen
+                        : activeToolbox === id)
                       ? 'bg-gradient-to-r from-amber-600 to-orange-600 text-white shadow-lg'
-                      : (noteInputMode && !N_MODE_PRIMARY_TOOL_IDS.includes(id))
+                      : (noteInputMode && id !== 'pedagogical' && !N_MODE_PRIMARY_TOOL_IDS.includes(id))
                         ? 'bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed'
                         : 'bg-amber-50 text-amber-900 hover:bg-amber-100 border border-amber-200'
                   } ${noteInputMode ? 'p-3' : 'p-2.5'}`}
@@ -17558,7 +17836,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
               );
             })}
 
-            {activeToolbox && toolboxes[activeToolbox] && (
+            {activeToolbox && toolboxes[activeToolbox] && activeToolbox !== 'pedagogical' && (
               <p className="mt-3 text-xs text-amber-600 italic">{t('toolbox.optionsAboveScore')}</p>
             )}
 
@@ -18258,204 +18536,6 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                   title={t('textBox.documentFontHint')}
                 />
               </div>
-              {/* Õpetaja režiimi tööriistariba (pedagoogiline notatsioon); data-score-export-chrome — PDF/trükk ei joonista seda, kõrgus eemaldatakse noodile vertikaalsest nihkest. */}
-              {notationMode === 'vabanotatsioon' && (
-                <div data-score-export-chrome className="mb-3 flex flex-wrap items-center gap-3 px-2 py-2 rounded-lg bg-amber-50 border border-amber-200">
-                  <span className="text-xs font-semibold text-amber-800 uppercase tracking-wider">Õpetaja</span>
-                  <div className="flex flex-wrap items-center gap-1 border-r border-amber-300 pr-3" title={t('settings.pedagogicalDisplayModeHint')}>
-                    <span className="text-[10px] font-semibold text-amber-700 uppercase mr-1">{t('settings.pedagogicalDisplayModeShort')}</span>
-                    {[
-                      { id: PEDAGOGICAL_DISPLAY_A, label: 'A' },
-                      { id: PEDAGOGICAL_DISPLAY_B, label: 'B', disabled: true },
-                      { id: PEDAGOGICAL_DISPLAY_C, label: 'C' },
-                      { id: PEDAGOGICAL_DISPLAY_D, label: 'D' },
-                    ].map((opt) => {
-                      const active = normalizePedagogicalDisplayMode(pedagogicalDisplayMode) === opt.id;
-                      return (
-                        <button
-                          key={opt.id}
-                          type="button"
-                          disabled={!!opt.disabled}
-                          title={
-                            opt.disabled
-                              ? t('settings.comingSoon')
-                              : opt.id === PEDAGOGICAL_DISPLAY_A
-                                ? t('settings.pedagogicalDisplayA')
-                                : opt.id === PEDAGOGICAL_DISPLAY_B
-                                  ? t('settings.pedagogicalDisplayB')
-                                  : opt.id === PEDAGOGICAL_DISPLAY_C
-                                    ? t('settings.pedagogicalDisplayC')
-                                    : t('settings.pedagogicalDisplayD')
-                          }
-                          onClick={() => {
-                            if (opt.disabled) return;
-                            dirtyRef.current = true;
-                            if (opt.id === PEDAGOGICAL_DISPLAY_D) setIsPedagogicalProject(true);
-                            setPedagogicalDisplayMode(opt.id);
-                          }}
-                          className={`min-w-[1.75rem] px-1.5 py-0.5 rounded text-xs font-bold border ${
-                            active
-                              ? opt.id === PEDAGOGICAL_DISPLAY_D
-                                ? 'bg-violet-600 text-white border-violet-700'
-                                : 'bg-amber-600 text-white border-amber-700'
-                              : opt.disabled
-                                ? 'bg-amber-50 text-amber-400 border-amber-200 cursor-not-allowed'
-                                : 'bg-white text-amber-900 border-amber-300 hover:bg-amber-100'
-                          }`}
-                        >
-                          {opt.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input type="checkbox" checked={showAllNoteLabels} onChange={(e) => { dirtyRef.current = true; setShowAllNoteLabels(e.target.checked); }} className="rounded border-amber-400 text-amber-600" />
-                    <span className="text-sm text-amber-900">{t('teacher.showAllLabels')}</span>
-                  </label>
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input type="checkbox" checked={enableEmojiOverlays} onChange={(e) => { dirtyRef.current = true; setEnableEmojiOverlays(e.target.checked); }} className="rounded border-amber-400 text-amber-600" />
-                    <span className="text-sm text-amber-900">{t('teacher.enableEmojiOverlays')}</span>
-                  </label>
-                  <button type="button" onClick={() => { clearAllNoteLabels(); }} className="px-2 py-1 rounded text-sm bg-amber-200 text-amber-900 hover:bg-amber-300 border border-amber-300">
-                    {t('teacher.clearAllAnnotations')}
-                  </button>
-                  {pedagogicalAudioUrl && !isPedagogicalProject && (
-                    <div className="flex flex-wrap items-center gap-2 border-l border-amber-300 pl-3">
-                      <span className="text-xs font-semibold text-amber-800">{t('pedagogical.audio')}:</span>
-                      <PedagogicalAudioTransport
-                        variant="teacher"
-                        isPlaying={isPedagogicalAudioPlaying}
-                        playLabel={t('pedagogical.play')}
-                        pauseLabel={t('pedagogical.pause')}
-                        rewindLabel="-5s"
-                        forwardLabel="+5s"
-                        onPlayPause={isPedagogicalAudioPlaying ? pausePedagogicalPlayback : startPedagogicalPlayback}
-                        onStop={() => stopPedagogicalPlayback()}
-                        onSeekBack={() => seekPedagogicalAudio(-5)}
-                        onSeekForward={() => seekPedagogicalAudio(5)}
-                        PlayIcon={icons?.Play}
-                        PauseIcon={icons?.Pause}
-                      />
-                      <label className="flex items-center gap-2">
-                        <span className="text-xs text-amber-800">Tempo</span>
-                        <input
-                          type="range"
-                          min={0.5}
-                          max={2}
-                          step={0.05}
-                          value={pedagogicalAudioPlaybackRate}
-                          onChange={(e) => {
-                            const v = clampNumber(Number(e.target.value) || 1, 0.5, 2);
-                            setPedagogicalAudioPlaybackRate(v);
-                            dirtyRef.current = true;
-                            if (pedagogicalAudioRef.current) pedagogicalAudioRef.current.playbackRate = v;
-                          }}
-                        />
-                        <span className="text-xs text-amber-800 w-10">{Math.round(pedagogicalAudioPlaybackRate * 100)}%</span>
-                      </label>
-                      <label className="flex items-center gap-1">
-                        <span className="text-xs text-amber-800">Step</span>
-                        <select
-                          value={String(pedagogicalRhythmStep)}
-                          onChange={(e) => {
-                            dirtyRef.current = true;
-                            setPedagogicalRhythmStep(clampNumber(Number(e.target.value) || 1, 0.125, 4));
-                          }}
-                          className="px-1.5 py-1 rounded text-xs border border-amber-300 bg-white text-amber-900"
-                          title="Rhythm-by-rhythm cursor step"
-                        >
-                          <option value="1">1/4</option>
-                          <option value="0.5">1/8</option>
-                          <option value="0.25">1/16</option>
-                        </select>
-                      </label>
-                      <label className="flex items-center gap-1">
-                        <span className="text-xs text-amber-800">Sync</span>
-                        <select
-                          value={pedagogicalSyncMode}
-                          onChange={(e) => {
-                            dirtyRef.current = true;
-                            setPedagogicalSyncMode(e.target.value === 'anchors' ? 'anchors' : 'bpm');
-                          }}
-                          className="px-1.5 py-1 rounded text-xs border border-amber-300 bg-white text-amber-900"
-                        >
-                          <option value="bpm">BPM</option>
-                          <option value="anchors">2A</option>
-                        </select>
-                      </label>
-                      {pedagogicalSyncMode === 'anchors' && (
-                        <div className="flex flex-wrap items-center gap-1 text-xs text-amber-900 px-2 py-1 rounded bg-amber-100 border border-amber-200">
-                          <span className="font-semibold">A</span>
-                          <input type="number" min={0} step={0.01} value={pedagogicalSyncStartTimeSec} onChange={(e) => { dirtyRef.current = true; setPedagogicalSyncStartTimeSec(Math.max(0, Number(e.target.value) || 0)); }} className="w-14 rounded border border-amber-300 px-1 py-0.5 bg-white" title="Audio sec" />
-                          <span>s</span>
-                          <input type="number" min={0} step={0.25} value={pedagogicalSyncStartBeat} onChange={(e) => { dirtyRef.current = true; setPedagogicalSyncStartBeat(Math.max(0, Number(e.target.value) || 0)); }} className="w-14 rounded border border-amber-300 px-1 py-0.5 bg-white" title="Score beat" />
-                          <span>b</span>
-                          <span className="font-semibold ml-1">B</span>
-                          <input type="number" min={0} step={0.01} value={pedagogicalSyncEndTimeSec} onChange={(e) => { dirtyRef.current = true; setPedagogicalSyncEndTimeSec(Math.max(0, Number(e.target.value) || 0)); }} className="w-14 rounded border border-amber-300 px-1 py-0.5 bg-white" title="Audio sec" />
-                          <span>s</span>
-                          <input type="number" min={0} step={0.25} value={pedagogicalSyncEndBeat} onChange={(e) => { dirtyRef.current = true; setPedagogicalSyncEndBeat(Math.max(0, Number(e.target.value) || 0)); }} className="w-14 rounded border border-amber-300 px-1 py-0.5 bg-white" title="Score beat" />
-                          <span>b</span>
-                        </div>
-                      )}
-                      <span className="text-xs text-amber-700">
-                        {Math.floor(pedagogicalAudioCurrentTime)}s / {Math.floor(pedagogicalAudioDuration || 0)}s
-                      </span>
-                    </div>
-                  )}
-                  {staves.length > 1 && (
-                    <div className="flex flex-wrap items-center gap-2 border-l border-amber-300 pl-3">
-                      <span className="text-xs font-semibold text-amber-800">{t('teacher.showStaves')}:</span>
-                      <span className="text-xs text-amber-700 hidden sm:inline">{t('teacher.showStavesHint')}</span>
-                      {staves.map((_, i) => (
-                        <label key={i} className="flex items-center gap-1 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={visibleStaves[i] !== false}
-                            onChange={(e) => {
-                              dirtyRef.current = true;
-                              setVisibleStaves((prev) => {
-                                const next = [...(prev.length === staves.length ? prev : staves.map(() => true))];
-                                next[i] = e.target.checked;
-                                if (!next[i] && activeStaffIndex === i) setActiveStaffIndex(Math.max(0, i - 1));
-                                return next;
-                              });
-                            }}
-                            className="rounded border-amber-400 text-amber-600"
-                          />
-                          <span className="text-sm text-amber-900">{i + 1}</span>
-                        </label>
-                      ))}
-                    </div>
-                  )}
-                  <div className="flex flex-wrap items-start gap-2 border-l border-amber-300 pl-3">
-                    <span className="text-xs font-semibold text-amber-800">{t('teacher.intermissionLabels')}</span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        dirtyRef.current = true;
-                        const totalBeats = Math.max(0, ...staves.map((s) => s.notes.reduce((a, n) => a + n.duration, 0)));
-                        setIntermissionLabels((prev) => [...prev, { id: (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `int-${Date.now()}`, startBeat: Math.max(0, totalBeats - 4), endBeat: totalBeats + 2, text: t('intermission.placeholder') }]);
-                      }}
-                      className="px-2 py-1 rounded text-sm bg-amber-200 text-amber-900 hover:bg-amber-300 border border-amber-300"
-                    >
-                      {t('teacher.addIntermission')}
-                    </button>
-                    {intermissionLabels.length > 0 && (
-                      <div className="flex flex-col gap-1.5 w-full max-w-md">
-                        {intermissionLabels.map((lab) => (
-                          <div key={lab.id} className="flex flex-wrap items-center gap-2 p-2 rounded bg-amber-100/80 border border-amber-200">
-                            <input type="number" min={0} step={0.5} value={lab.startBeat} onChange={(e) => { dirtyRef.current = true; setIntermissionLabels((prev) => prev.map((l) => l.id === lab.id ? { ...l, startBeat: Number(e.target.value) || 0 } : l)); }} className="w-14 rounded border border-amber-400 px-1 text-xs" title={t('intermission.startBeat')} />
-                            <span className="text-amber-700">–</span>
-                            <input type="number" min={0} step={0.5} value={lab.endBeat} onChange={(e) => { dirtyRef.current = true; setIntermissionLabels((prev) => prev.map((l) => l.id === lab.id ? { ...l, endBeat: Number(e.target.value) || 0 } : l)); }} className="w-14 rounded border border-amber-400 px-1 text-xs" title={t('intermission.endBeat')} />
-                            <input type="text" value={lab.text} onChange={(e) => { dirtyRef.current = true; setIntermissionLabels((prev) => prev.map((l) => l.id === lab.id ? { ...l, text: e.target.value } : l)); }} placeholder={t('intermission.placeholder')} className="flex-1 min-w-[8rem] rounded border border-amber-400 px-2 py-0.5 text-sm" />
-                            <button type="button" onClick={() => { dirtyRef.current = true; setIntermissionLabels((prev) => prev.filter((l) => l.id !== lab.id)); }} className="text-red-600 hover:text-red-700 font-bold text-lg leading-none" title={t('teacher.clearAllAnnotations')}>×</button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-            </div>
-          )}
           {(() => {
             // Mouse-based note input is only allowed when N-mode is ON
             // and the active toolbox is the pitch-input toolbox.
