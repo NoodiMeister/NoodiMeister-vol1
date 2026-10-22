@@ -348,7 +348,7 @@ var RHYTHM_SYLLABLE_IMAGES = {
 
 var VALID_DENOMINATORS = [1, 2, 4, 8, 16, 32, 64, 128];
 var MAX_NUMERATOR = 99;
-var TOOLBOX_ORDER = ['rhythm', 'timeSignature', 'clefs', 'keySignatures', 'transpose', 'pitchInput', 'pianoKeyboard', 'timelinePanel', 'notehead', 'instruments', 'repeatsJumps', 'layout', 'textBox', 'chords', 'pedagogical'];
+var TOOLBOX_ORDER = ['rhythm', 'timeSignature', 'clefs', 'pedagogical', 'keySignatures', 'transpose', 'pitchInput', 'pianoKeyboard', 'timelinePanel', 'notehead', 'instruments', 'repeatsJumps', 'layout', 'textBox', 'chords'];
 var PITCH_TO_SEMI = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
 /** Noodi täis MIDI väärtus (pitch + oktav + accidental), akordi „kõrgeima“ noodi võrdlemiseks. */
 function noteToMidi(n) {
@@ -2053,11 +2053,22 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   const [scoreDragOver, setScoreDragOver] = useState(false);
   // Nähtavad tööriistad: millised tööriistakastid on külgribas nähtavad (seotud notatsiooni sisestusmeetodiga)
   const [visibleToolIds, setVisibleToolIds] = useState(() => TOOLBOX_ORDER.slice());
-  // Pedagoogilises režiimis hoia „Pedagoogiline / Õpetaja“ paletis (ka vanade failide visibleToolIds korral).
+  // Pedagoogilises režiimis hoia „Pedagoogiline / Õpetaja“ paletis
+  // (ka pärast faili laadimist, kui salvestatud visibleToolIds ei sisalda 'pedagogical').
   useEffect(() => {
     if (notationMode !== 'vabanotatsioon') return;
-    setVisibleToolIds((prev) => (prev.includes('pedagogical') ? prev : [...prev, 'pedagogical']));
-  }, [notationMode]);
+    setVisibleToolIds((prev) => {
+      if (prev.includes('pedagogical')) return prev;
+      // Pane clefs'i järele, kui võimalik; muidu lõppu.
+      const clefsIdx = prev.indexOf('clefs');
+      if (clefsIdx >= 0) {
+        const next = prev.slice();
+        next.splice(clefsIdx + 1, 0, 'pedagogical');
+        return next;
+      }
+      return [...prev, 'pedagogical'];
+    });
+  }, [notationMode, visibleToolIds]);
   const [visibleToolsMenuOpen, setVisibleToolsMenuOpen] = useState(false);
   const [toolboxPaletteVisible, setToolboxPaletteVisible] = useState(() => {
     try { return localStorage.getItem('noodimeister-toolbox-palette-visible') !== 'false'; } catch (_) { return true; }
@@ -14997,16 +15008,20 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
           </div>
         </div>
       )}
-      {notationMode === 'vabanotatsioon' && teacherPanelOpen && (
+      {notationMode === 'vabanotatsioon' && teacherPanelOpen && typeof document !== 'undefined' && createPortal(
         <div
           ref={teacherPanelRef}
           data-score-export-chrome
           role="dialog"
           aria-label={t('teacher.panelTitle')}
-          className="fixed z-[120] max-w-[min(96vw,42rem)] rounded-xl border-2 border-amber-300 bg-amber-50 shadow-2xl"
-          style={teacherPanelPosition
-            ? { top: teacherPanelPosition.top, left: teacherPanelPosition.left }
-            : { top: 88, left: 24, visibility: 'hidden' }}
+          className="fixed z-[120] max-w-[min(96vw,42rem)] rounded-xl border-2 border-amber-400 bg-amber-50 shadow-2xl"
+          style={{
+            top: teacherPanelPosition?.top ?? 88,
+            left: teacherPanelPosition?.left ?? 24,
+            // Ära peida enne paigutust — muidu tundub nagu vana inline-riba ja X jääb märkamata.
+            opacity: teacherPanelPosition ? 1 : 0.01,
+            pointerEvents: teacherPanelPosition ? 'auto' : 'none',
+          }}
         >
           <div
             className="flex items-center justify-between gap-2 border-b border-amber-200 bg-amber-100 px-3 py-2 rounded-t-xl cursor-grab active:cursor-grabbing select-none"
@@ -15024,9 +15039,9 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                 setActiveToolbox((prev) => (prev === 'pedagogical' ? null : prev));
               }}
               onMouseDown={(e) => e.stopPropagation()}
-              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-amber-300 bg-white text-amber-900 hover:bg-amber-200"
+              className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border-2 border-amber-500 bg-white text-amber-950 hover:bg-amber-200 text-xl font-bold leading-none"
             >
-              {icons?.X ? <icons.X className="h-4 w-4" /> : <span className="text-sm font-bold">×</span>}
+              ×
             </button>
           </div>
           <div className="flex flex-wrap items-center gap-3 px-3 py-2.5">
@@ -15139,7 +15154,8 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
               )}
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
       {scorePlayerPopupOpen && (
         <div
@@ -17735,7 +17751,10 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
               )}
             </div>
 
-            {TOOLBOX_ORDER.filter((id) => visibleToolIds.includes(id)).map((id) => {
+            {TOOLBOX_ORDER.filter((id) => (
+              visibleToolIds.includes(id)
+              || (id === 'pedagogical' && notationMode === 'vabanotatsioon')
+            )).map((id) => {
               if (id === 'pianoKeyboard' && isActiveUnpitchedPercussion) return null;
               if (id === 'pedagogical' && notationMode !== 'vabanotatsioon') return null;
               const toolbox = toolboxes[id];
