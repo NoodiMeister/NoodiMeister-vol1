@@ -20521,6 +20521,8 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                         effectiveShortcutPrefs['app.noteInputToggle'],
                         effectiveShortcutPrefs['app.undo'],
                         effectiveShortcutPrefs['app.redo'],
+                        // Defense in depth: Period = dotted (also in shouldIgnorePianoComputerKey).
+                        { code: 'Period', shift: false, alt: false, mod: false },
                       ].filter(Boolean)}
                       ignoreKeyboardWhenModalOpen={newWorkSetupOpen || saveCloudDialogOpen || googleLoadPickerOpen || settingsOpen || shortcutsOpen || showPdfExportPreview || isInstrumentManagerOpen}
                     />
