@@ -1814,12 +1814,14 @@ export function FigurenotesView({
                               )}
                               {typeof onMeasureContextMenu === "function" && (
                                 <rect
+                                  data-nm-selection-hit="1"
                                   x={measureX}
                                   y={sys.yOffset + padVertical}
                                   width={Math.max(1, measureWidth)}
                                   height={10}
                                   fill="transparent"
                                   style={{ cursor: "context-menu", pointerEvents: "all" }}
+                                  onMouseDown={(e) => { e.stopPropagation(); }}
                                   onContextMenu={(e) => {
                                     e.preventDefault();
                                     e.stopPropagation();

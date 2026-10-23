@@ -36,7 +36,10 @@ const DEPRECATED_PRODUCTION_HOSTS = new Set([
   'noodi-meister-vol1.vercel.app',
 ]);
 
-/** Esc vajutamine logib sisselogitud kasutaja välja ja suunab avalehele. */
+/**
+ * Esc → logout ainult väljaspool noodiredaktorit.
+ * Redaktoris (AGENTS): Esc = deselect / tühista — mitte välja logida.
+ */
 function EscapeLogoutHandler() {
   const navigate = useNavigate();
   const store = useNoodimeisterOptional();
@@ -44,12 +47,24 @@ function EscapeLogoutHandler() {
   useEffect(() => {
     const onKeyDown = (e) => {
       if (e.key !== 'Escape') return;
+      if (e.defaultPrevented) return;
       // Kui kasutaja parasjagu kirjutab (input/textarea/contentEditable), siis ära logi välja.
-      // Muidu katkestab Escape tekstikasti/pealkirja redigeerimise.
       const el = e.target;
       const tag = el?.tagName;
       const isTypingTarget = tag === 'INPUT' || tag === 'TEXTAREA' || el?.isContentEditable;
       if (isTypingTarget) return;
+      // Noodileht / partituur: Esc kuulub valiku tühistamisele (sinised kastid).
+      const path = String(window.location?.pathname || '');
+      if (
+        path === '/app'
+        || path.startsWith('/app/')
+        || path === '/demo-noodid'
+        || path.startsWith('/demo-noodid')
+        || path === '/part'
+        || path.startsWith('/part/')
+      ) {
+        return;
+      }
       if (!authStorage.isLoggedIn()) return;
       if (logout) logout();
       else authStorage.clearAuth();

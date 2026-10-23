@@ -1792,6 +1792,7 @@ export function TraditionalNotationView({
                   <g key={measureIdx}>
                     {(typeof onMeasureClick === 'function' || typeof onMeasureContextMenu === 'function') && (
                       <rect
+                        data-nm-selection-hit="1"
                         x={measureX}
                         y={staffY + staffBarTopY - spacing * 0.5}
                         width={Math.max(1, measureWidth)}
@@ -1801,6 +1802,7 @@ export function TraditionalNotationView({
                         stroke={isMeasureSelected ? '#3b82f6' : 'none'}
                         strokeWidth={isMeasureSelected ? 2 : 0}
                         style={{ cursor: 'pointer', pointerEvents: 'all' }}
+                        onMouseDown={(e) => { e.stopPropagation(); }}
                         onClick={(e) => {
                           e.stopPropagation();
                           onMeasureClick?.(measureIdx, e);
@@ -1839,6 +1841,8 @@ export function TraditionalNotationView({
                         {/* Left barline: E040 / E042 (Leland); ühine loogika repeatBarlineResolve */}
                         {leftBarlineRepeat.variant === 'both' ? (
                           <g
+                            data-nm-selection-hit="1"
+                            onMouseDown={typeof onSelectRepeatMark === 'function' ? (e) => { e.stopPropagation(); } : undefined}
                             onClick={typeof onSelectRepeatMark === 'function' ? (e) => {
                               e.stopPropagation();
                               onSelectRepeatMark(measureIdx, 'repeatStart', { toggle: !!(e.metaKey || e.ctrlKey) });
@@ -2294,14 +2298,16 @@ export function TraditionalNotationView({
                       const canDragPitch = noteInputMode && !note.isRest && typeof onNotePitchChange === 'function' && typeof getPitchFromY === 'function' && !canHandDragNotes;
                       const canDragBeat = canHandDragNotes && typeof onNoteBeatChange === 'function';
                       const noteGroupProps = {
+                        'data-nm-selection-hit': '1',
                         onClick: (e) => { e.stopPropagation(); onNoteClick?.(globalNoteIndex, e); },
                         onMouseDown: (e) => {
+                          // Ära lase lehe deselect’il mousedown’il valikut kustutada enne noodi klikki.
+                          e.stopPropagation();
                           if (typeof onNoteMouseDown === 'function') {
                             onNoteMouseDown(globalNoteIndex, e);
                             if (e.defaultPrevented) return;
                           }
                           if (canDragBeat && e.button === 0) {
-                            e.stopPropagation();
                             setNoteBeatDrag({ noteIndex: globalNoteIndex, startClientX: e.clientX });
                             return;
                           }
@@ -2309,7 +2315,6 @@ export function TraditionalNotationView({
                           // Keep plain click for selection. Pitch-drag is intentional only with Alt+drag.
                           if (!e.altKey) return;
                           if (e.button !== 0) return;
-                          e.stopPropagation();
                           lastPitchRef.current = { pitch: note.pitch, octave: note.octave };
                           setNoteDrag({ noteIndex: globalNoteIndex, staffY });
                         },

@@ -10407,6 +10407,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       }
       if ((e.key === 'Escape' || e.code === 'Escape') && !modKey) {
         const sel = cursorSelectionRef.current;
+        const msel = measureSelectionRef.current;
         const hadPointerSelection = !!(
           (sel && sel.kind && sel.kind !== 'none')
           || selectedRepeatMark
@@ -10414,12 +10415,16 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
           || selectedTextboxId
           || selectedClef
           || activeTextLineType
+          || (msel && Number.isInteger(msel.start))
           || measureSelection
+          || selectedNoteIndex >= 0
+          || (selectionStart >= 0 && selectionEnd >= 0)
           || handtoolResizePopup
         );
         const willCloseSelectionToolbox = shouldCloseToolboxOnDeselect(activeToolbox, { noteInputMode });
         if (hadPointerSelection || willCloseSelectionToolbox) {
           e.preventDefault();
+          e.stopPropagation();
           clearPointerSelection({ closeToolbox: true });
           return;
         }
@@ -11590,7 +11595,9 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         }
         if (e.key === 'Escape') {
           e.preventDefault();
-          setActiveToolbox(null);
+          e.stopPropagation();
+          // Toolbox Esc peab ka sinised valikukastid eemaldama (mitte ainult riba sulgema).
+          clearPointerSelection({ closeToolbox: true });
           setSelectedOptionIndex(0);
           return;
         }
@@ -18542,8 +18549,16 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
           data-nm-deselect-surface="1"
           onMouseDown={(e) => {
             if (e.button !== 0) return;
-            if (e.target !== e.currentTarget) return;
             if (activeToolbox === 'textBox') return;
+            const t = e.target;
+            // Laua/lehe chrome või mitte-valiku tabamus → deselect (sinised kastid kaovad).
+            if (typeof t?.closest === 'function') {
+              if (t.closest('[data-nm-selection-hit]')) return;
+              if (t.closest('input, textarea, select, button, label, a[href], [contenteditable="true"]')) return;
+            }
+            if (e.target !== e.currentTarget && typeof t?.closest === 'function' && !t.closest('[data-nm-deselect-surface]')) {
+              return;
+            }
             clearPointerSelection({ closeToolbox: true });
           }}
           onScroll={onMainScroll}
@@ -18912,9 +18927,14 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
               if (!Number.isNaN(optionIndex) && toolboxes.rhythm?.options?.[optionIndex]) handleToolboxSelection(optionIndex);
             }}
             onMouseDown={(e) => {
-              // Tühi lehe pind (mitte noot/takt/võti/tekst) → pointer deselect.
-              if (e.button === 0 && e.target === e.currentTarget && activeToolbox !== 'textBox') {
-                clearPointerSelection({ closeToolbox: true });
+              // Tühi lehe / joonestiku pind (mitte noot/takt/võti/tekst) → pointer deselect.
+              if (e.button === 0 && activeToolbox !== 'textBox') {
+                const t = e.target;
+                const hitSelection = typeof t?.closest === 'function' && t.closest('[data-nm-selection-hit]');
+                const hitUi = typeof t?.closest === 'function' && t.closest('input, textarea, select, button, label, a[href], [contenteditable="true"]');
+                if (!hitSelection && !hitUi) {
+                  clearPointerSelection({ closeToolbox: true });
+                }
               }
               if (isPedagogicalInteractiveMode && pedagogicalLivePreviewEnabled && isPedagogicalSceneAreaPicking && e.button === 0) {
                 e.preventDefault();
