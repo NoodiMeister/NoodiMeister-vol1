@@ -6,6 +6,8 @@ import {
   extractBeatRangeRelative,
   applyRepeatAfterBeat,
   findNoteIndicesInBeatRange,
+  clampNoteIndexToAnchorMeasure,
+  measureIndexForNoteIndex,
 } from '../src/musical/repeatSelection.js';
 
 function assert(cond, msg) {
@@ -48,5 +50,24 @@ const emptyTail = applyRepeatAfterBeat(
   [{ pitch: 'G', octave: 4, duration: 1, beat: 0 }],
 );
 assert(emptyTail.length === 2 && Math.abs(emptyTail[1].beat - 1) < 1e-6, 'repeat at end appends');
+
+// Measure boundary clamp (plain drag stays in anchor measure)
+const twoBarNotes = [
+  { pitch: 'C', octave: 4, duration: 1, beat: 0 },
+  { pitch: 'D', octave: 4, duration: 1, beat: 1 },
+  { pitch: 'E', octave: 4, duration: 1, beat: 2 },
+  { pitch: 'F', octave: 4, duration: 1, beat: 3 },
+  { pitch: 'G', octave: 4, duration: 1, beat: 4 },
+  { pitch: 'A', octave: 4, duration: 1, beat: 5 },
+];
+const twoBars = [
+  { startBeat: 0, endBeat: 4 },
+  { startBeat: 4, endBeat: 8 },
+];
+assert(measureIndexForNoteIndex(twoBarNotes, twoBars, 1) === 0, 'note 1 in measure 0');
+assert(measureIndexForNoteIndex(twoBarNotes, twoBars, 4) === 1, 'note 4 in measure 1');
+assert(clampNoteIndexToAnchorMeasure(twoBarNotes, twoBars, 0, 5) === 3, 'clamp drag to end of measure 0');
+assert(clampNoteIndexToAnchorMeasure(twoBarNotes, twoBars, 5, 1) === 4, 'clamp drag back to start of measure 1');
+assert(clampNoteIndexToAnchorMeasure(twoBarNotes, twoBars, 0, 2) === 2, 'within measure unchanged');
 
 console.log('check-repeat-selection: ok');

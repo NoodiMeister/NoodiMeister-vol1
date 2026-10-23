@@ -95,6 +95,7 @@ export function toolboxIdForSelection(selection) {
 
 /**
  * Kas note-klikk peab avama N-mode (plain click; mitte Shift-range ega lyric-click).
+ * MuseScore: klikk noodile = note select (+ sisestusrežiim); klikk tühjale taktile = bar select.
  * @param {{ shiftKey?: boolean, __nmLyricClick?: boolean } | null | undefined} eventLike
  * @param {{ cursorTool?: string }} ctx
  */
@@ -104,6 +105,12 @@ export function shouldEnterNoteInputOnNoteClick(eventLike, ctx = {}) {
   if (ctx.cursorTool === 'type') return false;
   return true;
 }
+
+/**
+ * Hit-test poliitika (dokumentatsioon + view’ide `data-nm-*-hit`):
+ * - `data-nm-note-hit` peal → note/range selection
+ * - `data-nm-measure-hit` (tühi takt) → measureRange
+ */
 
 /**
  * Ehita singleObject selection taktijoonte/korduste jaoks.

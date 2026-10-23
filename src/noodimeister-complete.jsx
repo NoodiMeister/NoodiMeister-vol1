@@ -131,6 +131,8 @@ import {
   insertBeatGapIntoChords,
 } from './musical/measureProperties';
 import {
+  beatAtNoteIndex,
+  clampNoteIndexToAnchorMeasure,
   extractNoteIndexRangeRelative,
   extractBeatRangeRelative,
   extractChordsBeatRangeRelative,
@@ -8930,18 +8932,19 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     });
   }, [cursorPosition, notes, notesWithExplicitBeats, saveToHistory, timeSignature]);
 
-  // Akordi lisamise asukoht: kursor (sisestusrežiim) või valitud noodi algus
+  // Akordi lisamise asukoht: valitud noot (MuseScore) → muidu kursor.
   const getChordInsertBeat = useCallback(() => {
-    let beat;
-    if (noteInputMode) beat = cursorPosition;
-    else if (selectedNoteIndex >= 0 && selectedNoteIndex < notes.length) {
-      beat = notes.slice(0, selectedNoteIndex).reduce((s, n) => s + n.duration, 0);
-    } else beat = cursorPosition;
+    let beat = cursorPosition;
+    if (selectedNoteIndex >= 0 && selectedNoteIndex < notes.length) {
+      beat = beatAtNoteIndex(notes, selectedNoteIndex);
+    } else if (selectionStart >= 0 && selectionEnd >= 0) {
+      beat = beatAtNoteIndex(notes, Math.min(selectionStart, selectionEnd));
+    }
     if (isHarmonyFormInstrument(staves[activeStaffIndex]?.instrumentId ?? instrument, instrumentConfig)) {
       return snapBeatToHarmonyChordGrid(beat, harmonyFormChordBeatStep, timeSignature);
     }
     return beat;
-  }, [noteInputMode, cursorPosition, selectedNoteIndex, notes, staves, activeStaffIndex, instrument, instrumentConfig, harmonyFormChordBeatStep, timeSignature]);
+  }, [cursorPosition, selectedNoteIndex, selectionStart, selectionEnd, notes, staves, activeStaffIndex, instrument, instrumentConfig, harmonyFormChordBeatStep, timeSignature]);
 
   const normalizeChordHotkey = useCallback((raw) => {
     const s = String(raw || '').trim();
@@ -11859,10 +11862,14 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
           return;
         }
 
-        // Valikurežiim: A–G muudab valitud nooti(de) kõla ja rakendab aktiivse rütmi
+        // Valikurežiim: A–G muudab valitud nooti kõla; akorditööriist avatud → akordimärk valitud noodi beat’ile.
         const noteLetterSel = e.key?.toLowerCase();
         if (['c', 'd', 'e', 'f', 'g', 'a', 'b'].includes(noteLetterSel) && selectedNoteIndex >= 0) {
           e.preventDefault();
+          if (activeToolbox === 'chords' || isHarmonyFormMode) {
+            addChordAt(getChordInsertBeat(), noteLetterSel.toUpperCase(), '');
+            return;
+          }
           const pitch = noteLetterSel.toUpperCase();
           const durationLabel = lastDurationRef.current ?? selectedDuration;
           const effectiveDuration = getEffectiveDuration(durationLabel);
@@ -12068,6 +12075,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     notesWithExplicitBeats, getBeatAtNoteIndex, noteToMidi,
     applyTieToSelection, applySlurToSelection, applyExtendSlurFromSelection,
     activeLegatoSlurPair, applyLegatoSlurExtendForPair, applyLegatoSlurRetractForPair, applyLegatoSlurRemoveForPair, applySelectionModel, clearPointerSelection,
+    isHarmonyFormMode,
   ]);
 
   // JO-võti: klõps väljaspool võtit lõpetab valiku
@@ -13125,7 +13133,14 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     if (e.button !== 0) return;
     e.preventDefault();
     e.stopPropagation();
-    selectionDragRef.current = { startIndex: noteIndex, lastIndex: noteIndex, pointerDown: true, moved: false };
+    // Shift all = üle taktipiiri; ilma Shiftita jääb valik ankru takti sisse.
+    selectionDragRef.current = {
+      startIndex: noteIndex,
+      lastIndex: noteIndex,
+      pointerDown: true,
+      moved: false,
+      crossMeasure: !!e.shiftKey,
+    };
     if (notationStyle !== 'FIGURENOTES') {
       setNoteInputMode(false);
     }
@@ -13141,17 +13156,21 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     const drag = selectionDragRef.current;
     if (!drag || !drag.pointerDown) return;
     e?.stopPropagation?.();
-    if (noteIndex !== drag.lastIndex) {
+    const allowCrossMeasure = !!(drag.crossMeasure || e?.shiftKey);
+    const focusIndex = allowCrossMeasure
+      ? noteIndex
+      : clampNoteIndexToAnchorMeasure(notes, measuresRef.current, drag.startIndex, noteIndex);
+    if (focusIndex !== drag.lastIndex) {
       drag.moved = true;
-      drag.lastIndex = noteIndex;
+      drag.lastIndex = focusIndex;
     }
     const current = cursorSelectionRef.current;
     if (current.kind === 'range') {
-      applySelectionModel({ kind: 'range', anchorIndex: current.anchorIndex, focusIndex: noteIndex });
+      applySelectionModel({ kind: 'range', anchorIndex: current.anchorIndex, focusIndex });
     }
     // Keep cursor/playhead synced to the currently hovered end of the selection.
     setCursorSubRow(0);
-    setCursorPosition(getBeatAtNoteIndex(notes, noteIndex));
+    setCursorPosition(getBeatAtNoteIndex(notes, focusIndex));
   }, [getBeatAtNoteIndex, notes, applySelectionModel]);
 
   const handleScoreContentClick = useCallback((e) => {

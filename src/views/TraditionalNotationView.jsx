@@ -1793,6 +1793,7 @@ export function TraditionalNotationView({
                     {(typeof onMeasureClick === 'function' || typeof onMeasureContextMenu === 'function') && (
                       <rect
                         data-nm-selection-hit="1"
+                        data-nm-measure-hit="1"
                         x={measureX}
                         y={staffY + staffBarTopY - spacing * 0.5}
                         width={Math.max(1, measureWidth)}
@@ -1805,6 +1806,7 @@ export function TraditionalNotationView({
                         onMouseDown={(e) => { e.stopPropagation(); }}
                         onClick={(e) => {
                           e.stopPropagation();
+                          // Tühi takt (mitte noot): measure select. Noodid on peal eraldi hit-alaga.
                           onMeasureClick?.(measureIdx, e);
                         }}
                         onContextMenu={(e) => {
@@ -2297,11 +2299,15 @@ export function TraditionalNotationView({
                           : (pitchY > middleLineY);
                       const canDragPitch = noteInputMode && !note.isRest && typeof onNotePitchChange === 'function' && typeof getPitchFromY === 'function' && !canHandDragNotes;
                       const canDragBeat = canHandDragNotes && typeof onNoteBeatChange === 'function';
+                      // Hit-ala eraldab note select’i measure select’ist (tühi takt).
+                      const noteHitHalfW = Math.max(14, spacing * 1.4);
+                      const noteHitHalfH = Math.max(16, spacing * 1.7);
                       const noteGroupProps = {
                         'data-nm-selection-hit': '1',
+                        'data-nm-note-hit': '1',
                         onClick: (e) => { e.stopPropagation(); onNoteClick?.(globalNoteIndex, e); },
                         onMouseDown: (e) => {
-                          // Ära lase lehe deselect’il mousedown’il valikut kustutada enne noodi klikki.
+                          // Ära lase lehe/takti deselect+select mousedown’il noodi klikki varastada.
                           e.stopPropagation();
                           if (typeof onNoteMouseDown === 'function') {
                             onNoteMouseDown(globalNoteIndex, e);
@@ -2321,6 +2327,17 @@ export function TraditionalNotationView({
                         onMouseEnter: typeof onNoteMouseEnter === 'function' ? (e) => onNoteMouseEnter(globalNoteIndex, e) : undefined,
                         style: { cursor: (onNoteClick || canDragPitch || canDragBeat) ? 'pointer' : undefined }
                       };
+                      const makeNotePointerHitRect = (cy) => (
+                        <rect
+                          key="nm-note-hit"
+                          x={noteX - noteHitHalfW}
+                          y={cy - noteHitHalfH}
+                          width={noteHitHalfW * 2}
+                          height={noteHitHalfH * 2}
+                          fill="transparent"
+                          pointerEvents="all"
+                        />
+                      );
                       const restLabelY = staffY + lastLineY + spacing * 1.8;
 
                       if (note.isRest) {
@@ -2347,6 +2364,7 @@ export function TraditionalNotationView({
                               : staffY + staffCenterY;
                         return (
                           <g key={noteIdx} {...noteGroupProps}>
+                            {makeNotePointerHitRect(restAnchorY)}
                             {drawRestGlyph && renderStandardRest(note, noteX, restAnchorY, spacing)}
                             {drawRestGlyph && note.isDotted && (
                               <SmuflGlyph
@@ -2403,13 +2421,14 @@ export function TraditionalNotationView({
                       const visibleAccidental = resolveVisibleAccidentalForDisplay(note, keySignature, isVabanotatsioon);
                       return (
                         <g key={noteIdx} {...noteGroupProps}>
+                          {makeNotePointerHitRect(noteY)}
                           {nLedgerAbove > 0 && Array.from({ length: nLedgerAbove }, (_, i) => (
                             <line key={`la-${i}`} x1={noteX - ledgerHalfWidth} y1={staffY + firstLineY - (i + 1) * spacing} x2={noteX + ledgerHalfWidth} y2={staffY + firstLineY - (i + 1) * spacing} stroke="#333" strokeWidth={getLegerLineThickness(spacing)} />
                           ))}
                           {nLedgerBelow > 0 && Array.from({ length: nLedgerBelow }, (_, i) => (
                             <line key={`lb-${i}`} x1={noteX - ledgerHalfWidth} y1={staffY + lastLineY + (i + 1) * spacing} x2={noteX + ledgerHalfWidth} y2={staffY + lastLineY + (i + 1) * spacing} stroke="#333" strokeWidth={getLegerLineThickness(spacing)} />
                           ))}
-                          {isSelected && <rect x={noteX - 18} y={noteY - 22} width={36} height={44} fill="#93c5fd" opacity="0.3" rx="4" />}
+                          {isSelected && <rect x={noteX - noteHitHalfW} y={noteY - noteHitHalfH} width={noteHitHalfW * 2} height={noteHitHalfH * 2} fill="#93c5fd" opacity="0.3" rx="4" pointerEvents="none" />}
                           {(visibleAccidental === 1 || visibleAccidental === -1 || visibleAccidental === 0) && (
                             <text x={noteX - (noteheadRx + ensureMinGlyphHorizontalGapPx(spacing * 0.5))} y={noteY} textAnchor="middle" dominantBaseline="central" fontSize={Math.round(spacing * 1.4)} fill={noteFillColor} fontFamily="serif">{visibleAccidental === 1 ? '♯' : visibleAccidental === -1 ? '♭' : '♮'}</text>
                           )}

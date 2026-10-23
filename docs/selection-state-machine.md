@@ -25,11 +25,11 @@ See dokument fikseerib Noodimeistri valiku (selection) käitumise nii, et see ol
 
 | Hit target | Next state | Toolbox | Lubatud käsud / UX |
 |---|---|---|---|
-| Tühi takt | `measureRange` (üks takt) | `layout` | reavahetus / ühendus eelmise reaga |
+| Tühi takt (väljaspool noodi hit’i) | `measureRange` (üks takt) | `layout` | reavahetus / ühendus; **mitte** note-käsud |
 | Taktijoon / topelt / kordus / hüpe | `singleObject` | `repeatsJumps` | Backspace → single barline / eemalda märk |
 | Tekstikast / pealkiri / autor | `singleObject` (text*) | `textBox` (+ floating text) | redigeeri teksti |
 | Võti (clef) | `singleObject` (clef) | `clefs` | vaheta glüüf → score uueneb |
-| Noot / paus | `note` | `rhythm` + **N-mode** | kestus, artikulatsioon, kõrgus |
+| Noot / paus (noodipea hit) | `note` | `rhythm` + **N-mode** | ↑↓ kõrgus; kestus; akordimärk noodi beat’ile; measure highlight kaob |
 | Shift+Click noot | `range` | (ei sunni N-mode) | range highlight |
 
 Poliitika: `src/orchestrator/pointerClickPolicy.js` (`toolboxIdForSelection`).
@@ -39,9 +39,10 @@ Poliitika: `src/orchestrator/pointerClickPolicy.js` (`toolboxIdForSelection`).
 | Event | Current State | Next State | Visual | Lubatud käsud |
 |---|---|---|---|---|
 | Click noot | any | `note` (+ N-mode) | noodi sinine highlight | Delete→rest, Copy; rhythm toolbox |
-| Shift+Click noot | `note`/`range` | `range` | range highlight | Delete→rest, Copy |
+| Left-drag noot→noot (ilma Shift) | `note`/`range` | `range` **sama takti sees** | range highlight | taktipiir = ankru takti start/endBeat |
+| Shift+Click / Shift+drag noot | `note`/`range` | `range` (võib üle takti) | range highlight | Delete→rest, Copy |
 | Shift+Arrow Left/Right | `note`/`range` | `range` | range highlight | Copy |
-| Click tühi takt | any | `measureRange` | sinine takti kast | layout; paremklikk → kontekstimenüü |
+| Click tühi takt | any | `measureRange` (üks takt) | sinine takti kast | layout; paremklikk → kontekstimenüü |
 | Right-click takt | any | `measureRange` (+ menüü) | sinine kast + menüü | properties / insert / delete / copy / paste |
 | Teine left-click samale taktile | `measureRange` | `measureRange` (sama) | kast jääb | **ei** deselecti (erinevalt taktijoonest/võtmest) |
 | Shift+Arrow Left/Right (taktivalik aktiivne) | `measureRange` | `measureRange` (focus nihkub) | sinine kast laieneb/kahaneb | MuseScore: anchor fikseeritud, focus liigub |

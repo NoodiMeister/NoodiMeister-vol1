@@ -2996,6 +2996,8 @@ export function FigurenotesView({
                             const noteY = beatBoxBottomY - figureSize / 2;
                             const canDragBeat = canDragBeatOnThisRow;
                             const noteGroupProps = {
+                              "data-nm-selection-hit": "1",
+                              "data-nm-note-hit": "1",
                               onClick: (e) => {
                                 e.stopPropagation();
                                 if (combinedRows)
@@ -3003,6 +3005,7 @@ export function FigurenotesView({
                                 else onNoteClick?.(globalNoteIndex, e);
                               },
                               onMouseDown: (e) => {
+                                e.stopPropagation();
                                 if (
                                   typeof onNoteMouseDown === "function" &&
                                   e.shiftKey
@@ -3017,7 +3020,6 @@ export function FigurenotesView({
                                   return;
                                 }
                                 if (canDragBeat && e.button === 0) {
-                                  e.stopPropagation();
                                   setNoteBeatDrag({
                                     noteIndex: globalNoteIndex,
                                     startClientX: e.clientX,

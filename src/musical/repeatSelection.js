@@ -7,6 +7,20 @@ import { insertBeatGapIntoStaffNotes, insertBeatGapIntoChords } from './measureP
 
 const EPS = 1e-6;
 
+/**
+ * MuseScore-laadne hit-test eristus:
+ * - klikk noodipea hit-alale → note select
+ * - klikk takti tühjale alale (väljaspool noodi hit’i) → measure select
+ */
+export const NOTE_POINTER_HIT = Object.freeze({
+  /** Traditsiooniline noodipea / pausi tabamisala (SVG px umbes staffSpace~12). */
+  traditionalHalfW: 18,
+  traditionalHalfH: 22,
+  /** Figuurnoodi ploki tabamisala. */
+  figurenotesHalfW: 22,
+  figurenotesHalfH: 26,
+});
+
 /** Absoluutne alguslöök noodi indeksil (toetab nii beat-välja kui järjestikust kestust). */
 export function beatAtNoteIndex(staffNotes, index) {
   if (index < 0 || index >= (staffNotes?.length ?? 0)) return 0;
@@ -18,6 +32,52 @@ export function beatAtNoteIndex(staffNotes, index) {
     beat = noteBeat + (Number(n.duration) || 1);
   }
   return beat;
+}
+
+/**
+ * Taktindeks noodi indeksist (takti startBeat/endBeat järgi).
+ * @returns {number} -1 kui ei leia
+ */
+export function measureIndexForNoteIndex(staffNotes, measures, noteIndex) {
+  if (!Array.isArray(measures) || measures.length === 0) return -1;
+  const beat = beatAtNoteIndex(staffNotes, noteIndex);
+  const i = measures.findIndex((m) => beat >= m.startBeat - EPS && beat < m.endBeat - EPS);
+  if (i >= 0) return i;
+  const last = measures[measures.length - 1];
+  if (last && beat >= last.startBeat - EPS && beat <= last.endBeat + EPS) return measures.length - 1;
+  return -1;
+}
+
+/** Nootide indeksid, mille algus jääb takti [startBeat, endBeat). */
+export function noteIndicesInMeasure(staffNotes, measure) {
+  if (!measure) return [];
+  const blockStart = Number(measure.startBeat) || 0;
+  const blockEnd = Number(measure.endBeat) || blockStart;
+  const out = [];
+  let run = 0;
+  (staffNotes || []).forEach((n, i) => {
+    const s = typeof n.beat === 'number' ? n.beat : run;
+    const dur = Number(n.duration) || 1;
+    run = s + dur;
+    if (s >= blockStart - EPS && s < blockEnd - EPS) out.push(i);
+  });
+  return out;
+}
+
+/**
+ * Plain left-drag: ära ületa taktipiiri. Shift lubab üle takti.
+ * Kui focus on väljaspool ankru takti, klambi ankru takti äärmise noodini (sama suund).
+ */
+export function clampNoteIndexToAnchorMeasure(staffNotes, measures, anchorIndex, focusIndex) {
+  if (!Number.isInteger(anchorIndex) || !Number.isInteger(focusIndex)) return focusIndex;
+  if (anchorIndex === focusIndex) return focusIndex;
+  const mi = measureIndexForNoteIndex(staffNotes, measures, anchorIndex);
+  if (mi < 0 || !measures?.[mi]) return focusIndex;
+  const idxs = noteIndicesInMeasure(staffNotes, measures[mi]);
+  if (idxs.length === 0) return anchorIndex;
+  if (idxs.includes(focusIndex)) return focusIndex;
+  if (focusIndex > anchorIndex) return idxs[idxs.length - 1];
+  return idxs[0];
 }
 
 /**
