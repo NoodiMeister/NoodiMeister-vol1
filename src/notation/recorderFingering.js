@@ -2,20 +2,22 @@
  * Soprano C plokkflööt — Saksa sõrmestus (SVG-augudiagramm).
  * Üks tõde: TraditionalNotationView + eelvaatekaart.
  *
- * Oktaavid (teaduslik / MIDI): madalaim noot = C4 (mitte C5).
+ * Oktaavid (teaduslik / MIDI): madalaim noot = C4.
  * Pöial eraldi; 7 sõrmeauku ülevalt alla (LH1–3, RH4–7).
- * true/1 = kinni, false/0 = lahti, 'half' = poolenisti.
- * D5+: sama sõrmestus mis oktav all, pöial täielikult kinni; "+" = ülemine register.
+ * true/1 = kinni, false/0 = lahti, 'half' = poolenisti (pool must / pool valge).
+ * D5–B5: sama sõrmestus mis oktav 4, pöial half (mitte "+" märk).
+ * F♯: I–III kinni, IV lahti, V–VI kinni, VII lahti.
  * C♯: Yubioto (Saksa = barokk C♯ osas).
  */
 
-/** Sõrmeaugud ülevalt alla (LH1–3, RH4–7). C4 = kõik kinni; C5 eraldi all. */
+/** Sõrmeaugud ülevalt alla (LH1–3, RH4–7). */
 export const RECORDER_FINGER_HOLES = {
   C: [1, 1, 1, 1, 1, 1, 1],
   D: [1, 1, 1, 1, 1, 1, 0],
   E: [1, 1, 1, 1, 1, 0, 0],
   F: [1, 1, 1, 1, 0, 0, 0],
-  'F#': [1, 1, 1, 1, 0, 1, 0],
+  /** F♯4/F♯5: I–III kinni, IV lahti, V–VI kinni, VII lahti */
+  'F#': [1, 1, 1, 0, 1, 1, 0],
   G: [1, 1, 1, 0, 0, 0, 0],
   'G#': [1, 1, 0, 1, 1, 0, 0],
   A: [1, 1, 0, 0, 0, 0, 0],
@@ -48,18 +50,16 @@ export function getRecorderFingeringPattern(pitch, octave) {
   const sharpFromFlat = { Db: 'C#', Eb: 'D#', Gb: 'F#', Ab: 'G#', Bb: 'A#' };
   const normalized = sharpFromFlat[pitch] || pitch;
   const low = RECORDER_LOWEST_OCTAVE; // 4
-  const mid = low + 1; // 5 — C5 kõik lahti / C#5 eraldi
-  const high = low + 2; // 6 — C6
+  const mid = low + 1; // 5
+  const high = low + 2; // 6
 
   if (normalized === 'C' && !String(pitch).includes('#')) {
     if (octave === low) {
       return { thumb: true, holes: recorderHolesFromBits(RECORDER_FINGER_HOLES.C), overblow: false };
     }
-    // C5: pöial kinni, I lahti, II kinni, III–VII lahti
     if (octave === mid) {
       return { thumb: true, holes: recorderHolesFromBits(RECORDER_C5_HOLES), overblow: false };
     }
-    // C6: pöial lahti, kõik sõrmeaugud lahti
     if (octave === high) {
       return { thumb: false, holes: recorderHolesFromBits(RECORDER_HOLES_ALL_OPEN), overblow: false };
     }
@@ -79,8 +79,8 @@ export function getRecorderFingeringPattern(pitch, octave) {
   const holes = recorderHolesFromBits(RECORDER_FINGER_HOLES[normalized]);
   if (!holes) return null;
   if (octave === low) return { thumb: true, holes, overblow: false };
-  // D5+ (ülemine register): pöial täielikult kinni — "+" näitab registrit
-  if (octave >= mid) return { thumb: true, holes, overblow: true };
+  // D5–B5 (ja sama register kõrgemal): sama sõrmestus, pöial half — ilma "+" märgita
+  if (octave >= mid) return { thumb: 'half', holes, overblow: false };
   return null;
 }
 
