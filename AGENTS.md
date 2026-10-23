@@ -9,7 +9,7 @@ Noodimeister peab käituma “õpetaja tööriistana”: võimalikult vähe üll
 Kõik muudatused peavad hoidma kasutaja teekonnad tervena:
 
 - **Auth**: kasutaja saab registreerida ja sisse logida isikliku konto / Google / Microsoft kanaliga, kuid identiteeti ei tohi automaatselt kokku liita üle providerite. `provider + email` moodustab konto identiteedi; erinevad Google/Microsoft e-mailid peavad jääma eraldi kontodeks ja eraldi tööruumideks.
-- **Minu tööd**: kaustade ja failide loomine + haldus (loodud tööde turvaline säilimine) — sh nooditööd, kujundaja ja **Muusika stuudio** materjalid.
+- **Minu tööd**: kaustade ja failide loomine + haldus (loodud tööde turvaline säilimine).
 - **No-overwrite**: failid ei tohi üksteist üle kirjutada; konfliktid lahendatakse selgelt (rename/duplicate/version), mitte vaikimisi overwrite’iga.
 - **Noodistusmootor**: noodi/akordi sisestus ja eemaldus peab olema deterministlik, kursor ei tohi skip’ida ega “joosta”.
 - **Sisestuse kvaliteet**: tekstikastide, nootide, akordide, TAB-ide ja fingering-märkide sisestus peab töötama sujuvalt, täpselt ja ilma lag'ita; ükski sisestus ei tohi juhuslikult dubleeruda, kaduda või nihkuda.
@@ -130,7 +130,7 @@ Kõik muudatused peavad hoidma kasutaja teekonnad tervena:
   - Selection, click, Shift+Arrow, Shift+drag peavad muutma ühtset kursori/valiku mudelit; UI ei tohi pidada paralleelset “salatõde”.
   - **Caret vs beat:** `cursorBeat` võib layout’i jaoks jääda; **nähtav caret** peidetakse tühja ala (leht/laud/takt ilma noodita) klikil (`scoreCursorVisible=false`) ja tuuakse tagasi noodi klikil või nooleklahvidega.
   - **Noodi klikk:** caret viiakse **täpselt** selle noodi beat’ile (mitte ennustatud/naaber-taktile).
-  - **Caret + ghost sama X:** ghost-preview ei tohi olla kestuse pooliku võrra nihutatud; muidu tundub kursor “laiali”. Olemasoleval noodil ainult caret (ghost peidus); tühjal pesal ghost sama ankruga.
+  - **Caret + ghost sama X:** ghost-preview ei tohi olla kestuse pooliku võrra nihutatud; muidu tundub kursor “laiali”. **N-mode:** ghost on alati nähtav (sisestusoktaavi/kõrguse eelvaade); caret ja ghost jagavad sama X-ankrut. Olemasoleva noodi peal ghost on madalama opacity’ga (mitte peidus), et õpetaja näeks ikka, millisesse oktaavi järgmine noot läheb.
   - **Loo lõpp:** kui `cursorBeat >= maxCursor` (viimase takti lõpp), `ArrowRight` jätab kursori sinna; autopikendus ainult reaalse noodi/patterni sisestusel, mitte nooleliikumisel.
   - **Renderi ankur:** `findSystemAtBeat` peab lõpu-beat’i kinnitama **viimasele** süsteemile (mitte kukkuma esimesele reale).
 
@@ -150,13 +150,40 @@ Kõik muudatused peavad hoidma kasutaja teekonnad tervena:
 
 - **Standard: pedagoogilised kuvarežiimid A/B/C/D**
   - Kehtib ainult pedagoogilise faili sees (`notationMode` / `vabanotatsioon`); `sourceNotationMode` jääb lukku.
-  - `pedagogicalDisplayMode`: **A** `joStaff` (JO-võti + noodid), **B** `joStaffHandSigns` (JO + käemärgid noodi all enne laulusõnu), **C** `handSignLyrics` (7 astmejoont, käemärgid glüüfide asemel, laulusõnad all), **D** `interactive` (interaktiivne playback: taustheli, cue’d, playhead, meedia-toolbar, animatsiooni eksport).
+  - `pedagogicalDisplayMode`: **A** `joStaff` (JO-võti + noodid), **B** `joStaffHandSigns` (JO + käemärgid noodi all enne laulusõnu), **C** `handSignLyrics` (7 astmejoont, käemärgid glüüfide asemel, laulusõnad all), **D** `interactive` = tootenimi **Muusika stuudio** (interaktiivne õppematerjal: noodid + video/audio + sync; vt eraldi standard allpool).
   - A/B/C/D on **sama loo vaated** (`notes`, lyrics, taktimõõt, JO-ankur) — vahetus ei dubleeri ega kustuta andmeid.
   - **A/B/C = noodistus** (sisestus, korrastus, kuvamine). Playbacki UI ja süsteemid **ei tohi** A/B/C-s olla peal ega segada sisestust.
-  - **D = interaktiivne režiim**: kogu pedagoogiline playback (heli, cue, playhead-stiilid, alumine meedia-toolbar, video ruler, animatsiooni eksport) elab **ainult** D all. D-st lahkudes peatatakse taasesitus.
+  - **D = Muusika stuudio**: kogu interaktiivne playback (heli/video, cue, playhead, meedia-toolbar, video ruler, sync, animatsiooni eksport) elab **ainult** D all. D-st lahkudes peatatakse taasesitus.
   - C: alumine joon = JO … ülemine = DI; taktijooned 1.–7. jooneni; X = beat/taktimõõt (ti-ti lähestikku); käemärk RTL peegel ainult renderdamisel (uTheory ND); `handSignStyle.showDegreeLines` võib horisontaalsed astmejooned peita.
   - Ülemine **Režiim/meetod** riba: T/F/P → (kui P) A/B/C/D → (kui C) Style; A–D ei dubleerita teacher-paneelis.
   - Detailid: `docs/PEDAGOGICAL-NOTATION-REQUIREMENTS.md` §5.
+
+- **Standard: Muusika stuudio (interaktiivne õppematerjal / D)**
+  - **Mis see on:** Soundslice-taoline **õppematerjali keskkond** Noodimeistris — mitte noodigraafika redaktor. Kasutaja seob nooditöö + õppevideo/-heli, sünkroonib (käsitsi või AI) ja harjutab / ekspordib.
+  - **Minu tööd (sisenemine):** Muusika stuudio on **eraldi töö tüüp** loomise/laadimise valikute hulgas (kõrvuti “Uus töö”, kujundaja, import jms) — nt **“Uus Muusika stuudio”** / **“Ava Muusika stuudio”**. Avamisel saab: (a) alustada tühjast stuudio-dokumendist, (b) **tuua sisse** olemasolev Noodimeistri töö (rikas ülekanne), (c) avada juba salvestatud stuudio-fail. Filtreerimine/märgistamine Minu töödes peab stuudio materjali eristama tavalisest nooditööst (nt `projectKind: 'musicStudio'` või laiend/meta).
+  - **Kujundus (UX ankur):** üks stuudio-vaade = noodigraafika + video/player + **timeline/ruler** + sync tööriistad. Peamine CTA: lae noodid, lae video, sync, harjuta, ekspordi. Ei dubleeri A/B/C noodistusribasid; stuudio on “õppematerjali montaaž”, mitte engraving.
+  - **Rikas ülekanne:** Noodimeistri projektist stuudiosse tulevad **kõik noodiga seotud andmed** (sh augudiagrammid, käemärgid, režiimispetsiifiline kuvainfo). MusicXML jääb väliseks sillaks; stuudio sisene ülekanne ei tohi neid kihte ära visata.
+  - **Põhivoog:** (1) lae/seo noodid → (2) lae õppevideo või -heli → (3) sync (käsitsi või autosync) → (4) harjuta → (5) salvesta / ekspordi. Sync/media on stuudio-kiht; nooditõde ei kao ega dubleeru mõttetult.
+  - **Videoallikad (kohustuslikud):**
+    - **YouTube** — kasutaja sisestab lingi; stuudio salvestab viite (URL + videoId), mitte YouTube’i faili koopiat.
+    - **Üleslaaditav fail** — MP4 ja muud toetatud videoformaadid (vähemalt MP4; võimalusel WebM jms); fail elab kasutaja pilvekaustas *sidecar*’ina (sama muster mis pedagoogiline audioAsset).
+    - Audio-only (MP3 jms) on lubatud sama sync-mudeli peal.
+  - **Käsitsi sync:** takti (vajadusel löögi) põhiselt — ruler / syncpunktid seovad media aja noodigraafikaga; nood ↔ media navigeerimine kahesuunaline (Soundslice-analoog).
+  - **Autosync (AI):** võrdleb laetud video/audio tempot ja struktuuri loo nootide ajateljega ning **pakub** ruler’i sync’i. Tulemus ülevaatatav ja käsitsi korrigeeritav; AI ei lukusta valesid punkte ilma eelvaate / kinnituseta.
+  - **Salvestusmudel:** stuudio on **oma dokument** (soovitus: `.nms` või `.nm` + `projectKind: 'musicStudio'`), mis sisaldab:
+    - viide / embeditud nooditõde (snapshot või linked `sourceProjectId` + snapshot versioon — no-overwrite: stuudio ei kirjuta vaikimisi üle algset nooditööd);
+    - media: `youtube` viide **või** `videoAsset` / `audioAsset` `{ provider, fileId, folderId, mimeType, fileName, … }`;
+    - synckaart (takt/beat ↔ media aeg), cue’d, playhead/export seaded.
+    - Binäärid (üleslaetud video) **ei** lähe JSON-i base64 sisse püsivalt; pilvele upload + JSON ref (nagu olemasolev `*Asset` muster).
+  - **Salvestuskeskkond:** sama mis Minu tööd — kasutaja **Google Drive / OneDrive** kaustad + faili ID; kohalik dev võib olla fallback. Stuudio fail ja selle video-sidecar peavad kuuluma **samasse loogilisse tööruumi** (konto `provider + email`).
+  - **Kaustadesse tõstmine / kopeerimine (Minu tööd):**
+    - Stuudio materjali saab **liigutada** ja **kopeerida** konkreetsesse valmis tööde kausta nagu teisi töid (sama move/copy UX).
+    - **Move:** stuudio JSON + seotud üleslaetud media-sidecari(d) peavad liikuma koos (või refs uuendatakse sihtkausta); YouTube-viide liigub JSON-iga (eraldi faili pole).
+    - **Copy:** uus fail + uued media koopiad (mitte jagatud fileId, mis katkeb); nimi `(koopia)` muster; ei overwrite’i.
+    - Katkine media-ref pärast move/copy on P0 — copy ei tohi olla “ainult JSON” kui video on üleslaetud fail.
+  - **Eksport:** peamine suund **MP4** (sünkroonitud õppevideo / animatsioon+noodid vastavalt stuudio seadetele). Eksport võib alla laadida või salvestada valitud Minu tööd kausta. YouTube’i üleslaadimine pole vaikimisi osa sellest standardist (ainult *sisend* lingiga).
+  - **Eraldus A/B/C noodistusest:** stuudio UI/runtime ei ole peal noodistamisel; kui stuudio on seotud pedagoogilise D vaatega, D-st / stuudiost lahkudes playback peatub.
+  - Detailid: `docs/MUUSIKA-STUUDIO.md` (UX + JSON mustand); `docs/PEDAGOGICAL-NOTATION-REQUIREMENTS.md` §5.4.
 
 - **Standard: käemärkide nähtavus (C)**
   - `handSignStyle`: `sizePercent` (50…200; 100 = vaikimisi, 200 = 2× vektorskaala) ja `contrast` (0…1; peenike → väga paks SVG stroke).

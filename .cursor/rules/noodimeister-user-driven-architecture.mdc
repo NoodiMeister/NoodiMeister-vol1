@@ -13,7 +13,7 @@ Noodimeistri arhitektuur peab lähtuma kasutaja “teekondadest”. Kõik muudat
   - konto identiteet on `provider + email`
   - erinevad Google ja Microsoft e-mailid peavad jääma eraldi kontodeks
   - eraldi kontodel peavad olema eraldi tööruumid, sessioonid ja pilvekäitumine
-- **Minu tööd**: kasutaja saab luua/halda kaustu ja faile, ning hallata loodud töid (nimetamine, liigutamine, kustutamine, avamine).
+- **Minu tööd**: kasutaja saab luua/halda kaustu ja faile, ning hallata loodud töid (nimetamine, liigutamine, kustutamine, avamine) — sh nooditööd, kujundaja ja **Muusika stuudio** õppematerjalid.
 - **Failide ohutus**: kasutaja ei tohi kogeda, et failid kirjutavad üksteist üle või “kaovad”.
 - **Noodistusmootor**: sisestus/eemaldus (noot + akord) peab olema deterministlik ja ennustatav.
 - **Tekstikastid**: kasutaja lohistab/valib ala → tekstikast tekib täpselt sinna; eelvaated/vaated peavad olema identsed.

@@ -11516,18 +11516,60 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
           playNoteAtBeatIfEnabled(Math.min(maxCursor, endBeat));
           return;
         }
-        // Shift+Arrow Up/Down (või Cmd/Ctrl+Arrow) N-režiimis muudab ainult ghost-oktaavi.
-        // See hoiab sisestusvoo deterministliku: oktaavivahetus ei tohi kogemata olemasolevat nooti muuta.
+        // N-mode pitch/octave target: selection or note spanning caret.
+        // Caret at note end (half-open) = insert slot → ghost only (visible octave preview).
+        const resolveNModePitchEditTarget = () => {
+          if (selectedNoteIndex >= 0 || (selectionStart >= 0 && selectionEnd >= 0)) {
+            return { kind: 'selection' };
+          }
+          const atCursor = getNoteIndexAtCursor();
+          if (atCursor >= 0) return { kind: 'index', index: atCursor };
+          return { kind: 'none' };
+        };
+        // Shift / Cmd/Ctrl+↑↓: oktaav valitud/kursori noodil (nagu SEL); muidu ghost-oktaav sisestuseks.
+        // Rida/akordivahetus N-režiimis: Tab+↑↓ (mitte Cmd).
         if ((e.code === 'ArrowUp' || e.code === 'ArrowDown') && (e.shiftKey || modKey)) {
           e.preventDefault();
           const dir = e.code === 'ArrowUp' ? 1 : -1;
           const pedOctBounds = isPedagogicalNotationMode(notationMode)
             ? { minOctave: PEDAGOGICAL_WRITING_MIN_OCTAVE, maxOctave: PEDAGOGICAL_WRITING_MAX_OCTAVE }
             : {};
+          if (!(hasChordRow && cursorSubRow === 1)) {
+            const target = resolveNModePitchEditTarget();
+            if (target.kind === 'selection') {
+              const firstIdx = selectionStart >= 0 && selectionEnd >= 0
+                ? Math.min(selectionStart, selectionEnd)
+                : selectedNoteIndex;
+              const firstNote = notes[firstIdx];
+              applyToSelectedNotes((n) => (n.isRest ? {} : { octave: shiftOctave(n.octave, dir, pedOctBounds) }));
+              if (firstNote && !firstNote.isRest) {
+                const nextOct = shiftOctave(firstNote.octave, dir, pedOctBounds);
+                setGhostOctave(nextOct);
+                if (playNoteOnInsert) {
+                  playPianoNote(firstNote.pitch, nextOct, firstNote.accidental ?? 0);
+                }
+              }
+              return;
+            }
+            if (target.kind === 'index') {
+              const note = notes[target.index];
+              if (note && !note.isRest) {
+                saveToHistory(notes);
+                const nextOct = shiftOctave(note.octave, dir, pedOctBounds);
+                setNotes((prev) => prev.map((n, i) => (i === target.index ? { ...n, octave: nextOct } : n)));
+                setGhostPitch(note.pitch);
+                setGhostOctave(nextOct);
+                const playAcc = getEffectiveAccidental(note, keySignature);
+                setGhostAccidental(playAcc);
+                if (playNoteOnInsert) playPianoNote(note.pitch, nextOct, playAcc);
+                return;
+              }
+            }
+          }
           setGhostOctave(shiftOctave(ghostOctave, dir, pedOctBounds));
           return;
         }
-        // Cursor on a note: Arrow Up/Down = one note up/down (pitch class). Akordireal (cursorSubRow === 1) mõjutame ainult akordi.
+        // Arrow Up/Down = pitch class (same octave). Akordireal (cursorSubRow === 1) mõjutame ainult akordi.
         if (e.code === 'ArrowUp' || e.code === 'ArrowDown') {
           if (hasChordRow && cursorSubRow === 1) {
             const chordAtCursor = getChordAtCursor();
@@ -11540,32 +11582,61 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
             }
             return;
           }
-          const noteIdx = getNoteIndexAtCursor();
-          if (noteIdx >= 0) {
+          const target = resolveNModePitchEditTarget();
+          if (target.kind === 'selection') {
             e.preventDefault();
             const dir = e.code === 'ArrowUp' ? 1 : -1;
-            saveToHistory(notes);
-            const note = notes[noteIdx];
-            let updated = shiftPitchClassSameOctave(note.pitch, note.octave, note.accidental, dir, keySignature);
-            if (isPedagogicalNotationMode(notationMode)) {
-              updated = clampPitchFieldsToMinMidi(updated, PEDAGOGICAL_WRITING_MIN_MIDI);
-            }
-            setNotes((prev) => prev.map((n, i) => {
-              if (i !== noteIdx) return n;
-              const merged = { ...n, ...updated };
-              if (Object.prototype.hasOwnProperty.call(updated, 'accidental') && updated.accidental === undefined) {
-                delete merged.accidental;
+            const firstIdx = selectionStart >= 0 && selectionEnd >= 0
+              ? Math.min(selectionStart, selectionEnd)
+              : selectedNoteIndex;
+            const firstNote = notes[firstIdx];
+            applyToSelectedNotes((n) => {
+              if (n.isRest) return {};
+              const next = shiftPitchClassSameOctave(n.pitch, n.octave, n.accidental, dir, keySignature);
+              return isPedagogicalNotationMode(notationMode)
+                ? clampPitchFieldsToMinMidi(next, PEDAGOGICAL_WRITING_MIN_MIDI)
+                : { ...next };
+            });
+            if (firstNote && !firstNote.isRest && playNoteOnInsert) {
+              let newNote = shiftPitchClassSameOctave(firstNote.pitch, firstNote.octave, firstNote.accidental, dir, keySignature);
+              if (isPedagogicalNotationMode(notationMode)) {
+                newNote = clampPitchFieldsToMinMidi(newNote, PEDAGOGICAL_WRITING_MIN_MIDI);
               }
-              return merged;
-            }));
-            setGhostPitch(updated.pitch);
-            setGhostOctave(updated.octave);
-            const playAcc = getEffectiveAccidental(updated, keySignature);
-            setGhostAccidental(playAcc);
-            if (playNoteOnInsert) playPianoNote(updated.pitch, updated.octave, playAcc);
+              setGhostPitch(newNote.pitch);
+              setGhostOctave(newNote.octave);
+              const playAcc = getEffectiveAccidental(newNote, keySignature);
+              setGhostAccidental(playAcc);
+              playPianoNote(newNote.pitch, newNote.octave, playAcc);
+            }
             return;
           }
-          // Akord kursori taktis (meloodiareal): nool üles/alla muudab akordi nime
+          if (target.kind === 'index') {
+            const note = notes[target.index];
+            if (note && !note.isRest) {
+              e.preventDefault();
+              const dir = e.code === 'ArrowUp' ? 1 : -1;
+              saveToHistory(notes);
+              let updated = shiftPitchClassSameOctave(note.pitch, note.octave, note.accidental, dir, keySignature);
+              if (isPedagogicalNotationMode(notationMode)) {
+                updated = clampPitchFieldsToMinMidi(updated, PEDAGOGICAL_WRITING_MIN_MIDI);
+              }
+              setNotes((prev) => prev.map((n, i) => {
+                if (i !== target.index) return n;
+                const merged = { ...n, ...updated };
+                if (Object.prototype.hasOwnProperty.call(updated, 'accidental') && updated.accidental === undefined) {
+                  delete merged.accidental;
+                }
+                return merged;
+              }));
+              setGhostPitch(updated.pitch);
+              setGhostOctave(updated.octave);
+              const playAcc = getEffectiveAccidental(updated, keySignature);
+              setGhostAccidental(playAcc);
+              if (playNoteOnInsert) playPianoNote(updated.pitch, updated.octave, playAcc);
+              return;
+            }
+          }
+          // Sisestuspesa (caret tühjal / noodi lõpus): ↑↓ muudab ghost-kõrgust; akord taktis → akordinimi.
           if (!e.shiftKey && !modKey) {
             const chordAtCursor = getChordAtCursor();
             if (chordAtCursor) {
@@ -11576,6 +11647,30 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
               dirtyRef.current = true;
               return;
             }
+            e.preventDefault();
+            const dir = e.code === 'ArrowUp' ? 1 : -1;
+            const ghostAccArg = ghostAccidentalIsExplicit ? ghostAccidental : undefined;
+            let next = shiftPitchClassSameOctave(ghostPitch, ghostOctave, ghostAccArg, dir, keySignature);
+            if (isPedagogicalNotationMode(notationMode)) {
+              next = clampPitchFieldsToMinMidi(next, PEDAGOGICAL_WRITING_MIN_MIDI);
+            }
+            setGhostPitch(next.pitch);
+            setGhostOctave(next.octave);
+            if (Object.prototype.hasOwnProperty.call(next, 'accidental')) {
+              if (next.accidental === undefined) {
+                setGhostAccidentalIsExplicit(false);
+                setGhostAccidental(0);
+              } else {
+                setGhostAccidentalIsExplicit(true);
+                setGhostAccidental(next.accidental);
+              }
+            }
+            const playAcc = getEffectiveAccidental(
+              { pitch: next.pitch, accidental: next.accidental },
+              keySignature
+            );
+            if (playNoteOnInsert) playPianoNote(next.pitch, next.octave, playAcc);
+            return;
           }
         }
         const noteLetter = e.key?.toLowerCase();
@@ -21924,8 +22019,10 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
           }
           return false;
         })();
-        // Ghost ainult tühjal sisestuspesal — olemasoleval noodil ainult caret (väldib “laiali”).
-        const showGhostPreview = !!(noteInputMode && !cursorOverlapsExistingNote);
+        // N-mode: ghost alati nähtav — näitab sisestatava noodi kõrgust/oktaavi (Cmd/Ctrl+↑↓).
+        // Sama X caret’iga (mitte kestuse keskpunkt); olemasoleval noodil madalam opacity, et ei “laiali”.
+        const showGhostPreview = !!noteInputMode;
+        const ghostPreviewOpacity = cursorOverlapsExistingNote ? 0.45 : 0.9;
         const distanceToNextNote = (() => {
           let beat = 0;
           const list = allNotes || [];
@@ -22043,7 +22140,8 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
             </>
           )}
           {showGhostPreview && isRest ? (
-            isFigurenotesMode
+            <g opacity={ghostPreviewOpacity}>
+            {isFigurenotesMode
               ? (() => {
                   const zSize = Math.max(10, Math.min(80, emojiSizePx * 0.6));
                   return <text x={ghostX} y={cursorInfo.system.yOffset + centerY + crOff + zSize * 0.2} textAnchor="middle" fontSize={zSize} fontWeight="bold" fill="#dc2626" fontFamily="serif">Z</text>;
@@ -22060,8 +22158,9 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
                   if (dur === '1/16') return <g stroke="#dc2626" fill="#dc2626"><circle cx={x} cy={restY - 6} r="1.8"/><circle cx={x} cy={restY} r="1.8"/><path d={`M ${x} ${restY + 2} Q ${x - 5} ${restY + 4} ${x} ${restY + 10}`} fill="none" strokeWidth="1.5"/></g>;
                   if (dur === '1/32') return <g stroke="#dc2626" fill="#dc2626"><circle cx={x} cy={restY - 8} r="1.5"/><circle cx={x} cy={restY - 2} r="1.5"/><circle cx={x} cy={restY + 4} r="1.5"/><path d={`M ${x} ${restY + 6} Q ${x - 4} ${restY + 8} ${x} ${restY + 12}`} fill="none" strokeWidth="1.3"/></g>;
                   return <rect x={x - w/2} y={restY - h/2} width={w} height={h} fill="#dc2626"/>;
-                })()
-          ) : showGhostPreview && ghostPitch && ghostOctave ? (
+                })()}
+            </g>
+          ) : showGhostPreview && ghostPitch && typeof ghostOctave === 'number' ? (
             (() => {
               const cx = ghostX;
               const pitchY = getPitchY(ghostPitch, ghostOctave);
@@ -22115,7 +22214,7 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
                   );
                 }
                 return (
-                  <g opacity="0.9">
+                  <g opacity={ghostPreviewOpacity}>
                     {el}
                     {isDotted && ghostPitch && (
                       <g>
@@ -22149,7 +22248,7 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
                 const showGhostAcc = ghostAccidentalIsExplicit && (ghostAccidental === 1 || ghostAccidental === -1 || (ghostAccidental === 0 && gKeyAcc !== 0));
                 const ghostAccChar = ghostAccidental === 1 ? '♯' : ghostAccidental === -1 ? '♭' : '♮';
                 return (
-                  <g opacity="0.85">
+                  <g opacity={ghostPreviewOpacity}>
                     {nLedgerAbove > 0 && Array.from({ length: nLedgerAbove }, (_, i) => (
                       <line key={`ghost-ledger-above-${i}`} x1={cx - ledgerHalfWidth} y1={sysY + crOff + firstLineY - (i + 1) * spacing} x2={cx + ledgerHalfWidth} y2={sysY + crOff + firstLineY - (i + 1) * spacing} stroke={themeColors.staffLineColor} strokeWidth="1.5" />
                     ))}
@@ -22181,7 +22280,7 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
               const stemY2 = stemUp ? cy - 24 : cy + 24;
               const pKeyAcc = getAccidentalForPitchInKey(ghostPitch, safeKey);
               const accSuffix = !ghostAccidentalIsExplicit ? '' : (ghostAccidental === 1 ? '♯' : ghostAccidental === -1 ? '♭' : (ghostAccidental === 0 && pKeyAcc !== 0 ? '♮' : ''));
-              return <g opacity="0.85"><circle cx={cx} cy={cy} r="9" fill="none" stroke={themeColors.textColor}/><text x={cx} y={cy+3} textAnchor="middle" fontSize="11" fontWeight="bold" fill={themeColors.textColor}>{ghostPitch}{accSuffix}</text><line x1={stemX} y1={cy} x2={stemX} y2={stemY2} stroke={themeColors.textColor} strokeWidth="1.5"/></g>;
+              return <g opacity={ghostPreviewOpacity}><circle cx={cx} cy={cy} r="9" fill="none" stroke={themeColors.textColor}/><text x={cx} y={cy+3} textAnchor="middle" fontSize="11" fontWeight="bold" fill={themeColors.textColor}>{ghostPitch}{accSuffix}</text><line x1={stemX} y1={cy} x2={stemX} y2={stemY2} stroke={themeColors.textColor} strokeWidth="1.5"/></g>;
             })()
           ) : (
             <circle cx={cursorX} cy={cursorInfo.system.yOffset + centerY + crOff} r="6" fill="#2563eb" stroke="white" strokeWidth="2">

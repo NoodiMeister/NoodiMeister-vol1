@@ -1,12 +1,15 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { X, ArrowLeft, Send } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { X, ArrowLeft, Send, BookOpen } from 'lucide-react';
 import { LOCALE_STORAGE_KEY, DEFAULT_LOCALE, getTranslations } from '../i18n';
+import { answerFromHowToGuide } from '../services/answerFromHowToGuide';
+import { getHowToGuideContent } from '../content/howToGuideContent';
 
 const CONTACT_EMAIL = 'info@la-stravaganza.com';
 
 /**
- * Hõljuv AI-kirjutusrobot (all parem): ? ringis → valik küsimus / ettepanek → tekst → e-post.
- * Paneelis klahvid ei leki noodisisestusse; Esc sulgeb paneeli (ei logi välja).
+ * Hõljuv abiline: ? → küsimus/ettepanek.
+ * Küsimused vastatakse „Kuidas?“ juhendi põhjal sammhaaval; ettepanekud lähevad e-posti.
  */
 export default function AiAssistantWidget() {
   const [locale] = useState(() => {
@@ -17,11 +20,13 @@ export default function AiAssistantWidget() {
     }
   });
   const t = useMemo(() => getTranslations(locale), [locale]);
+  const howToMeta = useMemo(() => getHowToGuideContent(locale), [locale]);
 
   const [open, setOpen] = useState(false);
-  const [step, setStep] = useState('choose'); // 'choose' | 'compose' | 'sent'
+  const [step, setStep] = useState('choose'); // 'choose' | 'compose' | 'guide' | 'sent'
   const [intent, setIntent] = useState(null); // 'question' | 'suggestion'
   const [message, setMessage] = useState('');
+  const [guide, setGuide] = useState(null);
   const panelRef = useRef(null);
   const textareaRef = useRef(null);
 
@@ -29,6 +34,7 @@ export default function AiAssistantWidget() {
     setStep('choose');
     setIntent(null);
     setMessage('');
+    setGuide(null);
   }, []);
 
   const close = useCallback(() => {
@@ -41,6 +47,13 @@ export default function AiAssistantWidget() {
     reset();
   }, [reset]);
 
+  const goBackToChoose = useCallback(() => {
+    setStep('choose');
+    setIntent(null);
+    setMessage('');
+    setGuide(null);
+  }, []);
+
   // Esc sulgeb roboti enne EscapeLogoutHandler'it (capture).
   useEffect(() => {
     if (!open) return undefined;
@@ -48,17 +61,15 @@ export default function AiAssistantWidget() {
       if (e.key !== 'Escape') return;
       e.preventDefault();
       e.stopPropagation();
-      if (step === 'compose' || step === 'sent') {
-        setStep('choose');
-        setIntent(null);
-        setMessage('');
+      if (step === 'compose' || step === 'guide' || step === 'sent') {
+        goBackToChoose();
         return;
       }
       close();
     };
     window.addEventListener('keydown', onKeyDown, true);
     return () => window.removeEventListener('keydown', onKeyDown, true);
-  }, [open, step, close]);
+  }, [open, step, close, goBackToChoose]);
 
   useEffect(() => {
     if (open && step === 'compose') {
@@ -72,6 +83,7 @@ export default function AiAssistantWidget() {
     setIntent(next);
     setStep('compose');
     setMessage('');
+    setGuide(null);
   };
 
   const stopKeyLeak = (e) => {
@@ -83,10 +95,14 @@ export default function AiAssistantWidget() {
     const text = message.trim();
     if (!text || !intent) return;
 
-    const kindLabel =
-      intent === 'question'
-        ? (t['aiAssistant.intentQuestion'] || 'Küsimus')
-        : (t['aiAssistant.intentSuggestion'] || 'Ettepanek');
+    if (intent === 'question') {
+      const result = answerFromHowToGuide(text, locale);
+      setGuide(result);
+      setStep('guide');
+      return;
+    }
+
+    const kindLabel = t['aiAssistant.intentSuggestion'] || 'Ettepanek';
     const subject = encodeURIComponent(`Noodimeister – ${kindLabel}`);
     const body = encodeURIComponent(
       `${kindLabel}\n\n${text}\n\n---\n${typeof window !== 'undefined' ? window.location.href : ''}`
@@ -107,13 +123,24 @@ export default function AiAssistantWidget() {
     intent === 'suggestion'
       ? (t['aiAssistant.placeholderSuggestion'] || 'Nt sooviksin, et…')
       : (t['aiAssistant.placeholderQuestion'] || 'Nt kuidas ma saan…');
-  const sendLabel = t['aiAssistant.send'] || 'Saada';
+  const sendLabel =
+    intent === 'question'
+      ? (t['aiAssistant.askGuide'] || 'Küsi juhendit')
+      : (t['aiAssistant.send'] || 'Saada');
   const backLabel = t['aiAssistant.back'] || 'Tagasi';
   const closeLabel = t['common.close'] || 'Sulge';
   const sentThanks =
     t['aiAssistant.sentThanks'] ||
     'Aitäh! Kui e-posti klient ei avanenud, kirjuta aadressile info@la-stravaganza.com.';
   const openAria = t['aiAssistant.openAria'] || 'Ava abiline: küsimused ja ettepanekud';
+  const guideIntro =
+    t['aiAssistant.guideIntro'] || 'Siin on juhend „Kuidas?“ lehe põhjal:';
+  const guideNoMatch =
+    t['aiAssistant.guideNoMatch'] ||
+    'Täpset vastust ei leidnud. Vaata „Kuidas?“ juhendit või kirjuta meile.';
+  const openHowTo = t['aiAssistant.openHowTo'] || 'Ava „Kuidas?“';
+  const askAnother = t['aiAssistant.askAnother'] || 'Küsi uuesti';
+  const stepsTitle = howToMeta.stepsTitle || 'Sammud';
 
   return (
     <div
@@ -126,12 +153,12 @@ export default function AiAssistantWidget() {
           role="dialog"
           aria-modal="true"
           aria-label={title}
-          className="pointer-events-auto w-[min(92vw,22rem)] rounded-2xl border-2 border-amber-300 dark:border-amber-600 bg-white dark:bg-zinc-900 shadow-2xl overflow-hidden"
+          className="pointer-events-auto w-[min(92vw,22rem)] max-h-[min(78vh,36rem)] flex flex-col rounded-2xl border-2 border-amber-300 dark:border-amber-600 bg-white dark:bg-zinc-900 shadow-2xl overflow-hidden"
           onKeyDown={stopKeyLeak}
           onKeyUp={stopKeyLeak}
           onKeyPress={stopKeyLeak}
         >
-          <div className="flex items-center justify-between gap-2 px-4 py-3 bg-amber-500 text-white">
+          <div className="flex items-center justify-between gap-2 px-4 py-3 bg-amber-500 text-white shrink-0">
             <div className="flex items-center gap-2 min-w-0">
               <span
                 className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/20 text-lg font-bold"
@@ -152,7 +179,7 @@ export default function AiAssistantWidget() {
             </button>
           </div>
 
-          <div className="p-4 space-y-3">
+          <div className="p-4 space-y-3 overflow-y-auto">
             {step === 'choose' && (
               <>
                 <p className="text-sm text-slate-700 dark:text-slate-200 leading-relaxed">{greeting}</p>
@@ -182,21 +209,22 @@ export default function AiAssistantWidget() {
               <form onSubmit={handleSend} className="space-y-3">
                 <button
                   type="button"
-                  onClick={() => {
-                    setStep('choose');
-                    setIntent(null);
-                    setMessage('');
-                  }}
+                  onClick={goBackToChoose}
                   className="inline-flex items-center gap-1 text-xs font-medium text-amber-800 dark:text-amber-300 hover:underline"
                 >
                   <ArrowLeft className="w-3.5 h-3.5" />
                   {backLabel}
                 </button>
                 <p className="text-sm text-slate-700 dark:text-slate-200">{composeHint}</p>
+                {intent === 'question' && (
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    {t['aiAssistant.guideSourceHint'] || 'Vastus koostatakse „Kuidas?“ juhendi põhjal.'}
+                  </p>
+                )}
                 <textarea
                   ref={textareaRef}
                   value={message}
-                  onChange={(e) => setMessage(e.target.value)}
+                  onChange={(ev) => setMessage(ev.target.value)}
                   onKeyDown={stopKeyLeak}
                   rows={5}
                   placeholder={placeholder}
@@ -211,6 +239,68 @@ export default function AiAssistantWidget() {
                   {sendLabel}
                 </button>
               </form>
+            )}
+
+            {step === 'guide' && guide && (
+              <div className="space-y-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setStep('compose');
+                    setGuide(null);
+                  }}
+                  className="inline-flex items-center gap-1 text-xs font-medium text-amber-800 dark:text-amber-300 hover:underline"
+                >
+                  <ArrowLeft className="w-3.5 h-3.5" />
+                  {backLabel}
+                </button>
+
+                {guide.understoodAs ? (
+                  <p className="text-sm font-medium text-amber-900 dark:text-amber-100 leading-snug rounded-xl bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-800 px-3 py-2">
+                    {guide.understoodAs}
+                  </p>
+                ) : null}
+
+                {guide.matched ? (
+                  <>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">{guideIntro}</p>
+                    <h3 className="text-sm font-semibold text-amber-950 dark:text-amber-50 leading-snug">
+                      {guide.title}
+                    </h3>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-400">
+                      {stepsTitle}
+                    </p>
+                    <ol className="list-decimal pl-5 space-y-2 text-sm leading-relaxed text-slate-800 dark:text-slate-100">
+                      {guide.steps.map((s) => (
+                        <li key={s}>{s}</li>
+                      ))}
+                    </ol>
+                  </>
+                ) : (
+                  <p className="text-sm text-slate-700 dark:text-slate-200 leading-relaxed">{guideNoMatch}</p>
+                )}
+
+                <Link
+                  to="/kuidas"
+                  onClick={close}
+                  className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border-2 border-amber-300 dark:border-amber-600 bg-amber-50 dark:bg-amber-950/40 text-amber-950 dark:text-amber-50 font-semibold text-sm hover:bg-amber-100 dark:hover:bg-amber-900/50 transition-colors"
+                >
+                  <BookOpen className="w-4 h-4" />
+                  {openHowTo}
+                </Link>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setStep('compose');
+                    setGuide(null);
+                    setMessage('');
+                  }}
+                  className="w-full px-4 py-2 rounded-xl text-sm font-medium text-amber-800 dark:text-amber-300 hover:underline"
+                >
+                  {askAnother}
+                </button>
+              </div>
             )}
 
             {step === 'sent' && (
