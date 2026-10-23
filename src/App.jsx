@@ -29,6 +29,7 @@ const DemoIntroPage = lazyWithRetry(() => import('./pages/DemoIntroPage'));
 import * as authStorage from './services/authStorage';
 import { IntroCrossfadeProvider } from './context/IntroCrossfadeContext';
 import { SHOW_SUPPORT_AND_PRICING_UI } from './config/productFlags';
+import AiAssistantWidget from './components/AiAssistantWidget';
 
 const CANONICAL_PRODUCTION_ORIGIN = 'https://noodimeister.ee';
 const DEPRECATED_PRODUCTION_HOSTS = new Set([
@@ -301,6 +302,7 @@ function AppRoutes() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Suspense>
+      <AiAssistantWidget />
     </div>
   );
 }

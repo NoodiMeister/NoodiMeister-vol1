@@ -1,4 +1,10 @@
 import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
+import pdfWorkerSrc from 'pdfjs-dist/legacy/build/pdf.worker.mjs?url';
+
+// pdf.js nõuab workerSrc enne getDocument(); ilma selleta: No "GlobalWorkerOptions.workerSrc" specified.
+if (typeof pdfjsLib?.GlobalWorkerOptions === 'object' && pdfjsLib.GlobalWorkerOptions) {
+  pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerSrc;
+}
 
 export const PDF_IMPORT_STAGE = {
   ACCEPTED: 'accepted',

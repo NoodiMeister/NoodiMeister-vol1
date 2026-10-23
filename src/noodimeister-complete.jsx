@@ -151,6 +151,11 @@ import {
   runIsolatedPrintFromHtml,
 } from './print/nmPrintDocument';
 import { registerSmuflFontsForJsPdf } from './export/registerSmuflFontForJsPdf';
+import {
+  buildMusicXmlFromProject,
+  downloadMusicXmlFile,
+  getMusicXmlExportFileName,
+} from './export/musicXmlExport';
 import { getScorePageDimensions } from './layout/LayoutManager';
 import { getPageCount, normalizePaperSize, layoutYToDeskDisplayY } from './utils/pageGeometry';
 import { openCloudFileInNewBrowserTab } from './utils/appUrls';
@@ -3151,7 +3156,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   const [authorAlignment, setAuthorAlignment] = useState('right'); // 'left' | 'center' | 'right'
   /** Vertikaalne nihutus pealkirja/autor plokile (px); negatiivne = kõrgemale. Käetööriistaga lohistamine score päises. */
   const [scoreHeaderTranslateYPx, setScoreHeaderTranslateYPx] = useState(0);
-  const [staffRowAlignment, setStaffRowAlignment] = useState('center'); // 'left' | 'center' | 'right' – figuurnotatsiooni rea joondus
+  const [staffRowAlignment, setStaffRowAlignment] = useState('center'); // 'left' | 'center' | 'right' – noodirea joondus (figure + traditional)
   const titleInputRef = useRef(null);
   const authorInputRef = useRef(null);
   const textToolPopupRef = useRef(null);
@@ -3497,6 +3502,10 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   const [openedCloudFile, setOpenedCloudFile] = useState(null); // { provider, fileId, modifiedTime?, eTag?, fileName? }
   const pdfExportDownloadFileName = useMemo(
     () => getPdfExportDownloadFileName(songTitle, openedCloudFile?.fileName, localProjectFileName, t('common.untitled')),
+    [songTitle, openedCloudFile, localProjectFileName, t]
+  );
+  const musicXmlExportDownloadFileName = useMemo(
+    () => getMusicXmlExportFileName(songTitle, openedCloudFile?.fileName, localProjectFileName, t('common.untitled')),
     [songTitle, openedCloudFile, localProjectFileName, t]
   );
   /** Brauseri Print → Salvesta PDF kasutab document.title / iframe <title>; mitte turunduslause index.html-ist. */
@@ -5016,6 +5025,50 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       if (e?.name !== 'AbortError') setPdfExportSaveLocation('downloads');
     }
   }, [pdfExportDownloadFileName]);
+
+  const exportToMusicXml = useCallback(() => {
+    try {
+      const xml = buildMusicXmlFromProject({
+        songTitle,
+        author,
+        keySignature,
+        timeSignature,
+        staves,
+        chords,
+        addedMeasures,
+        pickupEnabled,
+        pickupQuantity,
+        pickupDuration,
+        incompleteLastMeasure,
+        measurePropsByIndex,
+        measureRepeatMarks,
+      });
+      downloadMusicXmlFile(xml, musicXmlExportDownloadFileName);
+      setSaveFeedback(t('file.exportMusicXmlDone'));
+      setTimeout(() => setSaveFeedback(''), 1800);
+      setHeaderMenuOpen(null);
+    } catch (err) {
+      console.error('[MusicXML export]', err);
+      setSaveFeedback(t('file.exportMusicXmlFailed'));
+      setTimeout(() => setSaveFeedback(''), 2500);
+    }
+  }, [
+    songTitle,
+    author,
+    keySignature,
+    timeSignature,
+    staves,
+    chords,
+    addedMeasures,
+    pickupEnabled,
+    pickupQuantity,
+    pickupDuration,
+    incompleteLastMeasure,
+    measurePropsByIndex,
+    measureRepeatMarks,
+    musicXmlExportDownloadFileName,
+    t,
+  ]);
 
   const exportToPdf = useCallback(async (saveOptions = {}) => {
     const { fileHandle, usePreviewSvg, previewSvgData } = saveOptions;
@@ -12500,7 +12553,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         + ((visibleStaffCountForLayout - 1) * layoutPartsGap);
       // Figurenotes multistaff rule: one measure's staves (e.g. piano RH+LH + extra instruments)
       // must stay inside the same system; only full system jumps to the next row.
-      const data = { measures, timeSignature, pixelsPerBeat: effectivePixelsPerBeat, staffSpacing: figureSystemCoreHeight + layoutSystemGap, globalSpacingMultiplier: layoutGlobalSpacingMultiplier, boxesPerRow: effectiveLayoutMeasuresPerLine || 4, pageWidth: scoreContentWidth, pageHeight: scorePageInnerHeight, notationPageHeaderReservePx: scoreHeadBlockReservePx, notationPageEdgeReservePx: scorePageEdgeReservePx, lineBreakBefore: effectiveLayoutLineBreakBefore, pageBreakBefore: effectiveLayoutPageBreakBefore, figurenotesSize: effectiveFigurenotesSize, excludePickupFromMeasureCount: pickupEnabled, pickupMeasureIndex: 0, enforceMeasuresPerLine: effectiveLayoutStrictMeasuresPerLine };
+      const data = { measures, timeSignature, pixelsPerBeat: effectivePixelsPerBeat, staffSpacing: figureSystemCoreHeight + layoutSystemGap, globalSpacingMultiplier: layoutGlobalSpacingMultiplier, boxesPerRow: effectiveLayoutMeasuresPerLine || 4, pageWidth: scoreContentWidth, pageHeight: scorePageInnerHeight, notationPageHeaderReservePx: scoreHeadBlockReservePx, notationPageEdgeReservePx: scorePageEdgeReservePx, lineBreakBefore: effectiveLayoutLineBreakBefore, pageBreakBefore: effectiveLayoutPageBreakBefore, figurenotesSize: effectiveFigurenotesSize, excludePickupFromMeasureCount: pickupEnabled, pickupMeasureIndex: 0, enforceMeasuresPerLine: effectiveLayoutStrictMeasuresPerLine, measureStretchFactors };
       const raw = calculateLayout('figure', pageOrientation === 'landscape' ? 'landscape' : 'portrait', data);
       return raw.map((s, i) => ({ ...s, yOffset: s.yOffset + (systemYOffsets[i] ?? 0) }));
     }
@@ -12560,7 +12613,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     const layoutStaffCount = staves.length || 1;
     if (notationStyle === 'FIGURENOTES') {
       const figureSystemCoreHeight = (nVis * figurenotesTotalRowHeight) + ((nVis - 1) * layoutPartsGap);
-      const data = { measures, timeSignature, pixelsPerBeat: effectivePixelsPerBeat, staffSpacing: figureSystemCoreHeight + layoutSystemGap, globalSpacingMultiplier: layoutGlobalSpacingMultiplier, boxesPerRow: effectiveLayoutMeasuresPerLine || 4, pageWidth: scoreContentWidth, pageHeight: scorePageInnerHeight, notationPageHeaderReservePx: scoreHeadBlockReservePx, notationPageEdgeReservePx: scorePageEdgeReservePx, lineBreakBefore: effectiveLayoutLineBreakBefore, pageBreakBefore: effectiveLayoutPageBreakBefore, figurenotesSize: effectiveFigurenotesSize, enforceMeasuresPerLine: effectiveLayoutStrictMeasuresPerLine, excludePickupFromMeasureCount: pickupEnabled, pickupMeasureIndex: 0 };
+      const data = { measures, timeSignature, pixelsPerBeat: effectivePixelsPerBeat, staffSpacing: figureSystemCoreHeight + layoutSystemGap, globalSpacingMultiplier: layoutGlobalSpacingMultiplier, boxesPerRow: effectiveLayoutMeasuresPerLine || 4, pageWidth: scoreContentWidth, pageHeight: scorePageInnerHeight, notationPageHeaderReservePx: scoreHeadBlockReservePx, notationPageEdgeReservePx: scorePageEdgeReservePx, lineBreakBefore: effectiveLayoutLineBreakBefore, pageBreakBefore: effectiveLayoutPageBreakBefore, figurenotesSize: effectiveFigurenotesSize, enforceMeasuresPerLine: effectiveLayoutStrictMeasuresPerLine, excludePickupFromMeasureCount: pickupEnabled, pickupMeasureIndex: 0, measureStretchFactors };
       const sys = calculateLayout('figure', pageOrientation === 'landscape' ? 'landscape' : 'portrait', data);
       const lastY = sys.length > 0 ? sys[sys.length - 1].yOffset + (systemYOffsets[sys.length - 1] ?? 0) : 0;
       const maxBaseYOffset = entries.reduce((maxY, { staffIdx, visibleIndex }) => {
@@ -15967,6 +16020,15 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                       {icons?.FileDown && <icons.FileDown className="w-4 h-4" />}
                       {t('file.exportPdf')}
                     </button>
+                    <button
+                      type="button"
+                      onClick={() => { exportToMusicXml(); }}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-amber-50 hover:bg-slate-600"
+                      title={t('file.exportMusicXmlTitle')}
+                    >
+                      <Music2 className="w-4 h-4" />
+                      {t('file.exportMusicXml')}
+                    </button>
                     <div className="my-1 border-t border-slate-600" />
                     {/* Animatsiooni eksport (video) – ainult pedagoogilise interaktiivse režiimi (D) puhul */}
                     {isPedagogicalInteractiveMode && (
@@ -17762,17 +17824,15 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                           )}
                         </div>
                       </div>
-                      {notationStyle === 'FIGURENOTES' && (
-                        <div className="mb-4 pt-4 border-t-2 border-amber-200">
-                          <h4 className="text-xs font-bold text-amber-900 uppercase mb-1">{t('layout.staffRowAlignment')}</h4>
-                          <p className="text-xs text-amber-700 mb-2">{t('layout.staffRowAlignmentHint')}</p>
-                          <div className="flex gap-2">
-                            {(['left', 'center', 'right']).map((align) => (
-                              <button key={align} type="button" onClick={() => { dirtyRef.current = true; setStaffRowAlignment(align); }} className={`flex-1 py-1.5 px-2 rounded text-sm font-medium ${staffRowAlignment === align ? 'bg-amber-600 text-white' : 'bg-amber-100 text-amber-800 hover:bg-amber-200'}`}>{align === 'left' ? t('layout.alignLeft') : align === 'center' ? t('layout.alignCenter') : t('layout.alignRight')}</button>
-                            ))}
-                          </div>
+                      <div className="mb-4 pt-4 border-t-2 border-amber-200">
+                        <h4 className="text-xs font-bold text-amber-900 uppercase mb-1">{t('layout.staffRowAlignment')}</h4>
+                        <p className="text-xs text-amber-700 mb-2">{t('layout.staffRowAlignmentHint')}</p>
+                        <div className="flex gap-2">
+                          {(['left', 'center', 'right']).map((align) => (
+                            <button key={align} type="button" onClick={() => { dirtyRef.current = true; setStaffRowAlignment(align); }} className={`flex-1 py-1.5 px-2 rounded text-sm font-medium ${staffRowAlignment === align ? 'bg-amber-600 text-white' : 'bg-amber-100 text-amber-800 hover:bg-amber-200'}`}>{align === 'left' ? t('layout.alignLeft') : align === 'center' ? t('layout.alignCenter') : t('layout.alignRight')}</button>
+                          ))}
                         </div>
-                      )}
+                      </div>
                       <p className="text-xs text-amber-700 mb-2 py-1.5 px-2 rounded bg-slate-100 border border-slate-200 text-slate-800">{t('layout.staffSpacerHint')}</p>
                       <p className="text-xs text-amber-700 mb-1">Paigutuse muudatus kehtib kursorit sisaldava takti suhtes. Liigu kursoriga (← →) soovitud takti.</p>
                       <div className="mb-2 px-2 py-1.5 rounded bg-amber-100 border border-amber-200 text-amber-900 text-sm font-medium">{t('layout.cursorInMeasure')}: {cursorMeasureIndex + 1}</div>
@@ -20622,15 +20682,22 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
   const totalHeight = verticalPageExtraPx > 0 ? (totalHeightLogical + Math.max(0, totalPages - 1) * verticalPageExtraPx) : totalHeightLogical;
   const centerY = timelineHeight / 2;
   const pw = pageWidth || LAYOUT.PAGE_WIDTH_MIN;
-  const marginLeft = isFigurenotesMode && systemsComputed.length > 0
+  // Ridade joondus (vasak/keskele/parem): figure + traditional, kui rida on lehest kitsam.
+  // Baas = MARGIN_LEFT (sama mis computeLayout vaikimisi); TraditionalNotationView laiendab
+  // clef/key/time jaoks effectiveMarginLeft'i ilma taktilaiusi muutmata.
+  const alignmentBaseMargin = LAYOUT.MARGIN_LEFT;
+  const marginLeft = systemsComputed.length > 0
     ? (() => {
         const rowWidth = (systemsComputed[0].measureWidths ?? []).reduce((a, b) => a + b, 0);
-        if (staffRowAlignment === 'left') return LAYOUT.MARGIN_LEFT;
-        if (staffRowAlignment === 'right') return Math.max(LAYOUT.MARGIN_LEFT, Math.round(pw - rowWidth - LAYOUT.MARGIN_RIGHT));
+        if (!(rowWidth > 0)) return alignmentBaseMargin;
+        if (staffRowAlignment === 'left') return alignmentBaseMargin;
+        if (staffRowAlignment === 'right') {
+          return Math.max(alignmentBaseMargin, Math.round(pw - rowWidth - LAYOUT.MARGIN_RIGHT));
+        }
         const centered = Math.round((pw - rowWidth) / 2);
-        return Math.max(LAYOUT.MARGIN_LEFT, centered);
+        return Math.max(alignmentBaseMargin, centered);
       })()
-    : LAYOUT.MARGIN_LEFT;
+    : alignmentBaseMargin;
 
   const spacing = (typeof notationStaffSpace === 'number' && Number.isFinite(notationStaffSpace) && notationStaffSpace > 0)
     ? notationStaffSpace

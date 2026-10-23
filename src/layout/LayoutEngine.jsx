@@ -177,6 +177,12 @@ function calculateFigureGrid(data, availableWidth, availablePageHeight = 0) {
     return (excludePickupFromMeasureCount && i === pickupMeasureIndex ? 0 : 1);
   };
   const getMeasureBeats = (i) => measures[i].beatCount ?? beatsPerMeasure;
+  const stretchFactors = Array.isArray(data?.measureStretchFactors) ? data.measureStretchFactors : [];
+  const getStretchFactor = (i) => (
+    typeof stretchFactors[i] === 'number' && Number.isFinite(stretchFactors[i])
+      ? Math.max(0.25, Math.min(4, stretchFactors[i]))
+      : 1
+  );
 
   const pixelsPerBeatInput = typeof data?.pixelsPerBeat === 'number' && data.pixelsPerBeat > 0 ? data.pixelsPerBeat : null;
   /** Desired density, but never below the figure-size floor used for reflow. */
@@ -191,7 +197,7 @@ function calculateFigureGrid(data, availableWidth, availablePageHeight = 0) {
     let pixelsPerBeatForRow;
     if (desiredPixelsPerBeat != null) {
       measureWidths = fitWidthsToContentWidth(
-        rowIndices.map((i) => getMeasureBeats(i) * desiredPixelsPerBeat),
+        rowIndices.map((i) => getMeasureBeats(i) * desiredPixelsPerBeat * getStretchFactor(i)),
         effectiveWidth,
       );
       const totalBeats = rowIndices.reduce((sum, i) => sum + getMeasureBeats(i), 0);

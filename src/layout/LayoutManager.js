@@ -6,6 +6,7 @@
 
 import { getPaperDimensionsPx, getNotationPageBodies, snapSystemYToPage } from '../utils/pageGeometry';
 import { measureLengthInQuarterBeats } from '../musical/timeSignature';
+import { fitWidthsToContentWidth } from './pageFitSpacing';
 
 const DEFAULT_PAGE_DIMS = getPaperDimensionsPx('a4', 'portrait');
 const DEFAULT_PAGE_DIMS_LANDSCAPE = getPaperDimensionsPx('a4', 'landscape');
@@ -79,6 +80,10 @@ export function setLayoutConfig(config) {
 /**
  * Arvutab süsteemid (read) – iga rida = eraldi Stave.
  * Toetab eeltakti, taktide arv rea kohta, käsitsi rea/lehevahetusi ja measureStretchFactors ({ } klahvid).
+ *
+ * `pixelsPerBeat` + stretch on SOOVITUD tihedus (nagu figuurnotatsioonis): rida ei venita
+ * vaikimisi lehe täislaiuseks. Üleääre korral skaleeritakse `fitWidthsToContentWidth`-iga.
+ * See võimaldab ridade joondust (vasak/keskele/parem), kui rida on lehest kitsam.
  */
 export function computeLayout(measures, timeSignature, pixelsPerBeat, pageWidth, layoutOptions = {}) {
   const w = Number(pageWidth) || LAYOUT.PAGE_WIDTH_MIN;
@@ -105,7 +110,7 @@ export function computeLayout(measures, timeSignature, pixelsPerBeat, pageWidth,
   } = layoutOptions;
   const mult = Math.max(0.25, Math.min(3, Number(globalSpacingMultiplier) || 1));
   const effectiveMeasuresPerLine = measuresPerLine > 0 ? Math.max(1, Math.round(measuresPerLine / mult)) : 0;
-  const effectiveAvailableWidth = availableWidth / mult;
+  const desiredPixelsPerBeat = Math.max(12, Number(pixelsPerBeat) || 85);
   const staffHeightForStep = optionsStaffHeight ?? getStaffHeight();
   const step = typeof optionsStaffSpacing === 'number' && optionsStaffSpacing > 0
     ? optionsStaffSpacing
@@ -128,6 +133,8 @@ export function computeLayout(measures, timeSignature, pixelsPerBeat, pageWidth,
   const getFactor = (i) => (Array.isArray(measureStretchFactors) && typeof measureStretchFactors[i] === 'number')
     ? measureStretchFactors[i]
     : 1;
+  const getMeasureBeats = (i) => measures[i].beatCount ?? beatsPerMeasure;
+  const getNaturalMeasureWidth = (i) => getMeasureBeats(i) * desiredPixelsPerBeat * getFactor(i);
   const getMeasureCountWeight = (i) => {
     if (measures[i]?.excludeFromCount === true) return 0;
     if (measures[i]?.excludeFromCount === false) return 1;
@@ -136,14 +143,13 @@ export function computeLayout(measures, timeSignature, pixelsPerBeat, pageWidth,
 
   const buildSystem = (rowIndices, systemIndex, nextPageBreak) => {
     if (rowIndices.length === 0) return null;
-    const totalWeight = rowIndices.reduce((sum, i) => sum + (measures[i].beatCount ?? beatsPerMeasure) * getFactor(i), 0);
-    if (totalWeight <= 0) return null;
-    const measureWidths = rowIndices.map((i) => {
-      const beats = measures[i].beatCount ?? beatsPerMeasure;
-      return (beats * getFactor(i) / totalWeight) * availableWidth;
-    });
-    const totalBeatCount = rowIndices.reduce((sum, i) => sum + (measures[i].beatCount ?? beatsPerMeasure), 0);
-    const pixelsPerBeatForRow = totalBeatCount > 0 ? availableWidth / totalBeatCount : pixelsPerBeat;
+    const naturalWidths = rowIndices.map((i) => getNaturalMeasureWidth(i));
+    const totalNatural = naturalWidths.reduce((a, b) => a + b, 0);
+    if (!(totalNatural > 0)) return null;
+    const measureWidths = fitWidthsToContentWidth(naturalWidths, availableWidth);
+    const rowWidth = measureWidths.reduce((a, b) => a + b, 0);
+    const totalBeatCount = rowIndices.reduce((sum, i) => sum + getMeasureBeats(i), 0);
+    const pixelsPerBeatForRow = totalBeatCount > 0 ? rowWidth / totalBeatCount : desiredPixelsPerBeat;
     return {
       systemIndex,
       measureIndices: rowIndices,
@@ -197,8 +203,8 @@ export function computeLayout(measures, timeSignature, pixelsPerBeat, pageWidth,
         measureIndices: [],
         measureWidths: [],
         yOffset: 0,
-        pixelsPerBeat,
-        measureWidth: beatsPerMeasure * pixelsPerBeat,
+        pixelsPerBeat: desiredPixelsPerBeat,
+        measureWidth: beatsPerMeasure * desiredPixelsPerBeat,
         pageBreakBefore: false,
       });
     }
@@ -209,40 +215,30 @@ export function computeLayout(measures, timeSignature, pixelsPerBeat, pageWidth,
   let measureIdx = 0;
   let systemIndex = 0;
   let lastPlacedY = 0;
+  const minMeasureWidth = LAYOUT.MEASURE_MIN_WIDTH || 28;
   while (measureIdx < measures.length) {
-    let totalBeatCount = 0;
+    let rowNaturalWidth = 0;
     const rowIndices = [];
     while (measureIdx + rowIndices.length < measures.length) {
       const nextIdx = measureIdx + rowIndices.length;
-      const nextBeatCount = measures[nextIdx].beatCount ?? beatsPerMeasure;
-      const wouldBeTotal = totalBeatCount + nextBeatCount;
-      const wouldBePixelsPerBeat = effectiveAvailableWidth / wouldBeTotal;
-      const nextMeasureWidth = nextBeatCount * wouldBePixelsPerBeat;
-      if (rowIndices.length > 0 && nextMeasureWidth < (LAYOUT.MEASURE_MIN_WIDTH || 28)) break;
+      const nextWidth = getNaturalMeasureWidth(nextIdx);
+      if (rowIndices.length > 0 && rowNaturalWidth + nextWidth > availableWidth + 0.5) break;
+      if (rowIndices.length > 0 && nextWidth < minMeasureWidth && rowNaturalWidth + nextWidth > availableWidth * 0.98) break;
       rowIndices.push(nextIdx);
-      totalBeatCount = wouldBeTotal;
+      rowNaturalWidth += nextWidth;
     }
     if (rowIndices.length === 0) {
       rowIndices.push(measureIdx);
-      totalBeatCount = measures[measureIdx].beatCount ?? beatsPerMeasure;
     }
-    const totalWeight = rowIndices.reduce((sum, i) => sum + (measures[i].beatCount ?? beatsPerMeasure) * getFactor(i), 0);
-    const measureWidths = totalWeight > 0
-      ? rowIndices.map((i) => ((measures[i].beatCount ?? beatsPerMeasure) * getFactor(i) / totalWeight) * availableWidth)
-      : rowIndices.map((i) => (measures[i].beatCount ?? beatsPerMeasure) * (availableWidth / totalBeatCount));
-    const pixelsPerBeatForRow = totalBeatCount > 0 ? availableWidth / totalBeatCount : pixelsPerBeat;
-    const proposedY = systemIndex === 0 ? 0 : lastPlacedY + step;
-    const placed = placeSystemY(proposedY, systemIndex, false);
-    systems.push({
-      systemIndex,
-      measureIndices: rowIndices,
-      measureWidths,
-      yOffset: placed.y,
-      pixelsPerBeat: pixelsPerBeatForRow,
-      measureWidth: measureWidths[0],
-      pageBreakBefore: placed.pageBreak,
-    });
-    lastPlacedY = placed.y;
+    const sys = buildSystem(rowIndices, systemIndex, false);
+    if (sys) {
+      const proposedY = systemIndex === 0 ? 0 : lastPlacedY + step;
+      const placed = placeSystemY(proposedY, systemIndex, false);
+      sys.yOffset = placed.y;
+      sys.pageBreakBefore = placed.pageBreak;
+      systems.push(sys);
+      lastPlacedY = placed.y;
+    }
     measureIdx += rowIndices.length;
     systemIndex++;
   }
@@ -252,8 +248,8 @@ export function computeLayout(measures, timeSignature, pixelsPerBeat, pageWidth,
       measureIndices: [],
       measureWidths: [],
       yOffset: 0,
-      pixelsPerBeat,
-      measureWidth: beatsPerMeasure * pixelsPerBeat,
+      pixelsPerBeat: desiredPixelsPerBeat,
+      measureWidth: beatsPerMeasure * desiredPixelsPerBeat,
       pageBreakBefore: false,
     });
   }
