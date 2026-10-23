@@ -614,6 +614,11 @@ export function TraditionalNotationView({
   noteheadShape = 'oval',
   noteheadEmoji = '♪',
   chords = [],
+  /** Traditional MuseScore-laadne tippimine: { beat, draft, chordId? } | null */
+  chordSymbolEdit = null,
+  selectedChordSymbolId = null,
+  /** (chord) => void — klikk akordimärgile */
+  onSelectChordSymbol,
   isNoteSelected,
   onNoteClick,
   onNoteMouseDown,
@@ -2223,16 +2228,108 @@ export function TraditionalNotationView({
                     {chords.filter(c => c.beatPosition >= measure.startBeat && c.beatPosition < measure.endBeat).map((chord) => {
                       const chordX = measureX + (chord.beatPosition - measure.startBeat) * beatWidth;
                       const useFigurations = (instrument === 'harpsichord' || instrument === 'organ') && instrumentNotationVariant === 'figuredBass' && chord.figuredBass;
+                      const isEditing = chordSymbolEdit
+                        && (
+                          (chordSymbolEdit.chordId != null && chordSymbolEdit.chordId === chord.id)
+                          || (Math.abs((Number(chordSymbolEdit.beat) || 0) - (Number(chord.beatPosition) || 0)) < 1e-6)
+                        );
+                      const isSelected = selectedChordSymbolId != null && selectedChordSymbolId === chord.id;
+                      const label = isEditing ? String(chordSymbolEdit.draft ?? '') : String(chord.chord || '');
+                      const textY = staffY + firstLineY - 18;
+                      const hitW = Math.max(28, String(label || 'C').length * 9 + 8);
+                      const hitH = 22;
                       return (
-                        <g key={chord.id}>
-                          <text x={chordX} y={staffY + firstLineY - 18} textAnchor="start" fontSize="14" fontWeight="bold" fill="#1a1a1a" fontFamily="sans-serif">{chord.chord}</text>
-                          {chord.figuredBass && (useFigurations
+                        <g
+                          key={chord.id}
+                          data-nm-chord-symbol-hit="1"
+                          style={{ cursor: onSelectChordSymbol ? 'pointer' : 'default' }}
+                          onClick={(e) => {
+                            if (!onSelectChordSymbol) return;
+                            e.stopPropagation();
+                            onSelectChordSymbol(chord);
+                          }}
+                          onMouseDown={(e) => {
+                            if (!onSelectChordSymbol) return;
+                            e.stopPropagation();
+                          }}
+                        >
+                          {(isSelected || isEditing) && (
+                            <rect
+                              x={chordX - 2}
+                              y={textY - 14}
+                              width={hitW}
+                              height={hitH}
+                              fill="rgba(37, 99, 235, 0.18)"
+                              stroke="#2563eb"
+                              strokeWidth={1.5}
+                              rx={2}
+                              pointerEvents="none"
+                            />
+                          )}
+                          <rect
+                            x={chordX - 2}
+                            y={textY - 14}
+                            width={hitW}
+                            height={hitH}
+                            fill="transparent"
+                          />
+                          <text
+                            x={chordX}
+                            y={textY}
+                            textAnchor="start"
+                            fontSize="14"
+                            fontWeight="bold"
+                            fill={isSelected || isEditing ? '#1d4ed8' : '#1a1a1a'}
+                            fontFamily="sans-serif"
+                            pointerEvents="none"
+                          >
+                            {isEditing ? `${label}|` : label}
+                          </text>
+                          {chord.figuredBass && !isEditing && (useFigurations
                             ? renderFiguredBassFigurations(chord.figuredBass, { x: chordX, y: staffY + firstLineY - 4, fontSize: 11, fill: '#555' })
-                            : <text x={chordX} y={staffY + firstLineY - 4} textAnchor="start" fontSize="11" fill="#555" fontFamily="serif">{chord.figuredBass}</text>
+                            : <text x={chordX} y={staffY + firstLineY - 4} textAnchor="start" fontSize="11" fill="#555" fontFamily="serif" pointerEvents="none">{chord.figuredBass}</text>
                           )}
                         </g>
                       );
                     })}
+                    {chordSymbolEdit
+                      && Number(chordSymbolEdit.beat) >= measure.startBeat
+                      && Number(chordSymbolEdit.beat) < measure.endBeat
+                      && !chords.some((c) => (
+                        (chordSymbolEdit.chordId != null && c.id === chordSymbolEdit.chordId)
+                        || Math.abs((Number(c.beatPosition) || 0) - (Number(chordSymbolEdit.beat) || 0)) < 1e-6
+                      ))
+                      && (() => {
+                        const editX = measureX + (Number(chordSymbolEdit.beat) - measure.startBeat) * beatWidth;
+                        const textY = staffY + firstLineY - 18;
+                        const draft = String(chordSymbolEdit.draft || '');
+                        const hitW = Math.max(28, (draft.length || 1) * 9 + 8);
+                        return (
+                          <g key={`chord-edit-${measure.startBeat}`} pointerEvents="none">
+                            <rect
+                              x={editX - 2}
+                              y={textY - 14}
+                              width={hitW}
+                              height={22}
+                              fill="rgba(37, 99, 235, 0.18)"
+                              stroke="#2563eb"
+                              strokeWidth={1.5}
+                              rx={2}
+                            />
+                            <text
+                              x={editX}
+                              y={textY}
+                              textAnchor="start"
+                              fontSize="14"
+                              fontWeight="bold"
+                              fill="#1d4ed8"
+                              fontFamily="sans-serif"
+                            >
+                              {draft}|
+                            </text>
+                          </g>
+                        );
+                      })()}
                     {(() => {
                       const out = [];
                       const strokeTie = themeColors?.noteFill || 'var(--note-fill, #1a1a1a)';

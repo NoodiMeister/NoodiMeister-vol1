@@ -18,7 +18,7 @@ See dokument fikseerib Noodimeistri valiku (selection) käitumise nii, et see ol
 | `singleNote` | `note` | üks noot/paus |
 | `noteRange` | `range` | järjestikune nootide ajavahemik |
 | `measureRange` | `measureRange` | üks või mitu takti |
-| `singleObject` | `singleObject` | barline, repeat, clef, textBox |
+| `singleObject` | `singleObject` | barline, repeat, clef, chordSymbol, textBox |
 | `objectList` | `objectList` | Cmd/Ctrl multi-select (osaliselt) |
 
 ## Pointer click → selection → toolbox
@@ -30,6 +30,7 @@ See dokument fikseerib Noodimeistri valiku (selection) käitumise nii, et see ol
 | Tekstikast / pealkiri / autor | `singleObject` (text*) | `textBox` (+ floating text) | redigeeri teksti |
 | Võti (clef) | `singleObject` (clef) | `clefs` | vaheta glüüf → score uueneb |
 | Noot / paus (noodipea hit) | `note` | `rhythm` + **N-mode** | ↑↓ kõrgus; kestus; akordimärk noodi beat’ile; measure highlight kaob |
+| Akordimärk (traditional, staffi kohal) | `singleObject` (`chordSymbol`) | `chords` | Ctrl/Cmd+K tippimine / Delete eemaldab sümboli; **ei** figurenotes plokkidele |
 | Shift+Click noot | `range` | (ei sunni N-mode) | range highlight |
 
 Poliitika: `src/orchestrator/pointerClickPolicy.js` (`toolboxIdForSelection`).
@@ -51,8 +52,10 @@ Poliitika: `src/orchestrator/pointerClickPolicy.js` (`toolboxIdForSelection`).
 | Shift+Arrow (SEL taktis) | any | `measureRange` | takti highlight | Delete measure range, Copy |
 | Click taktijoon / repeat / jump | any | `singleObject` | märgi sinine highlight | Delete → single / remove; repeatsJumps |
 | Click clef | any | `singleObject` (clef) | clef highlight | clefs toolbox |
+| Click chord symbol (traditional) | any | `singleObject` (chordSymbol) + edit | sinine kast + draft caret | chords toolbox; tipi / Delete |
 | Click text | any | `singleObject` (text*) | text border / floating tool | textBox tools |
 | Backspace/Delete | `singleObject` (barline*) | `none` | marker kaob | convertFinal / removeRepeatMark |
+| Backspace/Delete | `singleObject` (chordSymbol) | `none` | marker kaob | eemalda `chords[]` kirje |
 | Backspace/Delete | `note`/`range` | sama ulatus (noodid → paus) | jääb või puhastub | replaceSelectedNotesWithRests |
 | Cmd/Ctrl+C | `note`/`range`/`measureRange` | unchanged | unchanged | copy |
 | Esc | any | `none` | kõik markerid kaovad | deselect + sulge selection-driven toolbox |
@@ -66,7 +69,7 @@ Poliitika: `src/orchestrator/pointerClickPolicy.js` (`toolboxIdForSelection`).
 
 | Tee | Käitumine |
 |---|---|
-| **Esc** | Puhasta note/range/measure/object/text/clef valik; sulge layout / repeatsJumps / clefs / textBox. N-mode + rhythm jääb alles. |
+| **Esc** | Puhasta note/range/measure/object/text/clef/chordSymbol valik (+ chordSymbolEdit); sulge layout / repeatsJumps / clefs / chords / textBox. N-mode + rhythm jääb alles. |
 | **Teine klikk** samale taktijoonele / võtmele | Toggle → `none` + sama toolbox-sulgumine. |
 | **Teine left-click samale taktile** | **Ei** deselecti (deselect = Esc / tühi pind). |
 | **Tühi pind** (score padding / lehe konteiner, kui `target === currentTarget`) | Sama mis Esc. |

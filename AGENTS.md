@@ -9,7 +9,7 @@ Noodimeister peab käituma “õpetaja tööriistana”: võimalikult vähe üll
 Kõik muudatused peavad hoidma kasutaja teekonnad tervena:
 
 - **Auth**: kasutaja saab registreerida ja sisse logida isikliku konto / Google / Microsoft kanaliga, kuid identiteeti ei tohi automaatselt kokku liita üle providerite. `provider + email` moodustab konto identiteedi; erinevad Google/Microsoft e-mailid peavad jääma eraldi kontodeks ja eraldi tööruumideks.
-- **Minu tööd**: kaustade ja failide loomine + haldus (loodud tööde turvaline säilimine).
+- **Minu tööd**: kaustade ja failide loomine + haldus (loodud tööde turvaline säilimine) — sh nooditööd, kujundaja ja **Muusika stuudio** materjalid.
 - **No-overwrite**: failid ei tohi üksteist üle kirjutada; konfliktid lahendatakse selgelt (rename/duplicate/version), mitte vaikimisi overwrite’iga.
 - **Noodistusmootor**: noodi/akordi sisestus ja eemaldus peab olema deterministlik, kursor ei tohi skip’ida ega “joosta”.
 - **Sisestuse kvaliteet**: tekstikastide, nootide, akordide, TAB-ide ja fingering-märkide sisestus peab töötama sujuvalt, täpselt ja ilma lag'ita; ükski sisestus ei tohi juhuslikult dubleeruda, kaduda või nihkuda.
@@ -112,6 +112,15 @@ Kõik muudatused peavad hoidma kasutaja teekonnad tervena:
   - **Akordiplokid** (`figurenotesChordBlocks`) on **kuvamise** lüliti: sisse = värviline akordirida; välja = akorde **ei kuvata** (ei plokke ega akordinimesid meloodia peal).
   - Lüliti **ei tohi** vaikimisi akorde failist kustutada; `chords[]` jääb alles, kuni kasutaja eemaldab akordi (Backspace/Delete akordireal) või **Eemalda kõik akordid**.
   - **Regressioon:** akordiplokkide väljalülitamine ei tohi jätta “rippuvaid” D/A-tüüpi nimesid figuurnootide kohale.
+  - **Sisestus:** peamine voog = akordirida (`cursorSubRow === 1`) + A–G / palett / dual-strip; **Ctrl/Cmd+K ei** ava traditional inline-edit’i (ainult fookus akordireale / chords toolbox).
+
+- **Standard: traditional akordimärgid (MuseScore)**
+  - **Mis:** staffi kohal olevad harmooniamärgid (`chords[]`: C, Dm7, G/B…), **mitte** stacked notes (Shift+A–G).
+  - **Sisenemine:** valitud noot / `cursorBeat` → **Ctrl/Cmd+K** avab `chordSymbolEdit` (vaba tippimine). **Ctrl/Cmd+A** = palett/toolbox abiks.
+  - **Tippimine:** Enter kinnitab ja väljub; Space/Tab kinnitab ja liigub järgmise helilise noodi beat’ile; Esc tühistab draft’i (olemasolevat ei muuda).
+  - **Valik:** klikk sümbolile → `singleObject` (`chordSymbol`) + sinine marker + edit; Delete/Backspace eemaldab sümboli (mitte pausiasendus).
+  - **Eristus figurenotes’ist:** sama `chords[]` timeline, aga **sisestus-UX ja render** on režiimispetsiifilised — ära klooni Ctrl+K inline-voogu figuurnotatsiooni ega akordiplokke traditionalisse.
+  - **Domeen:** `src/musical/chordSymbols.js`; undo peab salvestama `addChordAt` ajal.
 
 - **Standard: kursori ajamudel (cursor time model)**
   - **Kursori põhitõde on ajapositsioon** (`cursorBeat` / takt + löök + alamjaotus), mitte eraldiseisev “cursor rhythm”.
@@ -205,7 +214,8 @@ Kõik muudatused peavad hoidma kasutaja teekonnad tervena:
   - **2) Taktijoon / topeltjoon / kordusmärk:** klikk → `singleObject` + `repeatsJumps` toolbox. Backspace/Delete: topeltjoon või kordusmärk → tavaline taktijoon (`barlineSingle` / `removeRepeatMark`). Ka tavaline üksiktaktijoon peab olema valitav.
   - **3) Tekst:** klikk tekstikastile / pealkirjale / autorile → tekstivalik + tekstimuutmise tööriistad (`textBox` / floating text tool). Note/repeat valik puhastatakse.
   - **4) Võti (clef):** klikk võtme glüüfile → `singleObject` (clef) + `clefs` toolbox. Võtme vahetus peab uuendama noodigraafikat vastavalt võtmereeglitele (`setClefType` / JO-režiim).
-  - **5) Noot / paus (erinev takti tühjast alast):** left-click **noodipea/hit-alale** → `singleNote` (`kind: 'note'`) + N-mode + `rhythm` + caret noodi beat’il; **takti sinine kast peab kaduma**. Lubatud: ↑↓ kõrgus, kestus, artikulatsioon; **akordimärk** noodi beat’ile (`getChordInsertBeat` / akorditööriist + A–G). Left-click **takti tühjale** (väljaspool noodi hit’i) → ainult `measureRange` (mitte note). Shift+Click noot = range ilma N-mode sundita.
+  - **5) Noot / paus (erinev takti tühjast alast):** left-click **noodipea/hit-alale** → `singleNote` (`kind: 'note'`) + N-mode + `rhythm` + caret noodi beat’il; **takti sinine kast peab kaduma**. Lubatud: ↑↓ kõrgus, kestus, artikulatsioon; **akordimärk** noodi beat’ile (`getChordInsertBeat` / Ctrl/Cmd+K / akorditööriist + A–G). Left-click **takti tühjale** (väljaspool noodi hit’i) → ainult `measureRange` (mitte note). Shift+Click noot = range ilma N-mode sundita.
+  - **6) Akordimärk (traditional):** left-click sümbolile → `singleObject` (`chordSymbol`) + `chords` toolbox + tippimisrežiim. Figurenotes plokkidele see pointer-kaart ei kehti.
   - **Taktipiir (kohustuslik):** plain left-click / left-drag **ei ületa** taktipiiri (valik jääb ankru takti `startBeat…endBeat` sisse). **Shift+click / Shift+drag** lubab valikut üle taktipiiri laiendada (noodivahemik või taktivahemik).
   - **Deselect (kohustuslik):** `Esc`, **teine klikk** samale **taktijoonele/võtmele**, või **tühi lehe/laua pind** → `clearPointerSelection` (`none` + markerid kaovad + **caret peidus**). **Taktivalik:** deselect ainult Esc / tühjal pinnal (mitte teine left-click taktile). Selection-driven toolbox sulgub; N-mode + `rhythm` jääb alles, kui kasutaja on N-režiimis.
   - **Regressioon:** selection ilma nähtava markerita või toolbox, mis ei reageeri valitud objektile, on P0 UX-bug. Aktiivne valik, mida Esc ei puhasta, on samuti P0.

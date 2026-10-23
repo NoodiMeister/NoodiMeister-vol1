@@ -28,6 +28,7 @@ export const SCORE_OBJECT_TYPE = Object.freeze({
   VOLTA1: 'volta1',
   VOLTA2: 'volta2',
   CLEF: 'clef',
+  CHORD_SYMBOL: 'chordSymbol',
   TEXT_BOX: 'textBox',
   TITLE: 'title',
   AUTHOR: 'author',
@@ -80,6 +81,7 @@ export function toolboxIdForSelection(selection) {
       const t = selection.objectType;
       if (isBarlineFamilyMark(t)) return 'repeatsJumps';
       if (t === SCORE_OBJECT_TYPE.CLEF) return 'clefs';
+      if (t === SCORE_OBJECT_TYPE.CHORD_SYMBOL) return 'chords';
       if (TEXT_FAMILY.has(t)) return 'textBox';
       return null;
     }
@@ -172,9 +174,23 @@ export const SELECTION_DRIVEN_TOOLBOX_IDS = Object.freeze([
   'layout',
   'repeatsJumps',
   'clefs',
+  'chords',
   'textBox',
   'rhythm',
 ]);
+
+/**
+ * @param {{ id?: *, beatPosition?: number, chord?: string }} payload
+ */
+export function selectionForChordSymbol(payload = {}) {
+  return {
+    kind: SELECTION_KIND.SINGLE_OBJECT,
+    objectType: SCORE_OBJECT_TYPE.CHORD_SYMBOL,
+    id: payload.id ?? null,
+    beatPosition: Number.isFinite(Number(payload.beatPosition)) ? Number(payload.beatPosition) : null,
+    chord: payload.chord != null ? String(payload.chord) : '',
+  };
+}
 
 /**
  * Kas deselect peab sulgema aktiivse toolbox’i.
@@ -212,6 +228,7 @@ export function isSamePointerTarget(current, next) {
     if (cType !== nType) return false;
     if (cType === SCORE_OBJECT_TYPE.CLEF) return true;
     if (cType === SCORE_OBJECT_TYPE.TEXT_BOX) return (current.id ?? null) === (next.id ?? null);
+    if (cType === SCORE_OBJECT_TYPE.CHORD_SYMBOL) return (current.id ?? null) === (next.id ?? null);
     if (Number.isInteger(current.measureIndex) && Number.isInteger(next.measureIndex)) {
       return current.measureIndex === next.measureIndex;
     }

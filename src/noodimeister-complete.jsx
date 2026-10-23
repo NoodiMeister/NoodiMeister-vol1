@@ -200,8 +200,18 @@ import {
   selectionForNote,
   selectionForClef,
   selectionForText,
+  selectionForChordSymbol,
   isBarlineFamilyMark,
 } from './orchestrator/pointerClickPolicy';
+import {
+  normalizeChordSymbol,
+  findChordAtBeat,
+  findChordById,
+  commitChordAtBeat,
+  removeChordSymbol,
+  nextChordAdvanceBeat,
+  isChordSymbolTypingKey,
+} from './musical/chordSymbols';
 
 /** Vertikaalne lehearv: esimesel lehel lühem noodiala (pealikirjast eraldiseisev), järgmistel täisleht — sama mõõdustik mis LayoutEngine + Timeline. */
 function countVerticalScoreSheets(notationBodyHeightPx, firstBodyPx, restBodyPx) {
@@ -1282,6 +1292,8 @@ const DEFAULT_SHORTCUT_PREFS = {
   'app.clipboardHistory': { code: 'KeyV', shift: true, alt: false, mod: true },
   /** MuseScore-laadne: korda valitud noote/takte kohe järele (ilma copy/paste’ita). */
   'app.repeatSelection': { code: 'KeyR', shift: false, alt: false, mod: false },
+  /** MuseScore-laadne: traditional akordimärgi kirjutamine (Ctrl/Cmd+K). Figurenotes: fookus akordireale. */
+  'app.chordSymbol': { code: 'KeyK', shift: false, alt: false, mod: true },
   // Toolbox actions
   'toolbox.rhythm': { code: 'Digit1', shift: true, alt: false, mod: false },
   'toolbox.timeSignature': { code: 'Digit2', shift: true, alt: false, mod: false },
@@ -1325,6 +1337,7 @@ const SHORTCUT_ACTION_LABELS = {
   'app.paste': 'Kleebi',
   'app.clipboardHistory': 'Lopikelaua ajalugu',
   'app.repeatSelection': 'Korda valikut (R) — dubleeri noodid/taktid järele',
+  'app.chordSymbol': 'Akordimärk (Ctrl/Cmd+K) — traditional MuseScore-laadne tippimine',
   'app.tie': 'Pidekaar (T) — kaks sama helikõrguse nooti',
   'app.slur': 'Legato kaar (S) — kaks või enam nooti (vahemik)',
   'app.extendSlur': 'Legato kaare pikendamine (E) — vali kaare ots, siis E',
@@ -2335,6 +2348,10 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   const [selectionEnd, setSelectionEnd] = useState(-1);
   const [selectedRepeatMark, setSelectedRepeatMark] = useState(null); // { measureIndex, markType } | null
   const [selectedRepeatMarks, setSelectedRepeatMarks] = useState([]); // [{ measureIndex, markType }]
+  /** Traditional MuseScore-laadne akordimärgi tippimine. Figurenotes ei kasuta. */
+  const [chordSymbolEdit, setChordSymbolEdit] = useState(null); // null | { beat, draft, chordId? }
+  const chordSymbolEditRef = useRef(null);
+  chordSymbolEditRef.current = chordSymbolEdit;
   const [jumpMarkLayoutOverrides, setJumpMarkLayoutOverrides] = useState({}); // key: `${measureIndex}:${markType}` -> { dx, dy, sizePx }
   const [clefHandOffset, setClefHandOffset] = useState({ x: 0, y: 0, sizePx: null });
   const [handtoolResizePopup, setHandtoolResizePopup] = useState(null); // { type: 'jumpMark'|'clef', measureIndex?, markType?, x, y }
@@ -2593,6 +2610,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       preserveNoteInputMode: true,
       clearTextSelection: true,
     });
+    setChordSymbolEdit(null);
     setHandtoolResizePopup(null);
     if (opts.dismissCursor !== false) {
       setScoreCursorVisible(false);
@@ -8946,29 +8964,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     return beat;
   }, [cursorPosition, selectedNoteIndex, selectionStart, selectionEnd, notes, staves, activeStaffIndex, instrument, instrumentConfig, harmonyFormChordBeatStep, timeSignature]);
 
-  const normalizeChordHotkey = useCallback((raw) => {
-    const s = String(raw || '').trim();
-    if (!s) return '';
-    // If contains "+", interpret prefix as type (m/7) and suffix as note name.
-    if (s.includes('+')) {
-      const [prefixRaw, noteRaw] = s.split('+');
-      const type = String(prefixRaw || '').trim().toLowerCase();
-      const notePart = String(noteRaw || '').trim();
-      if (!notePart) return s;
-      const base = notePart.charAt(0).toUpperCase() + notePart.slice(1);
-      if (type === 'm') return `${base}m`;
-      if (type === '7') return `${base}7`;
-      return base;
-    }
-    // No "+": single-letter note (major) or already formatted chord like Dm, C7, F#m.
-    if (/^[a-gA-G]$/.test(s)) {
-      return s.toUpperCase();
-    }
-    if (/^[a-gA-G][#b]?$/.test(s)) {
-      return s.charAt(0).toUpperCase() + s.slice(1);
-    }
-    return s;
-  }, []);
+  const normalizeChordHotkey = useCallback((raw) => normalizeChordSymbol(raw), []);
 
   const normalizeLoadedChords = useCallback((arr) => {
     if (!Array.isArray(arr)) return [];
@@ -8991,29 +8987,89 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
 
   const addChordAt = useCallback((beatPosition, chordText, figuredBass = '') => {
     if (!chordText || !String(chordText).trim()) return;
-    const normalized = normalizeChordHotkey(chordText);
+    const normalized = normalizeChordSymbol(chordText);
     if (!normalized) return;
     dirtyRef.current = true;
+    saveToHistory(notes);
     const durationLabel = lastDurationRef.current ?? selectedDuration ?? '1/4';
     const effectiveDurationBeats = getEffectiveDuration(durationLabel) || 1;
     const effectiveBeatPosition = Math.max(0, Number(beatPosition) || 0);
-    const newChord = {
-      id: Date.now() + Math.random(),
+    setChords((prev) => commitChordAtBeat(prev, {
       beatPosition: effectiveBeatPosition,
-      chord: String(normalized).trim(),
+      chord: normalized,
       figuredBass: figuredBass ? String(figuredBass).trim() : '',
-      durationBeats: Math.max(0.125, effectiveDurationBeats)
-    };
-    setChords(prev => {
-      // Replace exact same beat insert, keep other chord changes in measure.
-      const EPS = 1e-6;
-      const next = prev.filter((c) => Math.abs((Number(c.beatPosition) || 0) - effectiveBeatPosition) > EPS);
-      return [...next, newChord].sort((a, b) => a.beatPosition - b.beatPosition);
-    });
+      durationBeats: Math.max(0.125, effectiveDurationBeats),
+    }));
+    // Auto-advance ainult harmony-form võrgustikul; traditional Ctrl+K Space teeb advance’i eraldi.
     if (isHarmonyFormInstrument(staves[activeStaffIndex]?.instrumentId ?? instrument, instrumentConfig)) {
       setCursorPosition(advanceHarmonyChordBeat(effectiveBeatPosition, harmonyFormChordBeatStep, timeSignature));
     }
-  }, [normalizeChordHotkey, selectedDuration, getEffectiveDuration, staves, activeStaffIndex, instrument, instrumentConfig, harmonyFormChordBeatStep, timeSignature]);
+  }, [selectedDuration, getEffectiveDuration, staves, activeStaffIndex, instrument, instrumentConfig, harmonyFormChordBeatStep, timeSignature, saveToHistory, notes]);
+
+  const isTraditionalChordSymbolMode = notationStyle === 'TRADITIONAL';
+
+  const cancelChordSymbolEdit = useCallback(() => {
+    setChordSymbolEdit(null);
+  }, []);
+
+  /** Alusta MuseScore-laadset tippimist (ainult traditional). */
+  const beginChordSymbolEdit = useCallback((beatPosition, chordId = null) => {
+    if (!isTraditionalChordSymbolMode) return;
+    const beat = Math.max(0, Number(beatPosition) || 0);
+    const existing = chordId != null
+      ? findChordById(chords, chordId)
+      : findChordAtBeat(chords, beat);
+    const editBeat = existing ? (Number(existing.beatPosition) || beat) : beat;
+    setChordSymbolEdit({
+      beat: editBeat,
+      draft: existing ? String(existing.chord || '') : '',
+      chordId: existing?.id ?? null,
+    });
+    setCursorPosition(editBeat);
+    setScoreCursorVisible(true);
+    setNotationFrameFocused(true);
+    if (existing) {
+      applySelectionModel(selectionForChordSymbol({
+        id: existing.id,
+        beatPosition: editBeat,
+        chord: existing.chord,
+      }), { syncToolbox: true });
+    }
+  }, [isTraditionalChordSymbolMode, chords, applySelectionModel]);
+
+  /**
+   * Kinnita draft. advance=true → Space/Tab (järgmise noodi peale, jätka edit); false → Enter (välju).
+   */
+  const commitChordSymbolEdit = useCallback((opts = {}) => {
+    const edit = chordSymbolEditRef.current;
+    if (!edit || !isTraditionalChordSymbolMode) return;
+    const advance = opts.advance === true;
+    const exit = opts.exit !== false && !advance;
+    const draft = String(edit.draft || '').trim();
+    if (draft) {
+      addChordAt(edit.beat, draft, '');
+    }
+    if (advance) {
+      const step = getEffectiveDuration(lastDurationRef.current ?? selectedDuration ?? '1/4') || 1;
+      const nextBeat = nextChordAdvanceBeat(notes, edit.beat, { stepBeats: step });
+      const nextExisting = findChordAtBeat(chords, nextBeat);
+      setCursorPosition(nextBeat);
+      setChordSymbolEdit({
+        beat: nextBeat,
+        draft: nextExisting ? String(nextExisting.chord || '') : '',
+        chordId: nextExisting?.id ?? null,
+      });
+      return;
+    }
+    if (exit) {
+      setChordSymbolEdit(null);
+    }
+  }, [isTraditionalChordSymbolMode, addChordAt, getEffectiveDuration, selectedDuration, notes, chords]);
+
+  const selectChordSymbolAt = useCallback((chord) => {
+    if (!chord || !isTraditionalChordSymbolMode) return;
+    beginChordSymbolEdit(Number(chord.beatPosition) || 0, chord.id);
+  }, [isTraditionalChordSymbolMode, beginChordSymbolEdit]);
 
   /** Kohandatud akord: väljad + „Lisa akord“ / Enter. Paleti „Sisesta akord…“ ei lisanud kunagi midagi — see juhatas ainult siia. */
   const submitCustomChordEntry = useCallback(() => {
@@ -9023,13 +9079,13 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       setTimeout(() => setSaveFeedback(''), 2800);
       return;
     }
-    const chord = normalizeChordHotkey(raw);
+    const chord = normalizeChordSymbol(raw);
     addChordAt(getChordInsertBeat(), chord, customFiguredBassInput);
     setCustomChordInput('');
     setCustomFiguredBassInput('');
     setSaveFeedback(t('chords.addedOk') || 'Akord lisatud.');
     setTimeout(() => setSaveFeedback(''), 2200);
-  }, [customChordInput, customFiguredBassInput, t, normalizeChordHotkey, addChordAt, getChordInsertBeat]);
+  }, [customChordInput, customFiguredBassInput, t, addChordAt, getChordInsertBeat]);
 
   const NOTE_TO_SEMITONE = useMemo(() => ({
     C: 0, 'B#': 0,
@@ -10036,6 +10092,63 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         stopScorePlayback(false);
       }
 
+      // Traditional MuseScore chord-symbol edit capture (Ctrl/Cmd+K). Figurenotes never enters this state.
+      const chordEdit = chordSymbolEditRef.current;
+      if (chordEdit && notationStyle === 'TRADITIONAL' && !isTypingInInput) {
+        if (e.key === 'Escape' || e.code === 'Escape') {
+          e.preventDefault();
+          e.stopPropagation();
+          cancelChordSymbolEdit();
+          return;
+        }
+        if (e.key === 'Enter' || e.code === 'Enter') {
+          e.preventDefault();
+          e.stopPropagation();
+          commitChordSymbolEdit({ exit: true });
+          return;
+        }
+        if (e.key === ' ' || e.code === 'Space' || e.key === 'Tab' || e.code === 'Tab') {
+          e.preventDefault();
+          e.stopPropagation();
+          commitChordSymbolEdit({ advance: true });
+          return;
+        }
+        if (isDeleteKey) {
+          e.preventDefault();
+          e.stopPropagation();
+          if (e.key === 'Delete' || e.code === 'Delete') {
+            // Delete = eemalda sümbol beat’ilt ja välju
+            if (chordEdit.chordId != null || String(chordEdit.draft || '').trim()) {
+              saveToHistory(notes);
+              setChords((prev) => removeChordSymbol(prev, {
+                chordId: chordEdit.chordId,
+                beat: chordEdit.beat,
+              }));
+              dirtyRef.current = true;
+            }
+            cancelChordSymbolEdit();
+            clearPointerSelection({ closeToolbox: true, dismissCursor: false });
+            return;
+          }
+          // Backspace: kustuta draft’i viimane märk
+          setChordSymbolEdit((prev) => (prev ? { ...prev, draft: String(prev.draft || '').slice(0, -1) } : null));
+          return;
+        }
+        if (!modKey && !e.altKey && isChordSymbolTypingKey(e)) {
+          e.preventDefault();
+          e.stopPropagation();
+          const ch = String(e.key);
+          setChordSymbolEdit((prev) => (prev ? { ...prev, draft: `${String(prev.draft || '')}${ch}` } : null));
+          return;
+        }
+        // Block note-input keys while editing chord symbol
+        if (!modKey) {
+          e.preventDefault();
+          e.stopPropagation();
+          return;
+        }
+      }
+
       if (e.code === 'Tab') {
         if (noteInputMode && !isTypingInInput) tabStaffCycleHeldRef.current = true;
         else tabStaffCycleHeldRef.current = false;
@@ -10408,6 +10521,21 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         dirtyRef.current = true;
         return;
       }
+      // Traditional: valitud akordimärk + Delete/Backspace → eemalda sümbol (mitte pauside asendus).
+      if (isDeleteKey && notationStyle === 'TRADITIONAL' && !chordSymbolEditRef.current) {
+        const selChord = cursorSelectionRef.current;
+        if (selChord?.kind === 'singleObject' && selChord.objectType === SCORE_OBJECT_TYPE.CHORD_SYMBOL) {
+          e.preventDefault();
+          saveToHistory(notes);
+          setChords((prev) => removeChordSymbol(prev, {
+            chordId: selChord.id,
+            beat: selChord.beatPosition,
+          }));
+          dirtyRef.current = true;
+          clearPointerSelection({ closeToolbox: true, dismissCursor: false });
+          return;
+        }
+      }
       if ((e.key === 'Escape' || e.code === 'Escape') && !modKey) {
         const sel = cursorSelectionRef.current;
         const msel = measureSelectionRef.current;
@@ -10423,6 +10551,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
           || selectedNoteIndex >= 0
           || (selectionStart >= 0 && selectionEnd >= 0)
           || handtoolResizePopup
+          || chordSymbolEditRef.current
         );
         const willCloseSelectionToolbox = shouldCloseToolboxOnDeselect(activeToolbox, { noteInputMode });
         if (hadPointerSelection || willCloseSelectionToolbox) {
@@ -10839,6 +10968,23 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
           }
           return !prev;
         });
+        return;
+      }
+
+      // Ctrl/Cmd+K: traditional = MuseScore chord-symbol edit; figurenotes = focus chord row / chords toolbox (not the same UX).
+      if (matchesShortcutPref(e, effectiveShortcutPrefs['app.chordSymbol']) && !isTypingInInput) {
+        e.preventDefault();
+        if (notationStyle === 'TRADITIONAL') {
+          beginChordSymbolEdit(getChordInsertBeat());
+          return;
+        }
+        if (notationStyle === 'FIGURENOTES') {
+          if (figurenotesChordBlocks) setCursorSubRow(1);
+          setActiveToolbox('chords');
+          setSelectedOptionIndex(0);
+          setNotationFrameFocused(true);
+          return;
+        }
         return;
       }
 
@@ -11436,10 +11582,10 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         const keyboardDrivenPianoInsertActive = pianoStripVisible && (notationStyle === 'FIGURENOTES' || notationMode === 'vabanotatsioon');
         if (!(keyboardDrivenPianoInsertActive && e.defaultPrevented) && !modKey && !e.altKey && ['c', 'd', 'e', 'f', 'g', 'a', 'b'].includes(noteLetter)) {
           e.preventDefault();
-          // Kursori asukoht loeb: akordireal (cursorSubRow === 1) → akord; meloodiareal → figuurnoot. Akorditööriistakast avatud → akord.
-          // Kasuta cursorSubRow prioriteedina (kui kasutaja on akordirea valinud, ei tohi sisestus minna meloodianoodiks).
-          const onChordRow = notationStyle === 'FIGURENOTES' && cursorSubRow === 1;
-          if (onChordRow || activeToolbox === 'chords' || isHarmonyFormMode) {
+          // Figurenotes akordirida → akord; chords-toolbox (palett) mõlemas režiimis → akord; harmony-form → akord.
+          // Traditional ilma toolbox’ita: A–G = meloodianoot. Ctrl/Cmd+K tippimine on chordSymbolEdit harus.
+          const onFigurenotesChordRow = notationStyle === 'FIGURENOTES' && cursorSubRow === 1;
+          if (onFigurenotesChordRow || activeToolbox === 'chords' || isHarmonyFormMode) {
             addChordAt(getChordInsertBeat(), noteLetter.toUpperCase(), '');
             return;
           }
@@ -11862,11 +12008,12 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
           return;
         }
 
-        // Valikurežiim: A–G muudab valitud nooti kõla; akorditööriist avatud → akordimärk valitud noodi beat’ile.
+        // Valikurežiim: A–G muudab valitud nooti kõla; akordipalett / figurenotes akordirida / harmony-form → akordimärk.
         const noteLetterSel = e.key?.toLowerCase();
         if (['c', 'd', 'e', 'f', 'g', 'a', 'b'].includes(noteLetterSel) && selectedNoteIndex >= 0) {
           e.preventDefault();
-          if (activeToolbox === 'chords' || isHarmonyFormMode) {
+          const onFigurenotesChordRowSel = notationStyle === 'FIGURENOTES' && cursorSubRow === 1;
+          if (onFigurenotesChordRowSel || activeToolbox === 'chords' || isHarmonyFormMode) {
             addChordAt(getChordInsertBeat(), noteLetterSel.toUpperCase(), '');
             return;
           }
@@ -12066,6 +12213,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     getEffectiveDuration, selectedNoteIndex, selectionStart, selectionEnd, clipboard, undo, saveToHistory, getSelectedNotes,
     shiftPitchClassSameOctave, shiftOctave, addMeasure, addSongBlock, ghostPitch, ghostOctave, ghostAccidental, ghostAccidentalIsExplicit, playNoteOnInsert, playPianoNote,
     cursorPosition, cursorSubRow, notationStyle, figurenotesChordBlocks, addChordAt, getChordInsertBeat, getChordAtCursor, transposeChordSymbol,
+    beginChordSymbolEdit, cancelChordSymbolEdit, commitChordSymbolEdit,
     cursorOnMelodyRow, noteIndexAtCursor, playNoteAtBeatIfEnabled,
     joClefFocused, joClefStaffPosition, keySignature, setNotes, setKeySignature, setStaves, notationMode, addNoteOnTopOfCursor,
     staves, activeStaffIndex, timeSignature, pickupEnabled, pickupQuantity, pickupDuration,
@@ -17284,7 +17432,25 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                 {(activeToolbox === 'timelinePanel' || (timelinePanelVisible && !activeToolbox)) && <p className="text-xs text-amber-700">Cmd/Ctrl+Shift+T avab/sulgeb ajajoone paneeli.</p>}
                 {activeToolbox === 'chords' && (
                   <div className="mb-3 p-3 bg-white rounded border-2 border-amber-400 space-y-2">
-                    <p className="text-xs text-amber-700">{t('chords.hint')} <kbd className="font-mono bg-amber-100 px-1 rounded">Ctrl+A</kbd> / <kbd className="font-mono bg-amber-100 px-1 rounded">Cmd+A</kbd>.</p>
+                    <p className="text-xs text-amber-700">
+                      {notationStyle === 'TRADITIONAL'
+                        ? (t('chords.hintTraditional') || t('chords.hint'))
+                        : (t('chords.hintFigurenotes') || t('chords.hint'))}
+                      {' '}
+                      {notationStyle === 'TRADITIONAL' ? (
+                        <>
+                          <kbd className="font-mono bg-amber-100 px-1 rounded">{shortcutLabels['app.chordSymbol'] || 'Ctrl/Cmd+K'}</kbd>
+                          {' · '}
+                          <kbd className="font-mono bg-amber-100 px-1 rounded">Ctrl/Cmd+A</kbd>
+                        </>
+                      ) : (
+                        <>
+                          <kbd className="font-mono bg-amber-100 px-1 rounded">Ctrl+A</kbd>
+                          {' / '}
+                          <kbd className="font-mono bg-amber-100 px-1 rounded">Cmd+A</kbd>
+                        </>
+                      )}
+                    </p>
                     <label className="block text-xs font-semibold text-amber-900">{t('chords.customLabel')}</label>
                     <input
                       ref={customChordInputRef}
@@ -19865,6 +20031,17 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                   } : undefined}
                   translateLabel={t}
                   chords={chords}
+                  chordSymbolEdit={staffIdx === activeStaffIndex && notationStyle === 'TRADITIONAL' ? chordSymbolEdit : null}
+                  selectedChordSymbolId={
+                    staffIdx === activeStaffIndex
+                    && cursorSelection?.kind === 'singleObject'
+                    && cursorSelection?.objectType === SCORE_OBJECT_TYPE.CHORD_SYMBOL
+                      ? cursorSelection.id
+                      : null
+                  }
+                  onSelectChordSymbol={staffIdx === activeStaffIndex && notationStyle === 'TRADITIONAL' ? (chord) => {
+                    selectChordSymbolAt(chord);
+                  } : undefined}
                   figurenotesSize={effectiveFigurenotesSize}
                   figurenotesStems={figurenotesStems}
                   figurenotesChordLineGap={figurenotesChordBlocks ? effectiveChordLineGap : 0}
@@ -20744,7 +20921,9 @@ function getFingeringForNote(pitch, octave, instrumentId) {
 }
 
 // Timeline Component – multi-system layout (VexFlow loogika). (PAGE_BREAK_GAP on defineeritud üleval.)
-function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, pageWidth, cursorPosition, notationMode, staffLines, clefType, keySignature = 'C', relativeNotationShowKeySignature = false, relativeNotationShowTraditionalClef = false, pedagogicalDisplayMode = DEFAULT_PEDAGOGICAL_DISPLAY_MODE, handSignStyle = DEFAULT_HAND_SIGN_STYLE, onJoClefPositionChange, joClefFocused = false, onJoClefFocus, instrument = 'single-staff-treble', instrumentNotationVariant = 'standard', instrumentConfig = {}, showBarNumbers = true, barNumberSize = 11, voltaNumberSize = 16, showRhythmSyllables = false, joClefStaffPosition: joClefStaffPositionProp, showAllNoteLabels = false, enableEmojiOverlays = true, noteheadShape = 'oval', noteheadEmoji = '♪', onNoteTeacherLabelChange, onNoteLabelClick, chords = [], isDotted, isRest, selectedDuration, noteInputMode, selectedNoteIndex, isNoteSelected, notes: allNotes, onStaffAddNote, onNoteClick, onNoteMouseDown, onNoteMouseEnter, onNotePitchChange, onNoteBeatChange, canHandDragNotes = false, timeSignatureOffset = { x: 0, y: 0 }, onTimeSignatureOffsetChange, ghostPitch, ghostOctave, ghostAccidental = 0, ghostAccidentalIsExplicit = false, onFigureBeatClick, onChordLineMouseMove, onChordLineClick, notationStyle, layoutMeasuresPerLine = 4, layoutLineBreakBefore = [], layoutBarNumberRestartAt = [], layoutPageBreakBefore = [], layoutSystemGap = 120, layoutPartsGap, layoutConnectedBarlines = false, staffRowAlignment = 'center', staffIndexInScore = 0, systemTotalHeight, layoutGlobalSpacingMultiplier = 1, systems: systemsProp, baseYOffset = 0, isActiveStaff = true, staffCount = 1, staffHeight: staffHeightProp, figurenotesSize = 16, figurenotesStems = false, figurenotesChordLineGap = 6, figurenotesChordBlocks = false, figurenotesChordBlocksShowTones = true, figurenotesMelodyShowNoteNames = true, figurenotesRowHeight: figurenotesRowHeightProp, figurenotesChordLineHeight: figurenotesChordLineHeightProp, figurenotesLyricReserveHeight = 0, timeSignatureSize = 16, hideTimeSignature = false, pedagogicalTimeSigDenominatorType = 'rhythm', pedagogicalTimeSigDenominatorColor = '#1a1a1a', pedagogicalTimeSigDenominatorInstrument = 'handbell', pedagogicalTimeSigDenominatorEmoji = '🥁', singleLineBarlineHalfSpanPx = 20, singleLineBarlineThicknessPx = 2, themeColors: themeColorsProp, pedagogicalPlayheadStyle = 'line', pedagogicalPlayheadEmoji = '🎵', pedagogicalPlayheadEmojiSize = 32, cursorSizePx, cursorLineStrokeWidth = 4, cursorSubRow = 0, pedagogicalPlayheadMovement = 'arch', rhythmCursorColor = '#0ea5e9', rhythmCursorOpacity = 0.55, rhythmCursorWidthMultiplier = 1, rhythmCursorHighContrast = false, isPedagogicalAudioPlaying = false, isExportingAnimation = false, exportCursorRef, scoreContainerRef, pageFlowDirection = 'vertical', pageOrientation = 'portrait', isFirstInBraceGroup = false, braceGroupSize = 0, lyricFontFamily = 'sans-serif', lyricFontSize = 12, lyricBold = false, lyricItalic = false, lyricUnderline = false, lyricWeight = 400, lyricLineYOffset = 0, translateLabel, showLayoutBreakIcons = false, showStaffSpacerHandles = false, showLyricSpacerHandles = false, onSystemYOffsetChange, onSystemXOffsetChange, systemXOffsets = [], onLyricLineYOffsetChange, onToggleLineBreakAfter, onRemoveRepeatMark, selectedRepeatMark = null, selectedRepeatMarks = [], onSelectRepeatMark, onJumpMarkPointerDown, jumpMarkLayoutOverrides = {}, clefHandOffset = { x: 0, y: 0 }, clefHandSizePx = null, onClefPointerDown, clefSelected = false, onSelectClef, measureSelection = null, onMeasureClick, onMeasureContextMenu, activeLyricNoteIndex = null, physicalPageGapPx = 3, physicalPageFrameYPx = 0, disablePhysicalPageGaps = false, hideCursorOverlay = false, exportNotationSvgRef = null, multiStaffInstruments = null, multiStaffMeasuresByInstrument = null, combinedCursorRowOffsetPx = 0, combinedActiveStaffRowIndex = 0, cursorStaffClefType = null, tinWhistleLinkedFingeringScale = 1, linkedNotationByStaffId = null, notationStaffSpace, activeLegatoSlurPair = null, onLegatoPathClick = undefined, onMeasureStartXChange = undefined, notationLayoutPageHeight = null, notationFirstPageBodyPx = null, pickupEnabled = false, harmonyFormMode = false, harmonyFormChordBeatStep = 4, harmonyFormLyricReserveHeight = 0, onHarmonyBeatClick }) {
+function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, pageWidth, cursorPosition, notationMode, staffLines, clefType, keySignature = 'C', relativeNotationShowKeySignature = false, relativeNotationShowTraditionalClef = false, pedagogicalDisplayMode = DEFAULT_PEDAGOGICAL_DISPLAY_MODE, handSignStyle = DEFAULT_HAND_SIGN_STYLE, onJoClefPositionChange, joClefFocused = false, onJoClefFocus, instrument = 'single-staff-treble', instrumentNotationVariant = 'standard', instrumentConfig = {}, showBarNumbers = true, barNumberSize = 11, voltaNumberSize = 16, showRhythmSyllables = false, joClefStaffPosition: joClefStaffPositionProp, showAllNoteLabels = false, enableEmojiOverlays = true, noteheadShape = 'oval', noteheadEmoji = '♪', onNoteTeacherLabelChange, onNoteLabelClick, chords = [], isDotted, isRest, selectedDuration, noteInputMode, selectedNoteIndex, isNoteSelected, notes: allNotes, onStaffAddNote, onNoteClick, onNoteMouseDown, onNoteMouseEnter, onNotePitchChange, onNoteBeatChange, canHandDragNotes = false, timeSignatureOffset = { x: 0, y: 0 }, onTimeSignatureOffsetChange, ghostPitch, ghostOctave, ghostAccidental = 0, ghostAccidentalIsExplicit = false, onFigureBeatClick, onChordLineMouseMove, onChordLineClick, notationStyle, layoutMeasuresPerLine = 4, layoutLineBreakBefore = [], layoutBarNumberRestartAt = [], layoutPageBreakBefore = [], layoutSystemGap = 120, layoutPartsGap, layoutConnectedBarlines = false, staffRowAlignment = 'center', staffIndexInScore = 0, systemTotalHeight, layoutGlobalSpacingMultiplier = 1, systems: systemsProp, baseYOffset = 0, isActiveStaff = true, staffCount = 1, staffHeight: staffHeightProp, figurenotesSize = 16, figurenotesStems = false, figurenotesChordLineGap = 6, figurenotesChordBlocks = false, figurenotesChordBlocksShowTones = true, figurenotesMelodyShowNoteNames = true, figurenotesRowHeight: figurenotesRowHeightProp, figurenotesChordLineHeight: figurenotesChordLineHeightProp, figurenotesLyricReserveHeight = 0, timeSignatureSize = 16, hideTimeSignature = false, pedagogicalTimeSigDenominatorType = 'rhythm', pedagogicalTimeSigDenominatorColor = '#1a1a1a', pedagogicalTimeSigDenominatorInstrument = 'handbell', pedagogicalTimeSigDenominatorEmoji = '🥁', singleLineBarlineHalfSpanPx = 20, singleLineBarlineThicknessPx = 2, themeColors: themeColorsProp, pedagogicalPlayheadStyle = 'line', pedagogicalPlayheadEmoji = '🎵', pedagogicalPlayheadEmojiSize = 32, cursorSizePx, cursorLineStrokeWidth = 4, cursorSubRow = 0, pedagogicalPlayheadMovement = 'arch', rhythmCursorColor = '#0ea5e9', rhythmCursorOpacity = 0.55, rhythmCursorWidthMultiplier = 1, rhythmCursorHighContrast = false, isPedagogicalAudioPlaying = false, isExportingAnimation = false, exportCursorRef, scoreContainerRef, pageFlowDirection = 'vertical', pageOrientation = 'portrait', isFirstInBraceGroup = false, braceGroupSize = 0, lyricFontFamily = 'sans-serif', lyricFontSize = 12, lyricBold = false, lyricItalic = false, lyricUnderline = false, lyricWeight = 400, lyricLineYOffset = 0, translateLabel, showLayoutBreakIcons = false, showStaffSpacerHandles = false, showLyricSpacerHandles = false, onSystemYOffsetChange, onSystemXOffsetChange, systemXOffsets = [], onLyricLineYOffsetChange, onToggleLineBreakAfter, onRemoveRepeatMark, selectedRepeatMark = null, selectedRepeatMarks = [], onSelectRepeatMark, onJumpMarkPointerDown, jumpMarkLayoutOverrides = {}, clefHandOffset = { x: 0, y: 0 }, clefHandSizePx = null, onClefPointerDown, clefSelected = false, onSelectClef, measureSelection = null, onMeasureClick, onMeasureContextMenu, activeLyricNoteIndex = null, physicalPageGapPx = 3, physicalPageFrameYPx = 0, disablePhysicalPageGaps = false, hideCursorOverlay = false, exportNotationSvgRef = null, multiStaffInstruments = null, multiStaffMeasuresByInstrument = null, combinedCursorRowOffsetPx = 0, combinedActiveStaffRowIndex = 0, cursorStaffClefType = null, tinWhistleLinkedFingeringScale = 1, linkedNotationByStaffId = null, notationStaffSpace, activeLegatoSlurPair = null, onLegatoPathClick = undefined, onMeasureStartXChange = undefined, notationLayoutPageHeight = null, notationFirstPageBodyPx = null, pickupEnabled = false, harmonyFormMode = false, harmonyFormChordBeatStep = 4, harmonyFormLyricReserveHeight = 0, onHarmonyBeatClick,
+  chordSymbolEdit = null, selectedChordSymbolId = null, onSelectChordSymbol,
+}) {
   const themeColors = themeColorsProp || { staffLineColor: '#000', noteFill: '#1a1a1a', textColor: '#1a1a1a', isDark: false };
   const safeKey = keySignature ?? 'C';
   // Alati lõplik number (mitte NaN) — varajane `return null` enne hookide kasutamist rikkus Reacti hookide reeglid ja võis jätta noodiala tühjaks.
@@ -21637,6 +21816,9 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
           noteheadShape={traditionalStaffNoteheadShape}
           noteheadEmoji={noteheadEmoji}
           chords={chords}
+          chordSymbolEdit={chordSymbolEdit}
+          selectedChordSymbolId={selectedChordSymbolId}
+          onSelectChordSymbol={onSelectChordSymbol}
           isNoteSelected={isNoteSelected}
           onNoteClick={onNoteClick}
           onNoteMouseDown={onNoteMouseDown}
