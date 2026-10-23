@@ -9,7 +9,7 @@
  * C♯: Yubioto (Saksa = barokk C♯ osas).
  */
 
-/** Sõrmeaugud ülevalt alla. C5 = kõik lahti (eraldi harus). */
+/** Sõrmeaugud ülevalt alla (LH1–3, RH4–7). C4 = kõik kinni; C5 eraldi all. */
 export const RECORDER_FINGER_HOLES = {
   C: [1, 1, 1, 1, 1, 1, 1],
   D: [1, 1, 1, 1, 1, 1, 0],
@@ -23,6 +23,8 @@ export const RECORDER_FINGER_HOLES = {
   B: [1, 0, 0, 0, 0, 0, 0],
 };
 
+/** C5: pöial kinni, I lahti, II kinni, III–VII lahti. */
+const RECORDER_C5_HOLES = [0, 1, 0, 0, 0, 0, 0];
 const RECORDER_HOLES_ALL_OPEN = [0, 0, 0, 0, 0, 0, 0];
 
 /** Madalaim kirjutatud / teaduslik oktav soprano C Saksa plokkflöödil. */
@@ -53,8 +55,12 @@ export function getRecorderFingeringPattern(pitch, octave) {
     if (octave === low) {
       return { thumb: true, holes: recorderHolesFromBits(RECORDER_FINGER_HOLES.C), overblow: false };
     }
-    // C5 / C6: pöial lahti, kõik sõrmeaugud lahti
-    if (octave === mid || octave === high) {
+    // C5: pöial kinni, I lahti, II kinni, III–VII lahti
+    if (octave === mid) {
+      return { thumb: true, holes: recorderHolesFromBits(RECORDER_C5_HOLES), overblow: false };
+    }
+    // C6: pöial lahti, kõik sõrmeaugud lahti
+    if (octave === high) {
       return { thumb: false, holes: recorderHolesFromBits(RECORDER_HOLES_ALL_OPEN), overblow: false };
     }
     return null;
