@@ -5,7 +5,7 @@
 import {
   measureLengthInQuarterBeats,
   durationLabelToQuarterNoteUnits,
-} from './timeSignature';
+} from './timeSignature.js';
 
 /**
  * Eeltakti pikkus neljandikühikutes (klambitud alla täistaktist).

@@ -3,11 +3,11 @@
  * Nominal = skoori timeSignature; Actual override ei muuda globaalset taktimõõtu.
  */
 
-import { measureLengthInQuarterBeats } from './timeSignature';
+import { measureLengthInQuarterBeats } from './timeSignature.js';
 import {
   getPickupQuarterBeats,
   getLastMeasureQuarterBeats,
-} from './pickup';
+} from './pickup.js';
 
 /**
  * @typedef {{ actualBeats?: number, excludeFromCount?: boolean, stretch?: number }} MeasurePropEntry

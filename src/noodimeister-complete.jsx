@@ -130,6 +130,14 @@ import {
   insertBeatGapIntoStaffNotes,
   insertBeatGapIntoChords,
 } from './musical/measureProperties';
+import {
+  extractNoteIndexRangeRelative,
+  extractBeatRangeRelative,
+  extractChordsBeatRangeRelative,
+  applyRepeatAfterBeat,
+  applyRepeatChordsAfterBeat,
+  findNoteIndicesInBeatRange,
+} from './musical/repeatSelection';
 import { MeasureContextMenu } from './components/MeasureContextMenu';
 import { MeasurePropertiesDialog } from './components/MeasurePropertiesDialog';
 import { useNoodimeisterOptional } from './store/NoodimeisterContext';
@@ -1270,6 +1278,8 @@ const DEFAULT_SHORTCUT_PREFS = {
   'app.copy': { code: 'KeyC', shift: false, alt: false, mod: true },
   'app.paste': { code: 'KeyV', shift: false, alt: false, mod: true },
   'app.clipboardHistory': { code: 'KeyV', shift: true, alt: false, mod: true },
+  /** MuseScore-laadne: korda valitud noote/takte kohe järele (ilma copy/paste’ita). */
+  'app.repeatSelection': { code: 'KeyR', shift: false, alt: false, mod: false },
   // Toolbox actions
   'toolbox.rhythm': { code: 'Digit1', shift: true, alt: false, mod: false },
   'toolbox.timeSignature': { code: 'Digit2', shift: true, alt: false, mod: false },
@@ -1312,6 +1322,7 @@ const SHORTCUT_ACTION_LABELS = {
   'app.copy': 'Kopeeri',
   'app.paste': 'Kleebi',
   'app.clipboardHistory': 'Lopikelaua ajalugu',
+  'app.repeatSelection': 'Korda valikut (R) — dubleeri noodid/taktid järele',
   'app.tie': 'Pidekaar (T) — kaks sama helikõrguse nooti',
   'app.slur': 'Legato kaar (S) — kaks või enam nooti (vahemik)',
   'app.extendSlur': 'Legato kaare pikendamine (E) — vali kaare ots, siis E',
@@ -3079,6 +3090,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   measureClipboardRef.current = measureClipboard;
   const copyMeasureSelectionToClipboardRef = useRef(() => false);
   const pasteMeasureClipboardAtRef = useRef(() => false);
+  const repeatSelectionRef = useRef(() => false);
   // Häälestus: võrdlusnoot (nt A3=440 Hz), muudetav seadetest
   const [tuningReferenceNote, setTuningReferenceNote] = useState('A');
   const [tuningReferenceOctave, setTuningReferenceOctave] = useState(3);
@@ -10748,6 +10760,13 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         return;
       }
 
+      // R = korda valikut (MuseScore): taktivalik või noodivalik / kursori all olev noot.
+      if (matchesShortcutPref(e, effectiveShortcutPrefs['app.repeatSelection']) && !modKey && !e.altKey) {
+        e.preventDefault();
+        repeatSelectionRef.current?.();
+        return;
+      }
+
       // Cmd+B / Ctrl+B – handled earlier (works even when input has focus)
 
       // Alt+[ / Alt+{ – vähenda valitud takti laiust (kokkusurumine); Alt+] / Alt+} – suurenda (laiendamine)
@@ -12273,6 +12292,151 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     return true;
   }, [cursorPosition, timeSignature, notes, saveToHistory, applySelectionModel, t]);
   pasteMeasureClipboardAtRef.current = pasteMeasureClipboardAtSelection;
+
+  /**
+   * R = korda valikut (MuseScore): dubleeri valitud takt(id) või noodid kohe järele.
+   * Lisab ajateljele ruumi (taktide puhul uued taktid); ei overwrite’i olemasolevat sisu.
+   */
+  const repeatSelection = useCallback(() => {
+    const msel = measureSelectionRef.current;
+    if (msel && Number.isInteger(msel.start) && Number.isInteger(msel.end)) {
+      const ms = measuresRef.current;
+      if (!Array.isArray(ms) || ms.length === 0) return false;
+      const startIdx = Math.min(msel.start, msel.end);
+      const endIdx = Math.max(msel.start, msel.end);
+      if (startIdx < 0 || endIdx >= ms.length) return false;
+      const blockStart = ms[startIdx].startBeat;
+      const blockEnd = ms[endIdx].endBeat;
+      const span = blockEnd - blockStart;
+      const measureCount = endIdx - startIdx + 1;
+      if (!(span > 0) || measureCount < 1) return false;
+      if (!hasFullAccess && ms.length + measureCount > DEMO_MAX_MEASURES) {
+        setSaveFeedback(t('demo.maxMeasures'));
+        setTimeout(() => setSaveFeedback(''), 3500);
+        return false;
+      }
+      const notesByStaff = (staves || []).map((staff) =>
+        extractBeatRangeRelative(staff.notes || [], blockStart, blockEnd),
+      );
+      const chordsRel = extractChordsBeatRangeRelative(chords || [], blockStart, blockEnd);
+      const insertIdx = endIdx + 1;
+      const insertAt = blockEnd;
+
+      saveToHistory(notes);
+      setStaves((prev) => prev.map((staff, si) => ({
+        ...staff,
+        notes: applyRepeatAfterBeat(
+          staff.notes || [],
+          insertAt,
+          span,
+          notesByStaff[si] || notesByStaff[0] || [],
+        ),
+      })));
+      setChords((prev) => applyRepeatChordsAfterBeat(prev || [], insertAt, span, chordsRel));
+      setIntermissionLabels((prev) => (prev || []).map((lab) => {
+        const s = Number(lab.startBeat) || 0;
+        const e = Number(lab.endBeat) || 0;
+        if (s >= insertAt) return { ...lab, startBeat: s + span, endBeat: e + span };
+        if (e > insertAt) return { ...lab, endBeat: e + span };
+        return lab;
+      }));
+      setAddedMeasures((prev) => (prev || 0) + measureCount);
+      setLayoutLineBreakBefore((prev) => remapBreakIndicesAfterMeasureInsert(prev, insertIdx, measureCount));
+      setPartLayoutLineBreakBefore((prev) => remapBreakIndicesAfterMeasureInsert(prev, insertIdx, measureCount));
+      setLayoutPageBreakBefore((prev) => remapBreakIndicesAfterMeasureInsert(prev, insertIdx, measureCount));
+      setPartLayoutPageBreakBefore((prev) => remapBreakIndicesAfterMeasureInsert(prev, insertIdx, measureCount));
+      setLayoutBarNumberRestartAt((prev) => remapBreakIndicesAfterMeasureInsert(prev, insertIdx, measureCount));
+      setMeasureStretchFactors((prev) => {
+        const arr = Array.isArray(prev) ? [...prev] : [];
+        while (arr.length < insertIdx) arr.push(1);
+        for (let k = 0; k < measureCount; k++) arr.splice(insertIdx, 0, 1);
+        return arr;
+      });
+      setMeasureRepeatMarks((prev) => remapRepeatMarksAfterMeasureInsert(prev, insertIdx, measureCount));
+      setMeasurePropsByIndex((prev) => remapMeasurePropsAfterInsert(prev, insertIdx, measureCount));
+      applySelectionModel({
+        kind: 'measureRange',
+        anchorMeasure: insertIdx,
+        focusMeasure: insertIdx + measureCount - 1,
+      }, { syncToolbox: true });
+      setCursorPosition(insertAt);
+      dirtyRef.current = true;
+      setSaveFeedback(
+        t('measure.repeated')
+          || `Korratud: ${measureCount} ${measureCount === 1 ? 'takt' : 'takti'} (lisatud järele).`,
+      );
+      setTimeout(() => setSaveFeedback(''), 1800);
+      return true;
+    }
+
+    let startIdx = -1;
+    let endIdx = -1;
+    if (selectionStart >= 0 && selectionEnd >= 0) {
+      startIdx = Math.min(selectionStart, selectionEnd);
+      endIdx = Math.max(selectionStart, selectionEnd);
+    } else if (selectedNoteIndex >= 0) {
+      startIdx = endIdx = selectedNoteIndex;
+    } else if (noteIndexAtCursor >= 0) {
+      startIdx = endIdx = noteIndexAtCursor;
+    }
+    if (startIdx < 0 || endIdx < 0 || !notes.length) {
+      setSaveFeedback('Kordamiseks vali noot, nootide vahemik või takt(id).');
+      setTimeout(() => setSaveFeedback(''), 2200);
+      return false;
+    }
+
+    const extracted = extractNoteIndexRangeRelative(notes, startIdx, endIdx);
+    if (!extracted) {
+      setSaveFeedback('Kordamiseks vali noot, nootide vahemik või takt(id).');
+      setTimeout(() => setSaveFeedback(''), 2200);
+      return false;
+    }
+    const { spanBeats, notes: relativeNotes, endBeat: insertAt } = extracted;
+
+    const measureQuarters = measureLengthInQuarterBeats(timeSignature);
+    let firstMeasureBeats = measureQuarters;
+    if (pickupEnabled && pickupQuantity > 0 && pickupDuration) {
+      const onePickupQuarters = durationLabelToQuarterNoteUnits(pickupDuration);
+      firstMeasureBeats = Math.max(0.25, Math.min(pickupQuantity * onePickupQuarters, measureQuarters - 0.25));
+    }
+    const totalMeasures = Math.max(1, 1 + (addedMeasures || 0));
+    const scoreEndBeat = firstMeasureBeats + (totalMeasures - 1) * measureQuarters;
+    const needExtraBeats = Math.max(0, (insertAt + spanBeats) - scoreEndBeat);
+    const measuresToAdd = needExtraBeats > 0 ? Math.ceil(needExtraBeats / measureQuarters) : 0;
+    if (measuresToAdd > 0) {
+      if (!hasFullAccess && totalMeasures + measuresToAdd > DEMO_MAX_MEASURES) {
+        setSaveFeedback(t('demo.maxMeasures'));
+        setTimeout(() => setSaveFeedback(''), 3500);
+        return false;
+      }
+      setAddedMeasures((prev) => (prev || 0) + measuresToAdd);
+    }
+
+    saveToHistory(notes);
+    const nextNotes = applyRepeatAfterBeat(notes, insertAt, spanBeats, relativeNotes);
+    setNotes(nextNotes);
+    const newIndices = findNoteIndicesInBeatRange(nextNotes, insertAt, insertAt + spanBeats);
+    if (newIndices.length === 1) {
+      applySelectionModel({ kind: 'note', index: newIndices[0] });
+    } else if (newIndices.length > 1) {
+      applySelectionModel({
+        kind: 'range',
+        anchorIndex: newIndices[0],
+        focusIndex: newIndices[newIndices.length - 1],
+      });
+    }
+    setCursorPosition(insertAt + spanBeats);
+    dirtyRef.current = true;
+    const count = relativeNotes.length;
+    setSaveFeedback(`Korratud: ${count} ${count === 1 ? 'noot' : 'nooti'}.`);
+    setTimeout(() => setSaveFeedback(''), 1800);
+    return true;
+  }, [
+    hasFullAccess, t, staves, chords, notes, saveToHistory, applySelectionModel,
+    selectionStart, selectionEnd, selectedNoteIndex, noteIndexAtCursor,
+    timeSignature, pickupEnabled, pickupQuantity, pickupDuration, addedMeasures, setNotes,
+  ]);
+  repeatSelectionRef.current = repeatSelection;
 
   const saveMeasureProperties = useCallback((payload) => {
     const mi = Number(payload.measureIndex) || 0;

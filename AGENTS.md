@@ -191,6 +191,14 @@ Kõik muudatused peavad hoidma kasutaja teekonnad tervena:
   - **Kopeeri-kleebi reegel:** `objectList` = merge-käitumine, `noteRange/measureRange` = ajavahemiku overwrite-käitumine. Käitumine peab olema ühtlane kõikides režiimides ja sama sisendi korral deterministlik.
   - **Smoke enne merge’i:** testi minimaalselt: (1) click single -> highlight, (2) shift-extend -> range marker, (3) cmd/ctrl-click toggle list, (4) selected repeat mark delete, (5) esc clear, (6) copy/paste vastab selection type’ile.
 
+- **Standard: R = korda valikut (repeat selection)**
+  - **Kiirklahv:** `R` (ilma Cmd/Ctrl/Alt) — MuseScore’i “Repeat selection” analoog; ei vaja eraldi copy/paste’i.
+  - **Taktivalik (`measureRange`):** valitud takt(id) dubleeritakse **kohe järele**; tekivad **uued taktid** (ajatelg nihkub edasi, olemasolevat sisu ei overwrite’ita).
+  - **Noodivalik (`note` / `range`):** valitud noot/noodid (+ kestused) dubleeritakse valiku lõpu järele; järgnev sisu nihkub span’i võrra edasi; vajadusel lisatakse takte.
+  - **Fallback:** kui valikut pole, aga kursor on noodil, korratakse seda nooti.
+  - **Ei kehti:** `singleObject` / `objectList` (kordusmärgid jms) — need ei ole R-sihtmärk.
+  - **Implementatsioon:** domeen `src/musical/repeatSelection.js`; orkestreerimine `repeatSelection` + `app.repeatSelection` shortcut.
+
 - **Standard: pointer click selection (score hit → selection → toolbox)**
   - **Poliitika:** `src/orchestrator/pointerClickPolicy.js` — üks kaart `selection → activeToolbox`. Ära dubleeri “mis toolbox avaneb” loogikat view failides.
   - **1) Tühi takt:** left-click → `measureRange` + sinine kast + `layout` toolbox (**alati select**; teine left-click samale taktile ei deselecti). Paremklikk → kontekstimenüü (Taktiomadused, Lisa enne/pärast, Kustuta, Copy/Paste). Taktiomadused: Actual kestus **ainult sellele taktile** (`measurePropsByIndex`; Nominal/taktimõõt ei muutu); **Salvesta ja sulge**. `cursorBeat` nihkub takti algusesse layout-nuppude jaoks, caret peidetakse (tühi ala ≠ noodi ankru).
