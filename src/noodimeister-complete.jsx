@@ -91,6 +91,11 @@ import { estimateWindFingeringLayoutReservePx } from './notation/windFingeringDi
 import { buildRecorderFingerHolesTable } from './notation/recorderFingering';
 import { computeLayout, getStaffHeight, LAYOUT, PAGE_BREAK_GAP } from './layout/LayoutManager';
 import {
+  normalizeClefHandOffset,
+  normalizeJumpMarkLayoutOverrides,
+  clefHandOffsetIsNonDefault,
+} from './layout/handPlacementPersistence';
+import {
   getTraditionalStaffLineSpanPx,
   getTraditionalInterStaffGapPx,
   getTraditionalStaffStepPx,
@@ -1010,7 +1015,7 @@ var TEMPO_TERMS = [
 ];
 
 /** D-tin whistle: holes as top→mouthpiece (aligned with tinWhistleCodeBottomFirstToHolesTopFirst), 1=covered.
- *  Concert pitch names: low octave D4–B4, C5, C#5; overblow register D5–B5 (+). */
+ *  Concert pitch names: low octave D4–B4, C5, C#5; upper D5–B5 (thumb half, no +). */
 var FINGERING_TIN_WHISTLE = {
   D4: [1, 1, 1, 1, 1, 1], E4: [1, 1, 1, 1, 1, 0], 'F#4': [1, 1, 1, 1, 0, 0], G4: [1, 1, 1, 0, 0, 0], A4: [1, 1, 0, 0, 0, 0], B4: [1, 0, 0, 0, 0, 0],
   C5: [0, 1, 1, 0, 0, 0], 'C#5': [0, 0, 0, 0, 0, 0],
@@ -5400,6 +5405,11 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     pageDesignPositionY,
     pageDesignCrop,
     timeSignatureOffset,
+    // Hand-tool placements: clef drag + jump-mark drag/resize (must survive save/load).
+    clefHandOffset: clefHandOffsetIsNonDefault(clefHandOffset) ? normalizeClefHandOffset(clefHandOffset) : undefined,
+    jumpMarkLayoutOverrides: Object.keys(jumpMarkLayoutOverrides || {}).length
+      ? normalizeJumpMarkLayoutOverrides(jumpMarkLayoutOverrides)
+      : undefined,
     visibleStaves: visibleStaves.length === staves.length ? visibleStaves : staves.map(() => true),
     instrumentPartGroups,
     intermissionLabels,
@@ -5408,7 +5418,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     lyricFontSize,
     noteheadShape,
     noteheadEmoji
-  }), [staves, activeStaffIndex, staffYOffsets, measureStretchFactors, systemYOffsets, systemXOffsets, visibleStaves, instrumentPartGroups, intermissionLabels, timeSignature, timeSignatureMode, keySignature, staffLines, notationStyle, pixelsPerBeat, notationMode, instrumentNotationVariant, linkedNotationByStaffId, tinWhistleLinkedFingeringScalePercent, cursorPosition, addedMeasures, measureRepeatMarks, setupCompleted, songTitle, author, pickupEnabled, pickupQuantity, pickupDuration, incompleteLastMeasure, measurePropsByIndex, pageOrientation, paperSize, layoutMeasuresPerLine, layoutStrictMeasuresPerLine, layoutLineBreakBefore, layoutBarNumberRestartAt, layoutPageBreakBefore, layoutExtraPages, layoutDeskPageGapPx, partLayoutDeskPageGapPx, deskPageGapAdjustStepPx, layoutSystemGap, layoutPartsGap, layoutPartsGapMm, layoutSizeUnit, layoutConnectedBarlines, layoutGlobalSpacingMultiplier, notationCtx?.globalSpacingMultiplier, notationCtx?.staffSpacing, notationCtx?.measureWidthMultiplier, viewMode, partLayoutMeasuresPerLine, partLayoutStrictMeasuresPerLine, partLayoutLineBreakBefore, partLayoutPageBreakBefore, partLayoutExtraPages, showPageNavigator, showPedagogicalVideoRuler, pageFlowDirection, viewFitPage, viewSmartPage, visibleToolIds, tuningReferenceNote, tuningReferenceOctave, tuningReferenceHz, playNoteOnInsert, figurenotesSize, figurenotesStems, figurenotesChordLineGap, figurenotesChordBlocks, figurenotesChordBlocksShowTones, figurenotesMelodyShowNoteNames, timeSignatureSize, hideTimeSignature, pedagogicalTimeSigDenominatorType, pedagogicalTimeSigDenominatorColor, pedagogicalTimeSigDenominatorInstrument, pedagogicalTimeSigDenominatorEmoji, singleLineBarlineHalfSpanPx, singleLineBarlineThicknessPx, showBarNumbers, barNumberSize, voltaNumberSize, showRhythmSyllables, showAllNoteLabels, enableEmojiOverlays, joClefStaffPosition, relativeNotationShowKeySignature, relativeNotationShowTraditionalClef, pedagogicalDisplayMode, handSignStyle, isPedagogicalProject, pedagogicalAudioBpm, pedagogicalAudioPlaybackRate, pedagogicalSyncMode, pedagogicalSyncStartBeat, pedagogicalSyncStartTimeSec, pedagogicalSyncEndBeat, pedagogicalSyncEndTimeSec, pedagogicalLoopEnabled, pedagogicalLoopCount, pedagogicalCues, pedagogicalRhythmStep, pedagogicalPlayheadStyle, pedagogicalPlayheadEmoji, pedagogicalPlayheadEmojiSize, cursorLineStrokeWidth, pedagogicalPlayheadMovement, rhythmCursorColor, rhythmCursorOpacity, rhythmCursorWidthMultiplier, rhythmCursorHighContrast, chords, textBoxes, documentFontFamily, lyricFontFamily, lyricBold, lyricItalic, lyricUnderline, lyricWeight, titleFontSize, authorFontSize, titleFontFamily, authorFontFamily, titleColor, authorColor, titleBold, titleItalic, titleUnderline, titleWeight, authorBold, authorItalic, authorUnderline, authorWeight, titleAlignment, authorAlignment, scoreHeaderTranslateYPx, staffRowAlignment, pageDesignDataUrl, pageDesignOpacity, pageDesignFit, pageDesignPositionX, pageDesignPositionY, pageDesignCrop, timeSignatureOffset, lyricLineIndex, lyricLineYOffset, lyricFontSize, noteheadShape, noteheadEmoji]);
+  }), [staves, activeStaffIndex, staffYOffsets, measureStretchFactors, systemYOffsets, systemXOffsets, visibleStaves, instrumentPartGroups, intermissionLabels, timeSignature, timeSignatureMode, keySignature, staffLines, notationStyle, pixelsPerBeat, notationMode, instrumentNotationVariant, linkedNotationByStaffId, tinWhistleLinkedFingeringScalePercent, cursorPosition, addedMeasures, measureRepeatMarks, setupCompleted, songTitle, author, pickupEnabled, pickupQuantity, pickupDuration, incompleteLastMeasure, measurePropsByIndex, pageOrientation, paperSize, layoutMeasuresPerLine, layoutStrictMeasuresPerLine, layoutLineBreakBefore, layoutBarNumberRestartAt, layoutPageBreakBefore, layoutExtraPages, layoutDeskPageGapPx, partLayoutDeskPageGapPx, deskPageGapAdjustStepPx, layoutSystemGap, layoutPartsGap, layoutPartsGapMm, layoutSizeUnit, layoutConnectedBarlines, layoutGlobalSpacingMultiplier, notationCtx?.globalSpacingMultiplier, notationCtx?.staffSpacing, notationCtx?.measureWidthMultiplier, viewMode, partLayoutMeasuresPerLine, partLayoutStrictMeasuresPerLine, partLayoutLineBreakBefore, partLayoutPageBreakBefore, partLayoutExtraPages, showPageNavigator, showPedagogicalVideoRuler, pageFlowDirection, viewFitPage, viewSmartPage, visibleToolIds, tuningReferenceNote, tuningReferenceOctave, tuningReferenceHz, playNoteOnInsert, figurenotesSize, figurenotesStems, figurenotesChordLineGap, figurenotesChordBlocks, figurenotesChordBlocksShowTones, figurenotesMelodyShowNoteNames, timeSignatureSize, hideTimeSignature, pedagogicalTimeSigDenominatorType, pedagogicalTimeSigDenominatorColor, pedagogicalTimeSigDenominatorInstrument, pedagogicalTimeSigDenominatorEmoji, singleLineBarlineHalfSpanPx, singleLineBarlineThicknessPx, showBarNumbers, barNumberSize, voltaNumberSize, showRhythmSyllables, showAllNoteLabels, enableEmojiOverlays, joClefStaffPosition, relativeNotationShowKeySignature, relativeNotationShowTraditionalClef, pedagogicalDisplayMode, handSignStyle, isPedagogicalProject, pedagogicalAudioBpm, pedagogicalAudioPlaybackRate, pedagogicalSyncMode, pedagogicalSyncStartBeat, pedagogicalSyncStartTimeSec, pedagogicalSyncEndBeat, pedagogicalSyncEndTimeSec, pedagogicalLoopEnabled, pedagogicalLoopCount, pedagogicalCues, pedagogicalRhythmStep, pedagogicalPlayheadStyle, pedagogicalPlayheadEmoji, pedagogicalPlayheadEmojiSize, cursorLineStrokeWidth, pedagogicalPlayheadMovement, rhythmCursorColor, rhythmCursorOpacity, rhythmCursorWidthMultiplier, rhythmCursorHighContrast, chords, textBoxes, documentFontFamily, lyricFontFamily, lyricBold, lyricItalic, lyricUnderline, lyricWeight, titleFontSize, authorFontSize, titleFontFamily, authorFontFamily, titleColor, authorColor, titleBold, titleItalic, titleUnderline, titleWeight, authorBold, authorItalic, authorUnderline, authorWeight, titleAlignment, authorAlignment, scoreHeaderTranslateYPx, staffRowAlignment, pageDesignDataUrl, pageDesignOpacity, pageDesignFit, pageDesignPositionX, pageDesignPositionY, pageDesignCrop, timeSignatureOffset, clefHandOffset, jumpMarkLayoutOverrides, lyricLineIndex, lyricLineYOffset, lyricFontSize, noteheadShape, noteheadEmoji]);
 
   const saveToStorageSync = useCallback(() => {
     try {
@@ -5884,6 +5894,8 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       if (data.timeSignatureOffset && Number.isFinite(data.timeSignatureOffset.x) && Number.isFinite(data.timeSignatureOffset.y)) {
         setTimeSignatureOffset({ x: Number(data.timeSignatureOffset.x), y: Number(data.timeSignatureOffset.y) });
       } else setTimeSignatureOffset({ x: 0, y: 0 });
+      setClefHandOffset(normalizeClefHandOffset(data.clefHandOffset));
+      setJumpMarkLayoutOverrides(normalizeJumpMarkLayoutOverrides(data.jumpMarkLayoutOverrides));
       if (data.pageDesignCrop && typeof data.pageDesignCrop.top === 'number' && typeof data.pageDesignCrop.right === 'number' && typeof data.pageDesignCrop.bottom === 'number' && typeof data.pageDesignCrop.left === 'number') {
         setPageDesignCrop({
           top: clampNumber(data.pageDesignCrop.top, 0, 50),
@@ -6412,6 +6424,8 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         if (data.timeSignatureOffset && Number.isFinite(data.timeSignatureOffset.x) && Number.isFinite(data.timeSignatureOffset.y)) {
           setTimeSignatureOffset({ x: Number(data.timeSignatureOffset.x), y: Number(data.timeSignatureOffset.y) });
         } else setTimeSignatureOffset({ x: 0, y: 0 });
+        setClefHandOffset(normalizeClefHandOffset(data.clefHandOffset));
+        setJumpMarkLayoutOverrides(normalizeJumpMarkLayoutOverrides(data.jumpMarkLayoutOverrides));
         if (data.pageDesignCrop && typeof data.pageDesignCrop.top === 'number' && typeof data.pageDesignCrop.right === 'number' && typeof data.pageDesignCrop.bottom === 'number' && typeof data.pageDesignCrop.left === 'number') {
           setPageDesignCrop({ top: clampNumber(data.pageDesignCrop.top, 0, 50), right: clampNumber(data.pageDesignCrop.right, 0, 50), bottom: clampNumber(data.pageDesignCrop.bottom, 0, 50), left: clampNumber(data.pageDesignCrop.left, 0, 50) });
         } else setPageDesignCrop({ top: 0, right: 0, bottom: 0, left: 0 });

@@ -16,6 +16,7 @@
     "test:export-smoke": "node scripts/check-export-determinism.mjs",
     "test:musicxml-export": "node scripts/check-musicxml-export.mjs",
     "test:piano-mod-guard": "node scripts/check-piano-mod-guard.mjs",
+    "test:hand-placement-persist": "node scripts/check-hand-placement-persist.mjs",
     "test:repeat-selection": "node scripts/check-repeat-selection.mjs",
     "test:composer-import": "node scripts/check-composer-import.mjs",
     "report:work-hours": "node scripts/generate-work-hours-report.mjs",
