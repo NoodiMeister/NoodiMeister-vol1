@@ -542,6 +542,7 @@ export function FigurenotesView({
   hideTimeSignature = false,
   keySignature = "C",
   isNoteSelected,
+  isNoteCursorFocused = null,
   onNoteClick,
   onNoteMouseDown,
   onNoteMouseEnter,
@@ -1403,6 +1404,12 @@ export function FigurenotesView({
                           ? isNoteSelected(noteIndex, staffSi)
                           : isNoteSelected(noteIndex)
                         : false;
+                      const isCursorFocused = typeof isNoteCursorFocused === "function"
+                        ? (combinedRows
+                          ? !!isNoteCursorFocused(noteIndex, staffSi)
+                          : !!isNoteCursorFocused(noteIndex))
+                        : false;
+                      const isCursorActive = isSelected || isCursorFocused;
                       const dur = note.durationLabel || "1/4";
                       const smuflType =
                         dur === "1/1"
@@ -1430,8 +1437,8 @@ export function FigurenotesView({
                       const stemY2 = y - stemLength;
                       const textColor = getFigurenoteTextColor(note.pitch);
                       const r = size / 2;
-                      const strokeShape = isSelected ? "#2563eb" : "#000";
-                      const strokeWShape = isSelected ? 3 : 2;
+                      const strokeShape = isCursorActive ? "#2563eb" : "#000";
+                      const strokeWShape = isCursorActive ? 3.5 : 2;
 
                       const fill = style.fill ?? "#C7BAB7";
                       const effectiveStroke = style.stroke ?? "none";
@@ -1630,7 +1637,7 @@ export function FigurenotesView({
                                 </g>
                               );
                             })()}
-                          {isSelected && (
+                          {isCursorActive && (
                             <g className="nm-note-selection-glow">
                               <circle
                                 cx={figureCenterX}
@@ -1638,8 +1645,8 @@ export function FigurenotesView({
                                 r={size / 2 + 4}
                                 fill="none"
                                 stroke="#2563eb"
-                                strokeWidth="2"
-                                opacity="0.5"
+                                strokeWidth="2.5"
+                                opacity={isSelected ? 0.65 : 0.55}
                               />
                             </g>
                           )}
@@ -3065,6 +3072,19 @@ export function FigurenotesView({
                               if (isAutoGapRest) return null;
                               // Kui samas ajavahemikus on juba figurshape/noot, loe see slot täidetuks ja ära joonista pausi.
                               if (restOverlapsPlayed(note)) return null;
+                              const isRestSelected = isNoteSelected
+                                ? combinedRows
+                                  ? isNoteSelected(globalNoteIndex, staffSi)
+                                  : isNoteSelected(globalNoteIndex)
+                                : false;
+                              const isRestCursorFocused =
+                                typeof isNoteCursorFocused === "function"
+                                  ? (combinedRows
+                                    ? !!isNoteCursorFocused(globalNoteIndex, staffSi)
+                                    : !!isNoteCursorFocused(globalNoteIndex))
+                                  : false;
+                              const isRestCursorActive = isRestSelected || isRestCursorFocused;
+                              const restFill = isRestCursorActive ? "#2563eb" : "#1a1a1a";
                               const drawRestGlyph = shouldDrawRestGlyph(
                                 measure.notes,
                                 noteIdx,
@@ -3100,7 +3120,7 @@ export function FigurenotesView({
                                       textAnchor="middle"
                                       fontSize={zSize}
                                       fontWeight="bold"
-                                      fill="#1a1a1a"
+                                      fill={restFill}
                                       fontFamily="serif"
                                     >
                                       Z

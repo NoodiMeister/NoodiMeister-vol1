@@ -42,6 +42,7 @@ export function HandSignDegreeStaffView({
   keySignature = 'C',
   joClefStaffPosition,
   isNoteSelected,
+  isNoteCursorFocused = null,
   onNoteClick,
   onNoteMouseDown,
   onNoteMouseEnter,
@@ -192,6 +193,10 @@ export function HandSignDegreeStaffView({
                     const selected = typeof isNoteSelected === 'function'
                       ? isNoteSelected(globalNoteIndex)
                       : false;
+                    const cursorFocused = typeof isNoteCursorFocused === 'function'
+                      ? !!isNoteCursorFocused(globalNoteIndex)
+                      : false;
+                    const visuallyActive = selected || cursorFocused;
                     const lyric = note.lyric || note.lyric1 || '';
 
                     return (
@@ -201,10 +206,10 @@ export function HandSignDegreeStaffView({
                           x={x}
                           y={y}
                           fontSize={metrics.fontSize}
-                          fill={metrics.fill}
-                          stroke={metrics.stroke}
-                          strokeWidth={metrics.strokeWidth}
-                          selected={!!selected}
+                          fill={visuallyActive ? '#2563eb' : metrics.fill}
+                          stroke={visuallyActive ? '#2563eb' : metrics.stroke}
+                          strokeWidth={visuallyActive ? Math.max(2, Number(metrics.strokeWidth) || 1) + 0.5 : metrics.strokeWidth}
+                          selected={!!visuallyActive}
                           onClick={onNoteClick ? (e) => { e.stopPropagation(); onNoteClick(globalNoteIndex, e); } : undefined}
                           onMouseDown={onNoteMouseDown ? (e) => { e.stopPropagation(); onNoteMouseDown(globalNoteIndex, e); } : undefined}
                           onMouseEnter={onNoteMouseEnter ? () => onNoteMouseEnter(globalNoteIndex) : undefined}

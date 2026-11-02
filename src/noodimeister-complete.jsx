@@ -145,6 +145,7 @@ import {
   applyRepeatChordsAfterBeat,
   findNoteIndicesInBeatRange,
 } from './musical/repeatSelection';
+import { rewriteRhythmSpan, rhythmDurationBeats } from './musical/rhythmDuration';
 import { MeasureContextMenu } from './components/MeasureContextMenu';
 import { MeasurePropertiesDialog } from './components/MeasurePropertiesDialog';
 import { useNoodimeisterOptional } from './store/NoodimeisterContext';
@@ -420,6 +421,93 @@ function noteToMidi(n) {
 const PEDAGOGICAL_WRITING_MIN_MIDI = 60;
 const PEDAGOGICAL_WRITING_MIN_OCTAVE = 4;
 const PEDAGOGICAL_WRITING_MAX_OCTAVE = 6;
+/** Ghost-eelvaade: oktaavipiirid puuduvad (0–8); noodi muutmine/sisestus kasutab pedagoogilisi piire. */
+const GHOST_OCTAVE_BOUNDS = { minOctave: 0, maxOctave: 8 };
+/** Kursori/valiku nood või paus — eristatavalt sinine; liigub cursorBeat’iga. */
+const CURSOR_NOTE_HIGHLIGHT = '#2563eb';
+
+/**
+ * Kursori ajapositsioon skoori piiridesse [0, maxCursor] (maxCursor = viimase takti lõpp / lõpujoon).
+ */
+function clampCursorBeatToScore(beat, maxCursor) {
+  const EPS = 1e-9;
+  if (!Number.isFinite(beat)) return 0;
+  const maxB = Number.isFinite(maxCursor) ? Math.max(0, maxCursor) : 0;
+  if (beat <= 0) return 0;
+  if (beat >= maxB - EPS) return maxB;
+  return beat;
+}
+
+/**
+ * Nooleliikumise järel: kui caret satub sündmuse sisse, vii sündmuse algusesse
+ * (“kursor enne nooti/pausi”). Exact end (pärast sisestust / reavahetuse ankur) jääb paigale.
+ * Lõpujoonel (maxCursor) ei snapita tagasi viimase sündmuse peale.
+ */
+function snapCursorBeatBeforeEvent(notes, beat, maxCursor) {
+  const EPS = 1e-6;
+  const clamped = clampCursorBeatToScore(beat, maxCursor);
+  if (!Array.isArray(notes) || notes.length === 0) return clamped;
+  if (clamped >= (Number(maxCursor) || 0) - EPS) return clamped;
+  let run = 0;
+  for (let i = 0; i < notes.length; i++) {
+    const n = notes[i];
+    const noteBeat = typeof n?.beat === 'number' && Number.isFinite(n.beat) ? n.beat : run;
+    const dur = Number(n?.duration) || 0;
+    const end = noteBeat + dur;
+    if (clamped >= noteBeat - EPS && clamped < end - EPS) {
+      return clampCursorBeatToScore(noteBeat, maxCursor);
+    }
+    run = end;
+  }
+  return clamped;
+}
+
+/**
+ * Noodi/pausi indeks, mida caret “muudab” (kursor enne nooti).
+ * Eelistus: algus beat’il → spanning → just lõppenud (pärast sisestust).
+ * Lõpujoonel (cursorBeat >= maxCursor): ending-only ei anna sinist (caret on takti lõpus, mitte enne nooti).
+ */
+function resolveCursorFocusedNoteIndex(notes, cursorBeat, maxCursor = null) {
+  if (!Array.isArray(notes) || notes.length === 0) return -1;
+  const EPS = 1e-6;
+  const beat = Number(cursorBeat);
+  if (!Number.isFinite(beat)) return -1;
+  const atScoreEnd = Number.isFinite(maxCursor) && beat >= maxCursor - EPS;
+  let run = 0;
+  const atStart = [];
+  const spanning = [];
+  const ending = [];
+  for (let i = 0; i < notes.length; i++) {
+    const n = notes[i];
+    const noteBeat = typeof n?.beat === 'number' && Number.isFinite(n.beat) ? n.beat : run;
+    const dur = Number(n?.duration) || 0;
+    const end = noteBeat + dur;
+    // Ära too sinist sündmustele, mis algavad pärast skoori lõppu.
+    if (Number.isFinite(maxCursor) && noteBeat >= maxCursor - EPS) {
+      run = end;
+      continue;
+    }
+    if (Math.abs(beat - noteBeat) < EPS) atStart.push({ index: i, note: n });
+    else if (beat > noteBeat + EPS && beat < end - EPS) spanning.push({ index: i, note: n });
+    if (!atScoreEnd && dur > EPS && Math.abs(beat - end) < EPS) ending.push({ index: i, note: n });
+    run = end;
+  }
+  const pickHighest = (cands) => {
+    if (cands.length === 0) return -1;
+    if (cands.length === 1) return cands[0].index;
+    let best = cands[0];
+    for (let k = 1; k < cands.length; k++) {
+      if (noteToMidi(cands[k].note) > noteToMidi(best.note)) best = cands[k];
+    }
+    return best.index;
+  };
+  const fromStart = pickHighest(atStart);
+  if (fromStart >= 0) return fromStart;
+  const fromSpan = pickHighest(spanning);
+  if (fromSpan >= 0) return fromSpan;
+  if (atScoreEnd) return -1;
+  return pickHighest(ending);
+}
 
 function isPedagogicalNotationMode(mode) {
   return mode === 'vabanotatsioon';
@@ -2422,6 +2510,8 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
 
   // Rütmi viimane väärtus (ref), et kohe pärast rütmi valimist lisatud noot kasutaks uut rütmi
   const lastDurationRef = useRef(selectedDuration);
+  /** Takti-sisene rütmiasendus (MuseScore replace). Keha omistatakse pärast measuresRef’i. */
+  const applyRhythmRewriteRef = useRef(() => false);
   // Pausi sisestus: 0 + rütmiklahv (2–7) → paus vastava vältusega
   const restNextRef = useRef(false);
   /** Taktiruudustiku lõpp (beatides); uuendatakse pärast maxCursorAllowed — setInstrument loeb ref’i (defineeritud enne arvutust). */
@@ -3249,7 +3339,10 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   const [pedagogicalPlayheadStyle, setPedagogicalPlayheadStyle] = useState('line'); // 'line' | 'violin' | 'smiley' | 'custom'
   const [pedagogicalPlayheadEmoji, setPedagogicalPlayheadEmoji] = useState('🎵'); // kasutub kui style === 'custom'; seadetes "Kursori karakter"
   const [pedagogicalPlayheadEmojiSize, setPedagogicalPlayheadEmojiSize] = useState(30); // HEV: 20–60 px (2px smaller default for N cursor)
-  const [traditionalMeasureStartX, setTraditionalMeasureStartX] = useState(null); // first visible beat anchor after clef/key/time signature
+  // Traditional: beat-1 X pärast clef/key/time (1. süsteem) ja pärast clef/key (jätkurida).
+  // Peab jõudma Timeline’i caret’i — muidu caret jääb marginLeft’ile (taktimõõdu peale).
+  const [traditionalMeasureStartX, setTraditionalMeasureStartX] = useState(null);
+  const [traditionalMeasureContinuationStartX, setTraditionalMeasureContinuationStartX] = useState(null);
   const [cursorSizePx, setCursorSizePx] = useState(30); // User setting: cursor/playhead size 1–500 px (used in Settings ruler)
   const [cursorLineStrokeWidth, setCursorLineStrokeWidth] = useState(4); // N-mode / reading cursor line thickness (1–8 px)
   const [pedagogicalPlayheadMovement, setPedagogicalPlayheadMovement] = useState('arch'); // 'arch' (distance-dependent) | 'horizontal'
@@ -7990,6 +8083,17 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   const maxCursor = hasFullAccess ? maxCursorAllowed : Math.min(maxCursorAllowed, demoMaxCursor);
   restPaddingGridEndBeatRef.current = maxCursorAllowed;
 
+  // Caret enne nooti/pausi → glüüf sinine; liigub cursorPosition’iga.
+  // Lõpujoonel (maxCursor) sinist ei näidata — caret ei lähe üle viimase takti / lõpujoone.
+  const cursorFocusedNoteIndex = useMemo(
+    () => resolveCursorFocusedNoteIndex(notes, cursorPosition, maxCursor),
+    [notes, cursorPosition, maxCursor],
+  );
+  const isNoteCursorFocused = useCallback(
+    (index) => scoreCursorVisible && index === cursorFocusedNoteIndex,
+    [cursorFocusedNoteIndex, scoreCursorVisible],
+  );
+
   /** N-režiim: autopikendus on lubatud ainult reaalse sisestuse ajal (noot/pattern),
    *  mitte kursori nooleliikumisel.
    *  provisionalMinMeasuresFromNotes = sama renderi noodijärgselt (ref võib olla ühe kaadri võrra vana). */
@@ -8026,14 +8130,13 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
 
   useEffect(() => {
     // Cursor invariant: keep one unified cursor always inside valid timeline bounds
-    // and recover immediately from invalid transient values.
+    // [0, maxCursor] — maxCursor = viimase takti lõpp (lõpujoon); nooleliikumine ei laienda skoori.
     if (!Number.isFinite(cursorPosition)) {
       setCursorPosition(0);
       return;
     }
-    if (cursorPosition < 0 || cursorPosition > maxCursor) {
-      setCursorPosition(Math.max(0, Math.min(maxCursor, cursorPosition)));
-    }
+    const clamped = clampCursorBeatToScore(cursorPosition, maxCursor);
+    if (clamped !== cursorPosition) setCursorPosition(clamped);
   }, [cursorPosition, maxCursor]);
 
   useEffect(() => {
@@ -8712,58 +8815,19 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     const insertIntoStaffNotes = (noteList) => {
       const withBeats = notesWithExplicitBeats(noteList);
       const ndur = (n) => noteDurationInQuarterBeats(n);
-      const newEnd = insertBeat + effectiveDuration;
-
-      // Kui kursor on puhkuse sees (mitte täpselt alguses), jaga puhkus: eelnevad pausid + uus + järellüngas pausid.
-      let splitRestId = null;
-      let splitRestStart = 0;
-      let splitRestEnd = 0;
-      for (const n of withBeats) {
-        if (!n.isRest) continue;
-        const nb = n.beat ?? 0;
-        const end = nb + ndur(n);
-        if (insertBeat > nb + EPS && insertBeat < end - EPS) {
-          splitRestId = n.id;
-          splitRestStart = nb;
-          splitRestEnd = end;
-          break;
-        }
-      }
-
-      const victimsAtStart = withBeats.filter((n) => Math.abs((n.beat ?? 0) - insertBeat) < EPS);
-      let victimSpanEnd = insertBeat;
-      if (victimsAtStart.length > 0) {
-        victimSpanEnd = Math.max(...victimsAtStart.map((n) => (n.beat ?? 0) + ndur(n)));
-      }
-
-      const cleaned = withBeats.filter((n) => {
-        if (splitRestId != null && n.id === splitRestId) return false;
-        const nb = n.beat ?? 0;
-        const sameBeat = Math.abs(nb - insertBeat) < EPS;
-        if (sameBeat) return false;
-        const d = ndur(n);
-        const sameDur = Math.abs(d - effectiveDuration) < EPS;
-        return !(n.isRest && sameBeat && sameDur);
+      const measureEndBeat = activeMeasure
+        ? (Number(activeMeasure.endBeat) || (insertBeat + effectiveDuration))
+        : insertBeat + effectiveDuration;
+      const rewritten = rewriteRhythmSpan(withBeats, {
+        beat: insertBeat,
+        durationBeats: effectiveDuration,
+        durationLabel: newNote.durationLabel,
+        isDotted: !!newNote.isDotted,
+        measureEndBeat,
+        placeNote: newNote,
       });
-
-      const toAdd = [];
-      if (splitRestId != null) {
-        if (insertBeat > splitRestStart + EPS) {
-          toAdd.push(...fillGapWithRests(splitRestStart, insertBeat));
-        }
-        toAdd.push(newNote);
-        if (splitRestEnd > newEnd + EPS) {
-          toAdd.push(...fillGapWithRests(newEnd, splitRestEnd));
-        }
-      } else {
-        toAdd.push(newNote);
-        // Lühem noot/puhkus asendab pikemat sama algusega: täida ülejäänud auk pausidega (nt 1/16 veerandi asemele → kolm 1/16 pausi).
-        if (victimsAtStart.length > 0 && victimSpanEnd > newEnd + EPS) {
-          toAdd.push(...fillGapWithRests(newEnd, victimSpanEnd));
-        }
-      }
-
-      const merged = [...cleaned, ...toAdd].sort((a, b) => (a.beat ?? 0) - (b.beat ?? 0));
+      if (!rewritten.ok) return null;
+      const merged = rewritten.notes;
       const totalSpan = merged.reduce((max, n) => Math.max(max, (n.beat ?? 0) + ndur(n)), 0);
       const demoMaxSpanBeats = beatsPerMeasureFromTimeSig(timeSignature) * DEMO_MAX_MEASURES;
       if (!hasFullAccess && totalSpan > demoMaxSpanBeats) {
@@ -8774,12 +8838,12 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       return merged;
     };
 
-    saveToHistory(notes);
     const sourceNotesForInsert = isGrandStaff && targetStaffIndex !== activeStaffIndex
       ? (staves[targetStaffIndex]?.notes || [])
       : notes;
     const mergedNotes = insertIntoStaffNotes(sourceNotesForInsert);
     if (mergedNotes == null) return;
+    saveToHistory(notes);
     if (!mergedNotes.some((n) => Math.abs((Number(n?.beat) || 0) - insertBeat) < 1e-6)) {
       throwCursorModelError('INSERT_RESULT_INVALID', 'Insert result must contain event at cursor beat.', {
         source: 'addNoteAtCursor',
@@ -8892,15 +8956,35 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     });
     const withBeats = notesWithExplicitBeats(notes);
     const EPS = 1e-6;
-    let cleaned = withBeats;
-    for (const nn of newNotes) {
-      cleaned = cleaned.filter((n) => {
-        const sameBeat = Math.abs((n.beat ?? 0) - (nn.beat ?? 0)) < EPS;
-        const sameDur = Math.abs((n.duration ?? 1) - (nn.duration ?? 1)) < EPS;
-        return !(n.isRest && sameBeat && sameDur);
-      });
+    const patternMeasures = measuresRef.current || [];
+    const patternMeasure = patternMeasures.find((m) => (
+      startBeat >= (Number(m?.startBeat) || 0) - EPS && startBeat < (Number(m?.endBeat) || 0) - EPS
+    ));
+    const patternMeasureEnd = patternMeasure
+      ? (Number(patternMeasure.endBeat) || (startBeat + totalDuration))
+      : startBeat + totalDuration;
+    if (startBeat + totalDuration > patternMeasureEnd + EPS) {
+      setSaveFeedback('Valitud rütm ei mahu takti. Vali lühem kestus või liigu järgmisse takti.');
+      setTimeout(() => setSaveFeedback(''), 2600);
+      return;
     }
-    const mergedPattern = [...cleaned, ...newNotes].sort((a, b) => (a.beat ?? 0) - (b.beat ?? 0));
+    let mergedPattern = withBeats;
+    for (const nn of newNotes) {
+      const rewritten = rewriteRhythmSpan(mergedPattern, {
+        beat: nn.beat,
+        durationBeats: nn.duration,
+        durationLabel: nn.durationLabel,
+        isDotted: false,
+        measureEndBeat: patternMeasureEnd,
+        placeNote: nn,
+      });
+      if (!rewritten.ok) {
+        setSaveFeedback('Valitud rütm ei mahu takti. Vali lühem kestus või liigu järgmisse takti.');
+        setTimeout(() => setSaveFeedback(''), 2600);
+        return;
+      }
+      mergedPattern = rewritten.notes;
+    }
     saveToHistory(notes);
     setNotes(mergedPattern);
     const patternEndBeat = startBeat + totalDuration;
@@ -9241,32 +9325,13 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
             }));
           } else setIsRest(prev => !prev);
         } else if (option.value === 'dotted') {
-          if (hasSelection) {
-            saveToHistory(notes);
-            setNotes(notes.map((note, i) => {
-              const inRange = selectionStart >= 0 && selectionEnd >= 0
-                ? (i >= Math.min(selectionStart, selectionEnd) && i <= Math.max(selectionStart, selectionEnd))
-                : (i === selectedNoteIndex);
-              return inRange ? { ...note, isDotted: !note.isDotted, duration: (durations[note.durationLabel] || 1) * (note.isDotted ? 1 : 1.5) } : note;
-            }));
-          } else setIsDotted(prev => !prev);
+          if (hasSelection) applyRhythmRewriteRef.current?.({ mode: 'toggle-dot' });
+          else setIsDotted(prev => !prev);
         } else {
           // 1/1, 1/2, 1/4, 1/8, 1/16, 1/32
           lastDurationRef.current = option.value;
           setSelectedDuration(option.value);
-          if (hasSelection) {
-            const newDurationLabel = option.value;
-            const baseDuration = durations[newDurationLabel];
-            saveToHistory(notes);
-            setNotes(notes.map((note, i) => {
-              const inRange = selectionStart >= 0 && selectionEnd >= 0
-                ? (i >= Math.min(selectionStart, selectionEnd) && i <= Math.max(selectionStart, selectionEnd))
-                : (i === selectedNoteIndex);
-              if (!inRange) return note;
-              const dotted = note.isDotted;
-              return { ...note, durationLabel: newDurationLabel, duration: dotted ? baseDuration * 1.5 : baseDuration, isDotted: dotted };
-            }));
-          }
+          if (hasSelection) applyRhythmRewriteRef.current?.({ mode: 'label', durationLabel: option.value });
         }
         break;
       }
@@ -9310,7 +9375,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       case 'clefs':
         if (option.value === 'jo') {
           setNotationMode('vabanotatsioon');
-          setGhostOctave((prev) => Math.max(PEDAGOGICAL_WRITING_MIN_OCTAVE, Number(prev) || PEDAGOGICAL_WRITING_MIN_OCTAVE));
+          // Ghost oktaavipiire ei sunni — vaikimisi C4 ainult uue pedagoogilise töö loomisel.
           setTeacherPanelOpen(true);
           setTeacherPanelPosition(null);
           setVisibleToolIds((prev) => (prev.includes('pedagogical') ? prev : [...prev, 'pedagogical']));
@@ -9527,11 +9592,11 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     setSelectedNoteIndex(noteIndexAtCursor);
   }, [noteInputMode, cursorTool, isPedagogicalAudioPlaying, isExportingAnimation, lyricChainIndex, hasChordRow, cursorSubRow, selectionStart, selectionEnd, measureSelection, noteIndexAtCursor, selectedNoteIndex, notes, cursorPosition, getBeatAtNoteIndex]);
 
-  // Selection anchor invariant: in SEL-mode a concrete selected note remains the
-  // authoritative cursor beat, even after figure-system hand-drag/layout moves.
+  // Selection anchor invariant: kui noot on valitud (pointer click / singleNote),
+  // kirjutus-caret peab jääma selle noodi beat'ile (ka SEL + select tool).
+  // N-mode: caret'i juhib sisestus/noolelogi eraldi — ära sunni siin tagasi.
   useEffect(() => {
     if (noteInputMode) return;
-    if (cursorTool === 'select') return;
     if (isPedagogicalAudioPlaying || isExportingAnimation) return;
     if (selectionStart >= 0 || selectionEnd >= 0) return;
     if (measureSelection != null) return;
@@ -9543,7 +9608,6 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     setCursorPosition(Math.max(0, selectedBeat));
   }, [
     noteInputMode,
-    cursorTool,
     isPedagogicalAudioPlaying,
     isExportingAnimation,
     selectionStart,
@@ -9586,6 +9650,71 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       });
     }
   }, [playNoteOnInsert, getNoteAtBeat, playPianoNote, getEffectivePlaybackBpm, noteDurationInQuarterBeats, keySignature]);
+
+  /**
+   * Pointer-select + ◀/▶: vii valik JA kirjutus-caret üheskoos naabernoodile (MuseScore).
+   * Kui valikut pole, tagasta false — kutsuja teeb tavalise beat-navi.
+   */
+  const moveNoteSelectionHorizontally = useCallback((dir) => {
+    const d = dir > 0 ? 1 : -1;
+    const withBeats = notesWithExplicitBeats(notes);
+    const order = withBeats
+      .map((n, i) => ({ n, i, beat: Number(n.beat) || 0 }))
+      .sort((a, b) => {
+        if (a.beat !== b.beat) return a.beat - b.beat;
+        const ma = noteToMidi(a.n);
+        const mb = noteToMidi(b.n);
+        if (ma !== mb) return ma - mb;
+        return a.i - b.i;
+      })
+      .map((s) => s.i);
+    if (order.length === 0) return false;
+
+    let fromIdx = -1;
+    if (selectionStart >= 0 && selectionEnd >= 0) {
+      fromIdx = d > 0
+        ? Math.max(selectionStart, selectionEnd)
+        : Math.min(selectionStart, selectionEnd);
+    } else if (selectedNoteIndex >= 0) {
+      fromIdx = selectedNoteIndex;
+    } else {
+      return false;
+    }
+
+    const pos = order.indexOf(fromIdx);
+    if (pos < 0) return false;
+    const nextPos = pos + d;
+    const targetIdx = (nextPos < 0 || nextPos >= order.length) ? fromIdx : order[nextPos];
+    const beat = getBeatAtNoteIndex(notes, targetIdx);
+    applySelectionModel(selectionForNote(targetIdx), { syncToolbox: true });
+    setCursorSubRow(0);
+    setCursorPosition(Number.isFinite(beat) ? Math.max(0, beat) : 0);
+    revealScoreCursor();
+    playNoteAtBeatIfEnabled(beat);
+    const target = notes[targetIdx];
+    if (target && !target.isRest) {
+      setGhostPitch(target.pitch);
+      setGhostOctave(typeof target.octave === 'number' ? target.octave : 4);
+      if (target.accidental !== undefined && target.accidental !== null) {
+        setGhostAccidentalIsExplicit(true);
+        setGhostAccidental(target.accidental);
+      } else {
+        setGhostAccidentalIsExplicit(false);
+        setGhostAccidental(0);
+      }
+    }
+    return true;
+  }, [
+    notes,
+    notesWithExplicitBeats,
+    selectionStart,
+    selectionEnd,
+    selectedNoteIndex,
+    getBeatAtNoteIndex,
+    applySelectionModel,
+    revealScoreCursor,
+    playNoteAtBeatIfEnabled,
+  ]);
 
   const applyTieToSelection = useCallback(() => {
     if (notationStyle === 'FIGURENOTES' || (notationMode !== 'traditional' && notationMode !== 'vabanotatsioon')) return;
@@ -11188,12 +11317,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
           const newDurationLabel = durationMapSel[e.code];
           lastDurationRef.current = newDurationLabel;
           setSelectedDuration(newDurationLabel);
-          const baseDuration = durations[newDurationLabel];
-          applyToSelectedNotes(n => ({
-            ...n,
-            durationLabel: newDurationLabel,
-            duration: n.isDotted ? baseDuration * 1.5 : baseDuration
-          }));
+          applyRhythmRewriteRef.current?.({ mode: 'label', durationLabel: newDurationLabel });
           return;
         }
         const noteLetterSel = e.key?.toLowerCase();
@@ -11201,9 +11325,6 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
           e.preventDefault();
           const pitch = noteLetterSel.toUpperCase();
           const durationLabel = lastDurationRef.current ?? selectedDuration;
-          const effectiveDuration = getEffectiveDuration(durationLabel);
-          const baseDuration = durations[durationLabel];
-          const newDuration = isDotted && baseDuration != null ? baseDuration * 1.5 : effectiveDuration;
           const octSel = notationStyle === 'FIGURENOTES'
             ? ghostOctave
             : (() => {
@@ -11230,17 +11351,16 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                 pedagogicalLetterOctaveOptions(notationMode)
               );
             })();
-          applyToSelectedNotes(n => ({
-            ...n,
-            pitch,
-            octave: octSel,
+          const applied = applyRhythmRewriteRef.current?.({
+            mode: 'label',
             durationLabel,
-            duration: newDuration,
             isDotted,
-            isRest
-          }));
-          setGhostPitch(pitch);
-          setGhostOctave(octSel);
+            patch: { pitch, octave: octSel, isRest },
+          });
+          if (applied) {
+            setGhostPitch(pitch);
+            setGhostOctave(octSel);
+          }
           return;
         }
       }
@@ -11465,79 +11585,112 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
             }
           }
         }
+        const applyCursorNavBeat = (rawBeat) => {
+          // Piir: [0, maxCursor]. Reavahetusel (järgmine süsteem) satub caret esimese löögi
+          // noodi/pausi ette (snapCursorBeatBeforeEvent), mitte lõpujoonest üle.
+          const next = snapCursorBeatBeforeEvent(notes, rawBeat, maxCursor);
+          setCursorPosition(next);
+          playNoteAtBeatIfEnabled(next);
+        };
+        // Pointer-select (või note range): ◀/▶ viib valiku + caret'i naabernoodile.
+        // Beat-span navi ainult siis, kui noodivalikut pole (puhas sisestuskursor).
+        if (!e.shiftKey && (e.code === 'ArrowLeft' || e.code === 'ArrowRight')) {
+          if (selectedNoteIndex >= 0 || (selectionStart >= 0 && selectionEnd >= 0)) {
+            e.preventDefault();
+            revealScoreCursor();
+            moveNoteSelectionHorizontally(e.code === 'ArrowRight' ? 1 : -1);
+            return;
+          }
+        }
         if (e.code === 'ArrowLeft') {
           e.preventDefault();
           revealScoreCursor();
           // Ära tee esmalt taktitaseme “teleporti”: muidu kursor hüppab tühja koha (nt kustutatud figuurnoodi) üle
           // ja span/piiriloogika jääb kasutamata.
           if (cursorPosition <= 0 + EPS) {
-            setCursorPosition(0);
-            playNoteAtBeatIfEnabled(0);
+            applyCursorNavBeat(0);
             return;
           }
           const span = getNoteSpanAtBeat(cursorPosition);
           if (span && cursorPosition > span.start + EPS) {
-            const newBeat = Math.max(0, span.start);
-            setCursorPosition(newBeat);
-            playNoteAtBeatIfEnabled(newBeat);
+            applyCursorNavBeat(span.start);
             return;
           }
           const boundary = getNextNoteBoundaryBeat(-1);
           const newBeat = boundary != null
-            ? Math.max(0, boundary)
+            ? boundary
             : getMetricalGridBoundaryBeat(-1, cursorPosition);
-          setCursorPosition(newBeat);
-          playNoteAtBeatIfEnabled(newBeat);
+          applyCursorNavBeat(newBeat);
           return;
         }
         if (e.code === 'ArrowRight') {
           e.preventDefault();
           revealScoreCursor();
-          // Kirjutatava loo lõpp: ArrowRight ei rända edasi ega laienda skoori.
+          // Kirjutatava loo lõpp / lõpujoon: ArrowRight ei rända edasi ega laienda skoori.
           if (cursorPosition >= maxCursor - EPS) {
-            setCursorPosition(maxCursor);
-            playNoteAtBeatIfEnabled(maxCursor);
+            applyCursorNavBeat(maxCursor);
             return;
           }
           const span = getNoteSpanAtBeat(cursorPosition);
           if (span && cursorPosition < span.end - EPS) {
-            const newBeat = Math.min(maxCursor, span.end);
-            setCursorPosition(newBeat);
-            playNoteAtBeatIfEnabled(newBeat);
+            // span.end süsteemi piiril = järgmise rea 1. löök → snap viib noodi/pausi ette.
+            applyCursorNavBeat(span.end);
             return;
           }
           const boundary = getNextNoteBoundaryBeat(1);
           const newBeat = boundary != null
-            ? Math.min(maxCursor, boundary)
+            ? boundary
             : getMetricalGridBoundaryBeat(1, cursorPosition);
-          setCursorPosition(Math.min(maxCursor, newBeat));
-          playNoteAtBeatIfEnabled(Math.min(maxCursor, newBeat));
+          applyCursorNavBeat(newBeat);
           return;
         }
         if (e.code === 'Home') {
           e.preventDefault();
           revealScoreCursor();
-          const start = getMeasureHomeBeat(cursorPosition);
-          setCursorPosition(Math.max(0, start));
-          playNoteAtBeatIfEnabled(start);
+          applyCursorNavBeat(getMeasureHomeBeat(cursorPosition));
           return;
         }
         if (e.code === 'End') {
           e.preventDefault();
           revealScoreCursor();
-          const endBeat = getMeasureEndAnchorBeat(cursorPosition);
-          setCursorPosition(Math.min(maxCursor, endBeat));
-          playNoteAtBeatIfEnabled(Math.min(maxCursor, endBeat));
+          // Viimase löögi algus (enne nooti/pausi), mitte üle lõpujoone.
+          applyCursorNavBeat(getMeasureEndAnchorBeat(cursorPosition));
           return;
         }
-        // N-mode pitch/octave target: selection or note spanning caret.
-        // Caret at note end (half-open) = insert slot → ghost only (visible octave preview).
+        // N-mode pitch/octave target after insert: caret often sits at note end
+        // (half-open [start,end) → getNoteIndexAtCursor is -1). Prefer selection,
+        // then spanning note, then sounding note that ends at caret — so ↑↓ /
+        // Cmd+↑↓ edit the just-entered note. Truly empty slot → ghost only.
+        // Ghost stays visible either way (oktaavi eelvaade järgmiseks sisestuseks).
+        const getNoteIndexEndingAtCursor = () => {
+          const EPS_END = 1e-6;
+          const withBeats = notesWithExplicitBeats(notes);
+          const candidates = [];
+          for (let i = 0; i < withBeats.length; i++) {
+            const n = withBeats[i];
+            if (n.isRest) continue;
+            const noteBeat = Number(n.beat) || 0;
+            const end = noteBeat + (Number(n.duration) || 0);
+            if (Math.abs(cursorPosition - end) < EPS_END) {
+              candidates.push({ index: i, note: n });
+            }
+          }
+          if (candidates.length === 0) return -1;
+          if (candidates.length === 1) return candidates[0].index;
+          let best = candidates[0];
+          for (let k = 1; k < candidates.length; k++) {
+            if (noteToMidi(candidates[k].note) > noteToMidi(best.note)) best = candidates[k];
+          }
+          return best.index;
+        };
         const resolveNModePitchEditTarget = () => {
           if (selectedNoteIndex >= 0 || (selectionStart >= 0 && selectionEnd >= 0)) {
             return { kind: 'selection' };
           }
           const atCursor = getNoteIndexAtCursor();
           if (atCursor >= 0) return { kind: 'index', index: atCursor };
+          const ending = getNoteIndexEndingAtCursor();
+          if (ending >= 0) return { kind: 'index', index: ending };
           return { kind: 'none' };
         };
         // Shift / Cmd/Ctrl+↑↓: oktaav valitud/kursori noodil (nagu SEL); muidu ghost-oktaav sisestuseks.
@@ -11580,7 +11733,8 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
               }
             }
           }
-          setGhostOctave(shiftOctave(ghostOctave, dir, pedOctBounds));
+          // Tühi pesa: ainult ghost — oktaavipiirid puuduvad (noodi muutmine kasutab pedOctBounds ülal).
+          setGhostOctave(shiftOctave(ghostOctave, dir, GHOST_OCTAVE_BOUNDS));
           return;
         }
         // Arrow Up/Down = pitch class (same octave). Akordireal (cursorSubRow === 1) mõjutame ainult akordi.
@@ -11650,7 +11804,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
               return;
             }
           }
-          // Sisestuspesa (caret tühjal / noodi lõpus): ↑↓ muudab ghost-kõrgust; akord taktis → akordinimi.
+          // Tõeliselt tühi pesa (ei valikut, ei spanning ega lõppevat nooti): ↑↓ → ghost; akord taktis → akordinimi.
           if (!e.shiftKey && !modKey) {
             const chordAtCursor = getChordAtCursor();
             if (chordAtCursor) {
@@ -11664,10 +11818,8 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
             e.preventDefault();
             const dir = e.code === 'ArrowUp' ? 1 : -1;
             const ghostAccArg = ghostAccidentalIsExplicit ? ghostAccidental : undefined;
-            let next = shiftPitchClassSameOctave(ghostPitch, ghostOctave, ghostAccArg, dir, keySignature);
-            if (isPedagogicalNotationMode(notationMode)) {
-              next = clampPitchFieldsToMinMidi(next, PEDAGOGICAL_WRITING_MIN_MIDI);
-            }
+            // Ghost: ei klambi C4-le — piir kehtib alles noodi sisestusel/muutmisel.
+            const next = shiftPitchClassSameOctave(ghostPitch, ghostOctave, ghostAccArg, dir, keySignature);
             setGhostPitch(next.pitch);
             setGhostOctave(next.octave);
             if (Object.prototype.hasOwnProperty.call(next, 'accidental')) {
@@ -11961,6 +12113,12 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
               return;
             }
           }
+          // Plain ◀/▶ koos noodivalikuga: ära tühjenda valikut — vii select + caret edasi.
+          if (!e.shiftKey && (selectedNoteIndex >= 0 || (selectionStart >= 0 && selectionEnd >= 0))) {
+            if (moveNoteSelectionHorizontally(e.code === 'ArrowRight' ? 1 : -1)) {
+              return;
+            }
+          }
           applySelectionModel(CURSOR_SELECTION_NONE);
           const EPS = 1e-6;
           const selectedDurStep = Number(durationLabelToQuarterBeats(selectedDuration)) || 1;
@@ -12108,12 +12266,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
           const newDurationLabel = durationMap[e.code];
           lastDurationRef.current = newDurationLabel;
           setSelectedDuration(newDurationLabel);
-          const baseDuration = durations[newDurationLabel];
-          applyToSelectedNotes(n => ({
-            ...n,
-            durationLabel: newDurationLabel,
-            duration: n.isDotted ? baseDuration * 1.5 : baseDuration
-          }));
+          applyRhythmRewriteRef.current?.({ mode: 'label', durationLabel: newDurationLabel });
           return;
         }
 
@@ -12128,9 +12281,6 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
           }
           const pitch = noteLetterSel.toUpperCase();
           const durationLabel = lastDurationRef.current ?? selectedDuration;
-          const effectiveDuration = getEffectiveDuration(durationLabel);
-          const baseDuration = durations[durationLabel];
-          const newDuration = isDotted && baseDuration != null ? baseDuration * 1.5 : effectiveDuration;
           const octSel2 = notationStyle === 'FIGURENOTES'
             ? ghostOctave
             : (() => {
@@ -12157,17 +12307,16 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                 pedagogicalLetterOctaveOptions(notationMode)
               );
             })();
-          applyToSelectedNotes(n => ({
-            ...n,
-            pitch,
-            octave: octSel2,
+          const applied = applyRhythmRewriteRef.current?.({
+            mode: 'label',
             durationLabel,
-            duration: newDuration,
             isDotted,
-            isRest
-          }));
-          setGhostPitch(pitch);
-          setGhostOctave(octSel2);
+            patch: { pitch, octave: octSel2, isRest },
+          });
+          if (applied) {
+            setGhostPitch(pitch);
+            setGhostOctave(octSel2);
+          }
           return;
         }
 
@@ -12195,17 +12344,12 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
 
       // Normal input mode (when N is ON) – Ghost note + add
       if (!activeToolbox && noteInputMode) {
-        const pedOctBoundsGhost = isPedagogicalNotationMode(notationMode)
-          ? { minOctave: PEDAGOGICAL_WRITING_MIN_OCTAVE, maxOctave: PEDAGOGICAL_WRITING_MAX_OCTAVE }
-          : {};
+        // Ghost: oktaavipiirid puuduvad. Noodi muutmine/sisestus klambib pedagoogilises režiimis eraldi.
         // Arrow Up/Down = one note up/down (pitch class in key). Shift+Arrow = octave change.
         if (e.code === 'ArrowUp' && !e.shiftKey) {
           e.preventDefault();
           const ghostAccArg = ghostAccidentalIsExplicit ? ghostAccidental : undefined;
-          let next = shiftPitchClassSameOctave(ghostPitch, ghostOctave, ghostAccArg, 1, keySignature);
-          if (isPedagogicalNotationMode(notationMode)) {
-            next = clampPitchFieldsToMinMidi(next, PEDAGOGICAL_WRITING_MIN_MIDI);
-          }
+          const next = shiftPitchClassSameOctave(ghostPitch, ghostOctave, ghostAccArg, 1, keySignature);
           setGhostPitch(next.pitch);
           setGhostOctave(next.octave);
           const playAcc = getEffectiveAccidental(next, keySignature);
@@ -12217,10 +12361,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         if (e.code === 'ArrowDown' && !e.shiftKey) {
           e.preventDefault();
           const ghostAccArg = ghostAccidentalIsExplicit ? ghostAccidental : undefined;
-          let next = shiftPitchClassSameOctave(ghostPitch, ghostOctave, ghostAccArg, -1, keySignature);
-          if (isPedagogicalNotationMode(notationMode)) {
-            next = clampPitchFieldsToMinMidi(next, PEDAGOGICAL_WRITING_MIN_MIDI);
-          }
+          const next = shiftPitchClassSameOctave(ghostPitch, ghostOctave, ghostAccArg, -1, keySignature);
           setGhostPitch(next.pitch);
           setGhostOctave(next.octave);
           const playAcc = getEffectiveAccidental(next, keySignature);
@@ -12229,10 +12370,10 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
           if (playNoteOnInsert) playPianoNote(next.pitch, next.octave, playAcc);
           return;
         }
-        // Shift+Arrow Up/Down – octave jump on ghost note (traditional)
+        // Shift+Arrow Up/Down – octave jump on ghost note (vabad piirid 0–8)
         if (e.code === 'ArrowUp' && e.shiftKey) {
           e.preventDefault();
-          const newOct = shiftOctave(ghostOctave, 1, pedOctBoundsGhost);
+          const newOct = shiftOctave(ghostOctave, 1, GHOST_OCTAVE_BOUNDS);
           setGhostOctave(newOct);
           if (playNoteOnInsert) {
             const keyA = getAccidentalForPitchInKey(ghostPitch, keySignature);
@@ -12243,7 +12384,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         }
         if (e.code === 'ArrowDown' && e.shiftKey) {
           e.preventDefault();
-          const newOct = shiftOctave(ghostOctave, -1, pedOctBoundsGhost);
+          const newOct = shiftOctave(ghostOctave, -1, GHOST_OCTAVE_BOUNDS);
           setGhostOctave(newOct);
           if (playNoteOnInsert) {
             const keyA = getAccidentalForPitchInKey(ghostPitch, keySignature);
@@ -12332,6 +12473,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     notesWithExplicitBeats, getBeatAtNoteIndex, noteToMidi,
     applyTieToSelection, applySlurToSelection, applyExtendSlurFromSelection,
     activeLegatoSlurPair, applyLegatoSlurExtendForPair, applyLegatoSlurRetractForPair, applyLegatoSlurRemoveForPair, applySelectionModel, clearPointerSelection,
+    moveNoteSelectionHorizontally,
     isHarmonyFormMode,
   ]);
 
@@ -12349,6 +12491,71 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   const measures = calculateMeasures();
   const measuresRef = useRef(measures);
   measuresRef.current = measures;
+
+  applyRhythmRewriteRef.current = ({ mode, durationLabel, isDotted, patch } = {}) => {
+    const EPS = 1e-6;
+    const withBeats = notesWithExplicitBeats(notes);
+    let indices = [];
+    if (selectionStart >= 0 && selectionEnd >= 0) {
+      const start = Math.min(selectionStart, selectionEnd);
+      const end = Math.max(selectionStart, selectionEnd);
+      for (let i = start; i <= end; i += 1) indices.push(i);
+    } else if (selectedNoteIndex >= 0) {
+      indices = [selectedNoteIndex];
+    }
+    indices = indices.filter((i) => i >= 0 && i < withBeats.length);
+    if (indices.length === 0) return false;
+
+    const beats = [...new Set(indices.map((i) => Number(withBeats[i].beat) || 0))].sort((a, b) => a - b);
+    const selectedIds = new Set(indices.map((i) => withBeats[i]?.id).filter((id) => id != null));
+    const ms = measuresRef.current || [];
+    let current = withBeats;
+    let appliedAny = false;
+    const rejectFit = () => {
+      setSaveFeedback('Valitud rütm ei mahu takti. Vali lühem kestus või liigu järgmisse takti.');
+      setTimeout(() => setSaveFeedback(''), 2600);
+      return false;
+    };
+
+    for (const beat of beats) {
+      const measure = ms.find((m) => (
+        beat >= (Number(m?.startBeat) || 0) - EPS && beat < (Number(m?.endBeat) || 0) - EPS
+      ));
+      if (!measure) return rejectFit();
+      const atBeat = current.filter((n) => Math.abs((Number(n.beat) || 0) - beat) < EPS);
+      if (atBeat.length === 0) continue;
+      let label = durationLabel;
+      let dotted = isDotted != null ? !!isDotted : !!atBeat[0].isDotted;
+      if (mode === 'toggle-dot') {
+        label = atBeat[0].durationLabel || '1/4';
+        dotted = !atBeat[0].isDotted;
+      }
+      const durationBeats = rhythmDurationBeats(label, dotted);
+      if (durationBeats == null) return rejectFit();
+      const rewritten = rewriteRhythmSpan(current, {
+        beat,
+        durationBeats,
+        durationLabel: label,
+        isDotted: dotted,
+        measureEndBeat: Number(measure.endBeat),
+      });
+      if (!rewritten.ok) {
+        if (rewritten.reason === 'no-event') continue;
+        return rejectFit();
+      }
+      current = rewritten.notes;
+      appliedAny = true;
+    }
+
+    if (!appliedAny) return false;
+    if (patch && typeof patch === 'object') {
+      current = current.map((n) => (selectedIds.has(n.id) ? { ...n, ...patch } : n));
+    }
+    saveToHistory(notes);
+    setNotes(current);
+    dirtyRef.current = true;
+    return true;
+  };
 
   const deleteMeasuresRange = useCallback(() => {
     const ms = measuresRef.current;
@@ -19704,6 +19911,13 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                       return isNoteSelected(index);
                     }
                     : isNoteSelected}
+                  isNoteCursorFocused={renderFigurenotesAsCombinedSystem
+                    ? (index, row) => {
+                      const r = staffEntries[row];
+                      if (!r || r.staffIdx !== activeStaffIndex) return false;
+                      return isNoteCursorFocused(index);
+                    }
+                    : (staffIdx === activeStaffIndex ? isNoteCursorFocused : () => false)}
                   notes={staff.notes}
                   onStaffAddNote={staffIdx === activeStaffIndex && mousePitchInputEnabled ? addNoteAtCursor : undefined}
                   onNoteClick={renderFigurenotesAsCombinedSystem
@@ -19740,6 +19954,8 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                         setCursorSubRow(0);
                         setCursorPosition(beat);
                         revealScoreCursor();
+                        setScoreCursorVisible(true);
+                        setNotationFrameFocused(true);
                         const clicked = noteList[index];
                         if (clicked && !clicked.isRest) {
                           setGhostPitch(clicked.pitch);
@@ -19793,9 +20009,12 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                             enterNoteInputMode: enterN,
                           });
                         }
+                        // Caret peab pointer-select'iga kohe noodi ette (enne toolbox/N-mode kõrvalmõjusid).
                         setCursorSubRow(0);
                         setCursorPosition(beat);
                         revealScoreCursor();
+                        setScoreCursorVisible(true);
+                        setNotationFrameFocused(true);
                         const clicked = notes[index];
                         if (clicked && !clicked.isRest) {
                           setGhostPitch(clicked.pitch);
@@ -19842,7 +20061,12 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                     : (staffIdx === activeStaffIndex ? updateSelectionDragHover : undefined)}
                   onNotePitchChange={(staffIdx === activeStaffIndex || renderFigurenotesAsCombinedSystem) ? onNotePitchChange : undefined}
                   onNoteBeatChange={(staffIdx === activeStaffIndex || renderFigurenotesAsCombinedSystem) ? onNoteBeatChange : undefined}
-                  onMeasureStartXChange={setTraditionalMeasureStartX}
+                  onMeasureStartXChange={(first, continuation) => {
+                    if (Number.isFinite(first)) setTraditionalMeasureStartX(first);
+                    if (Number.isFinite(continuation)) setTraditionalMeasureContinuationStartX(continuation);
+                  }}
+                  traditionalMeasureStartX={traditionalMeasureStartX}
+                  traditionalMeasureContinuationStartX={traditionalMeasureContinuationStartX}
                   canHandDragNotes={cursorTool === 'hand'}
                   timeSignatureOffset={timeSignatureOffset}
                   onTimeSignatureOffsetChange={(nextOffset) => {
@@ -21032,7 +21256,7 @@ function getFingeringForNote(pitch, octave, instrumentId) {
 }
 
 // Timeline Component – multi-system layout (VexFlow loogika). (PAGE_BREAK_GAP on defineeritud üleval.)
-function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, pageWidth, cursorPosition, notationMode, staffLines, clefType, keySignature = 'C', relativeNotationShowKeySignature = false, relativeNotationShowTraditionalClef = false, pedagogicalDisplayMode = DEFAULT_PEDAGOGICAL_DISPLAY_MODE, handSignStyle = DEFAULT_HAND_SIGN_STYLE, onJoClefPositionChange, joClefFocused = false, onJoClefFocus, instrument = 'single-staff-treble', instrumentNotationVariant = 'standard', instrumentConfig = {}, showBarNumbers = true, barNumberSize = 11, voltaNumberSize = 16, showRhythmSyllables = false, joClefStaffPosition: joClefStaffPositionProp, showAllNoteLabels = false, enableEmojiOverlays = true, noteheadShape = 'oval', noteheadEmoji = '♪', onNoteTeacherLabelChange, onNoteLabelClick, chords = [], isDotted, isRest, selectedDuration, noteInputMode, selectedNoteIndex, isNoteSelected, notes: allNotes, onStaffAddNote, onNoteClick, onNoteMouseDown, onNoteMouseEnter, onNotePitchChange, onNoteBeatChange, canHandDragNotes = false, timeSignatureOffset = { x: 0, y: 0 }, onTimeSignatureOffsetChange, ghostPitch, ghostOctave, ghostAccidental = 0, ghostAccidentalIsExplicit = false, onFigureBeatClick, onChordLineMouseMove, onChordLineClick, notationStyle, layoutMeasuresPerLine = 4, layoutLineBreakBefore = [], layoutBarNumberRestartAt = [], layoutPageBreakBefore = [], layoutSystemGap = 120, layoutPartsGap, layoutConnectedBarlines = false, staffRowAlignment = 'center', staffIndexInScore = 0, systemTotalHeight, layoutGlobalSpacingMultiplier = 1, systems: systemsProp, baseYOffset = 0, isActiveStaff = true, staffCount = 1, staffHeight: staffHeightProp, figurenotesSize = 16, figurenotesStems = false, figurenotesChordLineGap = 6, figurenotesChordBlocks = false, figurenotesChordBlocksShowTones = true, figurenotesMelodyShowNoteNames = true, figurenotesRowHeight: figurenotesRowHeightProp, figurenotesChordLineHeight: figurenotesChordLineHeightProp, figurenotesLyricReserveHeight = 0, timeSignatureSize = 16, hideTimeSignature = false, pedagogicalTimeSigDenominatorType = 'rhythm', pedagogicalTimeSigDenominatorColor = '#1a1a1a', pedagogicalTimeSigDenominatorInstrument = 'handbell', pedagogicalTimeSigDenominatorEmoji = '🥁', singleLineBarlineHalfSpanPx = 20, singleLineBarlineThicknessPx = 2, themeColors: themeColorsProp, pedagogicalPlayheadStyle = 'line', pedagogicalPlayheadEmoji = '🎵', pedagogicalPlayheadEmojiSize = 32, cursorSizePx, cursorLineStrokeWidth = 4, cursorSubRow = 0, pedagogicalPlayheadMovement = 'arch', rhythmCursorColor = '#0ea5e9', rhythmCursorOpacity = 0.55, rhythmCursorWidthMultiplier = 1, rhythmCursorHighContrast = false, isPedagogicalAudioPlaying = false, isExportingAnimation = false, exportCursorRef, scoreContainerRef, pageFlowDirection = 'vertical', pageOrientation = 'portrait', isFirstInBraceGroup = false, braceGroupSize = 0, lyricFontFamily = 'sans-serif', lyricFontSize = 12, lyricBold = false, lyricItalic = false, lyricUnderline = false, lyricWeight = 400, lyricLineYOffset = 0, translateLabel, showLayoutBreakIcons = false, showStaffSpacerHandles = false, showLyricSpacerHandles = false, onSystemYOffsetChange, onSystemXOffsetChange, systemXOffsets = [], onLyricLineYOffsetChange, onToggleLineBreakAfter, onRemoveRepeatMark, selectedRepeatMark = null, selectedRepeatMarks = [], onSelectRepeatMark, onJumpMarkPointerDown, jumpMarkLayoutOverrides = {}, clefHandOffset = { x: 0, y: 0 }, clefHandSizePx = null, onClefPointerDown, clefSelected = false, onSelectClef, measureSelection = null, onMeasureClick, onMeasureContextMenu, activeLyricNoteIndex = null, physicalPageGapPx = 3, physicalPageFrameYPx = 0, disablePhysicalPageGaps = false, hideCursorOverlay = false, exportNotationSvgRef = null, multiStaffInstruments = null, multiStaffMeasuresByInstrument = null, combinedCursorRowOffsetPx = 0, combinedActiveStaffRowIndex = 0, cursorStaffClefType = null, tinWhistleLinkedFingeringScale = 1, linkedNotationByStaffId = null, notationStaffSpace, activeLegatoSlurPair = null, onLegatoPathClick = undefined, onMeasureStartXChange = undefined, notationLayoutPageHeight = null, notationFirstPageBodyPx = null, pickupEnabled = false, harmonyFormMode = false, harmonyFormChordBeatStep = 4, harmonyFormLyricReserveHeight = 0, onHarmonyBeatClick,
+function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, pageWidth, cursorPosition, notationMode, staffLines, clefType, keySignature = 'C', relativeNotationShowKeySignature = false, relativeNotationShowTraditionalClef = false, pedagogicalDisplayMode = DEFAULT_PEDAGOGICAL_DISPLAY_MODE, handSignStyle = DEFAULT_HAND_SIGN_STYLE, onJoClefPositionChange, joClefFocused = false, onJoClefFocus, instrument = 'single-staff-treble', instrumentNotationVariant = 'standard', instrumentConfig = {}, showBarNumbers = true, barNumberSize = 11, voltaNumberSize = 16, showRhythmSyllables = false, joClefStaffPosition: joClefStaffPositionProp, showAllNoteLabels = false, enableEmojiOverlays = true, noteheadShape = 'oval', noteheadEmoji = '♪', onNoteTeacherLabelChange, onNoteLabelClick, chords = [], isDotted, isRest, selectedDuration, noteInputMode, selectedNoteIndex, isNoteSelected, isNoteCursorFocused = null, notes: allNotes, onStaffAddNote, onNoteClick, onNoteMouseDown, onNoteMouseEnter, onNotePitchChange, onNoteBeatChange, canHandDragNotes = false, timeSignatureOffset = { x: 0, y: 0 }, onTimeSignatureOffsetChange, ghostPitch, ghostOctave, ghostAccidental = 0, ghostAccidentalIsExplicit = false, onFigureBeatClick, onChordLineMouseMove, onChordLineClick, notationStyle, layoutMeasuresPerLine = 4, layoutLineBreakBefore = [], layoutBarNumberRestartAt = [], layoutPageBreakBefore = [], layoutSystemGap = 120, layoutPartsGap, layoutConnectedBarlines = false, staffRowAlignment = 'center', staffIndexInScore = 0, systemTotalHeight, layoutGlobalSpacingMultiplier = 1, systems: systemsProp, baseYOffset = 0, isActiveStaff = true, staffCount = 1, staffHeight: staffHeightProp, figurenotesSize = 16, figurenotesStems = false, figurenotesChordLineGap = 6, figurenotesChordBlocks = false, figurenotesChordBlocksShowTones = true, figurenotesMelodyShowNoteNames = true, figurenotesRowHeight: figurenotesRowHeightProp, figurenotesChordLineHeight: figurenotesChordLineHeightProp, figurenotesLyricReserveHeight = 0, timeSignatureSize = 16, hideTimeSignature = false, pedagogicalTimeSigDenominatorType = 'rhythm', pedagogicalTimeSigDenominatorColor = '#1a1a1a', pedagogicalTimeSigDenominatorInstrument = 'handbell', pedagogicalTimeSigDenominatorEmoji = '🥁', singleLineBarlineHalfSpanPx = 20, singleLineBarlineThicknessPx = 2, themeColors: themeColorsProp, pedagogicalPlayheadStyle = 'line', pedagogicalPlayheadEmoji = '🎵', pedagogicalPlayheadEmojiSize = 32, cursorSizePx, cursorLineStrokeWidth = 4, cursorSubRow = 0, pedagogicalPlayheadMovement = 'arch', rhythmCursorColor = '#0ea5e9', rhythmCursorOpacity = 0.55, rhythmCursorWidthMultiplier = 1, rhythmCursorHighContrast = false, isPedagogicalAudioPlaying = false, isExportingAnimation = false, exportCursorRef, scoreContainerRef, pageFlowDirection = 'vertical', pageOrientation = 'portrait', isFirstInBraceGroup = false, braceGroupSize = 0, lyricFontFamily = 'sans-serif', lyricFontSize = 12, lyricBold = false, lyricItalic = false, lyricUnderline = false, lyricWeight = 400, lyricLineYOffset = 0, translateLabel, showLayoutBreakIcons = false, showStaffSpacerHandles = false, showLyricSpacerHandles = false, onSystemYOffsetChange, onSystemXOffsetChange, systemXOffsets = [], onLyricLineYOffsetChange, onToggleLineBreakAfter, onRemoveRepeatMark, selectedRepeatMark = null, selectedRepeatMarks = [], onSelectRepeatMark, onJumpMarkPointerDown, jumpMarkLayoutOverrides = {}, clefHandOffset = { x: 0, y: 0 }, clefHandSizePx = null, onClefPointerDown, clefSelected = false, onSelectClef, measureSelection = null, onMeasureClick, onMeasureContextMenu, activeLyricNoteIndex = null, physicalPageGapPx = 3, physicalPageFrameYPx = 0, disablePhysicalPageGaps = false, hideCursorOverlay = false, exportNotationSvgRef = null, multiStaffInstruments = null, multiStaffMeasuresByInstrument = null, combinedCursorRowOffsetPx = 0, combinedActiveStaffRowIndex = 0, cursorStaffClefType = null, tinWhistleLinkedFingeringScale = 1, linkedNotationByStaffId = null, notationStaffSpace, activeLegatoSlurPair = null, onLegatoPathClick = undefined,   onMeasureStartXChange = undefined, traditionalMeasureStartX = null, traditionalMeasureContinuationStartX = null, notationLayoutPageHeight = null, notationFirstPageBodyPx = null, pickupEnabled = false, harmonyFormMode = false, harmonyFormChordBeatStep = 4, harmonyFormLyricReserveHeight = 0, onHarmonyBeatClick,
   chordSymbolEdit = null, selectedChordSymbolId = null, onSelectChordSymbol,
 }) {
   const themeColors = themeColorsProp || { staffLineColor: '#000', noteFill: '#1a1a1a', textColor: '#1a1a1a', isDark: false };
@@ -21462,6 +21686,8 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
     const { shape } = getFigureSymbol(note.pitch, note.octave);
     const size = figurenotesSize;
     const isSelected = isNoteSelected(noteIndex);
+    const isCursorFocused = typeof isNoteCursorFocused === 'function' ? !!isNoteCursorFocused(noteIndex) : false;
+    const isCursorActive = isSelected || isCursorFocused;
     const dur = note.durationLabel || '1/4';
     const drawStem = figurenotesStems && dur !== '1/1';
     const stemLength = 26;
@@ -21472,8 +21698,8 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
     const textColor = getFigurenoteTextColor(note.pitch);
     const shapeElement = (() => {
       const r = size / 2;
-      const strokeShape = isSelected ? '#2563eb' : (themeColors.isDark ? '#ffffff' : '#000');
-      const strokeWShape = isSelected ? 3 : (themeColors.isDark ? 2.5 : 2);
+      const strokeShape = isCursorActive ? CURSOR_NOTE_HIGHLIGHT : (themeColors.isDark ? '#ffffff' : '#000');
+      const strokeWShape = isCursorActive ? 3.5 : (themeColors.isDark ? 2.5 : 2);
       if (shape === 'none') {
         return (
           <rect x={x - r} y={y - r} width={size} height={size} fill="none" stroke={strokeShape} strokeWidth={strokeWShape} strokeDasharray="2 2" opacity={0.6} />
@@ -21607,6 +21833,8 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
   const getSystemTotalBeats = (sys) => sys.measureIndices.reduce((sum, i) => sum + (effectiveMeasures[i]?.beatCount ?? beatsPerMeasure), 0);
   const findSystemAtBeat = (targetBeat) => {
     if (!systems.length) return null;
+    // Reavahetus: beat == süsteemi lõpp (mitte viimane rida) → järgmise rea localBeat 0
+    // (caret järgmise rea esimese löögi juurde, mitte eelmise rea lõpujoonest “üle”).
     const safeBeat = Number.isFinite(targetBeat) ? Math.max(0, targetBeat) : 0;
     let beatAcc = 0;
     for (let s = 0; s < systems.length; s++) {
@@ -21627,20 +21855,31 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
     return findSystemAtBeat(cursorPosition);
   };
   const cursorInfo = findCursorSystem();
-  // Caret + ghost peavad jagama SAMA X-ankrut (cursorPosition).
-  // Varem nihutati ghost kestuse pooliku võrra → caret ühes, ghost teises kohas (“laiali”).
-  // Kestus tuleb ghost-glüüfi kujust (1/4 vs 1/2 vs täpp), mitte X-nihkest.
+  // Caret + ghost peavad jagama SAMA X-ankrut (cursorPosition / cursorBeat).
+  // Traditional: X peab algama pärast clef/key/time (sama mis TraditionalNotationView measureAreaLeft),
+  // mitte layout’i marginLeft’ist — muidu caret istub taktimõõdu peal ja N-mode “ennustab”.
+  // Kestus tuleb ghost-glüüfi kujust, mitte X-nihkest (pooliku kestuse offset keelatud).
   const getCursorXForInfo = (info, centerOffsetBeats = 0) => {
     if (!info) return null;
     const sys = info.system;
     const systemOffsetX = Number(systemXOffsets?.[sys.systemIndex]) || 0;
-    const widths = sys.measureWidths ?? sys.measureIndices.map(() => sys.measureWidth ?? beatsPerMeasure * 80);
-    const safeTraditionalMeasureStartX = (typeof traditionalMeasureStartX !== 'undefined' && Number.isFinite(traditionalMeasureStartX))
-      ? traditionalMeasureStartX
-      : marginLeft;
+    const widthsBase = sys.measureWidths ?? sys.measureIndices.map(() => sys.measureWidth ?? beatsPerMeasure * 80);
+    const firstStart = Number.isFinite(traditionalMeasureStartX) ? traditionalMeasureStartX : marginLeft;
+    const contStart = Number.isFinite(traditionalMeasureContinuationStartX)
+      ? traditionalMeasureContinuationStartX
+      : firstStart;
     const notationStartX = isFigurenotesMode
       ? marginLeft
-      : safeTraditionalMeasureStartX;
+      : (sys.systemIndex === 0 ? firstStart : contStart);
+    // Jätkurida: sama laiuse-boost mis TraditionalNotationView (lühem eesliide → taktid venivad).
+    let widths = widthsBase;
+    if (!isFigurenotesMode && sys.systemIndex > 0 && widthsBase.length > 0) {
+      const continuationLeftDelta = Math.max(0, firstStart - contStart);
+      if (continuationLeftDelta > 0) {
+        const boost = continuationLeftDelta / widthsBase.length;
+        widths = widthsBase.map((w) => w + boost);
+      }
+    }
     const systemTotalBeats = sys.measureIndices.reduce(
       (sum, i) => sum + (effectiveMeasures[i]?.beatCount ?? beatsPerMeasure),
       0,
@@ -21711,11 +21950,26 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
         beatAcc += beatsInSys;
         continue;
       }
-      const widths = sys.measureWidths ?? sys.measureIndices.map(() => sys.measureWidth ?? beatsPerMeasure * 80);
+      const widthsBase = sys.measureWidths ?? sys.measureIndices.map(() => sys.measureWidth ?? beatsPerMeasure * 80);
+      const firstStart = Number.isFinite(traditionalMeasureStartX) ? traditionalMeasureStartX : marginLeft;
+      const contStart = Number.isFinite(traditionalMeasureContinuationStartX)
+        ? traditionalMeasureContinuationStartX
+        : firstStart;
+      const notationStartX = isFigurenotesMode
+        ? marginLeft
+        : (sys.systemIndex === 0 ? firstStart : contStart);
+      let widths = widthsBase;
+      if (!isFigurenotesMode && sys.systemIndex > 0 && widthsBase.length > 0) {
+        const continuationLeftDelta = Math.max(0, firstStart - contStart);
+        if (continuationLeftDelta > 0) {
+          const boost = continuationLeftDelta / widthsBase.length;
+          widths = widthsBase.map((w) => w + boost);
+        }
+      }
       let localStart = selStart - sysStartBeat;
       let localEnd = selEnd - sysStartBeat;
-      let xStart = marginLeft;
-      let xEnd = marginLeft;
+      let xStart = notationStartX;
+      let xEnd = notationStartX;
       for (let j = 0; j < sys.measureIndices.length; j += 1) {
         const m = effectiveMeasures[sys.measureIndices[j]];
         const beatCount = m?.beatCount ?? beatsPerMeasure;
@@ -21810,6 +22064,7 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
           hideTimeSignature={hideTimeSignature}
           keySignature={safeKey}
           isNoteSelected={isNoteSelected}
+          isNoteCursorFocused={hideCursorOverlay ? null : isNoteCursorFocused}
           onNoteClick={onNoteClick}
           onNoteMouseDown={onNoteMouseDown}
           onNoteMouseEnter={onNoteMouseEnter}
@@ -21869,6 +22124,7 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
           keySignature={safeKey}
           joClefStaffPosition={joClefStaffPosition}
           isNoteSelected={isNoteSelected}
+          isNoteCursorFocused={hideCursorOverlay ? null : isNoteCursorFocused}
           onNoteClick={onNoteClick}
           onNoteMouseDown={onNoteMouseDown}
           onNoteMouseEnter={onNoteMouseEnter}
@@ -21931,6 +22187,7 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
           selectedChordSymbolId={selectedChordSymbolId}
           onSelectChordSymbol={onSelectChordSymbol}
           isNoteSelected={isNoteSelected}
+          isNoteCursorFocused={hideCursorOverlay ? null : isNoteCursorFocused}
           onNoteClick={onNoteClick}
           onNoteMouseDown={onNoteMouseDown}
           onNoteMouseEnter={onNoteMouseEnter}

@@ -130,9 +130,17 @@ Kõik muudatused peavad hoidma kasutaja teekonnad tervena:
   - Selection, click, Shift+Arrow, Shift+drag peavad muutma ühtset kursori/valiku mudelit; UI ei tohi pidada paralleelset “salatõde”.
   - **Caret vs beat:** `cursorBeat` võib layout’i jaoks jääda; **nähtav caret** peidetakse tühja ala (leht/laud/takt ilma noodita) klikil (`scoreCursorVisible=false`) ja tuuakse tagasi noodi klikil või nooleklahvidega.
   - **Noodi klikk:** caret viiakse **täpselt** selle noodi beat’ile (mitte ennustatud/naaber-taktile).
+  - **Pointer-select + ◀/▶:** kui noot (või note-range) on valitud, plain ArrowLeft/Right viib **valiku JA caret’i** naabernoodile (N- ja SEL-režiim); valik ei tohi “kinni jääda” pärast muutmist ega ilma muutmiseta. Beat-span navi kehtib ainult siis, kui noodivalikut pole.
   - **Caret + ghost sama X:** ghost-preview ei tohi olla kestuse pooliku võrra nihutatud; muidu tundub kursor “laiali”. **N-mode:** ghost on alati nähtav (sisestusoktaavi/kõrguse eelvaade); caret ja ghost jagavad sama X-ankrut. Olemasoleva noodi peal ghost on madalama opacity’ga (mitte peidus), et õpetaja näeks ikka, millisesse oktaavi järgmine noot läheb.
+  - **N-mode sisestatud noodi muutmine:** pärast sisestust jääb caret tihti noodi *lõppu* (poolavatud `[start,end)`). ↑↓ / Cmd/Ctrl+↑↓ peavad siis muutma **just sisestatud (või caret’i juures lõppevat) helilist nooti**, mitte ainult ghost’i; ghost sünkroonitakse sama kõrguse/oktaaviga. Tõeliselt tühjal pesal (eelnev noot ei lõpe caret’i juures) jäävad nooled ghost’i peale.
   - **Loo lõpp:** kui `cursorBeat >= maxCursor` (viimase takti lõpp), `ArrowRight` jätab kursori sinna; autopikendus ainult reaalse noodi/patterni sisestusel, mitte nooleliikumisel.
   - **Renderi ankur:** `findSystemAtBeat` peab lõpu-beat’i kinnitama **viimasele** süsteemile (mitte kukkuma esimesele reale).
+
+- **Standard: noodi ja pausi ühine kestus takti sees**
+  - Sama rütmiglüüf (`1/1`…`1/32`, punkt) on noodil ja pausil **sama arv** neljandikühikutes (`1/4` = 1, `1/8` = 0,5, punkt = ×1,5). Takti pikkus on samas ühikus.
+  - Uue noodi või rütmi sisestus ja olemasoleva noodi või rütmi muutmine kirjutab **ainult selle takti** ajavahemiku üle (MuseScore replace). Lühem jätab samast tabelist pausi. Pikem asendab sündmused, mis algavad uue kestuse sees.
+  - Taktipiiri ei ületata ja järgmise takti sisu ei nihku. Kui rütm takti ei mahu, sündmus jääb endiseks ja kasutaja saab teate.
+  - Domeen: `src/musical/rhythmDuration.js`.
 
 - **Standard: eeltakt / poolik takt pärast dokumendi alustamist**
   - Eeltakti (pickup) ja pooliku viimase takti saab muuta ka pärast setup’i (`Teose andmed` / Seaded), mitte ainult uue töö viisardis.
@@ -241,7 +249,7 @@ Kõik muudatused peavad hoidma kasutaja teekonnad tervena:
   - **2) Taktijoon / topeltjoon / kordusmärk:** klikk → `singleObject` + `repeatsJumps` toolbox. Backspace/Delete: topeltjoon või kordusmärk → tavaline taktijoon (`barlineSingle` / `removeRepeatMark`). Ka tavaline üksiktaktijoon peab olema valitav.
   - **3) Tekst:** klikk tekstikastile / pealkirjale / autorile → tekstivalik + tekstimuutmise tööriistad (`textBox` / floating text tool). Note/repeat valik puhastatakse.
   - **4) Võti (clef):** klikk võtme glüüfile → `singleObject` (clef) + `clefs` toolbox. Võtme vahetus peab uuendama noodigraafikat vastavalt võtmereeglitele (`setClefType` / JO-režiim).
-  - **5) Noot / paus (erinev takti tühjast alast):** left-click **noodipea/hit-alale** → `singleNote` (`kind: 'note'`) + N-mode + `rhythm` + caret noodi beat’il; **takti sinine kast peab kaduma**. Lubatud: ↑↓ kõrgus, kestus, artikulatsioon; **akordimärk** noodi beat’ile (`getChordInsertBeat` / Ctrl/Cmd+K / akorditööriist + A–G). Left-click **takti tühjale** (väljaspool noodi hit’i) → ainult `measureRange` (mitte note). Shift+Click noot = range ilma N-mode sundita.
+  - **5) Noot / paus (erinev takti tühjast alast):** left-click **noodipea/hit-alale** → `singleNote` (`kind: 'note'`) + N-mode + `rhythm` + caret noodi beat’il; **takti sinine kast peab kaduma**. Lubatud: ↑↓ kõrgus, kestus, artikulatsioon; **akordimärk** noodi beat’ile (`getChordInsertBeat` / Ctrl/Cmd+K / akorditööriist + A–G). Pärast valikut (muudatusega või ilma) plain ◀/▶ liigutab select+caret edasi naabernoodile. Left-click **takti tühjale** (väljaspool noodi hit’i) → ainult `measureRange` (mitte note). Shift+Click noot = range ilma N-mode sundita.
   - **6) Akordimärk (traditional):** left-click sümbolile → `singleObject` (`chordSymbol`) + `chords` toolbox + tippimisrežiim. Figurenotes plokkidele see pointer-kaart ei kehti.
   - **Taktipiir (kohustuslik):** plain left-click / left-drag **ei ületa** taktipiiri (valik jääb ankru takti `startBeat…endBeat` sisse). **Shift+click / Shift+drag** lubab valikut üle taktipiiri laiendada (noodivahemik või taktivahemik).
   - **Deselect (kohustuslik):** `Esc`, **teine klikk** samale **taktijoonele/võtmele**, või **tühi lehe/laua pind** → `clearPointerSelection` (`none` + markerid kaovad + **caret peidus**). **Taktivalik:** deselect ainult Esc / tühjal pinnal (mitte teine left-click taktile). Selection-driven toolbox sulgub; N-mode + `rhythm` jääb alles, kui kasutaja on N-režiimis.

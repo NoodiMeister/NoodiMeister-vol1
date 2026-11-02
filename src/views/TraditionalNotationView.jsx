@@ -544,7 +544,9 @@ function renderTimeSignature(timeSignature, timeSignatureMode, centerY, textColo
 }
 
 
-function renderStandardRest(note, x, y, staffSpace) {
+const CURSOR_NOTE_HIGHLIGHT = '#2563eb';
+
+function renderStandardRest(note, x, y, staffSpace, fill = 'var(--note-fill, #1a1a1a)') {
   const resolveRestDurationLabel = (n) => {
     const EPS = 1e-6;
     const numericDuration = Number(n?.duration);
@@ -565,7 +567,7 @@ function renderStandardRest(note, x, y, staffSpace) {
       y={y}
       glyph={glyph}
       fontSize={getRestFontSize(staffSpace)}
-      fill="var(--note-fill, #1a1a1a)"
+      fill={fill}
       dominantBaseline="alphabetic"
     />
   );
@@ -620,6 +622,8 @@ export function TraditionalNotationView({
   /** (chord) => void — klikk akordimärgile */
   onSelectChordSymbol,
   isNoteSelected,
+  /** Caret enne nooti/pausi — glüüf sinine, liigub cursorBeat’iga. */
+  isNoteCursorFocused = null,
   onNoteClick,
   onNoteMouseDown,
   onNoteMouseEnter,
@@ -876,8 +880,10 @@ export function TraditionalNotationView({
 
   useEffect(() => {
     if (typeof onMeasureStartXChange !== 'function') return;
-    onMeasureStartXChange(effectiveMarginLeftFirstSystem);
-  }, [effectiveMarginLeftFirstSystem, onMeasureStartXChange]);
+    // first = pärast clef/key/time; continuation = pärast clef/key (ilma taktimõõduta).
+    // Timeline caret peab kasutama sama X-i — muidu caret jääb taktimõõdu peale.
+    onMeasureStartXChange(effectiveMarginLeftFirstSystem, effectiveMarginLeftContinuation);
+  }, [effectiveMarginLeftFirstSystem, effectiveMarginLeftContinuation, onMeasureStartXChange]);
 
   // Measure layout for getBeatFromX (first system only; notation starts after clef/key/time sig)
   const measureLayout = React.useMemo(() => {
@@ -2437,6 +2443,13 @@ export function TraditionalNotationView({
                       );
                       const restLabelY = staffY + lastLineY + spacing * 1.8;
 
+                      const isSelected = isNoteSelected ? isNoteSelected(globalNoteIndex) : false;
+                      const isCursorFocused = typeof isNoteCursorFocused === 'function'
+                        ? !!isNoteCursorFocused(globalNoteIndex)
+                        : false;
+                      const isCursorActive = isSelected || isCursorFocused;
+                      const activeFill = CURSOR_NOTE_HIGHLIGHT;
+
                       if (note.isRest) {
                         const drawRestGlyph = shouldDrawRestGlyph(measure.notes, noteIdx);
                         const restSyllable = drawRestGlyph && showRhythmSyllables ? getRhythmSyllableForNote(note) : '';
@@ -2459,17 +2472,30 @@ export function TraditionalNotationView({
                             : dur === '1/2'
                               ? staffY + staffLinePositions[2] // half rest sits on middle line
                               : staffY + staffCenterY;
+                        const restFill = isCursorActive ? activeFill : 'var(--note-fill, #1a1a1a)';
                         return (
                           <g key={noteIdx} {...noteGroupProps}>
                             {makeNotePointerHitRect(restAnchorY)}
-                            {drawRestGlyph && renderStandardRest(note, noteX, restAnchorY, spacing)}
+                            {isCursorActive && (
+                              <rect
+                                x={noteX - noteHitHalfW}
+                                y={restAnchorY - noteHitHalfH}
+                                width={noteHitHalfW * 2}
+                                height={noteHitHalfH * 2}
+                                fill="#93c5fd"
+                                opacity={isSelected ? 0.35 : 0.28}
+                                rx="4"
+                                pointerEvents="none"
+                              />
+                            )}
+                            {drawRestGlyph && renderStandardRest(note, noteX, restAnchorY, spacing, restFill)}
                             {drawRestGlyph && note.isDotted && (
                               <SmuflGlyph
                                 x={getAugmentationDotXFromRestCenter(noteX, spacing)}
                                 y={staffY + getRestAugmentationDotPitchY(firstLineY, spacing)}
                                 glyph={SMUFL_GLYPH.augmentationDot}
                                 fontSize={getGlyphFontSize(spacing)}
-                                fill="var(--note-fill, #1a1a1a)"
+                                fill={restFill}
                                 dominantBaseline="alphabetic"
                               />
                             )}
@@ -2487,7 +2513,6 @@ export function TraditionalNotationView({
                         );
                       }
 
-                      const isSelected = isNoteSelected ? isNoteSelected(globalNoteIndex) : false;
                       const resolvedAccidental = (note.accidental !== undefined && note.accidental !== null)
                         ? note.accidental
                         : getAccidentalForPitchInKey(note.pitch, keySignature);
@@ -2495,7 +2520,11 @@ export function TraditionalNotationView({
                       const isOutOfRange = isMidiOutOfInstrumentRange(noteMidi, instrumentRangeMidi);
                       const isHandbellsInstrument = isHandbellsStaff;
                       const handbellColor = getSchoolHandbellColor(note.pitch, resolvedAccidental || 0);
-                      const noteFillColor = isOutOfRange ? OUT_OF_RANGE_COLOR : (isHandbellsInstrument ? handbellColor : 'var(--note-fill, #1a1a1a)');
+                      const noteFillColor = isOutOfRange
+                        ? OUT_OF_RANGE_COLOR
+                        : (isCursorActive
+                          ? activeFill
+                          : (isHandbellsInstrument ? handbellColor : 'var(--note-fill, #1a1a1a)'));
                       const ledgerHalfWidth = getLedgerHalfWidth(spacing);
                       const { above: nLedgerAbove, below: nLedgerBelow } = getLedgerLineCountExact(pitchY, firstLineY, lastLineY, spacing);
                       const isFigurenotesXHead = noteheadShape === 'x';
@@ -2525,7 +2554,18 @@ export function TraditionalNotationView({
                           {nLedgerBelow > 0 && Array.from({ length: nLedgerBelow }, (_, i) => (
                             <line key={`lb-${i}`} x1={noteX - ledgerHalfWidth} y1={staffY + lastLineY + (i + 1) * spacing} x2={noteX + ledgerHalfWidth} y2={staffY + lastLineY + (i + 1) * spacing} stroke="#333" strokeWidth={getLegerLineThickness(spacing)} />
                           ))}
-                          {isSelected && <rect x={noteX - noteHitHalfW} y={noteY - noteHitHalfH} width={noteHitHalfW * 2} height={noteHitHalfH * 2} fill="#93c5fd" opacity="0.3" rx="4" pointerEvents="none" />}
+                          {isCursorActive && (
+                            <rect
+                              x={noteX - noteHitHalfW}
+                              y={noteY - noteHitHalfH}
+                              width={noteHitHalfW * 2}
+                              height={noteHitHalfH * 2}
+                              fill="#93c5fd"
+                              opacity={isSelected ? 0.35 : 0.28}
+                              rx="4"
+                              pointerEvents="none"
+                            />
+                          )}
                           {(visibleAccidental === 1 || visibleAccidental === -1 || visibleAccidental === 0) && (
                             <text x={noteX - (noteheadRx + ensureMinGlyphHorizontalGapPx(spacing * 0.5))} y={noteY} textAnchor="middle" dominantBaseline="central" fontSize={Math.round(spacing * 1.4)} fill={noteFillColor} fontFamily="serif">{visibleAccidental === 1 ? '♯' : visibleAccidental === -1 ? '♭' : '♮'}</text>
                           )}
