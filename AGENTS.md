@@ -153,6 +153,7 @@ Kõik muudatused peavad hoidma kasutaja teekonnad tervena:
   - Pedagoogilises režiimis (`vabanotatsioon` / kuvarežiimid A–C) on sisestuse **alumine ankur absoluutne C4** (MIDI ≥ 60).
   - Vaikimisi ghost = C4; oktaavi nihutus lubab 4…6, mitte alla 4.
   - Tähekäsk A–G ei tohi valida oktavit, mis annaks noodi alla C4 (nt C4 + `B` → B4, mitte B3).
+  - **N-režiim:** arvutiklahvid A–G on **nooditähed** (A→pitch A, mitte klaverikaardi ASDF→C). Klaveri ASDF-kaart on lubatud figuurnotatsioonis või pedagoogikas SEL+klaveriribal; N-režiimis ei tohi see noodi asukohta röövida.
   - Käemärgid (režiim C) loetakse samast `notes[]`; C4-põhi hoiab JO…DI põhioktaavi stabiilsena.
   - Vt `docs/PEDAGOGICAL-NOTATION-REQUIREMENTS.md` §5.1.
 

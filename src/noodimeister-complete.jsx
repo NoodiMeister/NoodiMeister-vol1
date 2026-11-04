@@ -3,6 +3,7 @@ import React, { useState, useEffect, useLayoutEffect, useCallback, useRef, useMe
 import { createPortal } from 'react-dom';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { InteractivePiano } from './piano';
+import { shouldComputerKeysPlayPianoMap } from './piano/pianoKeyboardGuards';
 import * as googleDrive from './services/googleDrive';
 import * as oneDrive from './services/oneDrive';
 import * as authStorage from './services/authStorage';
@@ -11840,11 +11841,16 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
           }
         }
         const noteLetter = e.key?.toLowerCase();
-        const keyboardDrivenPianoInsertActive = pianoStripVisible && (notationStyle === 'FIGURENOTES' || notationMode === 'vabanotatsioon');
+        const keyboardDrivenPianoInsertActive = shouldComputerKeysPlayPianoMap({
+          notationStyle,
+          notationMode,
+          noteInputMode,
+          pianoStripVisible,
+        });
         if (!(keyboardDrivenPianoInsertActive && e.defaultPrevented) && !modKey && !e.altKey && ['c', 'd', 'e', 'f', 'g', 'a', 'b'].includes(noteLetter)) {
           e.preventDefault();
           // Figurenotes akordirida → akord; chords-toolbox (palett) mõlemas režiimis → akord; harmony-form → akord.
-          // Traditional ilma toolbox’ita: A–G = meloodianoot. Ctrl/Cmd+K tippimine on chordSymbolEdit harus.
+          // Traditional/pedagoogiline N-režiim: A–G = meloodianoot (mitte klaveri ASDF→CDE…). Ctrl/Cmd+K tippimine on chordSymbolEdit harus.
           const onFigurenotesChordRow = notationStyle === 'FIGURENOTES' && cursorSubRow === 1;
           if (onFigurenotesChordRow || activeToolbox === 'chords' || isHarmonyFormMode) {
             addChordAt(getChordInsertBeat(), noteLetter.toUpperCase(), '');
@@ -11870,6 +11876,8 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
               pedagogicalLetterOctaveOptions(notationMode)
             );
           addNoteAtCursor(letterUp, octForMelody);
+          setGhostPitch(letterUp);
+          setGhostOctave(octForMelody);
           return;
         }
       }
@@ -12436,18 +12444,61 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         const isTraditionalOrPedagogical = notationMode === 'traditional' || notationMode === 'vabanotatsioon';
         if (e.shiftKey && ['c', 'd', 'e', 'f', 'g', 'a', 'b'].includes(chordNoteLetter) && isTraditionalOrPedagogical) {
           e.preventDefault();
-          addNoteOnTopOfCursor(chordNoteLetter.toUpperCase(), ghostOctave);
+          const chordLetterUp = chordNoteLetter.toUpperCase();
+          const chordOct = resolveOctaveForPitchLetter(
+            chordLetterUp,
+            ghostReferenceMidi(
+              keySignature,
+              notationStyle,
+              ghostPitch,
+              ghostOctave,
+              ghostAccidental ?? 0,
+              ghostAccidentalIsExplicit
+            ),
+            keySignature,
+            notationStyle,
+            ghostAccidentalIsExplicit,
+            ghostAccidental ?? 0,
+            pedagogicalLetterOctaveOptions(notationMode)
+          );
+          addNoteOnTopOfCursor(chordLetterUp, chordOct);
           return;
         }
 
         // Note input (C-G) – sama loogika mis addNoteAtCursor (kursori löök, mitte järjekorra lõppu kleebimine).
         const noteLetter = e.key.toLowerCase();
-        const keyboardDrivenPianoInsertActive = pianoStripVisible && (notationStyle === 'FIGURENOTES' || notationMode === 'vabanotatsioon');
+        const keyboardDrivenPianoInsertActive = shouldComputerKeysPlayPianoMap({
+          notationStyle,
+          notationMode,
+          noteInputMode,
+          pianoStripVisible,
+        });
         if (!(keyboardDrivenPianoInsertActive && e.defaultPrevented) && ['c', 'd', 'e', 'f', 'g', 'a', 'b'].includes(noteLetter)) {
           restNextRef.current = false;
           setGhostAccidentalIsExplicit(false);
           e.preventDefault();
-          addNoteAtCursor(noteLetter.toUpperCase(), ghostOctave, undefined, { skipPlay: !playNoteOnInsert });
+          const letterUp = noteLetter.toUpperCase();
+          const octForMelody = notationStyle === 'FIGURENOTES'
+            ? ghostOctave
+            : resolveOctaveForPitchLetter(
+              letterUp,
+              ghostReferenceMidi(
+                keySignature,
+                notationStyle,
+                ghostPitch,
+                ghostOctave,
+                ghostAccidental ?? 0,
+                ghostAccidentalIsExplicit
+              ),
+              keySignature,
+              notationStyle,
+              ghostAccidentalIsExplicit,
+              ghostAccidental ?? 0,
+              pedagogicalLetterOctaveOptions(notationMode)
+            );
+          addNoteAtCursor(letterUp, octForMelody, undefined, { skipPlay: !playNoteOnInsert });
+          setGhostPitch(letterUp);
+          setGhostOctave(octForMelody);
           return;
         }
 
@@ -12475,6 +12526,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     activeLegatoSlurPair, applyLegatoSlurExtendForPair, applyLegatoSlurRetractForPair, applyLegatoSlurRemoveForPair, applySelectionModel, clearPointerSelection,
     moveNoteSelectionHorizontally,
     isHarmonyFormMode,
+    pianoStripVisible,
   ]);
 
   // JO-võti: klõps väljaspool võtit lõpetab valiku
@@ -20754,7 +20806,12 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                         }
                         : null}
                       keySignature={keySignature}
-                      keyboardPlaysPiano={pianoStripVisible && (notationStyle === 'FIGURENOTES' || notationMode === 'vabanotatsioon')}
+                      keyboardPlaysPiano={shouldComputerKeysPlayPianoMap({
+                        notationStyle,
+                        notationMode,
+                        noteInputMode,
+                        pianoStripVisible,
+                      })}
                       blockedShortcuts={[
                         effectiveShortcutPrefs['app.noteInputToggle'],
                         effectiveShortcutPrefs['app.undo'],

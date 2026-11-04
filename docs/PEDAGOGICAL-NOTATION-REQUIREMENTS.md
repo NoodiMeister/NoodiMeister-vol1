@@ -101,6 +101,7 @@ Märkused:\n+
 - Pedagoogilise sisestuse **alumine ankur on absoluutne C4** (MIDI ≥ 60).
 - Vaikimisi ghost = **C4**; oktaavi nihutus (`Shift+↑/↓`) lubab **4…6**, mitte alla 4.
 - Tähekäsk A–G valib oktavi nii, et tulemus ei jää alla C4 (nt ghost C4 + klahv `B` → **B4**, mitte B3).
+- **N-režiim:** A–G on nooditähed (A→A, G→G, B→B). Klaveririba võib olla avatud hiire/MIDI jaoks, aga ASDF klaverikaart (KeyA→C) ei tohi N-režiimis tähekäske üle võtta.
 - Käemärkide (C) 7 joont JO…DI loetakse samast `notes[]` andmest; C4-põhi hoiab põhioktaavi bassi libisemast.
 
 ### 5.2 Režiim C (testprototüüp) – fikseeritud reeglid
