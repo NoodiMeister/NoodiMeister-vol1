@@ -136,6 +136,13 @@ Kõik muudatused peavad hoidma kasutaja teekonnad tervena:
   - **Loo lõpp:** kui `cursorBeat >= maxCursor` (viimase takti lõpp), `ArrowRight` jätab kursori sinna; autopikendus ainult reaalse noodi/patterni sisestusel, mitte nooleliikumisel.
   - **Renderi ankur:** `findSystemAtBeat` peab lõpu-beat’i kinnitama **viimasele** süsteemile (mitte kukkuma esimesele reale).
 
+- **Standard: noodigraafika mängija transport**
+  - Mängijal on Play/Paus, Stop, **Algusesse**, **Tagasi** ja **Edasi**. Samm on `pedagogicalRhythmStep` (vaikimisi veerand).
+  - Algusesse viib kursori löögile 0. Kui taasesitus käib, jätkub lugu algusest. Stop peatab ja viib samuti algusesse.
+  - Tagasi/Edasi liigutavad kursorit ka mängimise ajal (kell nihkub); pausi ajal jääb järgmine Play sellesse kohta.
+  - Maci / süsteemi esitusklahvid (play/paus, eelmine, järgmine) juhivad seda transporti, kui mängija aken on avatud või noodigraafika taasesitus käib. Eelmine = algusesse, järgmine = samm edasi. Muul ajal meedianuppe ei haara.
+  - Domeen: `src/musical/scoreMediaSession.js`.
+
 - **Standard: noodi ja pausi ühine kestus takti sees**
   - Sama rütmiglüüf (`1/1`…`1/32`, punkt) on noodil ja pausil **sama arv** neljandikühikutes (`1/4` = 1, `1/8` = 0,5, punkt = ×1,5). Takti pikkus on samas ühikus.
   - Uue noodi või rütmi sisestus ja olemasoleva noodi või rütmi muutmine kirjutab **ainult selle takti** ajavahemiku üle (MuseScore replace). Lühem jätab samast tabelist pausi. Pikem asendab sündmused, mis algavad uue kestuse sees.

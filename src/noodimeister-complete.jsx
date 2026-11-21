@@ -193,6 +193,13 @@ import {
   buildPlaybackNoteEvents,
 } from './notation/repeatMarksEngine';
 import { attachPlaybackNoteDurations } from './musical/scorePlaybackLegato';
+import {
+  primeScoreMediaSession,
+  setScoreMediaElementPlaying,
+  syncScoreMediaSession,
+  releaseScoreMediaSession,
+  clampPlaybackBeat,
+} from './musical/scoreMediaSession';
 import { NOTEHEAD_ARTICULATION_DEFS } from './notation/articulationCatalog';
 import { NOTEHEAD_SHAPE_DEFS, normalizeNoteheadShape } from './notation/noteheadShapeCatalog';
 import {
@@ -320,7 +327,7 @@ function buildDemoVisibilityProject({ figurenotes, grandStaff }) {
 var LUCIDE_ICONS = [
   'Music2', 'Clock', 'Hash', 'Type', 'Piano', 'Palette', 'Layout', 'Check', 'Save', 'FolderOpen', 'BookOpen',
   'Plus', 'Settings', 'Key', 'Repeat', 'Cloud', 'LogOut', 'LogIn', 'UserPlus', 'User', 'CloudUpload', 'CloudDownload', 'FolderPlus', 'ChevronDown',
-  'Play', 'Pause', 'Video', 'Eye', 'ArrowDown', 'ArrowRight', 'ArrowUpDown', 'X', 'Printer', 'FileDown',
+  'Play', 'Pause', 'SkipBack', 'Rewind', 'FastForward', 'Video', 'Eye', 'ArrowDown', 'ArrowRight', 'ArrowUpDown', 'X', 'Printer', 'FileDown',
   'Hand', 'MousePointer', 'Keyboard', 'ExternalLink'
 ];
 var STORAGE_KEY = 'noodimeister-data';
@@ -3407,6 +3414,9 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   const scorePlaybackIntervalRef = useRef(null);
   const scorePlaybackLastBeatRef = useRef(0);
   const scorePlaybackStartedAtRef = useRef(0);
+  const scorePlaybackSessionRef = useRef(null);
+  const scorePlaybackArmingRef = useRef(false);
+  const scoreTransportRef = useRef({});
   const pedagogicalAudioDataRef = useRef(null); // base64 string (salvestamiseks)
   const pedagogicalAudioMimeTypeRef = useRef('audio/mpeg');
   const pedagogicalAudioFileNameRef = useRef('');
@@ -8246,7 +8256,10 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       clearInterval(scorePlaybackIntervalRef.current);
       scorePlaybackIntervalRef.current = null;
     }
+    scorePlaybackSessionRef.current = null;
+    scorePlaybackArmingRef.current = false;
     setIsScorePlaybackPlaying(false);
+    setScoreMediaElementPlaying(false);
     stopPreviewNote();
     if (resetCursor) setCursorPosition(0);
   }, [stopPreviewNote]);
@@ -8435,16 +8448,23 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   }, [staves, notesWithExplicitBeatsEarly, noteDurationInQuarterBeats]);
 
   const startScorePlayback = useCallback(() => {
-    if (scorePlaybackIntervalRef.current) return;
+    if (scorePlaybackIntervalRef.current || scorePlaybackArmingRef.current) return;
+    scorePlaybackArmingRef.current = true;
     pausePedagogicalPlayback();
     const withBeats = buildOrchestrationPlaybackNotes();
-    if (!withBeats.length) return;
+    if (!withBeats.length) {
+      scorePlaybackArmingRef.current = false;
+      return;
+    }
     const {
       events: playbackEvents,
       totalBeats,
       measureSequence,
     } = buildPlaybackNoteEvents(withBeats, playbackMeasuresWithMarks);
-    if (!playbackEvents.length || totalBeats <= 0) return;
+    if (!playbackEvents.length || totalBeats <= 0) {
+      scorePlaybackArmingRef.current = false;
+      return;
+    }
     const measureTimeline = [];
     let timelineCursor = 0;
     (Array.isArray(measureSequence) ? measureSequence : []).forEach((measureIndex) => {
@@ -8500,10 +8520,20 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     const beatMs = 60000 / bpm;
     attachPlaybackNoteDurations(playbackEvents, beatMs);
     const startBeat = Math.max(0, Math.min(totalBeats, mapScoreBeatToPlaybackBeat(cursorPosition)));
+    scorePlaybackSessionRef.current = {
+      beatMs,
+      totalBeats,
+      mapPlaybackBeatToScoreBeat,
+      mapScoreBeatToPlaybackBeat,
+    };
     scorePlaybackStartedAtRef.current = performance.now() - startBeat * beatMs;
-    scorePlaybackLastBeatRef.current = startBeat;
+    // Epsilon enne starti, et kursori all olev noot (sh loo esimene) kõlaks.
+    scorePlaybackLastBeatRef.current = startBeat - 1e-4;
+    setScoreMediaElementPlaying(true);
     setIsScorePlaybackPlaying(true);
+    setScoreCursorVisible(true);
     setCursorPosition(mapPlaybackBeatToScoreBeat(startBeat));
+    scorePlaybackArmingRef.current = false;
 
     scorePlaybackIntervalRef.current = setInterval(() => {
       const now = performance.now();
@@ -8525,6 +8555,103 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       if (beatNow >= totalBeats) stopScorePlayback(false);
     }, 25);
   }, [buildOrchestrationPlaybackNotes, playbackMeasuresWithMarks, getEffectivePlaybackBpm, cursorPosition, playPianoNote, stopScorePlayback, pausePedagogicalPlayback]);
+
+  const seekScorePlaybackByDelta = useCallback((deltaBeats) => {
+    const delta = Number(deltaBeats) || 0;
+    setScoreCursorVisible(true);
+    const session = scorePlaybackSessionRef.current;
+    const playing = !!scorePlaybackIntervalRef.current && session;
+    if (!playing) {
+      setCursorPosition((prev) => clampCursorBeatToScore((Number(prev) || 0) + delta, maxCursor));
+      return;
+    }
+    const current = Number(scorePlaybackLastBeatRef.current) || 0;
+    const next = clampPlaybackBeat(current + delta, session.totalBeats);
+    if (next >= session.totalBeats) {
+      scorePlaybackLastBeatRef.current = session.totalBeats;
+      setCursorPosition(session.mapPlaybackBeatToScoreBeat(session.totalBeats));
+      stopScorePlayback(false);
+      return;
+    }
+    scorePlaybackStartedAtRef.current = performance.now() - next * session.beatMs;
+    scorePlaybackLastBeatRef.current = next - 1e-4;
+    setCursorPosition(session.mapPlaybackBeatToScoreBeat(next));
+  }, [maxCursor, stopScorePlayback]);
+
+  const seekScorePlaybackToStart = useCallback(() => {
+    setScoreCursorVisible(true);
+    const session = scorePlaybackSessionRef.current;
+    const playing = !!scorePlaybackIntervalRef.current && session;
+    if (!playing) {
+      setCursorPosition(0);
+      return;
+    }
+    scorePlaybackStartedAtRef.current = performance.now();
+    scorePlaybackLastBeatRef.current = -1e-4;
+    setCursorPosition(session.mapPlaybackBeatToScoreBeat(0));
+  }, []);
+
+  const scoreStepBeats = Math.max(0.125, Number(pedagogicalRhythmStep) || 1);
+  scoreTransportRef.current = {
+    play: () => {
+      if (!scorePlaybackIntervalRef.current) startScorePlayback();
+    },
+    pause: () => {
+      if (scorePlaybackIntervalRef.current) stopScorePlayback(false);
+    },
+    stop: () => stopScorePlayback(true),
+    toStart: () => seekScorePlaybackToStart(),
+    stepForward: () => seekScorePlaybackByDelta(scoreStepBeats),
+    stepBack: () => seekScorePlaybackByDelta(-scoreStepBeats),
+  };
+
+  useEffect(() => {
+    const active = scorePlayerPopupOpen || isScorePlaybackPlaying;
+    if (!active) {
+      releaseScoreMediaSession();
+      return undefined;
+    }
+    syncScoreMediaSession({
+      playing: isScorePlaybackPlaying,
+      title: String(songTitle || '').trim() || 'Noodigraafika',
+      artist: 'Noodimeister',
+      onPlay: () => scoreTransportRef.current.play?.(),
+      onPause: () => scoreTransportRef.current.pause?.(),
+      onStop: () => scoreTransportRef.current.stop?.(),
+      onPrevious: () => scoreTransportRef.current.toStart?.(),
+      onNext: () => scoreTransportRef.current.stepForward?.(),
+      onSeekBack: () => scoreTransportRef.current.stepBack?.(),
+      onSeekForward: () => scoreTransportRef.current.stepForward?.(),
+    });
+    return undefined;
+  }, [scorePlayerPopupOpen, isScorePlaybackPlaying, songTitle]);
+
+  useEffect(() => () => releaseScoreMediaSession(), []);
+
+  useEffect(() => {
+    if (!scorePlayerPopupOpen && !isScorePlaybackPlaying) return undefined;
+    const onMediaKey = (e) => {
+      const key = String(e.key || '');
+      const code = String(e.code || '');
+      if (!key.startsWith('Media') && !code.startsWith('Media')) return;
+      if (e.repeat) return;
+      const active = document.activeElement;
+      const tag = (active?.tagName || '').toLowerCase();
+      if (tag === 'input' || tag === 'textarea' || active?.isContentEditable) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const transport = scoreTransportRef.current;
+      if (key === 'MediaPlayPause' || code === 'MediaPlayPause') {
+        if (scorePlaybackIntervalRef.current) transport.pause?.();
+        else transport.play?.();
+      } else if (key === 'MediaTrackPrevious' || code === 'MediaTrackPrevious') transport.toStart?.();
+      else if (key === 'MediaRewind' || code === 'MediaRewind') transport.stepBack?.();
+      else if (key === 'MediaTrackNext' || code === 'MediaTrackNext' || key === 'MediaFastForward' || code === 'MediaFastForward') transport.stepForward?.();
+      else if (key === 'MediaStop' || code === 'MediaStop') transport.stop?.();
+    };
+    window.addEventListener('keydown', onMediaKey, true);
+    return () => window.removeEventListener('keydown', onMediaKey, true);
+  }, [scorePlayerPopupOpen, isScorePlaybackPlaying]);
 
   const seekPedagogicalAudio = useCallback((deltaSeconds) => {
     if (!pedagogicalAudioUrl) return;
@@ -16392,7 +16519,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
             >
               <div>
                 <h3 className="text-sm font-bold uppercase tracking-wide">Noodigraafika mängija</h3>
-                <p className="text-xs text-indigo-100">Kursori lugemine ilma MP3 failita</p>
+                <p className="text-xs text-indigo-100">Kursori lugemine ilma MP3 failita. Maci esitusklahvid töötavad, kuni see aken on lahti.</p>
               </div>
               <button
                 type="button"
@@ -16406,11 +16533,30 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
               <div className="flex flex-wrap items-center gap-2">
                 <button
                   type="button"
+                  onClick={() => seekScorePlaybackToStart()}
+                  className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-200"
+                  title="Vii kursor loo algusesse. Maci eelmine esitusklahv teeb sama."
+                >
+                  {icons?.SkipBack ? <icons.SkipBack className="h-4 w-4" /> : null}
+                  Algusesse
+                </button>
+                <button
+                  type="button"
+                  onClick={() => seekScorePlaybackByDelta(-scoreStepBeats)}
+                  className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-200"
+                  title="Liiguta kursorit sammu võrra tagasi"
+                >
+                  {icons?.Rewind ? <icons.Rewind className="h-4 w-4" /> : null}
+                  Tagasi
+                </button>
+                <button
+                  type="button"
                   onClick={() => {
                     if (isScorePlaybackPlaying) stopScorePlayback(false);
                     else startScorePlayback();
                   }}
                   className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-white ${isScorePlaybackPlaying ? 'bg-amber-600 hover:bg-amber-500' : 'bg-emerald-600 hover:bg-emerald-500'}`}
+                  title="Esita või peata. Maci esitus/paus-klahv teeb sama."
                 >
                   {isScorePlaybackPlaying
                     ? (icons?.Pause ? <icons.Pause className="h-4 w-4" /> : null)
@@ -16419,25 +16565,21 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                 </button>
                 <button
                   type="button"
+                  onClick={() => seekScorePlaybackByDelta(scoreStepBeats)}
+                  className="inline-flex items-center gap-2 rounded-lg border border-indigo-300 bg-indigo-50 px-3 py-2 text-sm font-semibold text-indigo-900 hover:bg-indigo-100"
+                  title="Liiguta kursorit sammu võrra edasi. Maci järgmine esitusklahv teeb sama."
+                >
+                  {icons?.FastForward ? <icons.FastForward className="h-4 w-4" /> : null}
+                  Edasi
+                </button>
+                <button
+                  type="button"
                   onClick={() => stopScorePlayback(true)}
                   className="inline-flex items-center gap-2 rounded-lg bg-slate-700 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-600"
+                  title="Peata ja vii kursor algusesse"
                 >
                   {icons?.X ? <icons.X className="h-4 w-4" /> : null}
                   Stop
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setCursorPosition((prev) => Math.max(0, (Number(prev) || 0) - Math.max(0.125, Number(pedagogicalRhythmStep) || 1)))}
-                  className="rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-200"
-                >
-                  - Step
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setCursorPosition((prev) => Math.max(0, (Number(prev) || 0) + Math.max(0.125, Number(pedagogicalRhythmStep) || 1)))}
-                  className="rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-200"
-                >
-                  + Step
                 </button>
               </div>
               <div className="flex flex-wrap items-center gap-3 text-xs text-slate-700">
@@ -16453,7 +16595,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                   />
                 </label>
                 <label className="flex items-center gap-2">
-                  <span className="font-semibold">Step</span>
+                  <span className="font-semibold">Samm</span>
                   <select
                     value={String(pedagogicalRhythmStep)}
                     onChange={(e) => setPedagogicalRhythmStep(clampNumber(Number(e.target.value) || 1, 0.125, 4))}
@@ -16468,6 +16610,9 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
               <div className="rounded border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">
                 Beat: <strong>{Math.round((Number(cursorPosition) || 0) * 100) / 100}</strong>
               </div>
+              <p className="text-xs leading-relaxed text-slate-600">
+                MacBooki esitusklahvid: esitus/paus käivitab või peatab, eelmine viib algusesse, järgmine liigutab kursorit sammu võrra edasi. Klahvid on seotud selle aknaga (või käiva taasesitusega) ega sega noodisisestust, kui aken on suletud.
+              </p>
             </div>
           </div>
         </div>
@@ -16538,9 +16683,12 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
               </button>
               <button
                 type="button"
-                onClick={() => setScorePlayerPopupOpen(true)}
+                onClick={() => {
+                  setScorePlayerPopupOpen(true);
+                  primeScoreMediaSession();
+                }}
                 className="inline-flex items-center gap-2 px-3 py-2 rounded-lg font-semibold text-sm bg-indigo-600 text-white shadow-md hover:bg-indigo-500 border border-indigo-700/50"
-                title="Ava noodigraafika mängija aken"
+                title="Ava noodigraafika mängija aken. Maci esitusklahvid juhivad siis kursorit."
               >
                 {icons?.Play ? <icons.Play className="w-4 h-4" /> : null}
                 Noodigraafika mängija
