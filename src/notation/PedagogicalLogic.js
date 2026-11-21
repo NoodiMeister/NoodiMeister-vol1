@@ -4,8 +4,7 @@
  * JO-võti on ankur: värvid ja kujundid arvutatakse relatiivselt JO positsioonist (staff position).
  */
 
-/** Noodinimed C–B (relatiivne astme number 0–6). */
-const PITCH_STEP = { C: 0, D: 1, E: 2, F: 3, G: 4, A: 5, B: 6 };
+import { getStaffPositionTreble } from './StaffConstants.js';
 
 /** Pedagoogilise süsteemi värvid (JO = punane ruut; samad võtmed nagu Figuurnotatsioonil, aga arvutus JO suhtes). */
 const PEDAGOGICAL_COLORS = {
@@ -77,21 +76,13 @@ const SHAPE_ORDER = ['none', 'cross', 'square', 'circle', 'triangle', 'triangleD
  * @returns {number} poolspace sammud JO-st (positiivne = kõrgem)
  */
 export function getRelativeStaffStepsFromJo(keySignature, joStaffPosition, pitch, octave) {
-  const step = PITCH_STEP[pitch] ?? 0;
-  const midiOctave = octave + 1;
-  const totalSemitones = midiOctave * 12 + (step * 2 - Math.floor(step * 2 / 7) * 2); // ligikaudne
-  const pitchPosition = getStaffPositionFromPitchOctave(pitch, octave);
-  return pitchPosition - joStaffPosition;
-}
-
-/**
- * Ligikaudne staff position (poolspace) antud pitch+octave jaoks (viiulivõtme skaala).
- */
-function getStaffPositionFromPitchOctave(pitch, octave) {
-  const step = PITCH_STEP[pitch] ?? 0;
-  const octaveOffset = (octave - 4) * 7 * 2;
-  const stepOffset = step * 2 - (pitch === 'C' || pitch === 'F' ? 0 : 1);
-  return 6 + octaveOffset + stepOffset;
+  // Sama ankur mis käemärgid / JO-nimed (StaffConstants), mitte eraldi “ligikaudne” valem —
+  // vana F/C erand nihutas F ja B värvid valesse astmesse.
+  const pitchPosition = getStaffPositionTreble(pitch, octave);
+  const joPos = typeof joStaffPosition === 'number' && Number.isFinite(joStaffPosition)
+    ? joStaffPosition
+    : 0;
+  return pitchPosition - joPos;
 }
 
 /**
@@ -104,7 +95,8 @@ function getStaffPositionFromPitchOctave(pitch, octave) {
  */
 export function getPedagogicalColor(keySignature, joStaffPosition, pitch, octave) {
   const steps = getRelativeStaffStepsFromJo(keySignature, joStaffPosition, pitch, octave);
-  const stepInOctave = ((Math.round(steps / 2) % 7) + 7) % 7;
+  // getStaffPositionTreble: 1 samm = 1 diatooniline aste (mitte ×2 half-space).
+  const stepInOctave = ((Math.round(steps) % 7) + 7) % 7;
   return PEDAGOGICAL_COLORS[stepInOctave] ?? PEDAGOGICAL_COLORS[0];
 }
 

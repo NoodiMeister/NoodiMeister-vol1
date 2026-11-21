@@ -2,13 +2,17 @@
 
 ## Kasutaja ei pea MuseScore'i laadima
 
-Noodimeister laeb **instrumentide helid otse veebist** (GitHub / CDN). Kasutajal ei ole vaja MuseScore'i eraldi paigaldada ega kasutada.
+Noodimeister hostib **General MIDI (FluidR3_GM)** helid ise rakenduse all:
 
-- **Allikas:** teek `soundfont-player` laeb GM-hele (FluidR3_GM) aadressilt  
-  **https://gleitz.github.io/midi-js-soundfonts/FluidR3_GM/**  
-  (Benjamin Gleitzmani [midi-js-soundfonts](https://github.com/gleitz/midi-js-soundfonts) – GitHub Pages).
-- Iga instrument (klaver, viiul, kitarr jne) laetakse esimesel mängimisel võrgu kaudu; edaspidi on heli vahemälus.
-- See on **General MIDI**-ühilduv komplekt, sarnane MuseScore vaikimisi helidega, aga täiesti veebipõhine.
+- **Runtime URL:** `/sounds/FluidR3_GM/{instrument}-mp3.js`
+- **Kaust:** `public/sounds/FluidR3_GM/`
+- **Mängija:** `soundfont-player` + kaardistus `src/musical/soundLibrary.js`
+- **Uuenda faile:** `npm run sounds:fetch` (laeb ainult kasutatavad pillid; `deploy:cf` jooksutab sama enne build’i)
+- **Litsents / attribution:** `public/sounds/LICENSE.md` (FluidR3 MIT + midi-js-soundfonts packaging)
+
+Kasutajal ei ole vaja MuseScore’i ega MuseSounds’i. **MuseSounds on proprietary** ja ei kuulu Noodimeistri teeki.
+
+Faili avamisel käivitub **score load session** (`src/musical/scoreLoadSession.js`): eellaaditakse kõik failis kasutatud unikaalsed instrumendid (progress N/M). MIDI/Play ootavad sessiooni lõppu. Pärast seda on heli vahemälus; puuduva faili korral jääb oscillator-fallback + kasutajateade.
 
 ---
 
@@ -24,50 +28,67 @@ Noodimeister laeb **instrumentide helid otse veebist** (GitHub / CDN). Kasutajal
 - Tavaliselt sama struktuur kui MS2 või rakenduse kaustas `sound/`.
 
 ### MuseScore 4 (MuseHub)
-- Helipakid laaditakse alla **MuseHub**i kaudu.
-- Asukoht macOS-il: MuseHubi seadetes (Muse Hub → Settings) kuvatav “Sounds installation path”.
+- Helipakid laaditakse alla **MuseHub**i kaudu (MuseSounds = eraldi EULA; ei jaotata Noodimeistriga).
+- Asukoht macOS-il: MuseHubi seadetes “Sounds installation path”.
 - Windows: `C:\ProgramData\MuseHub\Downloads` (vaikimisi).
 
-MuseScore kasutab **General MIDI (GM)**-ühilduvat helikomplekti: 128 programmi (0–127), nii et MuseScore_General.sf3 ja Noodimeisteri vastendus on ühilduv iga GM SoundFontiga.
+MuseScore kasutab **General MIDI (GM)**-ühilduvat helikomplekti: 128 programmi (0–127), nii et FluidR3 / MuseScore_General ja Noodimeisteri vastendus on ühilduv.
 
 ---
 
-## Noodimeisteri instrument → GM program (MuseScore / üldine GM)
+## Noodimeisteri instrument → GM program / soundfont
 
-Noodimeister kasutab sama **instrument → GM program** vastendust, et klaviatuuri- ja noodisisestuse heli oleks kooskõlas MuseScore’i (ja teiste GM-rakendustega).
+Tõde on koodis: `INSTRUMENT_TO_GM_PROGRAM` ja `INSTRUMENT_TO_SOUNDFONT_NAME` failis `src/musical/soundLibrary.js`.
 
-| Noodimeister instrument | GM program | GM nimi (MuseScore / GM) |
-|-------------------------|------------|---------------------------|
-| piano | 0 | Acoustic Grand Piano |
-| organ | 19 | Church Organ |
-| harpsichord | 6 | Harpsichord |
-| accordion | 21 | Accordion |
-| guitar | 24 | Acoustic Guitar (nylon) |
-| ukulele-sopran, ukulele-tenor, ukulele-bariton | 24 | Acoustic Guitar (nylon) |
-| ukulele-bass | 32 | Acoustic Bass |
-| violin | 40 | Violin |
-| viola | 41 | Viola |
-| cello | 42 | Cello |
-| double-bass | 43 | Contrabass |
-| flute | 73 | Flute |
-| recorder | 74 | Recorder |
-| clarinet | 71 | Clarinet |
-| oboe | 68 | Oboe |
-| bassoon | 70 | Bassoon |
-| trumpet | 56 | Trumpet |
-| trombone | 57 | Trombone |
-| tuba | 58 | Tuba |
-| french-horn | 60 | French Horn |
-| tin-whistle | 75 | Whistle |
-| saxophone | 65 | Alto Sax |
-| voice | 52 | Choir Aahs |
-| single-staff-treble, single-staff-bass | 0 | Acoustic Grand Piano |
+| Noodimeister instrument | GM program | Soundfont name (FluidR3_GM) |
+|-------------------------|------------|------------------------------|
+| piano / single-staff-* | 0 | acoustic_grand_piano |
+| electric-piano | 4 | electric_piano_1 |
+| organ | 19 | church_organ |
+| harpsichord | 6 | harpsichord |
+| accordion | 21 | accordion |
+| celesta | 8 | celesta |
+| guitar / ukulele (sopran/tenor/bariton) | 24 | acoustic_guitar_nylon |
+| ukulele-bass / acoustic-bass | 32 | acoustic_bass |
+| electric-bass | 33 | electric_bass_finger |
+| violin | 40 | violin |
+| viola | 41 | viola |
+| cello | 42 | cello |
+| double-bass | 43 | contrabass |
+| strings-ensemble | 48 | string_ensemble_1 |
+| flute | 73 | flute |
+| recorder | 74 | recorder |
+| clarinet | 71 | clarinet |
+| oboe | 68 | oboe |
+| bassoon | 70 | bassoon |
+| trumpet | 56 | trumpet |
+| trombone | 57 | trombone |
+| tuba | 58 | tuba |
+| french-horn | 60 | french_horn |
+| tin-whistle-* | 78 | whistle |
+| saxophone | 65 | alto_sax |
+| voice | 52 | choir_aahs |
+| glockenspiel / metallophone | 9 | glockenspiel |
+| xylophone (sh Orff) | 13 | xylophone |
+| marimba / boomwhackers | 12 | marimba |
+| vibraphone | 11 | vibraphone |
+| handbells | 14 | tubular_bells |
+| triangle / sleighbells / windchimes | 112 | tinkle_bell |
+| agogo / cowbell / maracas / shakers | 113 | agogo |
+| claves / woodblock / temple-blocks / castanets / guiro | 115 | woodblock |
+| djembe / cajon | 116 | taiko_drum |
+| bongo / conga | 117 | melodic_tom |
+| cymbals | 119 | reverse_cymbal |
+| rainstick | 96 | fx_1_rain |
+| synth-lead | 80 | lead_1_square |
+| synth-pad | 88 | pad_2_warm |
 
-See tabel on koodis konstant `INSTRUMENT_TO_GM_PROGRAM` ja SoundFont-mängija jaoks `INSTRUMENT_TO_SOUNDFONT_NAME` (FluidR3_GM / MusyngKite või muu GM SoundFont).
+Klassiruumi/Orff rütmipillid kasutavad **erinevaid** GM tämbreid (mitte kõik `woodblock`).
 
 ---
 
 ## Noodimeisteris
 
-- **Klaviatuur ja “noot sisestamisel mängib”**: heli valitakse valitud **tööriista instrumendi** (Instrumendid-toolbox) järgi. Helid laetakse **veebist** (ülal nimetatud GitHub Pages CDN); kasutaja ei pea MuseScore'i ega ühtegi teist tarkvara laadima.
-- Esimesel mängimisel võib ühe hetke kesta instrumendi helifaili laadimine; seejärel mängib valitud instrument GM-heli (MuseScore-moodi).
+- **Klaviatuur ja “noot sisestamisel mängib”**: heli valitakse valitud **tööriista instrumendi** (Instrumendid-toolbox) järgi.
+- Helid tulevad **oma hostist** (`/sounds/...`); esimesel mängimisel võib olla lühike laadimine.
+- Arendus: pärast clone’i või kui heli puudub → `npm run sounds:fetch`.

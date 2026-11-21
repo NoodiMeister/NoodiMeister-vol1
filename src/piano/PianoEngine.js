@@ -42,10 +42,12 @@ export function usePianoEngine(options = {}) {
   }, []);
 
   const playNote = useCallback(
-    (pitch) => {
+    (pitch, options = {}) => {
       const midi = Number(pitch);
       if (!Number.isFinite(midi) || midi < 0 || midi > 127) return;
       setActiveNotes((prev) => (prev.includes(midi) ? prev : [...prev, midi]));
+      // silent: ainult visuaalne activeNotes — heli tuleb app’i soundfontist (õige instrument).
+      if (options && options.silent) return;
       stopOscillator(midi);
       const ctx = ensureAudioContext();
       if (ctx.state === 'suspended') ctx.resume();

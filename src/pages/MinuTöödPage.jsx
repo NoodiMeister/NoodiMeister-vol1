@@ -8,7 +8,9 @@ import { LOCALE_STORAGE_KEY, DEFAULT_LOCALE, LOCALES, getTranslations } from '..
 import { AppLogo } from '../components/AppLogo';
 import { useNoodimeisterOptional } from '../store/NoodimeisterContext';
 import { openCloudFileInNewBrowserTab } from '../utils/appUrls';
-import { runPdfImportPipeline } from '../import/pdf/pdfImportPipeline';
+import { preparePdfImportSuggestions, runPdfImportPipeline } from '../import/pdf/pdfImportPipeline';
+import PdfOmrGuidedSetup from '../components/import/PdfOmrGuidedSetup';
+import PdfOmrReviewPanel from '../components/import/PdfOmrReviewPanel';
 import { isComposerFileName } from '../document/composerDocumentModel';
 
 function getProjectFileHref(basePath, file, cloud) {
@@ -157,6 +159,11 @@ export default function MinuTöödPage() {
   const [projectSummaries, setProjectSummaries] = useState({});
   const [importingMusicXml, setImportingMusicXml] = useState(false);
   const [importingPdf, setImportingPdf] = useState(false);
+  const [pdfOmrFile, setPdfOmrFile] = useState(null);
+  const [pdfOmrSuggestions, setPdfOmrSuggestions] = useState(null);
+  const [pdfOmrStep, setPdfOmrStep] = useState(null); // 'guided' | 'review' | null
+  const [pdfOmrReport, setPdfOmrReport] = useState(null);
+  const [pdfOmrConstraints, setPdfOmrConstraints] = useState(null);
   const settingsRef = useRef(null);
   const importMusicXmlInputRef = useRef(null);
   const importPdfInputRef = useRef(null);
@@ -556,6 +563,15 @@ export default function MinuTöödPage() {
     }
   }, [navigate, basePath]);
 
+  const resetPdfOmrFlow = useCallback(() => {
+    setPdfOmrFile(null);
+    setPdfOmrSuggestions(null);
+    setPdfOmrStep(null);
+    setPdfOmrReport(null);
+    setPdfOmrConstraints(null);
+    setImportingPdf(false);
+  }, []);
+
   const handleImportPdfFromMyWorks = useCallback(async (e) => {
     const file = e.target?.files?.[0];
     if (!file) return;
@@ -568,33 +584,78 @@ export default function MinuTöödPage() {
     setImportingPdf(true);
     setError(null);
     try {
-      const pendingImport = {
-        file,
-        fileName: file.name || '',
-        fileSize: Number(file.size || 0),
-        fileType: file.type || 'application/pdf',
-        importedAt: Date.now(),
-      };
-      const report = await runPdfImportPipeline({ pendingImport });
-      sessionStorage.setItem('nm:pending-pdf-import', JSON.stringify({
-        pendingImport: {
-          fileName: pendingImport.fileName,
-          fileSize: pendingImport.fileSize,
-          fileType: pendingImport.fileType,
-          importedAt: pendingImport.importedAt,
-        },
-        report,
-      }));
-      const targetUrl = `${basePath}/app?new=1&importPdf=1`;
-      if (typeof window !== 'undefined') window.location.assign(targetUrl);
-      else navigate(targetUrl);
+      const suggestions = await preparePdfImportSuggestions(file);
+      setPdfOmrFile(file);
+      setPdfOmrSuggestions(suggestions);
+      setPdfOmrReport(null);
+      setPdfOmrConstraints(null);
+      setPdfOmrStep('guided');
     } catch (err) {
       setError(err?.message || 'PDF faili ettevalmistus ebaõnnestus');
+      resetPdfOmrFlow();
     } finally {
       setImportingPdf(false);
       e.target.value = '';
     }
-  }, [navigate, basePath]);
+  }, [resetPdfOmrFlow]);
+
+  const handlePdfOmrGuidedConfirm = useCallback(async (constraints) => {
+    if (!pdfOmrFile) return;
+    setImportingPdf(true);
+    setError(null);
+    setPdfOmrConstraints(constraints);
+    try {
+      const pendingImport = {
+        file: pdfOmrFile,
+        fileName: pdfOmrFile.name || '',
+        fileSize: Number(pdfOmrFile.size || 0),
+        fileType: pdfOmrFile.type || 'application/pdf',
+        importedAt: Date.now(),
+      };
+      const report = await runPdfImportPipeline({ pendingImport, constraints });
+      setPdfOmrReport(report);
+      setPdfOmrStep('review');
+    } catch (err) {
+      setError(err?.message || 'PDF OCR/AI analüüs ebaõnnestus');
+      setPdfOmrStep('guided');
+    } finally {
+      setImportingPdf(false);
+    }
+  }, [pdfOmrFile]);
+
+  const handlePdfOmrReviewApply = useCallback(() => {
+    if (!pdfOmrReport?.ok || !pdfOmrFile) {
+      setError('PDF mustand puudub — tee GuidedSetup uuesti.');
+      return;
+    }
+    try {
+      // sessionStorage quota: drop heavy page bitmaps after review
+      const reportForApply = {
+        ...pdfOmrReport,
+        reviewCompleted: true,
+        createNewOnly: true,
+        pagePreviews: [],
+        draftProject: pdfOmrReport.draftProject,
+        noteMarkers: pdfOmrReport.noteMarkers || [],
+        constraintsApplied: pdfOmrConstraints || pdfOmrReport.constraintsApplied,
+      };
+      sessionStorage.setItem('nm:pending-pdf-import', JSON.stringify({
+        pendingImport: {
+          fileName: pdfOmrFile.name || '',
+          fileSize: Number(pdfOmrFile.size || 0),
+          fileType: pdfOmrFile.type || 'application/pdf',
+          importedAt: Date.now(),
+        },
+        report: reportForApply,
+      }));
+      resetPdfOmrFlow();
+      const targetUrl = `${basePath}/app?new=1&importPdf=1`;
+      if (typeof window !== 'undefined') window.location.assign(targetUrl);
+      else navigate(targetUrl);
+    } catch (err) {
+      setError(err?.message || 'PDF mustandi salvestamine ebaõnnestus (võimalik sessionStorage limiit)');
+    }
+  }, [pdfOmrReport, pdfOmrFile, pdfOmrConstraints, basePath, navigate, resetPdfOmrFlow]);
 
   const handleDeleteGoogleFile = useCallback(async (fileId, fileName) => {
     const msg = (t['file.deleteConfirm'] || 'Kas kustutame faili "{name}"? Seda ei saa tagasi võtta.').replace('{name}', fileName || '');
@@ -1027,12 +1088,14 @@ export default function MinuTöödPage() {
             <button
               type="button"
               onClick={() => importPdfInputRef.current?.click()}
-              disabled={importingPdf}
+              disabled={importingPdf || !!pdfOmrStep}
               className="inline-flex items-center gap-2 px-6 py-3 rounded-xl border-2 border-amber-400 bg-white dark:bg-zinc-900 text-amber-800 dark:text-white font-semibold hover:bg-amber-50 dark:hover:bg-white/10 transition-colors disabled:opacity-60"
-              title="Impordi PDF fail"
+              title="Impordi PDF fail (guided OCR/AI)"
             >
-              {importingPdf ? <Loader2 className="w-5 h-5 animate-spin" /> : <FolderOpen className="w-5 h-5" />}
-              {importingPdf ? 'Valmistan PDF importi…' : 'Impordi töö (PDF)'}
+              {importingPdf || pdfOmrStep ? <Loader2 className="w-5 h-5 animate-spin" /> : <FolderOpen className="w-5 h-5" />}
+              {importingPdf || pdfOmrStep
+                ? (pdfOmrStep === 'review' ? 'PDF ülevaatus…' : pdfOmrStep === 'guided' ? 'PDF andmed…' : 'Valmistan PDF importi…')
+                : 'Impordi töö (PDF)'}
             </button>
             {(hasGoogle || hasMicrosoft) && (
               <button
@@ -1640,6 +1703,26 @@ export default function MinuTöödPage() {
               </div>
             </div>
           </div>
+        )}
+
+        {pdfOmrStep === 'guided' && (
+          <PdfOmrGuidedSetup
+            fileName={pdfOmrFile?.name || pdfOmrSuggestions?.fileName || ''}
+            suggestions={pdfOmrSuggestions}
+            constraints={pdfOmrConstraints}
+            busy={importingPdf}
+            onCancel={resetPdfOmrFlow}
+            onConfirm={handlePdfOmrGuidedConfirm}
+          />
+        )}
+        {pdfOmrStep === 'review' && pdfOmrReport && (
+          <PdfOmrReviewPanel
+            report={pdfOmrReport}
+            busy={importingPdf}
+            onBack={() => setPdfOmrStep('guided')}
+            onCancel={resetPdfOmrFlow}
+            onConfirmApply={handlePdfOmrReviewApply}
+          />
         )}
 
         {renameOpen && (

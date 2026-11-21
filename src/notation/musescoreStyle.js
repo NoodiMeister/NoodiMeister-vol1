@@ -52,6 +52,9 @@ export const LYRIC_LINE_THICKNESS = 0.1;
 export const DOT_NOTE_DISTANCE = 0.5;
 export const DOT_REST_DISTANCE = 0.25;
 
+/** Gap from accidental right edge to notehead left (sp). MuseScore-like. */
+export const ACCIDENTAL_NOTE_DISTANCE = 0.22;
+
 // --- Glyph scaling (SMuFL: 1 em = 4 staff spaces) ---
 export const GLYPH_FONT_SIZE_SP = 4;
 export const REST_FONT_SIZE_SP = 4;
@@ -103,6 +106,15 @@ export function getLyricLineThickness(staffSpace) {
 
 export function getGlyphFontSize(staffSpace) {
   return staffSpace * GLYPH_FONT_SIZE_SP;
+}
+
+/**
+ * X for a note accidental with textAnchor="end" (glyph right edge).
+ * Clears notehead left by ACCIDENTAL_NOTE_DISTANCE staff spaces.
+ */
+export function getAccidentalAnchorXFromNoteCenter(noteCenterX, noteheadRx, staffSpace) {
+  const gap = Number(staffSpace) * ACCIDENTAL_NOTE_DISTANCE;
+  return Number(noteCenterX) - Number(noteheadRx) - (Number.isFinite(gap) ? gap : 0);
 }
 
 export function getRestFontSize(staffSpace) {

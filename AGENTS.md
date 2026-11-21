@@ -79,6 +79,7 @@ Kõik muudatused peavad hoidma kasutaja teekonnad tervena:
   - **Põhireegel:** staff-jooned, taktijooned ja glüüfid (võtmed, accidentalid, kordusmärgid jne) peavad lähtuma **samast ankruraamist** (`barlineFrame` / `anchorFrame`), mitte eraldi valemitest eri vaadetes.
   - **Ühik:** kõik paigutuskonstandid peavad olema väljendatud `staffSpace` suhtes; väldi “paljaid px” väärtusi renderi keskloogikas.
   - **Renderi jaotus:** geomeetrilised objektid (`line`/`path`) jäävad geomeetriaks; SMuFL sümbolid jäävad glüüfideks — kuid nende `x/y/size` arvutatakse samast raamistikust.
+  - **Juhuslikud märgid (noodile):** traditional vaates ♯/♭/♮ (ja 𝄪/𝄫) peavad olema **Leland SMuFL** glüüfid (`accidentalSharp` U+E262 jms), sama fondiga mis võtmemärgid — mitte Unicode tekst (`♯`/`♭`/`♮` + serif). Paigutus: `textAnchor=end`, vahe noodipeast `ACCIDENTAL_NOTE_DISTANCE` (MuseScore-like). Figuurnotatsioonis jäävad alteratsiooninooled.
   - **Kordusmärgid (kohustuslik):** `repeatStart/repeatEnd` ei tohi “hõljuda” ega dubleeruda lõpujoonega; kui taktil on `repeatEnd`, ei tohi sama ankru peal lisaks tekkida fallback-final-barline.
   - **Lõpujoon / topeltjoon (MuseScore UX):** kasutaja klikib topeltjoonele → sinine valikukast; Backspace/Delete eemaldab topeltjoone ja asendab üksiktaktijoonega (`barlineSingle` peidab ka skoori lõpu auto-final’i). Tööriistakasti „Lõpujoon (||)“ taastab topeltjoone.
   - **Avaankur (kohustuslik):** kui rea alguses on kordusmärk, peab taktimõõt/helistik jääma loetavaks; kattumine (`repeatStart` vs `time signature`/`key signature`) on regressioon.
@@ -169,7 +170,25 @@ Kõik muudatused peavad hoidma kasutaja teekonnad tervena:
   - **Heli:** preview ja score Play kasutavad `INSTRUMENT_TO_SOUNDFONT_NAME` (woodblock → `'woodblock'` / FluidR3_GM) + staff’i ankurpitch; ära mängi klaveri SF-i ega sisend-MIDI pitch’i.
   - Klaveririba **ei ole** unpitched sisestuse eeldus; Web MIDI kuulamine on app-tasemel eraldi (klaver võib jääda peidetuks).
   - Ulatus `C5–C5` ei blokeeri pad-/klahvisisestust (remapp enne range-kontrolli).
-  - Järgmine faas (mitte siin): mitme pilli percussion band + pad→staff map.
+  - Järgmine faas (mitte siin): mitme pilli percussion band + pad→staff map — **ainult** siis, kui kasutaja vajutab kaks+ padi/klahvi (korraga või eraldi padidele); see loogika **ei tohi** lekida pitched pillidele.
+
+- **Standard: pitched MIDI sisestus (klaver / meloodiapill)**
+  - **Üks klahv** (noteOn → noteOff, midagi muud all pole) → **üks noot** kursori beat’il; kursor liigub edasi pärast vabastust.
+  - **Mitu klahvi korraga all** → noodid samale beat’ile **akordina** (primary + chord tones); kursor edasi alles kui kõik vabastatud.
+  - Unpitched/pad multi-staff meetodikat **ei** rakendata pitched instrumentidele.
+  - **Heli alati:** iga MIDI `noteOn` mängib heli (ka ilma N-mode’ta / ilma sisestuseta) — õpetaja võib harjutada nagu päris klaveril.
+  - **Sisestus ainult N-mode:** SEL-režiimis MIDI ei lisa noote; N-mode’is peab **esimene** klahv juba jõudma noodigraafikasse.
+  - **Kuulamine app-tasemel:** Web MIDI listener on aktiivne noodigraafika avamisel (`setupCompleted`), mitte alles klaveririba avamisel; klaveririba avatud → app-MIDI pitched välja (ei topeltkuulamist).
+  - **Ühekordsed hüpikud (sessionStorage):** SEL-i esimene MIDI → juhenda N-mode + teiste MIDI-appide sulgemine; N-mode esimene MIDI → kinnitus + sama stabiilsusvihje. Teiste appide (Logic/MuseScore) automaatset tuvastust **ei** tee.
+  - Domeen: `src/musical/midiPitchedInputSession.js`; UI/MIDI: app-taseme `useMidiHandler` + klaveririba `onNotePlay` / `onNoteStop`.
+
+- **Standard: score load session (faili avamine — heli + paigutus)**
+  - Pärast projekti JSON-i rakendamist (`importProject` / pilv / desktop / import-apply) käivitub **loading-session**: (1) paigutuse paint (+ fondid), (2) failis esinevate **unikaalsete** `staves[].instrumentId` soundfontide eellaadimine.
+  - **UX:** hüpikaken (dialog) + udune taust (`backdrop-blur`); taustal joonistub noodigraafika / avatud töö. Progress **0–100%** (paigutus ~12%, heli ülejäänu instrumentide järgi).
+  - MIDI ja score Play on blokeeritud kuni sessioon `ready` (väldi oscillator-beepi valede tämbritega).
+  - Ühe soundfonti timeout/ebaõnnestumine ei lukusta igavesti: teised pillid jäävad cache’i + kasutajale selge teade.
+  - **Ei** käivitu tühja “uus töö” viisardi peal ega BroadcastChannel sync / notationCapture voogudes (`skipLoadSession`).
+  - Domeen: `src/musical/scoreLoadSession.js`; orkestreerimine `noodimeister-complete.jsx`.
 
 - **Standard: pedagoogiline C4-põhi (kirjutamispiirkond)**
   - Pedagoogilises režiimis (`vabanotatsioon` / kuvarežiimid A–C) on sisestuse **alumine ankur absoluutne C4** (MIDI ≥ 60).
@@ -249,6 +268,15 @@ Kõik muudatused peavad hoidma kasutaja teekonnad tervena:
   - **C) XML export:** Failimenüüst `Ekspordi MusicXML` peab salvestama `score-partwise` MusicXML-i (noodid/pausid, helistik, taktimõõt, eeltakt, multi-staff/brace, laulusõnad, akordisümbolid), mida saab avada MuseScore/Finale/Sibelius tüüpi programmides. Implementatsioon: `src/export/musicXmlExport.js`.
   - **No-overwrite + jälgitavus:** impordi käigus peab säilima failiohutus: “create new” vaikimisi, selge konfliktikäitumine (duplicate/rename/version) ja kasutajale arusaadav teade, mida imporditi, mida ei suudetud lugeda ja mida soovitatakse käsitsi kontrollida.
   - **Kvaliteedinõue:** import ei tohi “pakendada” kogu partituuri ühte instrumenti ilma nähtava hoiatuseta; part-id, staffid ja hääled peavad säilima nii täpselt kui sisend lubab. Kui täpne taastamine pole võimalik, tuleb see kasutajale selgelt välja tuua ning pakkuda parandatavat tulemust, mitte vaikset andmekadu.
+
+- **Standard: PDF/OMR import (käsikiri + skänn)**
+  - **Arhitektuur:** brauser (pdf.js lehed, GuidedSetup, review) + meie server (`POST /api/import/omr`). Metadata tuleb **guided**; AI ei kirjuta struktuurivälju lõplikuks ilma kasutaja kinnituseta.
+  - **Guided metadata (kohustuslik enne apply):** pealkiri, instrument/staffid, taktimõõt, helistik, `notationMode` (traditional / figurenotes / pedagogical). AI võib soovitada; failinime ei rakendata pealkirjaks vaikimisi ilma kinnituseta.
+  - **AI loeb peamiselt:** noodid + rütmid (+ soovi korral laulusõnad/tekstikastid). Pausid/taktijaotus järgivad kasutaja taktimõõtu (ajatelje auke ei jäeta). Kordusmärgid/artikulatsioonid MVP-s: hoiatus “ei tuvastatud”, mitte vale glüüf.
+  - **Allika tüübid:** `text-layer` | `printed-scan` | `handwritten`. Käsikiri ja skänn → serveri OMR + **review alati kohustuslik**. Text-layer võib olla kiirem tee, aga GuidedSetup + import-raport jäävad.
+  - **Confidence:** sündmus ≥0.85 OK; 0.55…0.85 kollane marker; alla 0.55 või taktimõõdu konflikt → punane marker / paus või unknown slot. Raportis peab olema “N kohta vajab kontrolli”.
+  - **Apply:** ainult **create new** (no-overwrite). `reviewCompleted` peab olema true enne mustandi rakendamist app’is. Multi-staff kadu ei tohi olla vaikne.
+  - **Implementatsioon:** `src/import/pdf/**`, UI `src/components/import/**`, API `api/import/omr.js`.
 
 - **Standard: selection state machine (kohustuslik kõikides režiimides)**
   - **Üks tõde valikule:** valik on üks mudel (`selectionModel`), millel on selged tüübid: `none`, `singleNote`, `noteRange`, `measureRange`, `singleObject` (nt repeat mark), `objectList` (katkendlikud objektid). Ära hoia paralleelseid "peidetud tõdesid".

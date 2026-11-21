@@ -5,6 +5,7 @@
 import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { InteractivePiano } from '../piano';
+import { shouldComputerKeysPlayPianoMap } from '../piano/pianoKeyboardGuards';
 import { FIGURENOTES_COLORS } from '../utils/figurenotes';
 
 // --- MIDI abifunktsioonid (klaviatuuri vahemik ja noodi nimetused) ---
@@ -187,7 +188,12 @@ export function PianoSection({
             figurenotesColors={notationStyle === 'FIGURENOTES' || notationMode === 'pedagogical' ? FIGURENOTES_COLORS : null}
             keySignature={keySignature}
             useTraditionalNoteNames={notationStyle === 'FIGURENOTES'}
-            keyboardPlaysPiano={notationStyle === 'FIGURENOTES' || notationMode === 'pedagogical'}
+            keyboardPlaysPiano={shouldComputerKeysPlayPianoMap({
+              notationStyle,
+              notationMode,
+              noteInputMode,
+              pianoStripVisible: visible,
+            })}
           />
         </div>
       </div>

@@ -6,6 +6,8 @@ import ComposerCanvas from '../components/composer/ComposerCanvas';
 import ComposerInspector from '../components/composer/ComposerInspector';
 import ComposerWritingToolbar from '../components/composer/ComposerWritingToolbar';
 import ComposerFileInfoDialog from '../components/composer/ComposerFileInfoDialog';
+import ComposerFileMenu from '../components/composer/ComposerFileMenu';
+import ComposerGoogleDriveImportPicker from '../components/composer/ComposerGoogleDriveImportPicker';
 import ComposerImportTimeline from '../components/composer/ComposerImportTimeline';
 import {
   createComposerImportTimeline,
@@ -24,6 +26,7 @@ import {
   createComposerTextBox,
   getPageOrientation,
   isComposerDocumentJson,
+  isComposerFileName,
   normalizeComposerDocument,
   parseComposerFileTitle,
   splitComposerBlock,
@@ -35,6 +38,7 @@ import { exportComposerToPdf, printComposerDocument } from '../export/composerEx
 import * as googleDrive from '../services/googleDrive';
 import * as oneDrive from '../services/oneDrive';
 import * as authStorage from '../services/authStorage';
+import { LOCALE_STORAGE_KEY, DEFAULT_LOCALE, getTranslations } from '../i18n';
 
 function downloadText(name, text) {
   const blob = new Blob([text], { type: 'application/json;charset=utf-8' });
@@ -78,6 +82,18 @@ export default function ComposerPage() {
   const [fileInfoError, setFileInfoError] = useState('');
   const [fileInfoBusy, setFileInfoBusy] = useState(false);
   const [importTimeline, setImportTimeline] = useState(null);
+  const [googleImportOpen, setGoogleImportOpen] = useState(false);
+  const [googleImportLoading, setGoogleImportLoading] = useState(false);
+  const [googleImportError, setGoogleImportError] = useState('');
+  const [googleImportRows, setGoogleImportRows] = useState([]);
+  const [locale] = useState(() => {
+    try {
+      return localStorage.getItem(LOCALE_STORAGE_KEY) || DEFAULT_LOCALE;
+    } catch {
+      return DEFAULT_LOCALE;
+    }
+  });
+  const t = useMemo(() => getTranslations(locale), [locale]);
   const importProjectRef = useRef(null);
   const importComposerRef = useRef(null);
   const loadedFileIdRef = useRef('');
@@ -245,6 +261,81 @@ export default function ComposerPage() {
 
   const handleUploadProject = useCallback(() => importProjectRef.current?.click(), []);
   const handleUploadComposer = useCallback(() => importComposerRef.current?.click(), []);
+
+  const isNotationCloudFileName = useCallback((name) => {
+    const lower = String(name || '').toLowerCase();
+    if (!lower) return false;
+    if (isComposerFileName(lower)) return false;
+    return lower.endsWith('.nm') || lower.endsWith('.noodimeister') || lower.endsWith('.json');
+  }, []);
+
+  const openGoogleDriveImportPicker = useCallback(async () => {
+    const access = authStorage.assertCloudAccess('google', 'Google Drive import');
+    if (!access.ok) {
+      setFeedback(access.error || (t['composer.import.googleAccessError'] || 'Google Drive ligipääs puudub. Logi sisse Minu tööd lehel.'));
+      return;
+    }
+    const token = googleDrive.getStoredToken();
+    if (!token) {
+      setFeedback(t['composer.import.googleLoginHint'] || 'Logi sisse Google’iga, et importida Drive’ist.');
+      return;
+    }
+
+    setGoogleImportError('');
+    setGoogleImportRows([]);
+    setGoogleImportOpen(true);
+    setGoogleImportLoading(true);
+    try {
+      const [owned, shared] = await Promise.all([
+        googleDrive.listNoodimeisterFiles(token, { pageSize: 100 }),
+        googleDrive.listNoodimeisterFilesSharedWithMe(token),
+      ]);
+      const byId = new Map();
+      for (const f of owned || []) {
+        if (f?.id && isNotationCloudFileName(f.name)) byId.set(f.id, { ...f, fromShared: false });
+      }
+      for (const f of shared || []) {
+        if (f?.id && isNotationCloudFileName(f.name) && !byId.has(f.id)) {
+          byId.set(f.id, { ...f, fromShared: true });
+        }
+      }
+      const rows = Array.from(byId.values()).sort((a, b) => {
+        const ta = new Date(a.modifiedTime || 0).getTime();
+        const tb = new Date(b.modifiedTime || 0).getTime();
+        return tb - ta;
+      });
+      setGoogleImportRows(rows);
+    } catch (e) {
+      setGoogleImportError(e?.message || (t['file.loadCloudPickerListError'] || 'Failide nimekirja ei saanud laadida.'));
+    } finally {
+      setGoogleImportLoading(false);
+    }
+  }, [isNotationCloudFileName, t]);
+
+  const importNotationFromGoogleDrive = useCallback(async (row) => {
+    if (!row?.id) return;
+    setGoogleImportOpen(false);
+    beginImport('cloudNotation');
+    advanceImport(0, 'Google Drive');
+    try {
+      const token = googleDrive.getStoredToken();
+      if (!token) throw new Error(t['composer.import.googleLoginHint'] || 'Google Drive sessioon puudub.');
+      const raw = await googleDrive.getFileContent(token, row.id);
+      advanceImport(1, row.name || row.id);
+      if (isComposerDocumentJson(raw)) {
+        throw new Error(t['composer.import.notNotationFile'] || 'See on kujundusfail (.nmc). Vali nooditöö (.nm).');
+      }
+      advanceImport(2, row.name || 'Noodiprojekt');
+      const { successDetail } = await addProjectJsonAsBlock(raw, row.name || `google:${row.id}`, {
+        timelineType: 'cloudNotation',
+        manageTimeline: false,
+      });
+      finishImport(true, successDetail);
+    } catch (e) {
+      finishImport(false, e?.message || 'Google Drive’i import ebaõnnestus.');
+      setFeedback(e?.message || (t['composer.import.googleFailed'] || 'Google Drive’i import ebaõnnestus.'));
+    }
+  }, [addProjectJsonAsBlock, advanceImport, beginImport, finishImport, t]);
 
   const onProjectFileChange = useCallback(async (e) => {
     const file = e.target.files?.[0];
@@ -671,10 +762,21 @@ export default function ComposerPage() {
   }, [activeBlockId, deleteActiveBlock, editingBlockId, saveToCloud]);
 
   const showWritingToolbar = toolMode === 'text' || activeBlock?.type === 'text';
+  const cloudProviderLabel = (openedCloudFile?.provider || preferredCloud) === 'onedrive' ? 'OneDrive' : 'Google';
   const cloudSaveLabel = openedCloudFile?.fileId
-    ? `Salvesta (${openedCloudFile.provider === 'onedrive' ? 'OneDrive' : 'Google'})`
-    : `Salvesta pilve (${preferredCloud === 'onedrive' ? 'OneDrive' : 'Google'})`;
+    ? `${t['composer.file.saveUpdate'] || 'Salvesta (avatud fail)'} · ${cloudProviderLabel}`
+    : `${t['composer.file.saveNew'] || 'Salvesta pilve'} · ${cloudProviderLabel}`;
   const displayFileName = openedCloudFile?.fileName || buildComposerFileName(doc.meta?.title);
+  const fileMenuLabels = {
+    menu: t['file.menu'] || 'Fail',
+    menuTitle: t['composer.file.menuTitle'] || 'Fail: uus, salvesta, minu konto',
+    newFile: t['composer.file.new'] || 'Uus fail',
+    newTitle: t['composer.file.newTitle'] || 'Alusta uut kujundust',
+    save: t['composer.file.save'] || 'Salvesta',
+    saveTitle: t['composer.file.saveTitle'] || 'Salvesta pilve (sama fail või uus)',
+    saveLocal: t['composer.file.saveLocal'] || 'Salvesta arvutisse',
+    goToAccount: t['composer.file.goToAccount'] || 'Mine minu kontole',
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-amber-50 via-orange-50 to-amber-100 dark:bg-black">
@@ -689,6 +791,13 @@ export default function ComposerPage() {
                   {displayFileName}
                 </span>
               </div>
+              <ComposerFileMenu
+                labels={fileMenuLabels}
+                saveLabel={cloudSaveLabel}
+                onNewFile={startNewDocument}
+                onSave={() => saveToCloud()}
+                onSaveLocal={saveLocal}
+              />
             </div>
             <button
               type="button"
@@ -698,15 +807,6 @@ export default function ComposerPage() {
               Faili andmed
             </button>
             <div className="flex items-center gap-2 flex-wrap">
-              <button type="button" onClick={startNewDocument} className="px-3 py-2 rounded-lg border border-amber-300 text-sm font-medium text-amber-900 dark:text-white hover:bg-amber-100 dark:hover:bg-white/10">
-                Uus kujundus
-              </button>
-              <button type="button" onClick={saveLocal} className="px-3 py-2 rounded-lg border border-amber-300 text-sm font-medium text-amber-900 dark:text-white hover:bg-amber-100 dark:hover:bg-white/10">
-                Salvesta arvutisse
-              </button>
-              <button type="button" onClick={() => saveToCloud()} className="px-3 py-2 rounded-lg bg-amber-600 text-white text-sm font-medium hover:bg-amber-500" title="Cmd/Ctrl+S">
-                {cloudSaveLabel}
-              </button>
               <button type="button" onClick={() => exportComposerToPdf(doc, `${buildComposerFileName(doc.meta?.title).replace(/\.nmc$/i, '')}.pdf`)} className="px-3 py-2 rounded-lg border border-amber-300 text-sm font-medium text-amber-900 dark:text-white hover:bg-amber-100 dark:hover:bg-white/10">
                 Export PDF
               </button>
@@ -736,6 +836,27 @@ export default function ComposerPage() {
       <input ref={importProjectRef} type="file" accept=".nm,.noodimeister,.json" className="hidden" onChange={onProjectFileChange} />
       <input ref={importComposerRef} type="file" accept=".nmc,.json" className="hidden" onChange={onComposerFileChange} />
 
+      <ComposerGoogleDriveImportPicker
+        open={googleImportOpen}
+        loading={googleImportLoading}
+        error={googleImportError}
+        rows={googleImportRows}
+        locale={locale}
+        labels={{
+          title: t['composer.import.googleTitle'] || 'Lisa Google Drive’ist',
+          intro: t['composer.import.googleIntro'] || 'Vali nooditöö (.nm), et lisada see praegusesse kujundusse plokina.',
+          loading: t['file.loadCloudPickerLoading'] || 'Laadin failide nimekirja…',
+          empty: t['composer.import.googleEmpty'] || 'Google Drive’is ei leitud nooditöid (.nm).',
+          shared: t['file.loadCloudPickerShared'] || 'jagatud',
+          close: t['file.loadCloudPickerClose'] || 'Sulge',
+        }}
+        onClose={() => {
+          setGoogleImportOpen(false);
+          setGoogleImportError('');
+        }}
+        onPick={importNotationFromGoogleDrive}
+      />
+
       <main className="max-w-[1500px] mx-auto p-4 grid grid-cols-1 xl:grid-cols-[280px_minmax(0,1fr)_280px] gap-4">
         <ComposerSidebar
           blocks={activePage?.blocks || []}
@@ -744,6 +865,8 @@ export default function ComposerPage() {
           onBlockLayerChange={(layer) => patchActiveBlock({ layer })}
           onUploadProject={handleUploadProject}
           onUploadComposer={handleUploadComposer}
+          onImportFromGoogleDrive={openGoogleDriveImportPicker}
+          googleDriveImportLabel={t['composer.import.googleButton'] || 'Lisa Google Drive’ist'}
           onAddTextPreset={addTextPreset}
           onAddPage={addPage}
           onSelectBlock={(id) => {

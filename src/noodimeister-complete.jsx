@@ -5,6 +5,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { InteractivePiano, useMidiHandler } from './piano';
 import { shouldComputerKeysPlayPianoMap } from './piano/pianoKeyboardGuards';
 import { resolveUnpitchedHitPitch } from './musical/unpitchedRhythmInput';
+import { createMidiPitchedInputSession } from './musical/midiPitchedInputSession';
 import * as googleDrive from './services/googleDrive';
 import * as oneDrive from './services/oneDrive';
 import * as authStorage from './services/authStorage';
@@ -53,9 +54,9 @@ import { getFigureStyle, getShapePathsByOctave, FIGURENOTES_CROSS_PATHS } from '
 import { getChromaNotesColor, getPedagogicalSymbol, getSchoolHandbellColor } from './notation/PedagogicalLogic';
 import { FigurenotesBlockIcon, RhythmIcon, RhythmPatternIcon, MeterIcon, PedagogicalMeterIcon } from './toolboxes';
 import { SmuflGlyph } from './notation/smufl/SmuflGlyph';
-import { SMUFL_GLYPH, NOTEHEAD_SHAPE_GLYPH } from './notation/smufl/glyphs';
+import { SMUFL_GLYPH, NOTEHEAD_SHAPE_GLYPH, smuflAccidentalForAlter } from './notation/smufl/glyphs';
 import { getAugmentationDotCenterPitchY, getAugmentationDotXFromNoteCenter } from './notation/augmentationDotLayout';
-import { getGlyphFontSize } from './notation/musescoreStyle';
+import { getGlyphFontSize, getAccidentalAnchorXFromNoteCenter } from './notation/musescoreStyle';
 import { FigurenotesView } from './views/FigurenotesView';
 import { TraditionalNotationView } from './views/TraditionalNotationView';
 import { HandSignDegreeStaffView, getHandSignStaffGeometry } from './views/HandSignDegreeStaffView';
@@ -119,7 +120,14 @@ import {
   getEffectiveAccidental,
   pitchOctaveToMidi as pitchOctaveToMidiShared,
 } from './musical/transpose';
-import { getPitchFromMidi } from './musical/PitchInputLogic';
+import { getPitchFromMidi, resolveSpellingForMidiInKey as resolveSpellingForMidiInKeyShared } from './musical/PitchInputLogic';
+import {
+  SCORE_LOAD_PHASE_LAYOUT,
+  SCORE_LOAD_PHASE_SOUNDS,
+  collectInstrumentIdsFromProject,
+  computeLoadProgressPercent,
+  runScoreLoadSession,
+} from './musical/scoreLoadSession.js';
 import {
   measureLengthInQuarterBeats,
   durationLabelToQuarterNoteUnits,
@@ -1879,31 +1887,9 @@ function getAccidentalForPianoKey(midiNumber, keySignature) {
   return useFlat ? -1 : 1;
 }
 
+/** MIDI spelling — üks tõde: src/musical/PitchInputLogic.js (MuseScore ♭7/Bb, mitte A#). */
 function resolveSpellingForMidiInKey(midiNumber, keySignature = 'C') {
-  const n = Number(midiNumber);
-  if (!Number.isFinite(n) || n < 0 || n > 127) return null;
-  const midiPc = ((n % 12) + 12) % 12;
-  const letters = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
-  const pitchClass = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
-  const candidates = [null, 0, 1, -1];
-  let best = null;
-  for (const letter of letters) {
-    const keyAcc = getAccidentalForPitchInKey(letter, keySignature);
-    for (const explicitAcc of candidates) {
-      const effAcc = explicitAcc == null ? keyAcc : explicitAcc;
-      const pc = ((pitchClass[letter] + effAcc) % 12 + 12) % 12;
-      if (pc !== midiPc) continue;
-      const octave = Math.floor((n - pc) / 12) - 1;
-      if (!Number.isFinite(octave)) continue;
-      const isImplicit = explicitAcc == null;
-      const needsNatural = explicitAcc === 0 && keyAcc !== 0;
-      const score =
-        (isImplicit ? 0 : needsNatural ? 1 : 2) * 10 +
-        (letter === 'F' || letter === 'C' ? 0 : 1);
-      if (!best || score < best.score) best = { pitch: letter, octave, accidental: explicitAcc, score };
-    }
-  }
-  return best;
+  return resolveSpellingForMidiInKeyShared(midiNumber, keySignature);
 }
 // FINGERING_TIN_WHISTLE, FINGERING_RECORDER on faili alguses var'iga
 
@@ -2176,6 +2162,12 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   const [pixelsPerBeat, setPixelsPerBeat] = useState(85); // laius löögi kohta (px), vaikimisi 85 (vastab noodigraafika vaikimisi suurusele)
   // Cursor time model: cursorPosition is absolute beat/time anchor; selectedDuration is separate input rhythm.
   const [cursorPosition, setCursorPosition] = useState(3);
+  const cursorPositionRef = useRef(cursorPosition);
+  cursorPositionRef.current = cursorPosition;
+  /** Pitched MIDI: primary + held chord tones; unpitched ei kasuta. */
+  const midiPitchedSessionRef = useRef(null);
+  if (!midiPitchedSessionRef.current) midiPitchedSessionRef.current = createMidiPitchedInputSession();
+  const midiPitchedPendingAdvanceRef = useRef(null);
   /** Cursor row: 0 = melody/top (noodirida), 1 = chord/bottom (akordirida või lugeri rida). Cmd/Ctrl+↑/↓ vahetab; partituuris sama loogika partii vahetamiseks. */
   const [cursorSubRow, setCursorSubRow] = useState(0);
   const [keySignature, setKeySignature] = useState('C');
@@ -2235,6 +2227,9 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   const pianoStripWrapperRef = useRef(null); // klaviatuuri wrapper – laius mõõdetakse ResizeObserveriga
   const [pianoRangeNumbers, setPianoRangeNumbers] = useState({ first: 48, last: 72 }); // klaviatuuri vahemik MIDI (first, last); piirang 21–108
   const [pianoStripVisible, setPianoStripVisible] = useState(false); // klaviatuuri riba all – nähtav ka siis, kui avatud on Rütm vms
+  /** MIDI UX hüpik: 'sel' = test ilma N-mode’ta; 'nFirst' = esimene N-mode MIDI sessioonis. */
+  const [midiHintOpen, setMidiHintOpen] = useState(false);
+  const [midiHintKind, setMidiHintKind] = useState(/** @type {null | 'sel' | 'nFirst'} */ (null));
   const [timelinePanelVisible, setTimelinePanelVisible] = useState(false); // timeline panel alumises ribas
   const [videoTimelineClips, setVideoTimelineClips] = useState([]); // [{ id, name, url, durationSec, createdAt, mimeType }]
   /** Pedagoogilise alumise meedia-toolbar’i kõrgus (MP3 + animatsioon + noodijoon + video). */
@@ -2646,6 +2641,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         }
         setActiveToolbox(toolboxId);
         if (toolboxId === 'rhythm' && (notationStyle === 'TRADITIONAL' || notationMode === 'vabanotatsioon')) {
+          // Unpitched: effect peidab klaveri (MIDI app-tasemel). Siin avame meloodiapillidele.
           setPianoStripVisible(true);
           setTimelinePanelVisible(false);
         }
@@ -3596,6 +3592,18 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   const syncBroadcastTimeoutRef = useRef(null);
   const audioContextRef = useRef(null);
   const soundfontCacheRef = useRef(Object.create(null)); // soundfontPlayerCacheKey -> Soundfont player
+  /** Faili loading-session (paigutus + soundfontid); ref hoiab starterit importProject TDZ jaoks. */
+  const beginScoreLoadSessionRef = useRef(null);
+  const scoreLoadSessionGenRef = useRef(0);
+  const [scoreLoadSession, setScoreLoadSession] = useState({
+    active: false,
+    phase: SCORE_LOAD_PHASE_LAYOUT,
+    done: 0,
+    total: 1,
+    percent: 0,
+    instrumentId: null,
+    failedCount: 0,
+  });
   const activeSoundfontVoiceRef = useRef(null);
   const activeOscillatorStopRef = useRef(null);
   const activePreviewStopTimeoutRef = useRef(null);
@@ -3666,14 +3674,14 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     if (bodyOverflowRef.current == null) {
       bodyOverflowRef.current = body.style.overflow || '';
     }
-    const hasBlockingModal = newWorkSetupOpen || saveCloudDialogOpen || googleLoadPickerOpen || settingsOpen || shortcutsOpen || showPdfExportPreview || isInstrumentManagerOpen || saveLoadOpen;
+    const hasBlockingModal = newWorkSetupOpen || saveCloudDialogOpen || googleLoadPickerOpen || settingsOpen || shortcutsOpen || showPdfExportPreview || isInstrumentManagerOpen || saveLoadOpen || midiHintOpen;
     body.style.overflow = hasBlockingModal ? 'hidden' : bodyOverflowRef.current;
     return () => {
       if (body && bodyOverflowRef.current != null) {
         body.style.overflow = bodyOverflowRef.current;
       }
     };
-  }, [newWorkSetupOpen, saveCloudDialogOpen, googleLoadPickerOpen, settingsOpen, shortcutsOpen, showPdfExportPreview, isInstrumentManagerOpen, saveLoadOpen]);
+  }, [newWorkSetupOpen, saveCloudDialogOpen, googleLoadPickerOpen, settingsOpen, shortcutsOpen, showPdfExportPreview, isInstrumentManagerOpen, saveLoadOpen, midiHintOpen]);
 
   useEffect(() => {
     if (!isNewWorkFlow) return;
@@ -5631,7 +5639,8 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   }, [t]);
 
   // Re-hydrate workspace from JSON (future: can receive from cloud API)
-  const importProject = useCallback((data) => {
+  // options.skipLoadSession: BroadcastChannel sync / notationCapture (neil on oma ootevoog)
+  const importProject = useCallback((data, options = {}) => {
     if (!data || typeof data !== 'object') return false;
     try {
       if (Array.isArray(data.staves) && data.staves.length > 0) {
@@ -6020,11 +6029,17 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       clearDirty();
       setSaveFeedback(t('feedback.projectLoaded'));
       setTimeout(() => setSaveFeedback(''), 1800);
+      if (!options.skipLoadSession) {
+        const snapshot = data;
+        queueMicrotask(() => {
+          beginScoreLoadSessionRef.current?.(snapshot);
+        });
+      }
       return true;
     } catch (_) {
       return false;
     }
-  }, [clearDirty, notationCtx]);
+  }, [clearDirty, notationCtx, t]);
 
   // Cross-window sync (main score <-> part windows). Two-way, last-write-wins, avoids loops via sourceId+revision.
   useEffect(() => {
@@ -6040,7 +6055,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       syncLastAppliedRevisionRef.current = msg.revision;
       syncApplyingRemoteRef.current = true;
       try {
-        importProject(msg.payload);
+        importProject(msg.payload, { skipLoadSession: true });
       } finally {
         setTimeout(() => { syncApplyingRemoteRef.current = false; }, 0);
       }
@@ -6072,7 +6087,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     const runCapture = async (project) => {
       try {
         if (!project || typeof project !== 'object') throw new Error('Projekti andmed puuduvad.');
-        if (!importProject(project)) throw new Error('Projekti laadimine ebaõnnestus.');
+        if (!importProject(project, { skipLoadSession: true })) throw new Error('Projekti laadimine ebaõnnestus.');
 
         await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
         try {
@@ -7362,24 +7377,51 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     try {
       suppressAutoNewWorkSetupRef.current = true;
       setNewWorkSetupOpen(false);
-      beginImportTimeline('pdf', ['PDF vastu voetud', 'Tekstikiht loetud', 'Sisu analuuesitud', 'Editable mustand loodud', 'Valmis'], 0.55);
+      beginImportTimeline('pdf', ['PDF vastu võetud', 'Guided andmed', 'OCR/AI analüüs', 'Ülevaatus kinnitatud', 'Uus töö loodud'], 0.55);
       const raw = sessionStorage.getItem('nm:pending-pdf-import');
       const payload = raw ? JSON.parse(raw) : null;
       const report = payload?.report || null;
       const pendingMeta = payload?.pendingImport || null;
       const fileName = String(pendingMeta?.fileName || '').trim();
       if (!report?.ok) throw new Error('PDF import report puudub');
+      // AGENTS: apply only after GuidedSetup + review (create-new)
+      if (!report.reviewCompleted) {
+        setSaveFeedback('PDF import vajab GuidedSetup + ülevaatuse kinnitust Minu tööd lehel');
+        setTimeout(() => setSaveFeedback(''), 4500);
+        finishImportTimeline(false, 0.4);
+        sessionStorage.removeItem('nm:pending-pdf-import');
+        setSearchParams((prev) => {
+          const next = new URLSearchParams(prev);
+          next.delete('importPdf');
+          return next;
+        });
+        return;
+      }
       advanceImportTimeline(1, 0.62);
       advanceImportTimeline(2, report?.confidence?.score || 0.7);
-
       advanceImportTimeline(3, report?.confidence?.score || 0.74);
+
+      // Create-new only: never bind to a previous cloud file id
+      try {
+        if (typeof sessionStorage !== 'undefined') {
+          sessionStorage.removeItem('nm:open-cloud-file');
+          sessionStorage.removeItem('nm:current-cloud-file-id');
+        }
+      } catch { /* ignore */ }
+
       const applied = report?.draftProject ? importProject(report.draftProject) : false;
       const notesCount = report?.draftProject?.staves?.[0]?.notes?.length || 0;
+      const needsReview = Number(report?.noteMarkers?.length || 0);
+      const bands = report?.confidence?.bands || {};
       if (applied) {
-        if (fileName) setLocalProjectFileName(fileName);
+        if (fileName) setLocalProjectFileName(String(fileName).replace(/\.pdf$/i, '') + '.nm');
         const prefix = fileName ? `PDF "${fileName}"` : 'PDF';
-        setSaveFeedback(`${prefix} imporditud muudetava mustandina (${notesCount} nooti). Kontrolli rütmid/hääled.`);
-        setTimeout(() => setSaveFeedback(''), 5500);
+        const reviewHint =
+          needsReview > 0
+            ? ` ${needsReview} kohta vajab kontrolli (kollane ${bands.yellow || 0} / punane ${bands.red || 0}).`
+            : ' Kontrolli rütmid ja hääled.';
+        setSaveFeedback(`${prefix} imporditud uue tööna (${notesCount} nooti).${reviewHint}`);
+        setTimeout(() => setSaveFeedback(''), 7000);
         finishImportTimeline(true, report?.confidence?.score || 0.78);
       } else {
         setSaveFeedback('PDF import ebaõnnestus: mustandi rakendamine ei õnnestunud');
@@ -7395,8 +7437,8 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       });
     } catch (err) {
       console.error(err);
-      setSaveFeedback('PDF importi ei saanud alustada');
-      setTimeout(() => setSaveFeedback(''), 3000);
+      setSaveFeedback('PDF importi ei saanud alustada. Proovi Minu tööd → Impordi töö (PDF) uuesti või sisesta käsitsi.');
+      setTimeout(() => setSaveFeedback(''), 4500);
       finishImportTimeline(false);
     }
   }, [searchParams, setSearchParams, importProject, beginImportTimeline, advanceImportTimeline, finishImportTimeline]);
@@ -8223,6 +8265,112 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     }
   }, [tuningReferenceNote, tuningReferenceOctave, tuningReferenceHz, instrument, stopPreviewNote]);
 
+  // Eellaadi aktiivse instrumendi soundfont (kui faili loading-session ei jookse juba kõiki pille).
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    if (scoreLoadSession.active) return undefined;
+    const instrumentId = staves?.[activeStaffIndex]?.instrumentId ?? instrument;
+    const soundfontName = soundfontNameForInstrumentId(instrumentId);
+    const soundfontPack = soundfontPackForInstrumentId(instrumentId);
+    const sfCacheKey = soundfontPlayerCacheKey(instrumentId);
+    if (soundfontCacheRef.current[sfCacheKey]) return undefined;
+    let cancelled = false;
+    let ctx = audioContextRef.current;
+    if (!ctx) {
+      try {
+        ctx = new (window.AudioContext || window.webkitAudioContext)();
+        audioContextRef.current = ctx;
+      } catch (_) {
+        return undefined;
+      }
+    }
+    Soundfont.instrument(ctx, soundfontName, {
+      soundfont: soundfontPack || SOUNDFONT_PACK,
+      format: SOUNDFONT_FORMAT,
+      nameToUrl: soundfontNameToUrl,
+    })
+      .then((player) => {
+        if (!cancelled) soundfontCacheRef.current[sfCacheKey] = player;
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [staves, activeStaffIndex, instrument, scoreLoadSession.active]);
+
+  const beginScoreLoadSession = useCallback(async (projectData) => {
+    if (typeof window === 'undefined') return;
+    if (isNotationCaptureMode) return;
+    const gen = ++scoreLoadSessionGenRef.current;
+    const ids = collectInstrumentIdsFromProject(projectData);
+    setScoreLoadSession({
+      active: true,
+      phase: SCORE_LOAD_PHASE_LAYOUT,
+      done: 0,
+      total: Math.max(1, ids.length),
+      percent: 0,
+      instrumentId: null,
+      failedCount: 0,
+    });
+    const ensureAudioContext = () => {
+      let ctx = audioContextRef.current;
+      if (!ctx) {
+        ctx = new (window.AudioContext || window.webkitAudioContext)();
+        audioContextRef.current = ctx;
+      }
+      if (ctx.state === 'suspended') {
+        try { ctx.resume(); } catch (_) { /* ignore */ }
+      }
+      return ctx;
+    };
+    try {
+      const result = await runScoreLoadSession(projectData, {
+        cache: soundfontCacheRef.current,
+        Soundfont,
+        ensureAudioContext,
+        isCancelled: () => gen !== scoreLoadSessionGenRef.current,
+        onPhase: (p) => {
+          if (gen !== scoreLoadSessionGenRef.current) return;
+          const phase = p.phase === 'ready' ? SCORE_LOAD_PHASE_SOUNDS : p.phase;
+          const done = p.done;
+          const total = Math.max(1, p.total);
+          const percent = p.phase === 'ready'
+            ? 100
+            : computeLoadProgressPercent({ phase: p.phase, done, total });
+          setScoreLoadSession((prev) => ({
+            ...prev,
+            active: p.phase !== 'ready',
+            phase,
+            done,
+            total,
+            percent,
+            instrumentId: p.instrumentId ?? null,
+          }));
+        },
+      });
+      if (gen !== scoreLoadSessionGenRef.current) return;
+      setScoreLoadSession({
+        active: false,
+        phase: SCORE_LOAD_PHASE_SOUNDS,
+        done: Math.max(1, ids.length),
+        total: Math.max(1, ids.length),
+        percent: 100,
+        instrumentId: null,
+        failedCount: result.failed?.length || 0,
+      });
+      if (result.failed?.length) {
+        setSaveFeedback(
+          t('loading.scoreSoundsPartial')
+            || `Mõne instrumendi heli ei õnnestunud laadida (${result.failed.length}). MIDI võib kasutada asendusheli.`
+        );
+        setTimeout(() => setSaveFeedback(''), 4000);
+      }
+    } catch (_) {
+      if (gen !== scoreLoadSessionGenRef.current) return;
+      setScoreLoadSession((prev) => ({ ...prev, active: false }));
+    }
+  }, [isNotationCaptureMode, t]);
+
+  beginScoreLoadSessionRef.current = beginScoreLoadSession;
+
   const stopScorePlayback = useCallback((resetCursor = false) => {
     if (scorePlaybackIntervalRef.current) {
       clearInterval(scorePlaybackIntervalRef.current);
@@ -8420,6 +8568,11 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   }, [staves, notesWithExplicitBeatsEarly, noteDurationInQuarterBeats]);
 
   const startScorePlayback = useCallback(() => {
+    if (scoreLoadSession.active) {
+      setSaveFeedback(t('loading.scorePleaseWait') || 'Oota, kuni töö ja helid on laetud…');
+      setTimeout(() => setSaveFeedback(''), 2200);
+      return;
+    }
     if (scorePlaybackIntervalRef.current || scorePlaybackArmingRef.current) return;
     scorePlaybackArmingRef.current = true;
     pausePedagogicalPlayback();
@@ -8526,7 +8679,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       setCursorPosition(mapPlaybackBeatToScoreBeat(Math.min(totalBeats, beatNow)));
       if (beatNow >= totalBeats) stopScorePlayback(false);
     }, 25);
-  }, [buildOrchestrationPlaybackNotes, playbackMeasuresWithMarks, getEffectivePlaybackBpm, cursorPosition, playPianoNote, stopScorePlayback, pausePedagogicalPlayback]);
+  }, [buildOrchestrationPlaybackNotes, playbackMeasuresWithMarks, getEffectivePlaybackBpm, cursorPosition, playPianoNote, stopScorePlayback, pausePedagogicalPlayback, scoreLoadSession.active, t]);
 
   const seekScorePlaybackByDelta = useCallback((deltaBeats) => {
     const delta = Number(deltaBeats) || 0;
@@ -8835,13 +8988,16 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     const effectivePitch = singleLinePitch?.pitch ?? pitch;
     let oct = singleLinePitch?.octave ?? (octave ?? ghostOctave);
     // Figuurnotatsioonis kasutaja ei näe võtmemärke – kui accidental pole ette antud, võta helistikust (nt G-duur → F#).
+    // MIDI resolver võib anda undefined (implicit); ära tõlgenda null/undefined kui “explicit null” payload.
     const keyAccForPitch = getAccidentalForPitchInKey(effectivePitch, keySignature);
-    const accResolvedRaw = accidental !== undefined
+    const accResolvedRaw = (accidental !== undefined && accidental !== null)
       ? accidental
       : (notationStyle === 'FIGURENOTES'
         ? getAccidentalForPitchInKey(effectivePitch, keySignature)
         : (ghostAccidentalIsExplicit ? ghostAccidental : keyAccForPitch));
-    const accResolved = isUnpitchedSingleLineInstrument ? 0 : accResolvedRaw;
+    const accResolved = isUnpitchedSingleLineInstrument
+      ? 0
+      : (accResolvedRaw === null || accResolvedRaw === undefined ? keyAccForPitch : accResolvedRaw);
     // Pedagoogiline C4-põhi: ära luba sisestust alla MIDI 60 (nt B ghost C4 juures ei tohi minna B3-ks).
     if (isPedagogicalNotationMode(notationMode) && !isUnpitchedSingleLineInstrument) {
       oct = clampPitchFieldsToMinMidi(
@@ -8974,8 +9130,14 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       incompleteLastMeasure
     );
     const nextBeat = insertBeat + effectiveDuration;
-    expandScoreForNoteInputAdvance(nextBeat, provisionalMin, 'note-insert');
-    setCursorPosition(nextBeat);
+    if (!options.skipCursorAdvance) {
+      expandScoreForNoteInputAdvance(nextBeat, provisionalMin, 'note-insert');
+      setCursorPosition(nextBeat);
+      cursorPositionRef.current = nextBeat;
+    } else {
+      // MIDI akordi aken: laienda skoori vajadusel, aga kursor jääb primary beat’ile kuni klahvid üles.
+      expandScoreForNoteInputAdvance(nextBeat, provisionalMin, 'note-insert');
+    }
     setGhostPitch(effectivePitch);
     setGhostOctave(oct);
     if (!(options.forceRest != null ? !!options.forceRest : isRest) && playNoteOnInsert && !options.skipPlay) {
@@ -8986,6 +9148,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     }
     // Ühekordne paus (0 / toolbox): ära jäta sticky pausirežiimi peale.
     if (options.forceRest) setIsRest(false);
+    return { insertBeat, nextBeat, durationBeats: effectiveDuration };
   }, [cursorPosition, selectedDuration, getEffectiveDuration, isDotted, isRest, notes, saveToHistory, ghostOctave, ghostAccidental, ghostAccidentalIsExplicit, playPianoNote, playNoteOnInsert, tupletMode, durations, staves, activeStaffIndex, notesWithExplicitBeats, noteDurationInQuarterBeats, notationStyle, notationMode, keySignature, instrument, t, noteInputMode, expandScoreForNoteInputAdvance, timeSignature, pickupEnabled, pickupQuantity, pickupDuration, incompleteLastMeasure, assertCursorTimeModelInputs, throwCursorModelError, pendingArticulation]);
 
   /** MuseScore: sisesta üks paus valitud kestusega; ei hoia pausirežiimi. */
@@ -9020,33 +9183,90 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     insertUnpitchedRhythmHit();
   };
 
+  const MIDI_HINT_SEL_KEY = 'nm.midiHint.sel';
+  const MIDI_HINT_N_FIRST_KEY = 'nm.midiHint.nFirst';
+  const dismissMidiHint = useCallback(() => {
+    setMidiHintOpen(false);
+    setMidiHintKind(null);
+  }, []);
+  const maybeShowMidiHint = useCallback((kind) => {
+    if (kind !== 'sel' && kind !== 'nFirst') return;
+    const key = kind === 'sel' ? MIDI_HINT_SEL_KEY : MIDI_HINT_N_FIRST_KEY;
+    try {
+      if (typeof sessionStorage !== 'undefined' && sessionStorage.getItem(key) === '1') return;
+      if (typeof sessionStorage !== 'undefined') sessionStorage.setItem(key, '1');
+    } catch (_) {}
+    setMidiHintKind(kind);
+    setMidiHintOpen(true);
+  }, []);
+  useEffect(() => {
+    if (!midiHintOpen) return undefined;
+    const onKey = (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+        dismissMidiHint();
+      }
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [midiHintOpen, dismissMidiHint]);
+
   const onUnpitchedMidiNoteOn = useCallback((_midiNumber) => {
     if (!noteInputMode || !isActiveUnpitchedPercussion) return;
+    // Unpitched: iga pad/key noteOn = üks löök aktiivsele reale (MIDI pitch ei määra kõrgust).
+    // Mitme pilli pad→staff map on eraldi faas — ei leki pitched MIDI akordiloogikasse.
+    midiPitchedSessionRef.current.reset();
+    midiPitchedPendingAdvanceRef.current = null;
     insertUnpitchedRhythmHitRef.current();
-  }, [noteInputMode, isActiveUnpitchedPercussion]);
+    maybeShowMidiHint('nFirst');
+  }, [noteInputMode, isActiveUnpitchedPercussion, maybeShowMidiHint]);
   const onUnpitchedMidiNoteOff = useCallback(() => {}, []);
   const unpitchedMidiEnabled = !!(noteInputMode && isActiveUnpitchedPercussion && !pianoStripVisible);
   const unpitchedMidi = useMidiHandler(onUnpitchedMidiNoteOn, onUnpitchedMidiNoteOff, unpitchedMidiEnabled);
 
-  // Add a note on top of the note at cursor (chord input). Traditional or Pedagogical only. Shift+Letter.
+  useEffect(() => {
+    if (!noteInputMode || isActiveUnpitchedPercussion) {
+      midiPitchedSessionRef.current.reset();
+      midiPitchedPendingAdvanceRef.current = null;
+    }
+  }, [noteInputMode, isActiveUnpitchedPercussion]);
+
+  // Add a note on top of the note at cursor (chord input). Traditional or Pedagogical only. Shift+Letter / MIDI chord.
   const addNoteOnTopOfCursor = useCallback((pitch, octave, accidental, options = {}) => {
     if (notes.length === 0) return;
     const keyAccForChord = getAccidentalForPitchInKey(pitch, keySignature);
     const accResolved = accidental !== undefined ? accidental : (ghostAccidentalIsExplicit ? ghostAccidental : keyAccForChord);
+    const preferBeat = typeof options.insertAtBeat === 'number' ? options.insertAtBeat : cursorPosition;
+    const EPS = 1e-6;
     let beat = 0;
     let anchorIndex = -1;
     let anchorBeat = 0;
     for (let i = 0; i < notes.length; i++) {
       const n = notes[i];
       const noteBeat = typeof n.beat === 'number' ? n.beat : beat;
-      if (cursorPosition >= noteBeat && cursorPosition < noteBeat + n.duration && !n.isRest) {
+      const spans =
+        preferBeat >= noteBeat - EPS
+        && preferBeat < noteBeat + n.duration - EPS
+        && !n.isRest;
+      const sameOnset = Math.abs(noteBeat - preferBeat) < EPS && !n.isRest;
+      if (spans || sameOnset) {
         anchorIndex = i;
         anchorBeat = noteBeat;
+        // Prefer highest existing chord tone as splice point (keep stacking order).
         break;
       }
       beat = noteBeat + n.duration;
     }
     if (anchorIndex < 0) return;
+    // Same onset may have several chord tones — splice after the last one at that beat.
+    let spliceAt = anchorIndex;
+    for (let i = anchorIndex; i < notes.length; i++) {
+      const n = notes[i];
+      const noteBeat = typeof n.beat === 'number' ? n.beat : 0;
+      if (Math.abs(noteBeat - anchorBeat) < EPS && !n.isRest) spliceAt = i;
+      else if (noteBeat > anchorBeat + EPS) break;
+    }
     const anchor = notes[anchorIndex];
     const oct = octave ?? ghostOctave;
     const chordAccidentalPayload = notationStyle === 'FIGURENOTES'
@@ -9067,7 +9287,14 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     saveToHistory(notes);
     setNotes((prev) => {
       const next = [...prev];
-      next.splice(anchorIndex + 1, 0, newNote);
+      // Recompute splice against latest list (same-beat cluster).
+      let insertIdx = spliceAt + 1;
+      for (let i = 0; i < next.length; i++) {
+        const n = next[i];
+        const nb = typeof n.beat === 'number' ? n.beat : 0;
+        if (Math.abs(nb - anchorBeat) < EPS && !n.isRest) insertIdx = i + 1;
+      }
+      next.splice(insertIdx, 0, newNote);
       return next;
     });
     setGhostPitch(pitch);
@@ -9077,6 +9304,96 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       playPianoNote(pitch, oct, semitones);
     }
   }, [notes, cursorPosition, ghostOctave, ghostAccidental, ghostAccidentalIsExplicit, saveToHistory, setNotes, playPianoNote, playNoteOnInsert, notationStyle, keySignature]);
+
+  const resolveMidiPitchForInput = useCallback((midiNumber) => {
+    const fromLib = getPitchFromMidi(midiNumber, keySignature);
+    return {
+      pitch: fromLib.pitch,
+      octave: fromLib.octave,
+      accidental: fromLib.accidental === null || fromLib.accidental === undefined
+        ? undefined
+        : fromLib.accidental,
+    };
+  }, [keySignature]);
+
+  /**
+   * Pitched MIDI / klaveririba: heli alati (aktiivse staffi instrument); sisestus ainult N-mode.
+   * @param {number} midiNumber
+   * @param {{ playSound?: boolean }} [options] playSound=false ainult kui heli juba mängitud (legacy)
+   */
+  const handlePitchedMidiNoteOn = useCallback((midiNumber, options = {}) => {
+    if (isActiveUnpitchedPercussion) return;
+    if (scoreLoadSession.active) return;
+    const playSound = options.playSound !== false;
+    const { pitch, octave, accidental } = resolveMidiPitchForInput(midiNumber);
+    if (playSound) {
+      const semi = accidental === 1 ? 1 : accidental === -1 ? -1 : (Number(accidental) || 0);
+      const currentInstrumentId = staves?.[activeStaffIndex]?.instrumentId ?? instrument;
+      playPianoNote(pitch, octave, semi, { instrumentId: currentInstrumentId });
+    }
+    if (!noteInputModeRef.current) {
+      maybeShowMidiHint('sel');
+      return;
+    }
+    const decision = midiPitchedSessionRef.current.noteOn(midiNumber);
+    if (decision.action === 'ignore') return;
+    setGhostPitch(pitch);
+    setGhostOctave(octave);
+    if (decision.action === 'primary') {
+      const result = addNoteAtCursor(pitch, octave, accidental, {
+        skipPlay: true,
+        skipCursorAdvance: true,
+      });
+      if (result && Number.isFinite(result.nextBeat)) {
+        midiPitchedPendingAdvanceRef.current = {
+          insertBeat: result.insertBeat,
+          nextBeat: result.nextBeat,
+        };
+        maybeShowMidiHint('nFirst');
+      } else {
+        midiPitchedSessionRef.current.noteOff(midiNumber);
+        midiPitchedPendingAdvanceRef.current = null;
+      }
+      return;
+    }
+    if (decision.action === 'chordTone') {
+      const beat = midiPitchedPendingAdvanceRef.current?.insertBeat ?? cursorPositionRef.current;
+      addNoteOnTopOfCursor(pitch, octave, accidental, {
+        skipPlay: true,
+        insertAtBeat: beat,
+      });
+    }
+  }, [isActiveUnpitchedPercussion, resolveMidiPitchForInput, playPianoNote, addNoteAtCursor, addNoteOnTopOfCursor, maybeShowMidiHint, staves, activeStaffIndex, instrument, scoreLoadSession.active]);
+
+  const handlePitchedMidiNoteOff = useCallback((midiNumber) => {
+    if (isActiveUnpitchedPercussion) {
+      midiPitchedSessionRef.current.reset();
+      midiPitchedPendingAdvanceRef.current = null;
+      return;
+    }
+    if (!noteInputModeRef.current) return;
+    const decision = midiPitchedSessionRef.current.noteOff(midiNumber);
+    if (decision.action !== 'release' || !decision.shouldAdvance) return;
+    const pending = midiPitchedPendingAdvanceRef.current;
+    midiPitchedPendingAdvanceRef.current = null;
+    if (!pending || !Number.isFinite(pending.nextBeat)) return;
+    setCursorPosition(pending.nextBeat);
+    cursorPositionRef.current = pending.nextBeat;
+  }, [isActiveUnpitchedPercussion]);
+
+  const onAppPitchedMidiNoteOn = useCallback((midiNumber) => {
+    handlePitchedMidiNoteOn(midiNumber, { playSound: true });
+  }, [handlePitchedMidiNoteOn]);
+  const onAppPitchedMidiNoteOff = useCallback((midiNumber) => {
+    handlePitchedMidiNoteOff(midiNumber);
+  }, [handlePitchedMidiNoteOff]);
+  const pitchedMidiEnabled = !!(
+    setupCompleted
+    && !isActiveUnpitchedPercussion
+    && !pianoStripVisible
+    && !scoreLoadSession.active
+  );
+  useMidiHandler(onAppPitchedMidiNoteOn, onAppPitchedMidiNoteOff, pitchedMidiEnabled);
 
   const insertPatternAtCursor = useCallback((patternKey) => {
     const pattern = RHYTHM_PATTERN_SEGMENTS[patternKey];
@@ -11253,12 +11570,19 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
             setMeasureSelection(null);
             setActiveToolbox('rhythm');
             if (notationStyle === 'TRADITIONAL' || notationMode === 'vabanotatsioon') {
-              setPianoStripVisible(true);
+              setPianoStripVisible(!isActiveUnpitchedPercussion);
               setTimelinePanelVisible(false);
             }
             // Keep ghost pitch deterministic, but do not reset cursor to bar 1.
-            setGhostPitch('C');
-            setGhostOctave(4);
+            // Unpitched: staff-ankur (nt C5), mitte meloodia C4.
+            if (isActiveUnpitchedPercussion) {
+              const hit = resolveUnpitchedHitPitch(instrument, activeInstrumentCfg, getSingleLineStaffPitch);
+              setGhostPitch(hit.pitch);
+              setGhostOctave(hit.octave);
+            } else {
+              setGhostPitch('C');
+              setGhostOctave(4);
+            }
           }
           return !prev;
         });
@@ -14406,8 +14730,32 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   ];
 
   const waitingForCloud = driveFileId && !cloudLoadComplete;
+  const scoreLoadSessionActive = !!scoreLoadSession.active;
+  const scoreLoadPercent = Math.max(0, Math.min(100, Math.round(Number(scoreLoadSession.percent) || 0)));
+  const scoreLoadLabel = (() => {
+    if (scoreLoadSession.phase === SCORE_LOAD_PHASE_LAYOUT) {
+      return t('loading.scoreLayout') || 'Taastan paigutust…';
+    }
+    if (scoreLoadSession.phase === SCORE_LOAD_PHASE_SOUNDS) {
+      const inst = scoreLoadSession.instrumentId
+        ? (INSTRUMENT_I18N_KEYS?.[scoreLoadSession.instrumentId]
+          ? t(INSTRUMENT_I18N_KEYS[scoreLoadSession.instrumentId])
+          : scoreLoadSession.instrumentId)
+        : '';
+      const base = t('loading.scoreSounds') || 'Laadin instrumentide heli';
+      return inst ? `${base}: ${inst}` : base;
+    }
+    return t('loading.scoreSession') || 'Laadin tööd…';
+  })();
   if (!isReady) return <div className="loading-screen min-h-screen flex items-center justify-center bg-amber-950 text-amber-100"><span className="animate-pulse">Laen süsteemi...</span></div>;
-  if (waitingForCloud) return <div className="loading-screen min-h-screen flex items-center justify-center bg-amber-950 text-amber-100"><span className="animate-pulse">{saveFeedback || 'Laadin pilvest…'}</span></div>;
+  // Pilvest JSON enne hydrate’i: skoori veel pole — täisekraan. Pärast import’i: hüpik + udune taust.
+  if (waitingForCloud && !scoreLoadSessionActive) {
+    return (
+      <div className="loading-screen min-h-screen flex items-center justify-center bg-amber-950 text-amber-100">
+        <span className="animate-pulse">{saveFeedback || t('feedback.loadingFromCloud') || 'Laadin pilvest…'}</span>
+      </div>
+    );
+  }
   if (!icons) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-amber-900/95 text-amber-100">
@@ -14911,6 +15259,36 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
 
   return (
     <div className="min-h-screen flex flex-col relative bg-[var(--bg-color)]">
+      {scoreLoadSessionActive && (
+        <div
+          className="fixed inset-0 z-[200] flex items-center justify-center bg-amber-950/55 dark:bg-black/60 backdrop-blur-md p-6"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="nm-score-load-title"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={scoreLoadPercent}
+        >
+          <div className="bg-white dark:bg-zinc-950 rounded-2xl shadow-2xl max-w-md w-full border-2 border-amber-200 dark:border-white/20 px-8 py-7 space-y-4">
+            <h2 id="nm-score-load-title" className="text-lg font-bold text-amber-950 dark:text-amber-50 text-center" style={{ fontFamily: 'Georgia, serif' }}>
+              {t('loading.scoreSession') || 'Laadin tööd…'}
+            </h2>
+            <p className="text-sm text-amber-800 dark:text-amber-200/90 text-center">{scoreLoadLabel}</p>
+            <div className="space-y-2">
+              <div className="flex justify-between text-xs font-semibold text-amber-700 dark:text-amber-300 tabular-nums">
+                <span>{t('loading.scoreProgress') || 'Edenemine'}</span>
+                <span>{scoreLoadPercent}%</span>
+              </div>
+              <div className="w-full h-2.5 rounded-full bg-amber-100 dark:bg-zinc-800 overflow-hidden" aria-hidden="true">
+                <div
+                  className="h-full bg-amber-500 dark:bg-amber-400 transition-[width] duration-300 ease-out"
+                  style={{ width: `${scoreLoadPercent}%` }}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       {demoVisibility && (
         <div className="flex-shrink-0 z-40 border-b-2 border-amber-400 bg-amber-100 dark:bg-amber-950/90 dark:border-amber-600 px-3 py-2 text-sm text-amber-950 dark:text-amber-100">
           <span className="font-semibold">Demo: noodigraafika nähtavus</span>
@@ -15469,6 +15847,48 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                 className="px-4 py-2 rounded-lg bg-amber-600 text-white font-semibold hover:bg-amber-500 disabled:opacity-60"
               >
                 {isExportingPdf ? 'Exporting…' : t('file.exportPdf')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {midiHintOpen && (
+        <div
+          className="fixed inset-0 z-[130] flex items-center justify-center bg-amber-950/60 dark:bg-black/70 backdrop-blur-sm p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="midi-hint-title"
+          onClick={dismissMidiHint}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') {
+              e.preventDefault();
+              dismissMidiHint();
+            }
+          }}
+        >
+          <div
+            className="w-full max-w-md rounded-xl border border-amber-200 dark:border-white/20 bg-white dark:bg-zinc-900 shadow-2xl p-5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 id="midi-hint-title" className="text-base font-semibold text-amber-900 dark:text-white mb-2">
+              {midiHintKind === 'nFirst'
+                ? (t('midi.hintNFirstTitle') || 'MIDI N-mode')
+                : (t('midi.hintSelTitle') || 'MIDI sisend')}
+            </h3>
+            <p className="text-sm text-amber-800 dark:text-zinc-200 leading-relaxed mb-4">
+              {midiHintKind === 'nFirst'
+                ? (t('midi.hintNFirstBody') || t('midi.hintSelBody'))
+                : (t('midi.hintSelBody') || 'Noodigraafika sai infot MIDI keyboardi sisestusest, kuid sisestus ei jõudnud noodigraafikasse. Sisestuseks lülita N-mode. Palun lülita välja teised rakendused, mis on MIDI keyboardiga seotud.')}
+            </p>
+            <div className="flex justify-end">
+              <button
+                type="button"
+                className="px-4 py-2 rounded-lg bg-amber-600 text-white font-semibold hover:bg-amber-500"
+                onClick={dismissMidiHint}
+                autoFocus
+              >
+                {t('midi.hintDismiss') || 'Sain aru'}
               </button>
             </div>
           </div>
@@ -17571,7 +17991,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                     setMeasureSelection(null);
                     setActiveToolbox('rhythm');
                     if (notationStyle === 'TRADITIONAL' || notationMode === 'vabanotatsioon') {
-                      setPianoStripVisible(true);
+                      setPianoStripVisible(!isActiveUnpitchedPercussion);
                       setTimelinePanelVisible(false);
                     }
                   } else {
@@ -20955,15 +21375,15 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
             const lastNote = pianoRangeNumbers.last;
             const activePresetId = PIANO_RANGE_PRESETS.find((p) => p.first === firstNote && p.last === lastNote)?.id ?? null;
             const rangeLabel = activePresetId ?? `${midiToRangeLabel(firstNote)}–${midiToRangeLabel(lastNote)}`;
+            /**
+             * Pitched: heli app’i soundfontiga (õige instrument); InteractivePiano ainult visuaal.
+             * Unpitched Orff käib eraldi app-MIDI teel (klaver peidetud) — siia ei leki.
+             */
             const handleNotePlay = (midiNumber) => {
-              /* N-režiim: MIDI klaviatuur reageerib noodi sisestusele (noot lisatakse kursori juurde). SEL-režiim: mitte. */
-              if (!noteInputMode) return;
-              const resolved = resolveSpellingForMidiInKey(midiNumber, keySignature);
-              const { pitch, octave } = resolved || midiToPitchOctave(midiNumber);
-              const accidental = resolved ? resolved.accidental : getAccidentalForPianoKey(midiNumber, keySignature);
-              setGhostPitch(pitch);
-              setGhostOctave(octave);
-              addNoteAtCursor(pitch, octave, accidental, { skipPlay: true });
+              handlePitchedMidiNoteOn(midiNumber, { playSound: true });
+            };
+            const handleNoteStop = (midiNumber) => {
+              handlePitchedMidiNoteOff(midiNumber);
             };
             return (
               <div className="fixed bottom-0 left-0 right-0 z-[100] min-h-[140px] bg-gradient-to-t from-amber-100 to-amber-50 border-t-2 border-amber-300 shadow-[0_-4px_12px_rgba(0,0,0,0.12)] py-3 px-4" style={{ isolation: 'isolate' }}>
@@ -21009,7 +21429,9 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                       width={pianoStripWidth}
                       height={100}
                       showMidiSelect={true}
+                      playEngineSound={false}
                       onNotePlay={handleNotePlay}
+                      onNoteStop={handleNoteStop}
                       figurenotesColors={notationStyle === 'FIGURENOTES' ? FIGURENOTES_COLORS : null}
                       getKeyColor={notationMode === 'vabanotatsioon'
                         ? (pitch, oct) => {
@@ -21033,7 +21455,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                         // Defense in depth: Period = dotted (also in shouldIgnorePianoComputerKey).
                         { code: 'Period', shift: false, alt: false, mod: false },
                       ].filter(Boolean)}
-                      ignoreKeyboardWhenModalOpen={newWorkSetupOpen || saveCloudDialogOpen || googleLoadPickerOpen || settingsOpen || shortcutsOpen || showPdfExportPreview || isInstrumentManagerOpen}
+                      ignoreKeyboardWhenModalOpen={newWorkSetupOpen || saveCloudDialogOpen || googleLoadPickerOpen || settingsOpen || shortcutsOpen || showPdfExportPreview || isInstrumentManagerOpen || midiHintOpen}
                     />
                   </div>
                 </div>
@@ -22806,7 +23228,7 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
                   : { above: 0, below: 0 };
                 const gKeyAcc = getAccidentalForPitchInKey(ghostPitch, safeKey);
                 const showGhostAcc = ghostAccidentalIsExplicit && (ghostAccidental === 1 || ghostAccidental === -1 || (ghostAccidental === 0 && gKeyAcc !== 0));
-                const ghostAccChar = ghostAccidental === 1 ? '♯' : ghostAccidental === -1 ? '♭' : '♮';
+                const ghostAccGlyph = showGhostAcc ? smuflAccidentalForAlter(ghostAccidental) : null;
                 return (
                   <g opacity={ghostPreviewOpacity}>
                     {nLedgerAbove > 0 && Array.from({ length: nLedgerAbove }, (_, i) => (
@@ -22815,8 +23237,16 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
                     {nLedgerBelow > 0 && Array.from({ length: nLedgerBelow }, (_, i) => (
                       <line key={`ghost-ledger-below-${i}`} x1={cx - ledgerHalfWidth} y1={sysY + crOff + lastLineY + (i + 1) * spacing} x2={cx + ledgerHalfWidth} y2={sysY + crOff + lastLineY + (i + 1) * spacing} stroke={themeColors.staffLineColor} strokeWidth="1.5" />
                     ))}
-                    {showGhostAcc && (
-                      <text x={cx - (rx + spacing * 0.5)} y={cy} textAnchor="middle" dominantBaseline="central" fontSize={Math.round(spacing * 1.4)} fill={themeColors.noteFill} fontFamily="serif">{ghostAccChar}</text>
+                    {ghostAccGlyph && (
+                      <SmuflGlyph
+                        x={getAccidentalAnchorXFromNoteCenter(cx, rx, spacing)}
+                        y={cy}
+                        glyph={ghostAccGlyph}
+                        fontSize={getGlyphFontSize(spacing)}
+                        fill={themeColors.noteFill}
+                        textAnchor="end"
+                        dominantBaseline="alphabetic"
+                      />
                     )}
                     <NoteHead cx={cx} cy={cy} staffSpace={spacing} filled stemUp={stemUp} selected fill={themeColors.noteFill} />
                     <line x1={stemX} y1={cy} x2={stemX} y2={stemY2} stroke={themeColors.noteFill} strokeWidth="1.5"/>

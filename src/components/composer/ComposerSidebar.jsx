@@ -7,6 +7,8 @@ export default function ComposerSidebar({
   blocks,
   onUploadProject,
   onUploadComposer,
+  onImportFromGoogleDrive,
+  googleDriveImportLabel,
   onAddTextPreset,
   onAddPage,
   onSelectBlock,
@@ -28,6 +30,15 @@ export default function ComposerSidebar({
         <button type="button" onClick={onUploadProject} className="px-3 py-2 rounded-lg bg-amber-600 text-white text-sm font-medium hover:bg-amber-500">
           Lisa .nm / .json projekt
         </button>
+        {typeof onImportFromGoogleDrive === 'function' && (
+          <button
+            type="button"
+            onClick={onImportFromGoogleDrive}
+            className="px-3 py-2 rounded-lg border border-sky-300 dark:border-sky-500/40 text-sky-900 dark:text-sky-100 text-sm font-medium hover:bg-sky-50 dark:hover:bg-sky-950/40"
+          >
+            {googleDriveImportLabel || 'Lisa Google Drive’ist'}
+          </button>
+        )}
         <button type="button" onClick={onUploadComposer} className="px-3 py-2 rounded-lg border border-amber-300 dark:border-white/30 text-amber-900 dark:text-white text-sm font-medium hover:bg-amber-100 dark:hover:bg-white/10">
           Ava .nmc projekt
         </button>

@@ -6,7 +6,7 @@
 
 import { useEffect, useRef, useMemo } from 'react';
 import { buildKeyboardMap } from './keyboardMap.js';
-import { shouldIgnorePianoComputerKey } from './pianoKeyboardGuards.js';
+import { shouldIgnorePianoComputerKey, isPitchLetterComputerKey } from './pianoKeyboardGuards.js';
 
 function matchesBlockedShortcut(e, shortcut) {
   if (!shortcut || typeof shortcut.code !== 'string' || shortcut.code.length === 0) return false;
@@ -49,8 +49,8 @@ export function useKeyboardHandler(firstNote, lastNote, playNote, stopNote, enab
       // KeyZ is mapped to a MIDI pitch; without this guard N-mode does insert+undo in one chord.
       if (shouldIgnorePianoComputerKey(e)) return;
       if (Array.isArray(blockedShortcuts) && blockedShortcuts.some((shortcut) => matchesBlockedShortcut(e, shortcut))) return;
-      // Tavarežiimis reserveeri A–G noodisise kiirklahvide jaoks; Figurenotes/pedagoogilises režiimis luba need klaveriks.
-      if (reserveLetterKeys && !e.altKey && /^[a-g]$/i.test(e.key || '')) return;
+      // Tavarežiimis reserveeri A–G noodisise kiirklahvide jaoks (KeyA≠C); Figurenotes / ped. SEL: klaverikaart.
+      if (reserveLetterKeys && !e.altKey && isPitchLetterComputerKey(e)) return;
       const code = e.code;
       const midi = keyMap.get(code);
       if (midi === undefined) return;
@@ -77,7 +77,7 @@ export function useKeyboardHandler(firstNote, lastNote, playNote, stopNote, enab
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
       if (ignoreWhenModalOpen) return;
       if (shouldIgnorePianoComputerKey(e)) return;
-      if (reserveLetterKeys && !e.altKey && /^[a-g]$/i.test(e.key || '')) return;
+      if (reserveLetterKeys && !e.altKey && isPitchLetterComputerKey(e)) return;
       const midi = keyMap.get(code);
       if (midi === undefined) return;
       e.preventDefault();

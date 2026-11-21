@@ -1,5 +1,9 @@
 node_modules/
 dist/
+# Self-hosted FluidR3_GM blobs (fetch with: npm run sounds:fetch)
+public/sounds/FluidR3_GM/*-mp3.js
+public/sounds/FluidR3_GM/*-ogg.js
+
 .venv/
 .release-savefix/
 .DS_Store

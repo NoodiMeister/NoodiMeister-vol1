@@ -15,9 +15,13 @@ export const SMUFL_GLYPH = Object.freeze({
   cClef: '\uE05C',
   fClef: '\uE062',
 
-  // Accidentals (key signatures, note accidentals — Leland stroke weight)
+  // Accidentals (key signatures + note accidentals — Leland / SMuFL U+E260–E264)
+  // MuseScore & Dorico/Sibelius SMuFL use these, not Unicode ♯♭♮ text.
   accidentalFlat: '\uE260',
+  accidentalNatural: '\uE261',
   accidentalSharp: '\uE262',
+  accidentalDoubleSharp: '\uE263',
+  accidentalDoubleFlat: '\uE264',
 
   // Noteheads (for beamed notes or when stem length is custom)
   noteheadWhole: '\uE0A2',
@@ -183,6 +187,28 @@ export function smuflNoteheadForDurationLabel(durationLabel, shapeKey = 'oval') 
   if (dur === '1/1') return smuflNoteheadForType('whole', shapeKey);
   if (dur === '1/2') return smuflNoteheadForType('half', shapeKey);
   return smuflNoteheadForType('quarter', shapeKey);
+}
+
+/**
+ * Alter (-2…2) → Leland SMuFL accidental glyph for a note (not key signature layout).
+ * @param {number|null|undefined} alter 1=♯, -1=♭, 0=♮, 2=𝄪, -2=𝄫
+ * @returns {string|null}
+ */
+export function smuflAccidentalForAlter(alter) {
+  switch (alter) {
+    case 1:
+      return SMUFL_GLYPH.accidentalSharp;
+    case -1:
+      return SMUFL_GLYPH.accidentalFlat;
+    case 0:
+      return SMUFL_GLYPH.accidentalNatural;
+    case 2:
+      return SMUFL_GLYPH.accidentalDoubleSharp;
+    case -2:
+      return SMUFL_GLYPH.accidentalDoubleFlat;
+    default:
+      return null;
+  }
 }
 
 export function smuflRestForDurationLabel(durationLabel) {

@@ -11,6 +11,21 @@ export function shouldIgnorePianoComputerKey(e) {
   return false;
 }
 
+/** Pitch-letter codes that must stay A–G (not ASDF→CDE) in N-mode. */
+export const PITCH_LETTER_KEY_CODES = new Set([
+  'KeyA', 'KeyB', 'KeyC', 'KeyD', 'KeyE', 'KeyF', 'KeyG',
+]);
+
+/**
+ * Kas klahv on A–G nooditäht (e.code eelistatud; e.key fallback).
+ * @param {{ code?: string, key?: string }|null|undefined} e
+ */
+export function isPitchLetterComputerKey(e) {
+  if (!e) return false;
+  if (e.code && PITCH_LETTER_KEY_CODES.has(e.code)) return true;
+  return /^[a-g]$/i.test(String(e.key || ''));
+}
+
 /**
  * Kas ASDF/WETYU arvutiklahvid mängivad klaverikaarti (KeyA→C) või jäävad A–G nooditähtedeks.
  *

@@ -36,15 +36,20 @@ export function InteractivePiano({
   ignoreKeyboardWhenModalOpen = false,
   /** Shortcut pref objects reserved for app-level actions (blocked from piano mapping). */
   blockedShortcuts = [],
+  /**
+   * false: ära mängi sisemist oscillatorit — parent (Noodimeister) mängib soundfonti
+   * valitud instrumendiga (MIDI + hiir). Visuaalne klahvivajutus jääb alles.
+   */
+  playEngineSound = true,
 }) {
   const { activeNotes, playNote, stopNote } = usePianoEngine(engineOptions);
 
   const handlePlayNote = useCallback(
     (midi) => {
-      playNote(midi);
+      playNote(midi, { silent: !playEngineSound });
       onNotePlay?.(midi);
     },
-    [playNote, onNotePlay]
+    [playNote, onNotePlay, playEngineSound]
   );
 
   const handleStopNote = useCallback(

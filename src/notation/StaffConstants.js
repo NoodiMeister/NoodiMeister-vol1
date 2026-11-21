@@ -13,7 +13,7 @@ import {
   STEM_LENGTH,
   getThinBarlineThickness as getThinBarlineThicknessFromStyle,
 } from './musescoreStyle.js';
-import { getSemitonesFromKey } from '../utils/notationConstants';
+import { getSemitonesFromKey } from '../utils/notationConstants.js';
 
 /** Standardne vahe kahe joone vahel (px). Kõik joonestiku mõõdud tuletatakse sellest. */
 export const STAFF_SPACE = 10;

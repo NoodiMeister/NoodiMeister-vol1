@@ -45,11 +45,11 @@ export const HOW_TO_GUIDE_CONTENT = {
           {
             q: 'Kuidas sisestada helitute percussion-pillide rütme (pedagogical)?',
             steps: [
-              'Vali instrument Orff rütmipillide hulgast (unpitched percussion).',
-              'Vali rütm tööriistakastist (nt 1/4, 1/8, 1/16).',
-              'Mac/PC puhul sisesta noot füüsilise klaviatuuri tähtedega A-G.',
-              'iPad/tahvel seadmes kasuta nuppu “Sisesta rütm”, mis lisab valitud kestusega noodi kursori asukohta.',
-              'Varred kuvatakse nende pillide puhul vaikimisi üles suunas.',
+              'Vali instrument Orff rütmipillide hulgast (unpitched percussion), nt woodblock.',
+              'Vali rütm tööriistakastist (nt 1/4, 1/8, 1/16) ja lülitu N-režiimi.',
+              'Mac/PC: Space või A–G = üks löök; MIDI pad noteOn teeb sama (klaveririba pole vaja).',
+              'iPad/tahvel: nupp “Sisesta rütm” lisab valitud kestusega noodi kursori asukohta.',
+              'Heli tuleb pilli soundfontist (nt woodblock); varred vaikimisi üles.',
             ],
           },
           {
@@ -253,7 +253,7 @@ export const HOW_TO_GUIDE_CONTENT = {
           },
           {
             q: 'How do I enter unpitched percussion rhythms in pedagogical mode?',
-            a: 'Select an unpitched Orff percussion instrument and rhythm value first. On Mac/PC use physical keyboard letters A-G; on touch devices use the “Insert rhythm” button.',
+            a: 'Select an unpitched Orff instrument (e.g. woodblock) and a rhythm value in N-mode. Space or A–G inserts a hit; a MIDI pad noteOn does the same without the piano strip. Sound uses the instrument soundfont. On touch devices use “Insert rhythm”.',
           },
           {
             q: 'How do I switch notation mode?',

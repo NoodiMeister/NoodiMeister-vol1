@@ -8,7 +8,9 @@ import { buildKeyboardMap } from '../src/piano/keyboardMap.js';
 import {
   shouldIgnorePianoComputerKey,
   shouldComputerKeysPlayPianoMap,
+  isPitchLetterComputerKey,
 } from '../src/piano/pianoKeyboardGuards.js';
+import { createMidiPitchedInputSession } from '../src/musical/midiPitchedInputSession.js';
 
 const map = buildKeyboardMap(48, 72);
 if (!map.has('KeyZ')) {
@@ -56,6 +58,30 @@ for (const [opts, expected] of pianoMapCases) {
     console.error('shouldComputerKeysPlayPianoMap mismatch', { opts, expected, got });
     process.exit(1);
   }
+}
+
+if (!isPitchLetterComputerKey({ code: 'KeyA', key: '' })) {
+  console.error('isPitchLetterComputerKey must treat KeyA as pitch letter even if key is empty');
+  process.exit(1);
+}
+if (isPitchLetterComputerKey({ code: 'KeyZ', key: 'z' })) {
+  console.error('KeyZ must not be treated as pitch letter A–G');
+  process.exit(1);
+}
+
+const midiSession = createMidiPitchedInputSession();
+const p1 = midiSession.noteOn(60);
+const p1b = midiSession.noteOn(60);
+const p2 = midiSession.noteOn(67);
+const r67 = midiSession.noteOff(67);
+const r60 = midiSession.noteOff(60);
+if (p1.action !== 'primary' || p1b.action !== 'ignore' || p2.action !== 'chordTone') {
+  console.error('midi pitched session primary/chordTone mismatch', { p1, p1b, p2 });
+  process.exit(1);
+}
+if (r67.shouldAdvance !== false || r60.shouldAdvance !== true) {
+  console.error('midi pitched session advance mismatch', { r67, r60 });
+  process.exit(1);
 }
 
 console.log('check-piano-mod-guard: ok');

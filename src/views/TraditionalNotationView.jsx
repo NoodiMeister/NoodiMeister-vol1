@@ -30,6 +30,7 @@ import {
   smuflTimeSigDigitsForNumber,
   smuflPrecomposedNote,
   smuflPrecomposedTypeForDurationLabel,
+  smuflAccidentalForAlter,
   SMUFL_MUSIC_FONT_FAMILY,
 } from '../notation/smufl/glyphs';
 import { smuflArticulationGlyph } from '../notation/articulationCatalog';
@@ -73,6 +74,7 @@ import {
   getGlyphFontSize,
   getRestFontSize,
   getThickBarlineThickness,
+  getAccidentalAnchorXFromNoteCenter,
   BARLINE_SEPARATION,
   TEXT_FONT_FAMILY,
 } from '../notation/musescoreStyle';
@@ -2567,9 +2569,21 @@ export function TraditionalNotationView({
                               pointerEvents="none"
                             />
                           )}
-                          {(visibleAccidental === 1 || visibleAccidental === -1 || visibleAccidental === 0) && (
-                            <text x={noteX - (noteheadRx + ensureMinGlyphHorizontalGapPx(spacing * 0.5))} y={noteY} textAnchor="middle" dominantBaseline="central" fontSize={Math.round(spacing * 1.4)} fill={noteFillColor} fontFamily="serif">{visibleAccidental === 1 ? '♯' : visibleAccidental === -1 ? '♭' : '♮'}</text>
-                          )}
+                          {(() => {
+                            const accidentalGlyph = smuflAccidentalForAlter(visibleAccidental);
+                            if (!accidentalGlyph) return null;
+                            return (
+                              <SmuflGlyph
+                                x={getAccidentalAnchorXFromNoteCenter(noteX, noteheadRx, spacing)}
+                                y={noteY}
+                                glyph={accidentalGlyph}
+                                fontSize={glyphFontSize}
+                                fill={noteFillColor}
+                                textAnchor="end"
+                                dominantBaseline="alphabetic"
+                              />
+                            );
+                          })()}
                           {useLelandPrecomposedRhythm ? (
                             <SmuflGlyph
                               x={noteX}
