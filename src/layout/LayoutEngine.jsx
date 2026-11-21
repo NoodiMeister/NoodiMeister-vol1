@@ -7,6 +7,12 @@ import { computeLayout, getStaffHeight, LAYOUT } from './LayoutManager';
 import { measureLengthInQuarterBeats } from '../musical/timeSignature';
 import { getNotationPageBodies, snapSystemYToPage } from '../utils/pageGeometry';
 import { fitWidthsToContentWidth, minPixelsPerBeatForFigures } from './pageFitSpacing';
+import {
+  DEFAULT_SPACING_RATIO,
+  figurenotesMinNoteDistancePx,
+  naturalMeasureWidthFromNotes,
+  shortestDurationBeatsInNotes,
+} from './horizontalSpacing';
 
 /** Vaikimisi lehe mõõdud (px). A4 96 DPI: 794×1123 (portrait), 1123×794 (landscape); suhe 1 : 1.414. */
 export const PAGE_DIMENSIONS = {
@@ -189,6 +195,30 @@ function calculateFigureGrid(data, availableWidth, availablePageHeight = 0) {
   const desiredPixelsPerBeat = pixelsPerBeatInput != null
     ? Math.max(minPixelsPerBeat, pixelsPerBeatInput)
     : null;
+  const spacingRatio = Number.isFinite(Number(data?.spacingRatio)) && Number(data.spacingRatio) >= 1
+    ? Number(data.spacingRatio)
+    : DEFAULT_SPACING_RATIO;
+
+  const getNaturalMeasureWidth = (i) => {
+    const beats = getMeasureBeats(i);
+    const stretch = getStretchFactor(i);
+    const ppb = desiredPixelsPerBeat != null ? desiredPixelsPerBeat : minPixelsPerBeat;
+    const base = beats * ppb * stretch;
+    const m = measures[i];
+    const notes = Array.isArray(m?.notes) ? m.notes : null;
+    if (!notes || notes.length === 0) return base;
+    const shortest = shortestDurationBeatsInNotes(notes, m.startBeat, m.endBeat);
+    const minDist = figurenotesMinNoteDistancePx(figureSizeBase, shortest);
+    const springW = naturalMeasureWidthFromNotes(notes, {
+      startBeat: m.startBeat,
+      endBeat: m.endBeat,
+      beatCount: beats,
+      quarterWidthPx: ppb,
+      spacingRatio,
+      minNoteDistancePx: minDist,
+    });
+    return Math.max(base, springW * stretch);
+  };
 
   const flushRow = (rowIndices) => {
     if (rowIndices.length === 0) return;
@@ -197,7 +227,7 @@ function calculateFigureGrid(data, availableWidth, availablePageHeight = 0) {
     let pixelsPerBeatForRow;
     if (desiredPixelsPerBeat != null) {
       measureWidths = fitWidthsToContentWidth(
-        rowIndices.map((i) => getMeasureBeats(i) * desiredPixelsPerBeat * getStretchFactor(i)),
+        rowIndices.map((i) => getNaturalMeasureWidth(i)),
         effectiveWidth,
       );
       const totalBeats = rowIndices.reduce((sum, i) => sum + getMeasureBeats(i), 0);
@@ -257,16 +287,15 @@ function calculateFigureGrid(data, availableWidth, availablePageHeight = 0) {
     const fullRow = enforceMeasuresPerLine && currentRowMeasureCount >= boxesPerRow;
     const wouldBeIndices = currentRow.length > 0 ? [...currentRow, i] : [i];
     const wouldBeBeats = wouldBeIndices.reduce((sum, idx) => sum + getMeasureBeats(idx), 0);
-    const desiredRowWidth = desiredPixelsPerBeat != null
-      ? wouldBeBeats * desiredPixelsPerBeat
-      : wouldBeIndices.length * minMeasureWidth;
-    // Break before adding a measure that would force page-fit below the figure-size floor.
+    const desiredRowWidth = wouldBeIndices.reduce((sum, idx) => sum + getNaturalMeasureWidth(idx), 0);
+    // Break before adding a measure that would force page-fit below the figure-size floor
+    // or below MuseScore-style content springs (1/8+ packing).
     const wouldCrushFigures = currentRow.length > 0
       && desiredRowWidth > effectiveWidth + 0.5
       && wouldBeBeats * minPixelsPerBeat > effectiveWidth + 0.5;
     const widthPerMeasure = effectiveWidth / wouldBeIndices.length;
     const overflowBreak = currentRow.length > 0
-      && (widthPerMeasure < minMeasureWidth || wouldCrushFigures);
+      && (widthPerMeasure < minMeasureWidth || wouldCrushFigures || desiredRowWidth > effectiveWidth + 0.5);
 
     if ((breakBeforeThis || fullRow || overflowBreak) && currentRow.length > 0) {
       flushRow(currentRow);

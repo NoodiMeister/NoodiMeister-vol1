@@ -48,6 +48,11 @@ import {
   getKeySignatureStepPx,
 } from '../notation/TimeSignatureLayout';
 import { ensureGlyphHorizontalGapPx, ensureMinGlyphHorizontalGapPx } from '../notation/glyphSpacing';
+import {
+  createMeasureHorizontalLayout,
+  DEFAULT_SPACING_RATIO,
+  traditionalMinNoteDistancePx,
+} from '../layout/horizontalSpacing';
 import { measureLengthInQuarterBeats } from '../musical/timeSignature';
 import {
   getStaffLinePositions,
@@ -1658,25 +1663,21 @@ export function TraditionalNotationView({
                 const measureWidth = measureWidths[j] ?? (sys.measureWidth ?? beatsPerMeasure * 80);
                 const measureX = measureAreaLeft + measureWidths.slice(0, j).reduce((a, b) => a + b, 0);
                 const beatsInMeasure = measure.beatCount ?? beatsPerMeasure;
-                const beatWidth = measureWidth / beatsInMeasure;
-
-                const getSlotsPerBeat = (beatIndex) => {
-                  const beatStart = measure.startBeat + beatIndex;
-                  const beatEnd = beatStart + 1;
-                  const notesInBeat = measure.notes.filter(n => n.beat >= beatStart && n.beat < beatEnd);
-                  if (notesInBeat.length === 0) return 1;
-                  const minDur = Math.min(...notesInBeat.map(n => n.duration));
-                  return Math.max(1, Math.round(1 / minDur));
-                };
-                const getNoteSlotCenterX = (note) => {
-                  const beatInMeasure = note.beat - measure.startBeat;
-                  const beatIndex = Math.floor(beatInMeasure);
-                  const posInBeat = beatInMeasure - beatIndex;
-                  const slotsPerBeat = getSlotsPerBeat(beatIndex);
-                  const slotIndex = Math.min(Math.floor(posInBeat * slotsPerBeat), slotsPerBeat - 1);
-                  const slotCenter = (slotIndex + 0.5) / slotsPerBeat;
-                  return measureX + (beatIndex + slotCenter) * beatWidth;
-                };
+                const quarterWidthPx = measureWidth / Math.max(0.25, beatsInMeasure);
+                // MuseScore/Dorico springs: duration-based segment widths (not equal beat boxes).
+                // Fixes 1/16 and shorter clustering that left empty space before the barline.
+                const horizontalLayout = createMeasureHorizontalLayout({
+                  notes: measure.notes || [],
+                  startBeat: measure.startBeat,
+                  endBeat: measure.endBeat,
+                  beatCount: beatsInMeasure,
+                  measureX,
+                  measureWidth,
+                  quarterWidthPx: Math.max(12, quarterWidthPx),
+                  spacingRatio: DEFAULT_SPACING_RATIO,
+                  minNoteDistancePx: traditionalMinNoteDistancePx(spacing),
+                });
+                const getNoteSlotCenterX = (note) => horizontalLayout.noteCenterX(note);
                 const noteXOverrides = new Map();
                 const simultaneousBeatGroups = new Map();
                 for (let idx = 0; idx < measure.notes.length; idx += 1) {
@@ -2232,7 +2233,7 @@ export function TraditionalNotationView({
                       return parts.length ? <g key="repeatMarks">{parts}</g> : null;
                     })()}
                     {chords.filter(c => c.beatPosition >= measure.startBeat && c.beatPosition < measure.endBeat).map((chord) => {
-                      const chordX = measureX + (chord.beatPosition - measure.startBeat) * beatWidth;
+                      const chordX = horizontalLayout.xAtBeat(chord.beatPosition);
                       const useFigurations = (instrument === 'harpsichord' || instrument === 'organ') && instrumentNotationVariant === 'figuredBass' && chord.figuredBass;
                       const isEditing = chordSymbolEdit
                         && (
@@ -2306,7 +2307,7 @@ export function TraditionalNotationView({
                         || Math.abs((Number(c.beatPosition) || 0) - (Number(chordSymbolEdit.beat) || 0)) < 1e-6
                       ))
                       && (() => {
-                        const editX = measureX + (Number(chordSymbolEdit.beat) - measure.startBeat) * beatWidth;
+                        const editX = horizontalLayout.xAtBeat(Number(chordSymbolEdit.beat));
                         const textY = staffY + firstLineY - 18;
                         const draft = String(chordSymbolEdit.draft || '');
                         const hitW = Math.max(28, (draft.length || 1) * 9 + 8);

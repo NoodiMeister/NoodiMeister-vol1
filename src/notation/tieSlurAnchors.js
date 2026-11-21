@@ -4,6 +4,11 @@
 import { ensureGlyphHorizontalGapPx } from './glyphSpacing';
 import { computeBeamGroups, computeBeamGeometry } from './BeamCalculation';
 import { measureLengthInQuarterBeats } from '../musical/timeSignature';
+import {
+  createMeasureHorizontalLayout,
+  DEFAULT_SPACING_RATIO,
+  traditionalMinNoteDistancePx,
+} from '../layout/horizontalSpacing';
 
 /**
  * @returns {Map<number, { x: number, y: number, stemUp: boolean, beat: number }>}
@@ -28,24 +33,18 @@ export function buildTieSlurAnchorMapForMeasure({
   if (!measure?.notes?.length) return byId;
   const beatsPerMeasure = measureLengthInQuarterBeats(timeSignature);
   const beatsInMeasure = measure.beatCount ?? beatsPerMeasure;
-  const beatWidth = measureWidth / Math.max(1, beatsInMeasure);
-  const getSlotsPerBeat = (beatIndex) => {
-    const beatStart = measure.startBeat + beatIndex;
-    const beatEnd = beatStart + 1;
-    const notesInBeat = measure.notes.filter((n) => n.beat >= beatStart && n.beat < beatEnd);
-    if (notesInBeat.length === 0) return 1;
-    const minDur = Math.min(...notesInBeat.map((n) => n.duration));
-    return Math.max(1, Math.round(1 / minDur));
-  };
-  const getNoteSlotCenterX = (note) => {
-    const beatInMeasure = note.beat - measure.startBeat;
-    const beatIndex = Math.floor(beatInMeasure);
-    const posInBeat = beatInMeasure - beatIndex;
-    const slotsPerBeat = getSlotsPerBeat(beatIndex);
-    const slotIndex = Math.min(Math.floor(posInBeat * slotsPerBeat), slotsPerBeat - 1);
-    const slotCenter = (slotIndex + 0.5) / slotsPerBeat;
-    return measureX + (beatIndex + slotCenter) * beatWidth;
-  };
+  const horizontalLayout = createMeasureHorizontalLayout({
+    notes: measure.notes || [],
+    startBeat: measure.startBeat,
+    endBeat: measure.endBeat,
+    beatCount: beatsInMeasure,
+    measureX,
+    measureWidth,
+    quarterWidthPx: Math.max(12, measureWidth / Math.max(0.25, beatsInMeasure)),
+    spacingRatio: DEFAULT_SPACING_RATIO,
+    minNoteDistancePx: traditionalMinNoteDistancePx(spacing),
+  });
+  const getNoteSlotCenterX = (note) => horizontalLayout.noteCenterX(note);
   const noteXOverrides = new Map();
   const simultaneousBeatGroups = new Map();
   for (let idx = 0; idx < measure.notes.length; idx += 1) {

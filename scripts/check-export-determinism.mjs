@@ -141,8 +141,21 @@ async function main() {
     layoutEngine.includes('wouldCrushFigures'),
     'Figurenotes layout must break the row before page-fit would crush figures.'
   );
+  assert(
+    layoutEngine.includes('naturalMeasureWidthFromNotes') || layoutEngine.includes('getNaturalMeasureWidth'),
+    'Figurenotes layout must use MuseScore-style content springs for short values (1/8+).'
+  );
   assert(minPixelsPerBeatForFigures(85) >= 85, 'Figure floor must be at least figure diameter.');
   assert(minPixelsPerBeatForFigures(85) > maxFit, 'Default figures must force fewer measures/line than a crushed 4×4/4 fit.');
+  const horizontalSpacing = await read('src/layout/horizontalSpacing.js');
+  assert(
+    horizontalSpacing.includes('DEFAULT_SPACING_RATIO = Math.SQRT2'),
+    'Horizontal spacing must default to Gould/Dorico √2 spacing ratio.'
+  );
+  assert(
+    horizontalSpacing.includes('spacingWidthForDurationBeats'),
+    'Missing MuseScore quarter-reference spacing helper.'
+  );
 
   // Regression check for all time signature digit glyphs 0..9.
   for (let digit = 0; digit <= 9; digit += 1) {

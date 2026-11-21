@@ -99,6 +99,13 @@ Kõik muudatused peavad hoidma kasutaja teekonnad tervena:
   - `Vahe: tavaline` (85 px/löök), `Vahe: lai` (120 px/löök) ja “Laius löögi kohta” on **soovitud** tihedus — need peavad paigutust muutma (kitsam/laiem), mitte jääma vaikseks.
   - **Ära** klambi `pixelsPerBeat` enne layout’i lehe max-fit väärtusele (see lukustab UI: kõik ≥ max näevad välja sama).
   - Lehepiir kehtib **ainult ületäitumisel**: figuurnotatsiooni rea `measureWidths` summa ≤ content-laius (`fitWidthsToContentWidth`); ülejääv ei tohi minna `overflow: hidden` taha.
+
+- **Standard: horisontaalne noodi-/rütmivahe (MuseScore / Dorico springs)**
+  - **Mudel:** veerandnoodi baaslaius (`pixelsPerBeat`) + `spacingRatio` (vaikimisi √2, Gould/Dorico) + `minNoteDistance`; `width(d) = max(minDist, Wq * ratio^log2(d))`.
+  - **Takti naturaalne laius** = spring-segmentide summa onset’ide vahel (mitte ainult `beats * pixelsPerBeat`). Tihe sisu laiendab takti; lehepiiril eelistatakse reflow’t / propororaalset fit’i, mitte võrdseid löögikaste.
+  - **Traditional:** regressioon alates **1/16** (ja 1/32) — võrdsed löögikastid jätsid tühja ruumi taktijoonde ette ja kuhjasid lühikesed noodid.
+  - **Figurenotes:** regressioon alates **1/8** — ei tohi pack’ida 1px vahega (`compactCenters`); minDistance ≥ skaleeritud figuuri diameeter + gap.
+  - Domeen: `src/layout/horizontalSpacing.js`; layout: `LayoutManager` / `LayoutEngine`; render: traditional + figurenotes + caret X.
   - Kui soovitud laius juba täidab lehe, laiemaks saamiseks vähenda taktide arvu reas.
 
 - **Standard: landscape / mitme lehe noodirida**
@@ -156,11 +163,20 @@ Kõik muudatused peavad hoidma kasutaja teekonnad tervena:
   - **Poolik viimane takt** (valikuline): eeltakt + viimane takt = üks täistakt; taktinumber eeltaktil puudub (vt taktinumbrite standard).
   - Domeeniloogika elab `src/musical/pickup.js`; UI ainult kutsub `applyPickupSettingsChange`.
 
+- **Standard: unpitched Orff / rütmipill (faas A — üks pill)**
+  - Kehtib Orff unpitched pillidele (nt woodblock, claves, triangle): **1-jooneline** staff, pitch = `getSingleLineStaffPitch` (nt C5), mitte meloodiaheli.
+  - **N-režiim:** Space, A–G või **MIDI pad noteOn** → üks löök aktiivsele reale, kestus = `inputDuration` (`selectedDuration` / punkt); MIDI note number ei määra pitch’i (kõik padid = sama rida).
+  - **Heli:** preview ja score Play kasutavad `INSTRUMENT_TO_SOUNDFONT_NAME` (woodblock → `'woodblock'` / FluidR3_GM) + staff’i ankurpitch; ära mängi klaveri SF-i ega sisend-MIDI pitch’i.
+  - Klaveririba **ei ole** unpitched sisestuse eeldus; Web MIDI kuulamine on app-tasemel eraldi (klaver võib jääda peidetuks).
+  - Ulatus `C5–C5` ei blokeeri pad-/klahvisisestust (remapp enne range-kontrolli).
+  - Järgmine faas (mitte siin): mitme pilli percussion band + pad→staff map.
+
 - **Standard: pedagoogiline C4-põhi (kirjutamispiirkond)**
   - Pedagoogilises režiimis (`vabanotatsioon` / kuvarežiimid A–C) on sisestuse **alumine ankur absoluutne C4** (MIDI ≥ 60).
   - Vaikimisi ghost = C4; oktaavi nihutus lubab 4…6, mitte alla 4.
   - Tähekäsk A–G ei tohi valida oktavit, mis annaks noodi alla C4 (nt C4 + `B` → B4, mitte B3).
   - **N-režiim:** arvutiklahvid A–G on **nooditähed** (A→pitch A, mitte klaverikaardi ASDF→C). Klaveri ASDF-kaart on lubatud figuurnotatsioonis või pedagoogikas SEL+klaveriribal; N-režiimis ei tohi see noodi asukohta röövida.
+  - Unpitched Orff (vt ülal) on erand: A–G / MIDI remappivad single-line ankrule; C4-põhi ei kehti.
   - Käemärgid (režiim C) loetakse samast `notes[]`; C4-põhi hoiab JO…DI põhioktaavi stabiilsena.
   - Vt `docs/PEDAGOGICAL-NOTATION-REQUIREMENTS.md` §5.1.
 

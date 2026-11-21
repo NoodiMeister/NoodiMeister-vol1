@@ -7,6 +7,11 @@
 import { getPaperDimensionsPx, getNotationPageBodies, snapSystemYToPage } from '../utils/pageGeometry';
 import { measureLengthInQuarterBeats } from '../musical/timeSignature';
 import { fitWidthsToContentWidth } from './pageFitSpacing';
+import {
+  DEFAULT_SPACING_RATIO,
+  naturalMeasureWidthFromNotes,
+  traditionalMinNoteDistancePx,
+} from './horizontalSpacing';
 
 const DEFAULT_PAGE_DIMS = getPaperDimensionsPx('a4', 'portrait');
 const DEFAULT_PAGE_DIMS_LANDSCAPE = getPaperDimensionsPx('a4', 'landscape');
@@ -84,6 +89,10 @@ export function setLayoutConfig(config) {
  * `pixelsPerBeat` + stretch on SOOVITUD tihedus (nagu figuurnotatsioonis): rida ei venita
  * vaikimisi lehe täislaiuseks. Üleääre korral skaleeritakse `fitWidthsToContentWidth`-iga.
  * See võimaldab ridade joondust (vasak/keskele/parem), kui rida on lehest kitsam.
+ *
+ * MuseScore-style: kui taktil on `notes[]`, naturaalne laius tuleb kestuspõhistest
+ * spring-segmentidest (quarter reference + spacingRatio + minNoteDistance), mitte ainult
+ * `beats * pixelsPerBeat` — muidu 1/16 ja lühemad koonduvad ühte löögikasti.
  */
 export function computeLayout(measures, timeSignature, pixelsPerBeat, pageWidth, layoutOptions = {}) {
   const w = Number(pageWidth) || LAYOUT.PAGE_WIDTH_MIN;
@@ -107,10 +116,15 @@ export function computeLayout(measures, timeSignature, pixelsPerBeat, pageWidth,
     enforceMeasuresPerLine = true,
     notationPageHeaderReservePx = 0,
     notationPageEdgeReservePx = 0,
+    spacingRatio = DEFAULT_SPACING_RATIO,
+    minNoteDistancePx,
   } = layoutOptions;
   const mult = Math.max(0.25, Math.min(3, Number(globalSpacingMultiplier) || 1));
   const effectiveMeasuresPerLine = measuresPerLine > 0 ? Math.max(1, Math.round(measuresPerLine / mult)) : 0;
   const desiredPixelsPerBeat = Math.max(12, Number(pixelsPerBeat) || 85);
+  const resolvedMinNoteDistance = Number.isFinite(Number(minNoteDistancePx)) && Number(minNoteDistancePx) > 0
+    ? Number(minNoteDistancePx)
+    : traditionalMinNoteDistancePx(optionsStaffSpace ?? 10);
   const staffHeightForStep = optionsStaffHeight ?? getStaffHeight();
   const step = typeof optionsStaffSpacing === 'number' && optionsStaffSpacing > 0
     ? optionsStaffSpacing
@@ -134,7 +148,23 @@ export function computeLayout(measures, timeSignature, pixelsPerBeat, pageWidth,
     ? measureStretchFactors[i]
     : 1;
   const getMeasureBeats = (i) => measures[i].beatCount ?? beatsPerMeasure;
-  const getNaturalMeasureWidth = (i) => getMeasureBeats(i) * desiredPixelsPerBeat * getFactor(i);
+  const getNaturalMeasureWidth = (i) => {
+    const beats = getMeasureBeats(i);
+    const stretch = getFactor(i);
+    const base = beats * desiredPixelsPerBeat * stretch;
+    const m = measures[i];
+    const notes = Array.isArray(m?.notes) ? m.notes : null;
+    if (!notes || notes.length === 0) return base;
+    const springW = naturalMeasureWidthFromNotes(notes, {
+      startBeat: m.startBeat,
+      endBeat: m.endBeat,
+      beatCount: beats,
+      quarterWidthPx: desiredPixelsPerBeat,
+      spacingRatio,
+      minNoteDistancePx: resolvedMinNoteDistance,
+    });
+    return Math.max(base, springW * stretch);
+  };
   const getMeasureCountWeight = (i) => {
     if (measures[i]?.excludeFromCount === true) return 0;
     if (measures[i]?.excludeFromCount === false) return 1;

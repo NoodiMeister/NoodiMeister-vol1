@@ -2,8 +2,9 @@
 import React, { useState, useEffect, useLayoutEffect, useCallback, useRef, useMemo, useReducer } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { InteractivePiano } from './piano';
+import { InteractivePiano, useMidiHandler } from './piano';
 import { shouldComputerKeysPlayPianoMap } from './piano/pianoKeyboardGuards';
+import { resolveUnpitchedHitPitch } from './musical/unpitchedRhythmInput';
 import * as googleDrive from './services/googleDrive';
 import * as oneDrive from './services/oneDrive';
 import * as authStorage from './services/authStorage';
@@ -106,6 +107,13 @@ import {
 } from './layout/traditionalMultiStaffGeometry';
 import { FIGURE_BASE_WIDTH, FIGURE_ROW_HEIGHT, calculateLayout, getFigureContentWidthPx, maxPixelsPerBeatToFitPage, SPACING_PRESET_NORMAL_PX, SPACING_PRESET_LOOSE_PX } from './layout/LayoutEngine';
 import {
+  createMeasureHorizontalLayout,
+  DEFAULT_SPACING_RATIO,
+  figurenotesMinNoteDistancePx,
+  traditionalMinNoteDistancePx,
+  shortestDurationBeatsInNotes,
+} from './layout/horizontalSpacing';
+import {
   transposeNotes,
   normalizeAccidentalsForKey,
   getEffectiveAccidental,
@@ -155,6 +163,15 @@ import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 import 'svg2pdf.js';
 import Soundfont from 'soundfont-player';
+import {
+  SOUNDFONT_FORMAT,
+  SOUNDFONT_PACK,
+  soundfontNameForInstrumentId,
+  soundfontNameToUrl,
+  soundfontPackForInstrumentId,
+  soundfontPlayerCacheKey,
+} from './musical/soundLibrary.js';
+
 import {
   scoreToSvg,
   getFirstPageSvgString,
@@ -1003,47 +1020,6 @@ var INSTRUMENT_I18N_KEYS = {
   marimba: 'inst.marimba', vibraphone: 'inst.vibraphone', 'synth-lead': 'inst.synthLead', 'synth-pad': 'inst.synthPad',
   voice: 'inst.voice'
 };
-var INSTRUMENT_TO_GM_PROGRAM = {
-  'single-staff-treble': 0, 'single-staff-bass': 0,
-  boomwhackers: 115, handbells: 14,
-  'soprano-xylophone': 13, 'alto-xylophone': 13, 'bass-xylophone': 13,
-  'soprano-metallophone': 10, 'alto-metallophone': 10, 'bass-metallophone': 10,
-  triangle: 115, claves: 115, woodblock: 115, 'temple-blocks': 115, castanets: 115,
-  shakers: 115, maracas: 115, bongo: 115, conga: 115, guiro: 115, agogo: 115, cowbell: 115, cymbals: 115, rainstick: 115, windchimes: 115, sleighbells: 115,
-  djembe: 115, cajon: 115,
-  piano: 0, 'electric-piano': 4, organ: 19, harpsichord: 6, accordion: 21, celesta: 8,
-  guitar: 24, 'ukulele-sopran': 24, 'ukulele-tenor': 24, 'ukulele-bariton': 24, 'ukulele-bass': 32,
-  violin: 40, viola: 41, cello: 42, 'double-bass': 43, 'strings-ensemble': 48, 'acoustic-bass': 32, 'electric-bass': 33,
-  flute: 73, recorder: 74, clarinet: 71, oboe: 68, bassoon: 70,
-  trumpet: 56, trombone: 57, tuba: 58, 'french-horn': 60,
-  'tin-whistle': 73, 'tin-whistle-d': 73, 'tin-whistle-c': 73, 'tin-whistle-bb': 73, 'tin-whistle-a': 73, 'tin-whistle-g': 73, 'tin-whistle-f': 73, saxophone: 65, glockenspiel: 9, xylophone: 13, marimba: 12, vibraphone: 11, 'synth-lead': 80, 'synth-pad': 88, voice: 52
-};
-var INSTRUMENT_TO_SOUNDFONT_NAME = {
-  'single-staff-treble': 'acoustic_grand_piano', 'single-staff-bass': 'acoustic_grand_piano',
-  boomwhackers: 'woodblock', handbells: 'tubular_bells',
-  'soprano-xylophone': 'xylophone', 'alto-xylophone': 'xylophone', 'bass-xylophone': 'xylophone',
-  'soprano-metallophone': 'glockenspiel', 'alto-metallophone': 'glockenspiel', 'bass-metallophone': 'glockenspiel',
-  triangle: 'woodblock', claves: 'woodblock', woodblock: 'woodblock', 'temple-blocks': 'woodblock', castanets: 'woodblock',
-  shakers: 'woodblock', maracas: 'woodblock', bongo: 'woodblock', conga: 'woodblock', guiro: 'woodblock', agogo: 'woodblock', cowbell: 'woodblock', cymbals: 'woodblock', rainstick: 'woodblock', windchimes: 'woodblock', sleighbells: 'woodblock',
-  djembe: 'woodblock', cajon: 'woodblock',
-  piano: 'acoustic_grand_piano', 'electric-piano': 'electric_piano_1', organ: 'church_organ', harpsichord: 'harpsichord', accordion: 'accordion', celesta: 'celesta',
-  guitar: 'acoustic_guitar_nylon', 'ukulele-sopran': 'acoustic_guitar_nylon', 'ukulele-tenor': 'acoustic_guitar_nylon', 'ukulele-bariton': 'acoustic_guitar_nylon', 'ukulele-bass': 'acoustic_bass',
-  violin: 'violin', viola: 'viola', cello: 'cello', 'double-bass': 'contrabass', 'strings-ensemble': 'string_ensemble_1', 'acoustic-bass': 'acoustic_bass', 'electric-bass': 'electric_bass_finger',
-  flute: 'flute', recorder: 'recorder', clarinet: 'clarinet', oboe: 'oboe', bassoon: 'bassoon',
-  trumpet: 'trumpet', trombone: 'trombone', tuba: 'tuba', 'french-horn': 'french_horn',
-  // Tin whistle: GM-s ei ole eraldi häält; kasutame flöödi programmi (73) — lähedasem kui recorder (74).
-  'tin-whistle': 'flute', 'tin-whistle-d': 'flute', 'tin-whistle-c': 'flute', 'tin-whistle-bb': 'flute', 'tin-whistle-a': 'flute', 'tin-whistle-g': 'flute', 'tin-whistle-f': 'flute', saxophone: 'alto_sax', glockenspiel: 'glockenspiel', xylophone: 'xylophone', marimba: 'marimba', vibraphone: 'vibraphone', 'synth-lead': 'lead_1_square', 'synth-pad': 'pad_2_warm', voice: 'choir_aahs'
-};
-// Instrument-specific SoundFont pack overrides (gleitz CDN). Default: FluidR3_GM (iirivile kasutab nüüd sama panka mis flööt).
-var INSTRUMENT_SOUNDFONT_PACK = {
-};
-function soundfontPackForInstrumentId(id) {
-  return INSTRUMENT_SOUNDFONT_PACK[id] || 'FluidR3_GM';
-}
-function soundfontPlayerCacheKey(instrumentId) {
-  return String(instrumentId || '') + '\0' + soundfontPackForInstrumentId(instrumentId);
-}
-
 // Noodivõtmete SVG path-id (var faili alguses – TDZ/vältimine)
 var TREBLE_CLEF_PATH = 'M14 2v2c0 2-1 4-3 5-2 1-4 1-5 0-1-1-1-3 0-4 1-1 2-2 2-3 1-2-1-2-3 0-4 2-1 4-1 6 0 2 1 3 2 4 3 1 2 2 3 2 5 0 2-1 4-3 5-2 1-4 1-6-1-2-2-2-5 0-7 2-2 4-2 7 0 3 2 4 4 4 7 0 2-2 4-4 5-2 1-4 0-5-2-1-2-1-4 0-6 1-2 3-2 5 0 2 2 3 4 3 6 0 1-1 2-2 2-3 0-1-1-1-2 0-2 1 0 2 0 3-1 1-1 2-2 2-4 0-2-1-3-2-4-1-1-3-1-4 0-1 1-1 2 0 3 1 1 2 1 3 0 1-1 2-1 3 0 1 1 2 1 3 0';
 var BASS_CLEF_PATH = 'M8 4c0 2 1 3 2 3 1 0 2-1 2-3 0-2-1-3-2-3-1 0-2 1-2 3zm8 0c0 2 1 3 2 3 1 0 2-1 2-3 0-2-1-3-2-3-1 0-2 1-2 3zm-10 4v12c0 1 1 2 2 2 1 0 2-1 2-2V8c0-1-1-2-2-2-1 0-2 1-2 2zm12 0v12c0 1 1 2 2 2 1 0 2-1 2-2V8c0-1-1-2-2-2-1 0-2 1-2 2zM10 6c-1 0-2 1-2 2v8c0 1 1 2 2 2 1 0 2-1 2-2V8c0-1-1-2-2-2zm4 0c-1 0-2 1-2 2v8c0 1 1 2 2 2 1 0 2-1 2-2V8c0-1-1-2-2-2z';
@@ -2520,7 +2496,8 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   const lastDurationRef = useRef(selectedDuration);
   /** Takti-sisene rütmiasendus (MuseScore replace). Keha omistatakse pärast measuresRef’i. */
   const applyRhythmRewriteRef = useRef(() => false);
-  // Pausi sisestus: 0 + rütmiklahv (2–7) → paus vastava vältusega
+  // MuseScore: 0 = ühekordne paus valitud kestusega (ei hoia pausirežiimi kinni).
+  // restNextRef jäetud ainult legacy cleanup’iks (N-mode väljumine); uut latch’i ei seata.
   const restNextRef = useRef(false);
   /** Taktiruudustiku lõpp (beatides); uuendatakse pärast maxCursorAllowed — setInstrument loeb ref’i (defineeritud enne arvutust). */
   const restPaddingGridEndBeatRef = useRef(0);
@@ -3065,19 +3042,10 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   const activeInstrumentCfg = instrumentConfig?.[instrument];
   const isActiveUnpitchedPercussion = isSingleLineUnpitchedPercussion(instrument, activeInstrumentCfg);
   const showPercussionRhythmInsertButton = noteInputMode
-    && notationMode === 'vabanotatsioon'
     && isActiveUnpitchedPercussion
     && isTouchPrimaryDevice;
-  const insertPercussionRhythmNote = () => {
-    if (!showPercussionRhythmInsertButton) return;
-    const singleLinePitch = getSingleLineStaffPitch(instrument, activeInstrumentCfg);
-    addNoteAtCursor(
-      singleLinePitch?.pitch || 'C',
-      singleLinePitch?.octave ?? ghostOctave,
-      0,
-      { forceRest: false }
-    );
-  };
+  const insertUnpitchedRhythmHitRef = useRef(() => false);
+  // Unpitched: klaveririba pole vaja (MIDI kuulamine on app-tasemel). Peida klaver, et ASDF ei segaks.
   useEffect(() => {
     if (!isActiveUnpitchedPercussion) return;
     if (pianoStripVisible) setPianoStripVisible(false);
@@ -8200,7 +8168,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     if (!Number.isFinite(baseMidi)) return; // vigane pitch/octave – ära mängi, et helimängija ei satuks segadusse
     const midiNote = Math.max(0, Math.min(127, Math.round(baseMidi + semi)));
     const freq = getNoteFrequency(tuningReferenceNote, tuningReferenceOctave, tuningReferenceHz, pitch, oct, semi);
-    const soundfontName = INSTRUMENT_TO_SOUNDFONT_NAME[instrumentId] || 'acoustic_grand_piano';
+    const soundfontName = soundfontNameForInstrumentId(instrumentId);
     const soundfontPack = soundfontPackForInstrumentId(instrumentId);
     const sfCacheKey = soundfontPlayerCacheKey(instrumentId);
     let ctx = audioContextRef.current;
@@ -8243,7 +8211,11 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       activePreviewStopTimeoutRef.current = null;
     }, durationMs + (scorePlayback ? 120 : 40));
     if (ctx && !soundfontCacheRef.current[sfCacheKey]) {
-      Soundfont.instrument(ctx, soundfontName, { soundfont: soundfontPack })
+      Soundfont.instrument(ctx, soundfontName, {
+          soundfont: soundfontPack || SOUNDFONT_PACK,
+          format: SOUNDFONT_FORMAT,
+          nameToUrl: soundfontNameToUrl,
+        })
         .then((player) => {
           soundfontCacheRef.current[sfCacheKey] = player;
         })
@@ -8880,7 +8852,9 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     const currentInstrumentRange = currentInstrumentCfg?.range;
     const currentRangeMidi = resolveInstrumentRangeMidi(currentInstrumentId, keySignature, currentInstrumentRange);
     const currentNoteMidi = toNoteMidi(effectivePitch, oct, accResolved);
-    const isOutOfRangeInsert = isMidiOutOfInstrumentRange(currentNoteMidi, currentRangeMidi);
+    // Unpitched: pitch remapitakse staff-ankrule; ära blokeeri pad/MIDI sisendit C5–C5 ulatusega.
+    const isOutOfRangeInsert = !isUnpitchedSingleLineInstrument
+      && isMidiOutOfInstrumentRange(currentNoteMidi, currentRangeMidi);
     if (isOutOfRangeInsert) {
       const rangeLabel = resolveInstrumentRange(currentInstrumentId, keySignature, currentInstrumentRange);
       const low = Array.isArray(rangeLabel) ? rangeLabel[0] : '?';
@@ -9002,13 +8976,57 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     const nextBeat = insertBeat + effectiveDuration;
     expandScoreForNoteInputAdvance(nextBeat, provisionalMin, 'note-insert');
     setCursorPosition(nextBeat);
-    setGhostPitch(pitch);
+    setGhostPitch(effectivePitch);
     setGhostOctave(oct);
     if (!(options.forceRest != null ? !!options.forceRest : isRest) && playNoteOnInsert && !options.skipPlay) {
-      const semitones = accResolved === 1 ? 1 : accResolved === -1 ? -1 : 0;
-      playPianoNote(pitch, oct, semitones);
+      const semitones = isUnpitchedSingleLineInstrument
+        ? 0
+        : (accResolved === 1 ? 1 : accResolved === -1 ? -1 : 0);
+      playPianoNote(effectivePitch, oct, semitones, { instrumentId: currentInstrumentId });
     }
+    // Ühekordne paus (0 / toolbox): ära jäta sticky pausirežiimi peale.
+    if (options.forceRest) setIsRest(false);
   }, [cursorPosition, selectedDuration, getEffectiveDuration, isDotted, isRest, notes, saveToHistory, ghostOctave, ghostAccidental, ghostAccidentalIsExplicit, playPianoNote, playNoteOnInsert, tupletMode, durations, staves, activeStaffIndex, notesWithExplicitBeats, noteDurationInQuarterBeats, notationStyle, notationMode, keySignature, instrument, t, noteInputMode, expandScoreForNoteInputAdvance, timeSignature, pickupEnabled, pickupQuantity, pickupDuration, incompleteLastMeasure, assertCursorTimeModelInputs, throwCursorModelError, pendingArticulation]);
+
+  /** MuseScore: sisesta üks paus valitud kestusega; ei hoia pausirežiimi. */
+  const insertRestAtCursor = useCallback(() => {
+    if (!noteInputMode) return false;
+    const dur = lastDurationRef.current || selectedDuration || '1/4';
+    restNextRef.current = false;
+    setIsRest(false);
+    addNoteAtCursor('C', ghostOctave, 0, {
+      insertAtBeat: cursorPosition,
+      overrideDurationLabel: dur,
+      forceRest: true,
+      skipPlay: true,
+    });
+    return true;
+  }, [noteInputMode, selectedDuration, ghostOctave, cursorPosition, addNoteAtCursor]);
+
+  /** Unpitched Orff: üks löök aktiivsele reale (Space / A–G / MIDI pad / touch). */
+  const insertUnpitchedRhythmHit = useCallback((options = {}) => {
+    if (!isActiveUnpitchedPercussion) return false;
+    if (!noteInputMode && !options.allowOutsideNMode) return false;
+    const hit = resolveUnpitchedHitPitch(instrument, activeInstrumentCfg, getSingleLineStaffPitch);
+    addNoteAtCursor(hit.pitch, hit.octave, 0, {
+      forceRest: false,
+      skipPlay: !!options.skipPlay,
+    });
+    return true;
+  }, [isActiveUnpitchedPercussion, noteInputMode, instrument, activeInstrumentCfg, addNoteAtCursor]);
+  insertUnpitchedRhythmHitRef.current = insertUnpitchedRhythmHit;
+  const insertPercussionRhythmNote = () => {
+    if (!showPercussionRhythmInsertButton) return;
+    insertUnpitchedRhythmHit();
+  };
+
+  const onUnpitchedMidiNoteOn = useCallback((_midiNumber) => {
+    if (!noteInputMode || !isActiveUnpitchedPercussion) return;
+    insertUnpitchedRhythmHitRef.current();
+  }, [noteInputMode, isActiveUnpitchedPercussion]);
+  const onUnpitchedMidiNoteOff = useCallback(() => {}, []);
+  const unpitchedMidiEnabled = !!(noteInputMode && isActiveUnpitchedPercussion && !pianoStripVisible);
+  const unpitchedMidi = useMidiHandler(onUnpitchedMidiNoteOn, onUnpitchedMidiNoteOff, unpitchedMidiEnabled);
 
   // Add a note on top of the note at cursor (chord input). Traditional or Pedagogical only. Shift+Letter.
   const addNoteOnTopOfCursor = useCallback((pitch, octave, accidental, options = {}) => {
@@ -9451,7 +9469,12 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                 : (i === selectedNoteIndex);
               return inRange ? { ...note, isRest: !note.isRest } : note;
             }));
-          } else setIsRest(prev => !prev);
+            setIsRest(false);
+          } else if (noteInputMode) {
+            insertRestAtCursor();
+          } else {
+            setIsRest(false);
+          }
         } else if (option.value === 'dotted') {
           if (hasSelection) applyRhythmRewriteRef.current?.({ mode: 'toggle-dot' });
           else setIsDotted(prev => !prev);
@@ -11983,6 +12006,11 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
             addChordAt(getChordInsertBeat(), noteLetter.toUpperCase(), '');
             return;
           }
+          // Unpitched Orff: A–G = rütmilöök staff-ankrule (+ woodblock SF), mitte meloodiatäht.
+          if (isActiveUnpitchedPercussion) {
+            insertUnpitchedRhythmHit();
+            return;
+          }
           const letterUp = noteLetter.toUpperCase();
           const octForMelody = notationStyle === 'FIGURENOTES'
             ? ghostOctave
@@ -12005,6 +12033,18 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
           addNoteAtCursor(letterUp, octForMelody);
           setGhostPitch(letterUp);
           setGhostOctave(octForMelody);
+          return;
+        }
+        // Unpitched Orff: Space = valitud kestusega löök (+ heli). Ära sega tekstikaste / chord edit.
+        if (
+          isActiveUnpitchedPercussion
+          && !modKey
+          && !e.altKey
+          && !isTypingInInput
+          && (e.key === ' ' || e.code === 'Space')
+        ) {
+          e.preventDefault();
+          insertUnpitchedRhythmHit();
           return;
         }
       }
@@ -12087,24 +12127,8 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
           if (durationMap[e.code] && !e.shiftKey && !modKey) {
             e.preventDefault();
             const dur = durationMap[e.code];
-            if (restNextRef.current) {
-              restNextRef.current = false;
-              lastDurationRef.current = dur;
-              setSelectedDuration(dur);
-              setIsRest(true);
-              const restIdx = toolbox.options.findIndex(opt => opt.value === 'rest');
-              if (restIdx >= 0) setSelectedOptionIndex(restIdx);
-              if (noteInputMode) {
-                addNoteAtCursor('C', ghostOctave, 0, {
-                  insertAtBeat: cursorPosition,
-                  overrideDurationLabel: dur,
-                  forceRest: true,
-                  forceDotted: false,
-                  skipPlay: true,
-                });
-              }
-              return;
-            }
+            restNextRef.current = false;
+            setIsRest(false);
             lastDurationRef.current = dur;
             setSelectedDuration(dur);
             const optionIdx = toolbox.options.findIndex(opt => opt.value === dur);
@@ -12113,7 +12137,8 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
           }
           if (e.code === 'Digit0' && !e.shiftKey && !modKey) {
             e.preventDefault();
-            restNextRef.current = true;
+            if (noteInputMode) insertRestAtCursor();
+            else setIsRest(false);
             return;
           }
           if (e.code === 'Period' && !e.shiftKey && !modKey) {
@@ -12535,29 +12560,15 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         };
         if (durationMap[e.code] && !e.shiftKey && !modKey) {
           const dur = durationMap[e.code];
-          if (restNextRef.current) {
-            restNextRef.current = false;
-            e.preventDefault();
-            lastDurationRef.current = dur;
-            setSelectedDuration(dur);
-            // Insert a rest at the cursor beat (replace any placeholder rest),
-            // not appended to the end of the note list.
-            addNoteAtCursor('C', ghostOctave, 0, {
-              insertAtBeat: cursorPosition,
-              overrideDurationLabel: dur,
-              forceRest: true,
-              forceDotted: false,
-              skipPlay: true,
-            });
-            return;
-          }
+          restNextRef.current = false;
+          setIsRest(false);
           lastDurationRef.current = dur;
           setSelectedDuration(dur);
           return;
         }
         if (e.code === 'Digit0' && !e.shiftKey && !modKey) {
           e.preventDefault();
-          restNextRef.current = true;
+          insertRestAtCursor();
           return;
         }
         if (e.code === 'Period' && !e.shiftKey && !modKey) {
@@ -12602,6 +12613,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         });
         if (!(keyboardDrivenPianoInsertActive && e.defaultPrevented) && ['c', 'd', 'e', 'f', 'g', 'a', 'b'].includes(noteLetter)) {
           restNextRef.current = false;
+          setIsRest(false);
           setGhostAccidentalIsExplicit(false);
           e.preventDefault();
           const letterUp = noteLetter.toUpperCase();
@@ -12623,7 +12635,10 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
               ghostAccidental ?? 0,
               pedagogicalLetterOctaveOptions(notationMode)
             );
-          addNoteAtCursor(letterUp, octForMelody, undefined, { skipPlay: !playNoteOnInsert });
+          addNoteAtCursor(letterUp, octForMelody, undefined, {
+            skipPlay: !playNoteOnInsert,
+            forceRest: false,
+          });
           setGhostPitch(letterUp);
           setGhostOctave(octForMelody);
           return;
@@ -12638,7 +12653,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [
     activeToolbox, selectedOptionIndex, handleToolboxSelection, noteInputMode, selectedDuration, isDotted, isRest, notes,
-    getEffectiveDuration, selectedNoteIndex, selectionStart, selectionEnd, clipboard, undo, saveToHistory, getSelectedNotes,
+    insertRestAtCursor, getEffectiveDuration, selectedNoteIndex, selectionStart, selectionEnd, clipboard, undo, saveToHistory, getSelectedNotes,
     shiftPitchClassSameOctave, shiftOctave, addMeasure, addSongBlock, ghostPitch, ghostOctave, ghostAccidental, ghostAccidentalIsExplicit, playNoteOnInsert, playPianoNote,
     cursorPosition, cursorSubRow, notationStyle, figurenotesChordBlocks, addChordAt, getChordInsertBeat, getChordAtCursor, transposeChordSymbol,
     beginChordSymbolEdit, cancelChordSymbolEdit, commitChordSymbolEdit,
@@ -12654,6 +12669,8 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     moveNoteSelectionHorizontally,
     isHarmonyFormMode,
     pianoStripVisible,
+    isActiveUnpitchedPercussion,
+    insertUnpitchedRhythmHit,
   ]);
 
   // JO-võti: klõps väljaspool võtit lõpetab valiku
@@ -13368,6 +13385,22 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   });
   /** Pealkiri/autor (pt-6, mb-4, kaks rida) — pole süsteemide lastY sees; zoom/absolute kõrgus peab seda arvestama. */
   const scoreHeadBlockReservePx = notationMode === 'vabanotatsioon' ? 220 : 140;
+  /** MuseScore springs: attach notes to measures so natural widths grow for 1/16 (trad) / 1/8 (figure). */
+  const measuresForLayout = useMemo(() => {
+    const list = Array.isArray(measures) ? measures : [];
+    const staffList = Array.isArray(staves) ? staves : [];
+    return list.map((m) => {
+      const notes = [];
+      for (const staff of staffList) {
+        for (const n of staff?.notes || []) {
+          const b = Number(n?.beat);
+          if (!Number.isFinite(b)) continue;
+          if (b >= m.startBeat && b < m.endBeat) notes.push(n);
+        }
+      }
+      return notes.length ? { ...m, notes } : m;
+    });
+  }, [measures, staves]);
   const systemsForScore = useMemo(() => {
     if (notationStyle === 'FIGURENOTES') {
       const figureStaffStep = figurenotesTotalRowHeight + layoutPartsGap;
@@ -13375,14 +13408,14 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         + ((visibleStaffCountForLayout - 1) * layoutPartsGap);
       // Figurenotes multistaff rule: one measure's staves (e.g. piano RH+LH + extra instruments)
       // must stay inside the same system; only full system jumps to the next row.
-      const data = { measures, timeSignature, pixelsPerBeat: effectivePixelsPerBeat, staffSpacing: figureSystemCoreHeight + layoutSystemGap, globalSpacingMultiplier: layoutGlobalSpacingMultiplier, boxesPerRow: effectiveLayoutMeasuresPerLine || 4, pageWidth: scoreContentWidth, pageHeight: scorePageInnerHeight, notationPageHeaderReservePx: scoreHeadBlockReservePx, notationPageEdgeReservePx: scorePageEdgeReservePx, lineBreakBefore: effectiveLayoutLineBreakBefore, pageBreakBefore: effectiveLayoutPageBreakBefore, figurenotesSize: effectiveFigurenotesSize, excludePickupFromMeasureCount: pickupEnabled, pickupMeasureIndex: 0, enforceMeasuresPerLine: effectiveLayoutStrictMeasuresPerLine, measureStretchFactors };
+      const data = { measures: measuresForLayout, timeSignature, pixelsPerBeat: effectivePixelsPerBeat, staffSpacing: figureSystemCoreHeight + layoutSystemGap, globalSpacingMultiplier: layoutGlobalSpacingMultiplier, boxesPerRow: effectiveLayoutMeasuresPerLine || 4, pageWidth: scoreContentWidth, pageHeight: scorePageInnerHeight, notationPageHeaderReservePx: scoreHeadBlockReservePx, notationPageEdgeReservePx: scorePageEdgeReservePx, lineBreakBefore: effectiveLayoutLineBreakBefore, pageBreakBefore: effectiveLayoutPageBreakBefore, figurenotesSize: effectiveFigurenotesSize, excludePickupFromMeasureCount: pickupEnabled, pickupMeasureIndex: 0, enforceMeasuresPerLine: effectiveLayoutStrictMeasuresPerLine, measureStretchFactors };
       const raw = calculateLayout('figure', pageOrientation === 'landscape' ? 'landscape' : 'portrait', data);
       return raw.map((s, i) => ({ ...s, yOffset: s.yOffset + (systemYOffsets[i] ?? 0) }));
     }
-    const opts = { measuresPerLine: effectiveLayoutMeasuresPerLine, lineBreakBefore: effectiveLayoutLineBreakBefore, pageBreakBefore: effectiveLayoutPageBreakBefore, systemGap: effectiveTraditionalSystemGap, staffCount: staves.length, staffHeight: traditionalLayoutStaffHeight, measureStretchFactors, globalSpacingMultiplier: layoutGlobalSpacingMultiplier, pageHeight: scorePageInnerHeight, notationPageHeaderReservePx: scoreHeadBlockReservePx, notationPageEdgeReservePx: scorePageEdgeReservePx, excludePickupFromMeasureCount: pickupEnabled, pickupMeasureIndex: 0, enforceMeasuresPerLine: effectiveLayoutStrictMeasuresPerLine };
-    const raw = computeLayout(measures, timeSignature, effectivePixelsPerBeat, scoreContentWidth, opts);
+    const opts = { measuresPerLine: effectiveLayoutMeasuresPerLine, lineBreakBefore: effectiveLayoutLineBreakBefore, pageBreakBefore: effectiveLayoutPageBreakBefore, systemGap: effectiveTraditionalSystemGap, staffCount: staves.length, staffHeight: traditionalLayoutStaffHeight, staffSpace: traditionalStaffSpacePx, measureStretchFactors, globalSpacingMultiplier: layoutGlobalSpacingMultiplier, pageHeight: scorePageInnerHeight, notationPageHeaderReservePx: scoreHeadBlockReservePx, notationPageEdgeReservePx: scorePageEdgeReservePx, excludePickupFromMeasureCount: pickupEnabled, pickupMeasureIndex: 0, enforceMeasuresPerLine: effectiveLayoutStrictMeasuresPerLine, minNoteDistancePx: traditionalMinNoteDistancePx(traditionalStaffSpacePx) };
+    const raw = computeLayout(measuresForLayout, timeSignature, effectivePixelsPerBeat, scoreContentWidth, opts);
     return raw.map((s, i) => ({ ...s, yOffset: s.yOffset + (systemYOffsets[i] ?? 0) }));
-  }, [notationStyle, measures, timeSignature, effectivePixelsPerBeat, effectiveLayoutPageWidth, scoreContentWidth, pageOrientation, effectiveLayoutMeasuresPerLine, effectiveLayoutStrictMeasuresPerLine, effectiveLayoutLineBreakBefore, effectiveLayoutPageBreakBefore, effectiveTraditionalSystemGap, layoutGlobalSpacingMultiplier, staves.length, measureStretchFactors, systemYOffsets, scorePageInnerHeight, scorePageEdgeReservePx, figurenotesTotalRowHeight, figurenotesChordBlocks, layoutPartsGap, visibleStaffCountForLayout, traditionalLayoutStaffHeight, staffLineSpanPx, figurenotesSize, pickupEnabled]);
+  }, [notationStyle, measuresForLayout, timeSignature, effectivePixelsPerBeat, effectiveLayoutPageWidth, scoreContentWidth, pageOrientation, effectiveLayoutMeasuresPerLine, effectiveLayoutStrictMeasuresPerLine, effectiveLayoutLineBreakBefore, effectiveLayoutPageBreakBefore, effectiveTraditionalSystemGap, layoutGlobalSpacingMultiplier, staves.length, measureStretchFactors, systemYOffsets, scorePageInnerHeight, scorePageEdgeReservePx, figurenotesTotalRowHeight, figurenotesChordBlocks, layoutPartsGap, visibleStaffCountForLayout, traditionalLayoutStaffHeight, traditionalStaffSpacePx, staffLineSpanPx, figurenotesSize, pickupEnabled]);
   useEffect(() => { systemsForScoreRef.current = systemsForScore; }, [systemsForScore]);
   // Nutikas fookus: ainult valitud read; vähem ridu = suurem rea kõrgus (HEV/solfedž)
   const visibleStaffList = useMemo(() => {
@@ -13435,7 +13468,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     const layoutStaffCount = staves.length || 1;
     if (notationStyle === 'FIGURENOTES') {
       const figureSystemCoreHeight = (nVis * figurenotesTotalRowHeight) + ((nVis - 1) * layoutPartsGap);
-      const data = { measures, timeSignature, pixelsPerBeat: effectivePixelsPerBeat, staffSpacing: figureSystemCoreHeight + layoutSystemGap, globalSpacingMultiplier: layoutGlobalSpacingMultiplier, boxesPerRow: effectiveLayoutMeasuresPerLine || 4, pageWidth: scoreContentWidth, pageHeight: scorePageInnerHeight, notationPageHeaderReservePx: scoreHeadBlockReservePx, notationPageEdgeReservePx: scorePageEdgeReservePx, lineBreakBefore: effectiveLayoutLineBreakBefore, pageBreakBefore: effectiveLayoutPageBreakBefore, figurenotesSize: effectiveFigurenotesSize, enforceMeasuresPerLine: effectiveLayoutStrictMeasuresPerLine, excludePickupFromMeasureCount: pickupEnabled, pickupMeasureIndex: 0, measureStretchFactors };
+      const data = { measures: measuresForLayout, timeSignature, pixelsPerBeat: effectivePixelsPerBeat, staffSpacing: figureSystemCoreHeight + layoutSystemGap, globalSpacingMultiplier: layoutGlobalSpacingMultiplier, boxesPerRow: effectiveLayoutMeasuresPerLine || 4, pageWidth: scoreContentWidth, pageHeight: scorePageInnerHeight, notationPageHeaderReservePx: scoreHeadBlockReservePx, notationPageEdgeReservePx: scorePageEdgeReservePx, lineBreakBefore: effectiveLayoutLineBreakBefore, pageBreakBefore: effectiveLayoutPageBreakBefore, figurenotesSize: effectiveFigurenotesSize, enforceMeasuresPerLine: effectiveLayoutStrictMeasuresPerLine, excludePickupFromMeasureCount: pickupEnabled, pickupMeasureIndex: 0, measureStretchFactors };
       const sys = calculateLayout('figure', pageOrientation === 'landscape' ? 'landscape' : 'portrait', data);
       const lastY = sys.length > 0 ? sys[sys.length - 1].yOffset + (systemYOffsets[sys.length - 1] ?? 0) : 0;
       const maxBaseYOffset = entries.reduce((maxY, { staffIdx, visibleIndex }) => {
@@ -13460,12 +13493,14 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       enforceMeasuresPerLine: effectiveLayoutStrictMeasuresPerLine,
       excludePickupFromMeasureCount: pickupEnabled,
       pickupMeasureIndex: 0,
+      staffSpace: traditionalStaffSpacePx,
+      minNoteDistancePx: traditionalMinNoteDistancePx(traditionalStaffSpacePx),
     };
-    const sys = computeLayout(measures, timeSignature, effectivePixelsPerBeat, scoreContentWidth, opts);
+    const sys = computeLayout(measuresForLayout, timeSignature, effectivePixelsPerBeat, scoreContentWidth, opts);
     const lastY = sys.length > 0 ? sys[sys.length - 1].yOffset + (systemYOffsets[sys.length - 1] ?? 0) : 0;
     const perStaffCore = sys.length > 0 ? lastY + traditionalLayoutStaffHeight + 40 : traditionalLayoutStaffHeight + 40;
     return scoreHeadBlockReservePx + nVis * perStaffCore + sumBaseYOffset;
-  }, [notationStyle, notationMode, visibleStaffList, staves, effectiveStaffHeight, traditionalLayoutStaffHeight, layoutPartsGap, perStaffRowStep, staffYOffsets, measures, timeSignature, effectivePixelsPerBeat, effectiveLayoutPageWidth, scoreContentWidth, pageOrientation, effectiveLayoutMeasuresPerLine, effectiveLayoutStrictMeasuresPerLine, effectiveLayoutLineBreakBefore, effectiveLayoutPageBreakBefore, effectiveTraditionalSystemGap, layoutGlobalSpacingMultiplier, measureStretchFactors, systemYOffsets, scorePageInnerHeight, scorePageEdgeReservePx, figurenotesRowHeight, figurenotesTotalRowHeight, figurenotesSize, figurenotesChordBlocks, figurenotesChordLineGap, figurenotesChordLineHeight, scoreHeadBlockReservePx, useManualStaffOffsets, pickupEnabled]);
+  }, [notationStyle, notationMode, visibleStaffList, staves, effectiveStaffHeight, traditionalLayoutStaffHeight, traditionalStaffSpacePx, layoutPartsGap, perStaffRowStep, staffYOffsets, measuresForLayout, timeSignature, effectivePixelsPerBeat, effectiveLayoutPageWidth, scoreContentWidth, pageOrientation, effectiveLayoutMeasuresPerLine, effectiveLayoutStrictMeasuresPerLine, effectiveLayoutLineBreakBefore, effectiveLayoutPageBreakBefore, effectiveTraditionalSystemGap, layoutGlobalSpacingMultiplier, measureStretchFactors, systemYOffsets, scorePageInnerHeight, scorePageEdgeReservePx, figurenotesRowHeight, figurenotesTotalRowHeight, figurenotesSize, figurenotesChordBlocks, figurenotesChordLineGap, figurenotesChordLineHeight, scoreHeadBlockReservePx, useManualStaffOffsets, pickupEnabled]);
   const scoreNotationPageCount = useMemo(() => {
     const extra = Math.max(0, Number(effectiveLayoutExtraPages) || 0);
     const ch = logicalContentHeight || 800;
@@ -17692,10 +17727,41 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                 {(notationMode === 'traditional' || notationMode === 'vabanotatsioon') && (
                   <p className="text-[10px] text-amber-600 text-center mt-0.5">{t('noteInput.chordHint')}</p>
                 )}
-                {noteInputMode && notationMode === 'vabanotatsioon' && isActiveUnpitchedPercussion && (
-                  <p className="text-[10px] text-amber-700 text-center mt-0.5">
-                    Unpitched percussion: Mac/PC sisestus klahvidega A-G, puuteseadmes kasuta nuppu "Sisesta rütm".
-                  </p>
+                {noteInputMode && isActiveUnpitchedPercussion && (
+                  <div className="pt-1.5 mt-0.5 border-t border-amber-200 space-y-1.5">
+                    <p className="text-[10px] text-amber-700 text-center">
+                      {t('percussion.unpitchedHint')}
+                    </p>
+                    {unpitchedMidi.supported && (
+                      <div className="flex flex-wrap items-center justify-center gap-1.5 text-[10px] text-amber-800">
+                        <span className="font-medium">{t('midi.title')}</span>
+                        {unpitchedMidi.error ? (
+                          <span className="text-rose-700">{unpitchedMidi.error}</span>
+                        ) : unpitchedMidi.inputs.length === 0 ? (
+                          <span>{t('midi.noDevices')}</span>
+                        ) : (
+                          <label className="inline-flex items-center gap-1">
+                            <span className="sr-only">{t('midi.selectDevice')}</span>
+                            <select
+                              value={unpitchedMidi.selectedId ?? ''}
+                              onChange={(e) => unpitchedMidi.setSelectedId(e.target.value || null)}
+                              className="max-w-[180px] rounded border border-amber-300 bg-white px-1 py-0.5 text-[10px] text-amber-900"
+                            >
+                              <option value="">{t('midi.selectDevice')}</option>
+                              {unpitchedMidi.inputs.map((input) => (
+                                <option key={input.id} value={input.id}>
+                                  {input.name || input.id}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                        )}
+                      </div>
+                    )}
+                    {!unpitchedMidi.supported && (
+                      <p className="text-[10px] text-amber-600 text-center">{t('midi.unsupported')}</p>
+                    )}
+                  </div>
                 )}
                 {showPercussionRhythmInsertButton && (
                   <div className="pt-1.5 border-t border-amber-200 flex items-center justify-center">
@@ -17703,9 +17769,9 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                       type="button"
                       onClick={insertPercussionRhythmNote}
                       className="px-3 py-1.5 rounded-md bg-amber-500 text-white text-xs font-semibold hover:bg-amber-600 active:bg-amber-700 transition-colors"
-                      title="Sisesta valitud rütmiga noot"
+                      title={t('percussion.insertRhythm')}
                     >
-                      Sisesta rütm
+                      {t('percussion.insertRhythm')}
                     </button>
                   </div>
                 )}
@@ -22094,7 +22160,6 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
       const m = effectiveMeasures[sys.measureIndices[j]];
       const beatCount = m?.beatCount ?? beatsPerMeasure;
       const mw = widths[j] ?? 80 * beatCount;
-      const beatWidth = mw / beatCount;
       const isLastMeasure = j === sys.measureIndices.length - 1;
       // Lõpu-beat (localBeat === systemTotal): caret istub viimase takti paremale joonele.
       if (beatLeft < beatCount - 1e-9 || (isLastMeasure && beatLeft <= beatCount + 1e-9)) {
@@ -22102,7 +22167,24 @@ function Timeline({ measures, timeSignature, timeSignatureMode, pixelsPerBeat, p
         const xBeats = (isLastMeasure && local >= beatCount - 1e-9)
           ? beatCount
           : Math.min(beatCount, local + (Number(centerOffsetBeats) || 0));
-        return notationStartX + systemOffsetX + widths.slice(0, j).reduce((a, b) => a + b, 0) + xBeats * beatWidth;
+        const measureX = notationStartX + systemOffsetX + widths.slice(0, j).reduce((a, b) => a + b, 0);
+        const absBeat = (Number(m?.startBeat) || 0) + xBeats;
+        const shortest = shortestDurationBeatsInNotes(m?.notes || [], m?.startBeat, m?.endBeat);
+        const minDist = isFigurenotesMode
+          ? figurenotesMinNoteDistancePx(figurenotesSize, shortest)
+          : traditionalMinNoteDistancePx(10);
+        const layoutH = createMeasureHorizontalLayout({
+          notes: m?.notes || [],
+          startBeat: m?.startBeat,
+          endBeat: m?.endBeat,
+          beatCount,
+          measureX,
+          measureWidth: mw,
+          quarterWidthPx: Math.max(12, mw / Math.max(0.25, beatCount)),
+          spacingRatio: DEFAULT_SPACING_RATIO,
+          minNoteDistancePx: minDist,
+        });
+        return layoutH.xAtBeat(absBeat);
       }
       beatLeft -= beatCount;
     }

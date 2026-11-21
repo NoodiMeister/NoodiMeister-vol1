@@ -12,26 +12,27 @@ import {
   resolveHandSignGlyphMetrics,
 } from '../notation/handSigns/handSignMapping';
 import { measureLengthInQuarterBeats } from '../musical/timeSignature';
+import {
+  createMeasureHorizontalLayout,
+  DEFAULT_SPACING_RATIO,
+  traditionalMinNoteDistancePx,
+} from '../layout/horizontalSpacing';
 
 const LAYOUT = { MARGIN_LEFT: 60, MEASURE_MIN_WIDTH: 28 };
 
-function getSlotsPerBeat(measure, beatIndex) {
-  const beatStart = measure.startBeat + beatIndex;
-  const beatEnd = beatStart + 1;
-  const notesInBeat = (measure.notes || []).filter((n) => n.beat >= beatStart && n.beat < beatEnd);
-  if (notesInBeat.length === 0) return 1;
-  const minDur = Math.min(...notesInBeat.map((n) => n.duration || 1));
-  return Math.max(1, Math.round(1 / minDur));
-}
-
-function getNoteSlotCenterX(note, measure, measureX, beatWidth) {
-  const beatInMeasure = note.beat - measure.startBeat;
-  const beatIndex = Math.floor(beatInMeasure);
-  const posInBeat = beatInMeasure - beatIndex;
-  const slotsPerBeat = getSlotsPerBeat(measure, beatIndex);
-  const slotIndex = Math.min(Math.floor(posInBeat * slotsPerBeat), slotsPerBeat - 1);
-  const slotCenter = (slotIndex + 0.5) / slotsPerBeat;
-  return measureX + (beatIndex + slotCenter) * beatWidth;
+function getNoteSlotCenterX(note, measure, measureX, measureWidth, beatsInMeasure) {
+  const layout = createMeasureHorizontalLayout({
+    notes: measure.notes || [],
+    startBeat: measure.startBeat,
+    endBeat: measure.endBeat,
+    beatCount: beatsInMeasure,
+    measureX,
+    measureWidth,
+    quarterWidthPx: Math.max(12, measureWidth / Math.max(0.25, beatsInMeasure)),
+    spacingRatio: DEFAULT_SPACING_RATIO,
+    minNoteDistancePx: traditionalMinNoteDistancePx(10),
+  });
+  return layout.noteCenterX(note);
 }
 
 export function HandSignDegreeStaffView({
@@ -131,7 +132,6 @@ export function HandSignDegreeStaffView({
               const measureWidth = measureWidths[j] ?? beatsPerMeasure * 80;
               const measureX = measureAreaLeft + measureWidths.slice(0, j).reduce((a, b) => a + (b || 0), 0);
               const beatsInMeasure = measure.beatCount ?? beatsPerMeasure;
-              const beatWidth = measureWidth / beatsInMeasure;
               const barX = measureX + measureWidth;
 
               const displayBar =
@@ -188,7 +188,7 @@ export function HandSignDegreeStaffView({
                       joClefStaffPosition,
                     );
                     const degreeName = JO_NAMES[degreeIndex] ?? 'JO';
-                    const x = getNoteSlotCenterX(note, measure, measureX, beatWidth);
+                    const x = getNoteSlotCenterX(note, measure, measureX, measureWidth, beatsInMeasure);
                     const y = sys.yOffset + getDegreeLineY(degreeIndex, geom.topLineY, geom.lineSpacing);
                     const selected = typeof isNoteSelected === 'function'
                       ? isNoteSelected(globalNoteIndex)

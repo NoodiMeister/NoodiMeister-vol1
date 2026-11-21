@@ -8,6 +8,12 @@ import { RhythmSyllableLabel } from "../components/RhythmSyllableLabel";
 import { getRhythmSyllableForNote } from "../notation/rhythmSyllables";
 import { shouldDrawRestGlyph } from "../notation/restGlyphDedupe";
 import { getFigureNoteWidth, FIGURE_BASE_WIDTH } from "../layout/LayoutEngine";
+import {
+  createMeasureHorizontalLayout,
+  DEFAULT_SPACING_RATIO,
+  figurenotesMinNoteDistancePx,
+  shortestDurationBeatsInNotes,
+} from "../layout/horizontalSpacing";
 import { getDisplayBarNumber } from "../notation/barNumberRestart";
 import { SmuflGlyph } from "../notation/smufl/SmuflGlyph";
 import {
@@ -1253,7 +1259,27 @@ export function FigurenotesView({
                     const measure = instMeasures[measureIdx];
                     if (!measure) return null;
                     const beatsInMeasure = measure.beatCount ?? beatsPerMeasure;
-                    const beatWidth = beatContentWidth / beatsInMeasure;
+                    const quarterWidthPx = beatContentWidth / Math.max(0.25, beatsInMeasure);
+                    const shortestInMeasure = shortestDurationBeatsInNotes(
+                      measure.notes || [],
+                      measure.startBeat,
+                      measure.endBeat,
+                    );
+                    // MuseScore/Dorico springs: 1/8 and shorter need real width (not equal beat boxes).
+                    const horizontalLayout = createMeasureHorizontalLayout({
+                      notes: measure.notes || [],
+                      startBeat: measure.startBeat,
+                      endBeat: measure.endBeat,
+                      beatCount: beatsInMeasure,
+                      measureX: beatContentLeft,
+                      measureWidth: beatContentWidth,
+                      quarterWidthPx: Math.max(12, quarterWidthPx),
+                      spacingRatio: DEFAULT_SPACING_RATIO,
+                      minNoteDistancePx: figurenotesMinNoteDistancePx(
+                        figurenotesSize,
+                        shortestInMeasure,
+                      ),
+                    });
                     const measureIndexInSystem = sys.measureIndices.indexOf(measureIdx);
                     const prevMeasureInSystem =
                       measureIndexInSystem > 0
@@ -1313,34 +1339,15 @@ export function FigurenotesView({
                       const minDurBeats = durationInBeats(minDur);
                       return Math.max(1, Math.round(1 / minDurBeats));
                     };
-                    /** Slot index by position within beat (order when sorted by beat). */
-                    const getSlotIndexInBeat = (note) => {
-                      const beatIndex = Math.floor(
-                        note.beat - measure.startBeat,
-                      );
-                      const beatStart = measure.startBeat + beatIndex;
-                      const beatEnd = beatStart + 1;
-                      const notesInBeat = measure.notes
-                        .filter((n) => n.beat >= beatStart && n.beat < beatEnd)
-                        .sort((a, b) => (a.beat ?? 0) - (b.beat ?? 0));
-                      const idx = notesInBeat.findIndex((n) => n === note);
-                      return idx >= 0 ? idx : 0;
-                    };
-                    const getNoteSlotCenterX = (note) => {
-                      const beatInMeasure = note.beat - measure.startBeat;
-                      const beatIndex = Math.floor(beatInMeasure);
-                      const slotsPerBeat = getSlotsPerBeat(beatIndex);
-                      const slotIndex = getSlotIndexInBeat(note);
-                      const slotCenter =
-                        (Math.min(slotIndex, slotsPerBeat - 1) + 0.5) /
-                        slotsPerBeat;
-                      return beatContentLeft + (beatIndex + slotCenter) * beatWidth;
-                    };
+                    const getNoteSlotCenterX = (note) =>
+                      horizontalLayout.noteCenterX(note);
                     const getRestBoxWidth = (note) => {
-                      const beatInMeasure = note.beat - measure.startBeat;
-                      const beatIndex = Math.floor(beatInMeasure);
-                      const slotsPerBeat = getSlotsPerBeat(beatIndex);
-                      return beatWidth / slotsPerBeat;
+                      const dur = durationInBeats(Number(note?.duration) || 1);
+                      const x0 = horizontalLayout.xAtBeat(note.beat);
+                      const x1 = horizontalLayout.xAtBeat(
+                        (Number(note.beat) || 0) + Math.max(1 / 64, dur),
+                      );
+                      return Math.max(4, Math.abs(x1 - x0));
                     };
 
                     const boxHeight = timelineHeight - 2 * padVertical;
@@ -1734,17 +1741,22 @@ export function FigurenotesView({
                           {
                             length: Math.max(0, Math.ceil(beatsInMeasure) - 1),
                           },
-                          (_, b) => (
-                            <line
-                              key={`beat-${b}`}
-                              x1={beatContentLeft + (b + 1) * beatWidth}
-                              y1={sys.yOffset + padVertical}
-                              x2={beatContentLeft + (b + 1) * beatWidth}
-                              y2={sys.yOffset + melodyRowHeight - padVertical}
-                              stroke="#e0e0e0"
-                              strokeWidth="1"
-                            />
-                          ),
+                          (_, b) => {
+                            const bx = horizontalLayout.xAtBeat(
+                              measure.startBeat + (b + 1),
+                            );
+                            return (
+                              <line
+                                key={`beat-${b}`}
+                                x1={bx}
+                                y1={sys.yOffset + padVertical}
+                                x2={bx}
+                                y2={sys.yOffset + melodyRowHeight - padVertical}
+                                stroke="#e0e0e0"
+                                strokeWidth="1"
+                              />
+                            );
+                          },
                         )}
                         {/* Tahvel/sõrm: puudeala löögikastidele – noodi lisamine soovitud löögile */}
                         {onBeatSlotClick &&
@@ -1765,18 +1777,27 @@ export function FigurenotesView({
                                 fromSelected,
                                 fromExisting,
                               );
+                              const beatStartX = horizontalLayout.xAtBeat(
+                                measure.startBeat + beatIndex,
+                              );
+                              const beatEndX = horizontalLayout.xAtBeat(
+                                measure.startBeat + beatIndex + 1,
+                              );
+                              const thisBeatWidth = Math.max(
+                                4,
+                                beatEndX - beatStartX,
+                              );
                               return Array.from(
                                 { length: slotsPerBeat },
                                 (_, slotIndex) => (
                                   <rect
                                     key={`beat-hit-${beatIndex}-${slotIndex}`}
                                     x={
-                                      beatContentLeft +
-                                      (beatIndex + slotIndex / slotsPerBeat) *
-                                        beatWidth
+                                      beatStartX +
+                                      (slotIndex / slotsPerBeat) * thisBeatWidth
                                     }
                                     y={sys.yOffset + padVertical}
-                                    width={beatWidth / slotsPerBeat}
+                                    width={thisBeatWidth / slotsPerBeat}
                                     height={boxHeight}
                                     fill="transparent"
                                     style={{ cursor: "pointer" }}
@@ -2868,52 +2889,20 @@ export function FigurenotesView({
                             );
                           };
 
-                          // Shorter-than-quarter notes in the same beat: place so that
-                          // right edge of one shape + 1px gap + left edge of next shape (repeated for every short note).
-                          const compactCenters = new Map();
+                          // MuseScore/Dorico springs already space 1/8+; do not pack with 1px gaps
+                          // (that regression made short figures overlap inside equal beat boxes).
                           const figureSizeByNoteIndex = new Map();
-                          const notesByBeat = new Map();
                           measure.notes.forEach((note, idx) => {
                             if (note.isRest) return;
                             const durLabel = note.durationLabel || "1/4";
-                            const durBeats =
-                              typeof note.duration === "number"
-                                ? note.duration
-                                : getDurationInBeats(durLabel);
-                            if (durBeats >= 1) return; // only shorter than quarter
-                            const beatInMeasure = note.beat - measure.startBeat;
-                            const beatIndex = Math.floor(beatInMeasure);
-                            if (!notesByBeat.has(beatIndex))
-                              notesByBeat.set(beatIndex, []);
                             const scale = getFigureScaleForDuration(durLabel);
-                            const figureSize = figureSizeBaseForMeasure * scale;
-                            figureSizeByNoteIndex.set(idx, figureSize);
-                            notesByBeat
-                              .get(beatIndex)
-                              .push({ note, idx, figureSize });
-                          });
-                          notesByBeat.forEach((group, beatIndex) => {
-                            if (!group || group.length <= 1) return;
-                            group.sort(
-                              (a, b) =>
-                                (a.note.beat ?? 0) - (b.note.beat ?? 0) ||
-                                a.idx - b.idx,
+                            figureSizeByNoteIndex.set(
+                              idx,
+                              figureSizeBaseForMeasure * scale,
                             );
-                            const beatLeft =
-                              beatContentLeft + beatIndex * beatWidth;
-                            let leftEdge = beatLeft + 1; // left edge of first short note in this beat
-                            group.forEach(({ idx, figureSize }) => {
-                              const center = leftEdge + figureSize / 2;
-                              compactCenters.set(idx, center);
-                              const rightEdge = leftEdge + figureSize;
-                              leftEdge = rightEdge + 1; // 1px gap, then left edge of next shape
-                            });
                           });
                           const getFigureCenterXForNote = (note, idx) => {
-                            const defaultCenterX = getNoteSlotCenterX(note);
-                            const baseCenter = compactCenters.has(idx)
-                              ? compactCenters.get(idx)
-                              : defaultCenterX;
+                            const baseCenter = getNoteSlotCenterX(note);
                             const figureSize =
                               figureSizeByNoteIndex.get(idx) ??
                               figureSizeBaseForMeasure;
@@ -3191,8 +3180,7 @@ export function FigurenotesView({
                               durLabel === "1/2" || durLabel === "1/1"
                                 ? Math.min(
                                     beatContentLeft + beatContentWidth,
-                                    beatContentLeft +
-                                      (endBeat - measure.startBeat) * beatWidth,
+                                    horizontalLayout.xAtBeat(endBeat),
                                   )
                                 : null;
                             /* Laulusõnad: vahe (gap) = lauluteksti fondi suurus (lyricFontSize); Cmd/Ctrl+L režiim loeb seda seadest. */

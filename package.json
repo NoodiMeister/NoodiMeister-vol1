@@ -19,12 +19,14 @@
     "test:hand-placement-persist": "node scripts/check-hand-placement-persist.mjs",
     "test:repeat-selection": "node scripts/check-repeat-selection.mjs",
     "test:rhythm-duration": "node scripts/check-rhythm-duration.mjs",
+    "test:horizontal-spacing": "node scripts/check-horizontal-spacing.mjs",
     "test:composer-import": "node scripts/check-composer-import.mjs",
     "report:work-hours": "node scripts/generate-work-hours-report.mjs",
     "mark-error-fixed": "node scripts/mark-auth-error-fixed.js",
     "export-symbols": "node scripts/export-all-symbols-png.js",
     "build-gallery": "node scripts/build-gallery-html.js",
-    "deploy:cf": "npm run build && wrangler deploy"
+    "sounds:fetch": "node scripts/fetch-soundfonts.mjs",
+    "deploy:cf": "npm run sounds:fetch && npm run build && wrangler deploy"
   },
   "dependencies": {
     "@azure/msal-browser": "^5.4.0",
