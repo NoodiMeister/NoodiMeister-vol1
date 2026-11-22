@@ -16,6 +16,7 @@ const PrivacyPage = lazyWithRetry(() => import('./pages/PrivacyPage'));
 const TermsPage = lazyWithRetry(() => import('./pages/TermsPage'));
 const HowToPage = lazyWithRetry(() => import('./pages/HowToPage'));
 const ComposerPage = lazyWithRetry(() => import('./pages/ComposerPage'));
+const MusicStudioPage = lazyWithRetry(() => import('./pages/MusicStudioPage'));
 const AdminGrantSupportPage = lazyWithRetry(() => import('./pages/AdminGrantSupportPage'));
 const AdminRegistrationPage = lazyWithRetry(() => import('./pages/AdminRegistrationPage'));
 const UserDashboard = lazyWithRetry(() => import('./components/UserDashboard'));
@@ -62,6 +63,10 @@ function EscapeLogoutHandler() {
         || path.startsWith('/demo-noodid')
         || path === '/part'
         || path.startsWith('/part/')
+        || path === '/stuudio'
+        || path.startsWith('/stuudio/')
+        || path === '/kujundaja'
+        || path.startsWith('/kujundaja/')
       ) {
         return;
       }
@@ -305,6 +310,9 @@ function AppRoutes() {
           <Route path="/kuidas" element={<HowToPage />} />
           <Route path="/kujundaja" element={<ComposerPage />} />
           <Route path="/koostaja" element={<Navigate to="/kujundaja" replace />} />
+          <Route path="/stuudio" element={<MusicStudioPage />} />
+          <Route path="/montaaz" element={<Navigate to="/stuudio" replace />} />
+          <Route path="/montaaž" element={<Navigate to="/stuudio" replace />} />
           <Route path="/how-to" element={<Navigate to="/kuidas" replace />} />
           <Route path="/about" element={<Navigate to="/teave" replace />} />
           <Route path="/administraator" element={<AdminGrantSupportPage />} />

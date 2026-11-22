@@ -87,14 +87,15 @@ Märkused:\n+
 | **A** | `joStaff` | JO-võti + noodijoonestik + noodiglüüfid (praegune vaikimisi pedagoogiline vaade; **sisestus**) |
 | **B** | `joStaffHandSigns` | JO-võti + noodijooned; käemärgid **noodi all**, **enne** laulusõnu |
 | **C** | `handSignLyrics` | **7 astmejoont** (JO…DI); käemärgid **noodi glüüfide asemel**; laulusõnad joonte all |
-| **D** | `interactive` | **Muusika stuudio**: interaktiivne õppematerjal (noodid + video/audio + sync, playhead, meedia-toolbar, animatsiooni eksport) |
 
-### 5.1 Ühine andmemudel (A ↔ B ↔ C ↔ D)
+Interaktiivne õppematerjal = **Muusika stuudio → Montaaž** (`/stuudio`), mitte pedagoogiline D. Legacy `interactive` normaliseeritakse A-ks.
+
+### 5.1 Ühine andmemudel (A ↔ B ↔ C)
 
 - Samad `notes[]` (pitch, duration, beat), `lyric*`, `timeSignature`, `keySignature`, `joClefStaffPosition`.
 - Režiimivahetus ei tohi muuta ega dubleerida nootide andmeid.
-- Sisestus ja korrastus toimuvad peamiselt **A**-s (ka B/C kuvana); **D ei tohi** olla vaikimisi peal ega segada nootide loomist.
-- Playbacki andmed (audio, cue’d, sync) võivad failis olla olemas ka A/B/C ajal, kuid nende **UI ja runtime** on ainult D-s.
+- Sisestus ja korrastus toimuvad peamiselt **A**-s (ka B/C kuvana).
+- Montaaž (heli/sync/stseenid) elab eraldi programmis; vt `docs/MUUSIKA-STUUDIO.md`.
 
 #### Kirjutamispiirkond: C4+ (kohustuslik A-s ja seega B/C andmetes)
 
@@ -125,34 +126,13 @@ Märkused:\n+
 - Andmed: sama `notes[]` / lyrics mis A; režiimivahetus ei dubleeri noote.
 - Sisestus eelistatult A-s; B on peamiselt **kuvamine** (õpetaja vaade).
 
-### 5.4 Režiim D — Muusika stuudio (interaktiivne õppematerjal)
+### 5.4 Muusika stuudio → Montaaž (mitte pedagoogiline D)
 
-Tootenimi: **Muusika stuudio**. Soundslice-taoline **õppematerjali keskkond**, mitte noodigraafika redaktor. Täielik toote-/salvestusstandard: `AGENTS.md` → **Standard: Muusika stuudio**.
+Interaktiivne õppematerjal elab eraldi programmis **Montaaž** (`/stuudio`), mitte A/B/C ribas. Standard: `AGENTS.md` → **Muusika stuudio (hub) + Montaaž**; detailid `docs/MUUSIKA-STUUDIO.md`.
 
-**Minu tööd**
-
-- Eraldi valik loomise/laadimise hulgas (“Uus Muusika stuudio” / olemasoleva stuudio avamine).
-- Materjali saab tõsta, kopeerida ja hoida samades kasutaja pilvekaustades mis teisi töid; üleslaetud video-sidecar liigub/kopeerub koos dokumendiga.
-
-**Põhivoog**
-
-1. **Lae noodid** — eelistatult Noodimeistri valmis projekt (rikas ülekanne: noodid + pedagoogilised kihid, sh augudiagrammid / käemärgid jne). MusicXML on väline sild, mitte stuudio sisene täistõde.
-2. **Lae õppevideo** — YouTube link **või** üleslaetav MP4 (jt toetatud formaadid); või audio.
-3. **Sync** — seosta media ajatelg noodigraafika taktidega (ruler / syncpunktid).
-4. **Harjuta** — playhead, loop, cue’d, meedia-toolbar.
-5. **Ekspordi** — peamine suund **MP4** (allalaadimine või salvestus Minu tööd kausta).
-
-**Sync**
-
-- **Käsitsi (takti põhiselt):** Soundslice-analoog — kasutaja märgib / kohandab syncpunkte taktide (vajadusel löökide) peal; nood ↔ media navigeerimine on kahesuunaline.
-- **Autosync (AI):** võrdleb laetud video/audio esitustempo ja struktuuri loo nootide ajateljega ning **pakub** ruler’i sync’i. Tulemus peab olema ülevaatatav ja käsitsi korrigeeritav; AI ei lukusta valesid punkte ilma nähtava eelvaate / kasutaja kinnituseta.
-
-**Tehnilised piirid**
-
-- D / Muusika stuudio UI: playback, stseenid (cue), playhead-stiilid, meedia-toolbar, video ruler, sync, MP4 eksport.
-- A/B/C-s neid süsteeme **ei kuvata** ega käivitata; stuudiost lahkudes peatatakse taasesitus.
-- Score’i geomeetria D-s järgib A-d (`resolvePedagogicalRenderMode`); overlay’d (media, ruler, playhead) on stuudio-spetsiifilised.
-- Salvestus: oma dokument + media ref (YouTube URL või pilve `videoAsset`); no-overwrite algse nooditöö suhtes.
+- Minu tööd: hub → Kujundaja | Montaaž.
+- Montaažis **null** noodigraafika tööriista.
+- Poolik `.nms` ja valmis videofail peavad olema Drive kaustast kätte saadavad; video alla laetav ja eraldiseisvalt esitatav.
 
 ---
 
@@ -164,6 +144,6 @@ Tootenimi: **Muusika stuudio**. Soundslice-taoline **õppematerjali keskkond**, 
 | 2  | Oma värvikombinatsioonid (JO suhtes) | Värvid tulevad pedagoogilise notatsiooni konfiguratsioonist, mitte figuurnotatsiooni konstantidest. |
 | 3  | Erisugused kujundid (kellad, torud, Orff) | Kujundid tulevad pedagoogilise notatsiooni / Orff konfiguratsioonist, mitte figuurnotatsiooni kujundite loogikast. |
 | 4  | Astme trepp ja käemärgid: eritasandiline JO-LE-MI (ruududega) | Oma vaate tüüp; ruudud tähistavad astme trepi tasandeid, mitte figuurnotatsiooni kujundeid. |
-| 5  | Kuvarežiimid A / B / C / D | Pedagoogilise faili sisene vaade; A–C noodistus; D = Muusika stuudio (noodid + video + sync); sama note/lyric tõde. |
+| 5  | Kuvarežiimid A / B / C | Pedagoogilise faili sisene vaade (noodistus). Interaktiivne montaaž = Muusika stuudio → Montaaž. |
 
 Kõik nõuded on mõeldud **pedagoogilise notatsiooni** jaoks ja peavad olema implementeeritud nii, et figuurnotatsiooni süsteem jääb eraldi; ühine võib olla ainult tehniline abikiht (nt ühine joonistusmootor), mitte andmemudel ega äriline loogika.

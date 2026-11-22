@@ -1,13 +1,13 @@
 /**
- * Sticky header ribbon: notation method (T/F/P) → pedagogical A–D → C hand-sign Style.
+ * Sticky header ribbon: notation method (T/F/P) → pedagogical A–C → C hand-sign Style.
  * Cascading segments appear only when the parent mode is active.
+ * Interactive playback lives in Muusika stuudio → Montaaž (`/stuudio`), not here.
  */
 import React from 'react';
 import {
   PEDAGOGICAL_DISPLAY_A,
   PEDAGOGICAL_DISPLAY_B,
   PEDAGOGICAL_DISPLAY_C,
-  PEDAGOGICAL_DISPLAY_D,
   normalizePedagogicalDisplayMode,
   isHandSignLyricsDisplayMode,
 } from '../../notation/handSigns/pedagogicalDisplayModes';
@@ -30,21 +30,17 @@ const PED_OPTIONS = [
   { id: PEDAGOGICAL_DISPLAY_A, short: 'A', titleKey: 'settings.pedagogicalDisplayA', hintKey: 'toolbar.pedVariantAHint' },
   { id: PEDAGOGICAL_DISPLAY_B, short: 'B', titleKey: 'settings.pedagogicalDisplayB', hintKey: 'toolbar.pedVariantBHint' },
   { id: PEDAGOGICAL_DISPLAY_C, short: 'C', titleKey: 'settings.pedagogicalDisplayC', hintKey: 'toolbar.pedVariantCHint' },
-  { id: PEDAGOGICAL_DISPLAY_D, short: 'D', titleKey: 'settings.pedagogicalDisplayD', hintKey: 'toolbar.pedVariantDHint' },
 ];
 
 function segmentClass() {
   return 'flex flex-wrap items-center gap-1.5 border-r border-amber-400/60 pr-3 mr-1 last:border-r-0 last:pr-0 last:mr-0';
 }
 
-function chipClass(active, { disabled = false, accent = 'amber' } = {}) {
+function chipClass(active, { disabled = false } = {}) {
   if (disabled) {
     return 'px-2 py-1 rounded-md text-xs font-semibold border bg-amber-50/40 text-amber-400 border-amber-200/60 cursor-not-allowed';
   }
   if (active) {
-    if (accent === 'violet') {
-      return 'px-2 py-1 rounded-md text-xs font-semibold border bg-violet-600 text-white border-violet-700 shadow-sm';
-    }
     return 'px-2 py-1 rounded-md text-xs font-semibold border bg-amber-600 text-white border-amber-700 shadow-sm';
   }
   return 'px-2 py-1 rounded-md text-xs font-semibold border bg-white/90 text-amber-950 border-amber-300 hover:bg-amber-100';
@@ -53,8 +49,7 @@ function chipClass(active, { disabled = false, accent = 'amber' } = {}) {
 function pedHintKey(pedMode) {
   if (pedMode === PEDAGOGICAL_DISPLAY_A) return 'toolbar.pedVariantAHint';
   if (pedMode === PEDAGOGICAL_DISPLAY_B) return 'toolbar.pedVariantBHint';
-  if (pedMode === PEDAGOGICAL_DISPLAY_C) return 'toolbar.pedVariantCHint';
-  return 'toolbar.pedVariantDHint';
+  return 'toolbar.pedVariantCHint';
 }
 
 export function NotationMethodRibbon({
@@ -123,10 +118,7 @@ export function NotationMethodRibbon({
                   if (opt.disabled) return;
                   onPedagogicalDisplayModeChange?.(opt.id);
                 }}
-                className={chipClass(active, {
-                  disabled: !!opt.disabled,
-                  accent: opt.id === PEDAGOGICAL_DISPLAY_D ? 'violet' : 'amber',
-                })}
+                className={chipClass(active, { disabled: !!opt.disabled })}
               >
                 {opt.short}
               </button>

@@ -78,7 +78,7 @@ export const HOW_TO_GUIDE_CONTENT = {
               'Tempo jaoks sea BPM (Noodigraafika mängija aknas või seotud seadetest).',
               'Rohkemate juhtnuppude jaoks ava „Noodigraafika mängija“ (Play, Paus, Stop, Step).',
               'Peatamiseks vajuta „Stop“ või „Paus“; Stop viib kursori tavaliselt tagasi algusesse.',
-              'Pedagoogilises režiimis D (interaktiivne) on lisaks taustheli ja meedia-toolbar; tavaliseks kuulamiseks piisab Play / Noodigraafika mängijast.',
+              'Õppematerjali montaažiks (heli sync, stseenid, video Drive’i) ava Minu tööd → Muusika stuudio → Montaaž. Tavaliseks kuulamiseks piisab Play / Noodigraafika mängijast.',
             ],
           },
           {
@@ -305,7 +305,7 @@ export const HOW_TO_GUIDE_CONTENT = {
               'Set BPM for tempo (in the Score player window or related settings).',
               'For more controls open “Noodigraafika mängija” / Score player (Play, Pause, Stop, Step).',
               'Use Pause or Stop to halt; Stop usually returns the cursor to the start.',
-              'In pedagogical mode D (interactive) you also get background audio and the media toolbar; for a normal listen, Play / Score player is enough.',
+              'For lesson montage with audio sync and scenes, open My works → Music Studio → Montage. For a normal listen, Play / Score player is enough.',
             ],
           },
           {

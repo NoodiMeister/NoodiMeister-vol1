@@ -12,12 +12,15 @@ import { preparePdfImportSuggestions, runPdfImportPipeline } from '../import/pdf
 import PdfOmrGuidedSetup from '../components/import/PdfOmrGuidedSetup';
 import PdfOmrReviewPanel from '../components/import/PdfOmrReviewPanel';
 import { isComposerFileName } from '../document/composerDocumentModel';
+import { isMusicStudioFileName } from '../document/musicStudioDocumentModel';
 
 function getProjectFileHref(basePath, file, cloud) {
   const params = new URLSearchParams();
   params.set('fileId', String(file.id));
   if (cloud === 'onedrive') params.set('cloud', 'onedrive');
-  const route = isComposerFileName(file.name) ? 'kujundaja' : 'app';
+  let route = 'app';
+  if (isComposerFileName(file.name)) route = 'kujundaja';
+  else if (isMusicStudioFileName(file.name)) route = 'stuudio';
   return `${basePath}/${route}?${params.toString()}`;
 }
 
@@ -25,6 +28,13 @@ function getNewDesignHref(basePath, cloud, folderId) {
   const params = new URLSearchParams({ new: '1', cloud });
   if (folderId) params.set('saveFolderId', folderId);
   return `${basePath}/kujundaja?${params.toString()}`;
+}
+
+function getNewStudioHref(basePath, cloud, folderId) {
+  const params = new URLSearchParams({ new: '1' });
+  if (cloud) params.set('cloud', cloud);
+  if (folderId) params.set('saveFolderId', folderId);
+  return `${basePath}/stuudio?${params.toString()}`;
 }
 
 /** Error Boundary: sisselogimise järgne vaade – punane kast veateatega */
@@ -159,6 +169,7 @@ export default function MinuTöödPage() {
   const [projectSummaries, setProjectSummaries] = useState({});
   const [importingMusicXml, setImportingMusicXml] = useState(false);
   const [importingPdf, setImportingPdf] = useState(false);
+  const [studioHubOpen, setStudioHubOpen] = useState(false);
   const [pdfOmrFile, setPdfOmrFile] = useState(null);
   const [pdfOmrSuggestions, setPdfOmrSuggestions] = useState(null);
   const [pdfOmrStep, setPdfOmrStep] = useState(null); // 'guided' | 'review' | null
@@ -1069,12 +1080,13 @@ export default function MinuTöödPage() {
             >
               <FolderOpen className="w-5 h-5" /> {t['mywork.openLastModified']}
             </a>
-            <a
-              href={`${basePath}/kujundaja?new=1`}
-              className="inline-flex items-center gap-2 px-6 py-3 rounded-xl border-2 border-amber-400 bg-white dark:bg-zinc-900 text-amber-800 dark:text-white font-semibold hover:bg-amber-50 dark:hover:bg-white/10 transition-colors no-underline"
+            <button
+              type="button"
+              onClick={() => setStudioHubOpen(true)}
+              className="inline-flex items-center gap-2 px-6 py-3 rounded-xl border-2 border-teal-500 bg-white dark:bg-zinc-900 text-teal-800 dark:text-teal-200 font-semibold hover:bg-teal-50 dark:hover:bg-white/10 transition-colors"
             >
-              <FolderOpen className="w-5 h-5" /> {t['mywork.openComposer'] || 'Ava kujundaja'}
-            </a>
+              <FolderOpen className="w-5 h-5" /> {t['mywork.musicStudio'] || 'Muusika stuudio'}
+            </button>
             <button
               type="button"
               onClick={() => importMusicXmlInputRef.current?.click()}
@@ -1762,6 +1774,74 @@ export default function MinuTöödPage() {
                 >
                   {renameLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Pencil className="w-4 h-4" />}
                   {renameLoading ? (t['feedback.creatingFolder'] || 'Salvestan…') : (t['account.renameFolder'] || 'Muuda nime')}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {studioHubOpen && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+            onClick={() => setStudioHubOpen(false)}
+            role="presentation"
+          >
+            <div
+              className="bg-white dark:bg-zinc-900 rounded-2xl shadow-xl border-2 border-teal-200 dark:border-white/20 max-w-md w-full p-6"
+              onClick={(e) => e.stopPropagation()}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="studio-hub-title"
+            >
+              <div className="flex items-center justify-between mb-2">
+                <h3 id="studio-hub-title" className="font-semibold text-teal-900 dark:text-white text-lg">
+                  {t['mywork.musicStudio'] || 'Muusika stuudio'}
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => setStudioHubOpen(false)}
+                  className="p-1 rounded hover:bg-teal-50 dark:hover:bg-white/10 text-teal-900 dark:text-white"
+                  aria-label={t['common.close'] || 'Sulge'}
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <p className="text-sm text-zinc-600 dark:text-white/80 mb-5">
+                {t['mywork.musicStudioHubHint'] || 'Vali programm: kirjastuse kujundaja või õppematerjali montaaž.'}
+              </p>
+              <div className="flex flex-col gap-3">
+                <a
+                  href={`${basePath}/kujundaja?new=1`}
+                  className="block rounded-xl border-2 border-amber-300 dark:border-amber-500/40 bg-amber-50 dark:bg-zinc-800 px-4 py-3 no-underline hover:bg-amber-100 dark:hover:bg-zinc-700 transition-colors"
+                  onClick={() => setStudioHubOpen(false)}
+                >
+                  <span className="block font-bold text-amber-900 dark:text-amber-100">
+                    {t['mywork.studioHubDesigner'] || '1) Kujundaja'}
+                  </span>
+                  <span className="block text-sm text-amber-800/90 dark:text-white/70 mt-0.5">
+                    {t['mywork.studioHubDesignerHint'] || 'Kirjastuse kujundaja tööriist'}
+                  </span>
+                </a>
+                <a
+                  href={getNewStudioHref(basePath)}
+                  className="block rounded-xl border-2 border-teal-400 dark:border-teal-500/40 bg-teal-50 dark:bg-zinc-800 px-4 py-3 no-underline hover:bg-teal-100 dark:hover:bg-zinc-700 transition-colors"
+                  onClick={() => setStudioHubOpen(false)}
+                >
+                  <span className="block font-bold text-teal-900 dark:text-teal-100">
+                    {t['mywork.studioHubMontage'] || '2) Montaaž'}
+                  </span>
+                  <span className="block text-sm text-teal-800/90 dark:text-white/70 mt-0.5">
+                    {t['mywork.studioHubMontageHint'] || 'Õppematerjali montaaž: import, sync, stseenid, playhead'}
+                  </span>
+                </a>
+              </div>
+              <div className="mt-5 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setStudioHubOpen(false)}
+                  className="px-4 py-2 rounded-lg border border-zinc-300 dark:border-white/30 text-zinc-700 dark:text-white hover:bg-zinc-50 dark:hover:bg-white/10 text-sm"
+                >
+                  {t['common.cancel'] || 'Tühista'}
                 </button>
               </div>
             </div>

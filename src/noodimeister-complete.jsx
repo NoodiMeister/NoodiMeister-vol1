@@ -65,7 +65,6 @@ import {
   PEDAGOGICAL_DISPLAY_A,
   PEDAGOGICAL_DISPLAY_B,
   PEDAGOGICAL_DISPLAY_C,
-  PEDAGOGICAL_DISPLAY_D,
   normalizePedagogicalDisplayMode,
   isHandSignLyricsDisplayMode,
   isJoStaffHandSignsDisplayMode,
@@ -3210,7 +3209,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   // Relatiivnotatsioon (Kodály): võtmemärk ja traditsiooniline noodivõti on valikulised; JO võti on kohustuslik.
   const [relativeNotationShowKeySignature, setRelativeNotationShowKeySignature] = useState(false);
   const [relativeNotationShowTraditionalClef, setRelativeNotationShowTraditionalClef] = useState(false);
-  /** Pedagoogiline kuvarežiim A/B/C/D (sama loo vaade; vt pedagogicalDisplayModes.js). D = interaktiivne/playback. */
+  /** Pedagoogiline kuvarežiim A/B/C (sama loo vaade; vt pedagogicalDisplayModes.js). Interaktiivne = Montaaž /stuudio. */
   const [pedagogicalDisplayMode, setPedagogicalDisplayMode] = useState(DEFAULT_PEDAGOGICAL_DISPLAY_MODE);
   /** C-režiimi käemärkide suurus/kontrast (sama uTheory font; ND — faile ei muudeta). */
   const [handSignStyle, setHandSignStyle] = useState(() => ({ ...DEFAULT_HAND_SIGN_STYLE }));
@@ -3776,7 +3775,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       setNotationMode('vabanotatsioon');
       setRelativeNotationShowKeySignature(false);
       setRelativeNotationShowTraditionalClef(false);
-      // New pedagogical works open in A (editing), not D (interactive/playback).
+      // New pedagogical works open in A (editing). Interactive montage lives in /stuudio.
       setPedagogicalDisplayMode(DEFAULT_PEDAGOGICAL_DISPLAY_MODE);
       // Kirjutamispiirkond C4+: ghost ei tohi alustada bassi oktavis.
       setGhostPitch('C');
@@ -4013,7 +4012,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       return tSec >= start && tSec < end;
     }) || null;
   }, [pedagogicalAudioCurrentTime, pedagogicalCues]);
-  /** Playback/interactive UI only in display mode D — A/B/C remain for note editing. */
+  /** Interactive playback UI removed from pedagogical modes — lives in Montaaž (/stuudio). */
   const isPedagogicalInteractiveMode = !!(
     isPedagogicalProject
     && isPedagogicalInteractiveDisplayMode(pedagogicalDisplayMode)
@@ -16425,7 +16424,6 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                         { id: PEDAGOGICAL_DISPLAY_A, label: t('settings.pedagogicalDisplayA') },
                         { id: PEDAGOGICAL_DISPLAY_B, label: t('settings.pedagogicalDisplayB') },
                         { id: PEDAGOGICAL_DISPLAY_C, label: t('settings.pedagogicalDisplayC') },
-                        { id: PEDAGOGICAL_DISPLAY_D, label: t('settings.pedagogicalDisplayD') },
                       ].map((opt) => {
                         const active = normalizePedagogicalDisplayMode(pedagogicalDisplayMode) === opt.id;
                         return (
@@ -16434,14 +16432,11 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                             type="button"
                             onClick={() => {
                               dirtyRef.current = true;
-                              if (opt.id === PEDAGOGICAL_DISPLAY_D) setIsPedagogicalProject(true);
                               setPedagogicalDisplayMode(opt.id);
                             }}
                             className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold border ${
                               active
-                                ? opt.id === PEDAGOGICAL_DISPLAY_D
-                                  ? 'bg-violet-600 text-white border-violet-700'
-                                  : 'bg-amber-600 text-white border-amber-700'
+                                ? 'bg-amber-600 text-white border-amber-700'
                                 : 'bg-white text-amber-900 border-amber-300 hover:bg-amber-50'
                             }`}
                           >
@@ -18058,7 +18053,6 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         pedagogicalDisplayMode={pedagogicalDisplayMode}
         onPedagogicalDisplayModeChange={(nextMode) => {
           dirtyRef.current = true;
-          if (nextMode === PEDAGOGICAL_DISPLAY_D) setIsPedagogicalProject(true);
           setPedagogicalDisplayMode(nextMode);
         }}
         handSignStyle={handSignStyle}
