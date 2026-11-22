@@ -10,6 +10,9 @@ import * as googleDrive from './services/googleDrive';
 import * as oneDrive from './services/oneDrive';
 import * as authStorage from './services/authStorage';
 import { refreshGoogleTokenSilently, refreshMicrosoftTokenSilently } from './services/cloudTokenRefresh';
+import { ensureGoogleDriveAccess } from './components/CloudLogin';
+import { isComposerDocumentJson, isComposerFileName } from './document/composerDocumentModel';
+import { isMusicStudioDocumentJson, isMusicStudioFileName } from './document/musicStudioDocumentModel';
 import { JoClefSymbol, TrebleClefSymbol, BassClefSymbol } from './components/ClefSymbols';
 import { AppLogo } from './components/AppLogo';
 import { PedagogicalAudioTransport } from './components/pedagogical/PedagogicalAudioTransport';
@@ -7124,14 +7127,37 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     setTimeout(() => setSaveFeedback(''), 3200);
   }, [projectSaveTarget, isLoggedIn, saveToStorageSync, saveToCloud, saveToOneDrive, t]);
 
+  const isNotationCloudFileName = useCallback((name) => {
+    const lower = String(name || '').toLowerCase();
+    if (!lower) return false;
+    if (isComposerFileName(lower) || isMusicStudioFileName(lower)) return false;
+    return lower.endsWith('.nm') || lower.endsWith('.noodimeister') || lower.endsWith('.json');
+  }, []);
+
+  const redirectCloudFileToCorrectApp = useCallback((fileId, data, fileName) => {
+    const q = new URLSearchParams({ fileId: String(fileId) });
+    if (isMusicStudioDocumentJson(data) || isMusicStudioFileName(fileName)) {
+      window.location.assign(`${(import.meta.env?.BASE_URL || '/').replace(/\/?$/, '/')}stuudio?${q}`);
+      return true;
+    }
+    if (isComposerDocumentJson(typeof data === 'string' ? data : JSON.stringify(data || {})) || isComposerFileName(fileName)) {
+      window.location.assign(`${(import.meta.env?.BASE_URL || '/').replace(/\/?$/, '/')}kujundaja?${q}`);
+      return true;
+    }
+    return false;
+  }, []);
+
   const loadGoogleDriveProjectById = useCallback(async (fileId) => {
-    const access = authStorage.assertCloudAccess('google', 'Google Drive laadimine');
+    const access = await ensureGoogleDriveAccess('Google Drive laadimine');
     if (!access.ok) {
       setSaveFeedback(access.error || 'Google Drive ligipääs puudub');
       setTimeout(() => setSaveFeedback(''), 3200);
       return;
     }
-    const token = googleDrive.getStoredToken?.();
+    let token = googleDrive.getStoredToken?.();
+    if (!token && fileId) {
+      try { token = await refreshGoogleTokenSilently(); } catch (_) { token = null; }
+    }
     if (!token || !fileId) return;
     setGoogleLoadPickerOpen(false);
     setGoogleLoadPickerError('');
@@ -7139,10 +7165,11 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       setSaveFeedback(t('feedback.loadingFromCloud') || 'Laadin…');
       const content = await googleDrive.getFileContent(token, fileId);
       const data = JSON.parse(content);
+      const meta = await googleDrive.getFileMetadata(token, fileId).catch(() => null);
+      if (redirectCloudFileToCorrectApp(fileId, data, meta?.name || '')) return;
       if (importProject(data)) {
         setSaveFeedback(t('feedback.loadedFromCloud') || 'Laaditud pilvest!');
         setTimeout(() => setSaveFeedback(''), 2500);
-        const meta = await googleDrive.getFileMetadata(token, fileId).catch(() => null);
         setLocalProjectFileName('');
         setOpenedCloudFile({ provider: 'google', fileId, modifiedTime: meta?.modifiedTime || '', fileName: meta?.name || '' });
       } else {
@@ -7150,10 +7177,29 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         setTimeout(() => setSaveFeedback(''), 2500);
       }
     } catch (e) {
+      if (isAuthTokenError(e)) {
+        try {
+          await refreshGoogleTokenSilently();
+          const retryToken = googleDrive.getStoredToken?.();
+          if (retryToken) {
+            const content = await googleDrive.getFileContent(retryToken, fileId);
+            const data = JSON.parse(content);
+            const meta = await googleDrive.getFileMetadata(retryToken, fileId).catch(() => null);
+            if (redirectCloudFileToCorrectApp(fileId, data, meta?.name || '')) return;
+            if (importProject(data)) {
+              setSaveFeedback(t('feedback.loadedFromCloud') || 'Laaditud pilvest!');
+              setTimeout(() => setSaveFeedback(''), 2500);
+              setLocalProjectFileName('');
+              setOpenedCloudFile({ provider: 'google', fileId, modifiedTime: meta?.modifiedTime || '', fileName: meta?.name || '' });
+              return;
+            }
+          }
+        } catch (_) { /* fall through */ }
+      }
       setSaveFeedback(e?.message || 'Pilvest laadimine ebaõnnestus');
       setTimeout(() => setSaveFeedback(''), 3000);
     }
-  }, [importProject, t]);
+  }, [importProject, t, redirectCloudFileToCorrectApp, isAuthTokenError]);
 
   const openGoogleDriveProjectInNewTab = useCallback((fileId) => {
     openCloudFileInNewBrowserTab(fileId);
@@ -7245,14 +7291,17 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
 
     // Default: Google Drive — rakendusesisene klikitav nimekiri (Drive API).
     {
-      const access = authStorage.assertCloudAccess('google', 'Google Drive laadimine');
+      const access = await ensureGoogleDriveAccess('Google Drive laadimine');
       if (!access.ok) {
         setSaveFeedback(access.error || 'Google Drive ligipääs puudub');
         setTimeout(() => setSaveFeedback(''), 3000);
         return;
       }
     }
-    const token = googleDrive.getStoredToken?.();
+    let token = googleDrive.getStoredToken?.();
+    if (!token) {
+      try { token = await refreshGoogleTokenSilently(); } catch (_) { token = null; }
+    }
     if (!token) {
       setSaveFeedback(t('feedback.loadFromCloudHint') || 'Logi sisse Google\'iga, et laadida Google Drive\'ist.');
       setTimeout(() => setSaveFeedback(''), 3000);
@@ -7269,10 +7318,12 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       ]);
       const byId = new Map();
       for (const f of owned || []) {
-        if (f?.id) byId.set(f.id, { ...f, fromShared: false });
+        if (f?.id && isNotationCloudFileName(f.name)) byId.set(f.id, { ...f, fromShared: false });
       }
       for (const f of shared || []) {
-        if (f?.id && !byId.has(f.id)) byId.set(f.id, { ...f, fromShared: true });
+        if (f?.id && isNotationCloudFileName(f.name) && !byId.has(f.id)) {
+          byId.set(f.id, { ...f, fromShared: true });
+        }
       }
       const rows = Array.from(byId.values()).sort((a, b) => {
         const ta = new Date(a.modifiedTime || 0).getTime();
@@ -7285,7 +7336,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     } finally {
       setGoogleLoadPickerLoading(false);
     }
-  }, [t, importProject]);
+  }, [t, importProject, isNotationCloudFileName]);
 
   const handleLoadBySelectedSource = useCallback(async () => {
     if (projectLoadSource === 'browser') {
@@ -7498,43 +7549,68 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
           done();
         });
     };
-    const loadFromGoogle = () => {
-      const token = googleDrive.getStoredToken();
-      if (!token) {
-        setSaveFeedback('Logi sisse Google\'iga, et laadida pilvest.');
-        setTimeout(() => setSaveFeedback(''), 4000);
-        done();
-        return;
-      }
-      googleDrive.getFileContent(token, driveFileId)
-        .then(async (content) => {
+    const loadFromGoogle = async () => {
+      try {
+        const access = await ensureGoogleDriveAccess('Google Drive laadimine');
+        if (cancelled) return;
+        if (!access.ok) {
+          setSaveFeedback(access.error || 'Logi sisse Google\'iga, et laadida pilvest.');
+          setTimeout(() => setSaveFeedback(''), 4000);
+          done();
+          return;
+        }
+        let token = googleDrive.getStoredToken();
+        if (!token) {
+          try { token = await refreshGoogleTokenSilently(); } catch (_) { token = null; }
+        }
+        if (!token) {
+          setSaveFeedback('Logi sisse Google\'iga, et laadida pilvest.');
+          setTimeout(() => setSaveFeedback(''), 4000);
+          done();
+          return;
+        }
+        const fetchAndImport = async (accessToken) => {
+          const content = await googleDrive.getFileContent(accessToken, driveFileId);
           if (cancelled) return;
           const data = JSON.parse(content);
+          const meta = await googleDrive.getFileMetadata(accessToken, driveFileId).catch(() => null);
+          if (redirectCloudFileToCorrectApp(driveFileId, data, meta?.name || '')) return;
           if (importProject(data)) {
             setSaveFeedback('Laaditud!');
             setTimeout(() => setSaveFeedback(''), 2500);
             // Märgi, et praegu avatud fail on Google Drive'i fail – Cmd/Ctrl+S saab selle üle kirjutada sama fileId-ga.
-            const meta = await googleDrive.getFileMetadata(token, driveFileId).catch(() => null);
             setLocalProjectFileName('');
             setOpenedCloudFile({ provider: 'google', fileId: driveFileId, modifiedTime: meta?.modifiedTime || '', fileName: meta?.name || '' });
           } else {
             setSaveFeedback('Vigane projektifail');
             setTimeout(() => setSaveFeedback(''), 3000);
           }
-          done();
-        })
-        .catch((e) => {
-          if (!cancelled) {
-            setSaveFeedback(e?.message || 'Pilvest laadimine ebaõnnestus');
-            setTimeout(() => setSaveFeedback(''), 4000);
+        };
+        try {
+          await fetchAndImport(token);
+        } catch (e) {
+          if (cancelled) return;
+          if (isAuthTokenError(e)) {
+            try {
+              const refreshed = await refreshGoogleTokenSilently();
+              if (refreshed) {
+                await fetchAndImport(refreshed);
+                done();
+                return;
+              }
+            } catch (_) { /* fall through */ }
           }
-          done();
-        });
+          setSaveFeedback(e?.message || 'Pilvest laadimine ebaõnnestus');
+          setTimeout(() => setSaveFeedback(''), 4000);
+        }
+      } finally {
+        if (!cancelled) done();
+      }
     };
     if (isOneDrive) loadFromOneDrive();
     else loadFromGoogle();
     return () => { cancelled = true; };
-  }, [driveFileId, isOneDrive, importProject]);
+  }, [driveFileId, isOneDrive, importProject, redirectCloudFileToCorrectApp, isAuthTokenError]);
 
   // Poll cloud metadata to warn when same file changed on another device.
   // Important: keep local openedCloudFile stamp unchanged, so save logic can still detect conflict.
@@ -19280,6 +19356,13 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                       <div className="flex flex-col gap-2">
                         <button type="button" onClick={downloadProject} className="w-full py-2 px-3 rounded-lg bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-500">{t('layout.saveProject')}</button>
                         <button type="button" onClick={() => { setPianoStripVisible(false); projectFileInputRef.current?.click(); }} className="w-full py-2 px-3 rounded-lg bg-slate-600 text-white text-sm font-semibold hover:bg-slate-500">{t('layout.openProject')}</button>
+                        <button
+                          type="button"
+                          onClick={() => { setPianoStripVisible(false); loadFromCloud(); }}
+                          className="w-full py-2 px-3 rounded-lg bg-sky-700 text-white text-sm font-semibold hover:bg-sky-600"
+                        >
+                          {t('file.loadCloud') || 'Laadi Google Drive’ist'}
+                        </button>
                         <input ref={projectFileInputRef} type="file" accept=".json,.nm,application/json" className="hidden" onChange={handleOpenProjectFile} />
                       </div>
                     </div>

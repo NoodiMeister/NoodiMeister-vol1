@@ -281,8 +281,12 @@ export function setMediaAudioLocal(doc, { fileName, mimeType, objectUrl, duratio
   });
 }
 
-export function addSceneToDoc(doc, name) {
-  const scenes = [...(doc.scenes || []), createSceneBox({ name })];
+export function addSceneToDoc(doc, name, opts = {}) {
+  const scenes = [...(doc.scenes || []), createSceneBox({
+    name,
+    startSec: Number.isFinite(opts.startSec) ? opts.startSec : 0,
+    endSec: Number.isFinite(opts.endSec) ? opts.endSec : null,
+  })];
   return touchMusicStudioMeta({ ...doc, scenes });
 }
 
@@ -310,6 +314,16 @@ export function addSyncPointToDoc(doc, point) {
 
 export function removeSyncPointFromDoc(doc, pointId) {
   const points = (doc.sync?.points || []).filter((p) => p.id !== pointId);
+  return touchMusicStudioMeta({
+    ...doc,
+    sync: { ...(doc.sync || {}), points },
+  });
+}
+
+export function updateSyncPointInDoc(doc, pointId, patch) {
+  const points = (doc.sync?.points || []).map((p) => (
+    p.id === pointId ? createSyncPoint({ ...p, ...patch, id: p.id }) : p
+  ));
   return touchMusicStudioMeta({
     ...doc,
     sync: { ...(doc.sync || {}), points },

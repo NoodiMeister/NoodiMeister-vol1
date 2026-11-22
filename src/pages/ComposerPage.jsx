@@ -38,6 +38,7 @@ import { exportComposerToPdf, printComposerDocument } from '../export/composerEx
 import * as googleDrive from '../services/googleDrive';
 import * as oneDrive from '../services/oneDrive';
 import * as authStorage from '../services/authStorage';
+import { ensureGoogleDriveAccess } from '../components/CloudLogin';
 import { LOCALE_STORAGE_KEY, DEFAULT_LOCALE, getTranslations } from '../i18n';
 
 function downloadText(name, text) {
@@ -270,7 +271,7 @@ export default function ComposerPage() {
   }, []);
 
   const openGoogleDriveImportPicker = useCallback(async () => {
-    const access = authStorage.assertCloudAccess('google', 'Google Drive import');
+    const access = await ensureGoogleDriveAccess(t['composer.import.googleTitle'] || 'Google Drive import');
     if (!access.ok) {
       setFeedback(access.error || (t['composer.import.googleAccessError'] || 'Google Drive ligipääs puudub. Logi sisse Minu tööd lehel.'));
       return;

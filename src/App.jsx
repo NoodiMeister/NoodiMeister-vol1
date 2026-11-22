@@ -111,10 +111,16 @@ function AccountOrRedirect() {
 function parseDriveState(stateParam) {
   if (!stateParam || typeof stateParam !== 'string') return null;
   try {
-    const decoded = decodeURIComponent(stateParam);
-    const data = JSON.parse(decoded);
-    const ids = data?.ids;
-    if (Array.isArray(ids) && ids.length > 0 && ids[0]) return ids[0];
+    // URLSearchParams.get on juba dekodeerinud; decodeURIComponent on ohutu kahekordseks dekoodiks.
+    let raw = stateParam;
+    try {
+      if (/%[0-9A-Fa-f]{2}/.test(stateParam)) raw = decodeURIComponent(stateParam);
+    } catch {
+      raw = stateParam;
+    }
+    const data = JSON.parse(raw);
+    const ids = data?.ids || data?.exportIds;
+    if (Array.isArray(ids) && ids.length > 0 && ids[0]) return String(ids[0]);
     return null;
   } catch {
     return null;
@@ -132,6 +138,14 @@ function AppOrRedirect() {
   }
   const isNew = searchParams.get('new') === '1';
   const openLocal = searchParams.get('local') === '1';
+  // Drive / Minu tööd fileId: ilma sisselogimiseta ei saa Google faili laadida — suuna loginile ja tule tagasi.
+  if (!isLoggedIn() && fileId) {
+    try {
+      const returnTo = `${window.location.pathname}${window.location.search || ''}`;
+      sessionStorage.setItem('noodimeister-google-return-url', returnTo);
+    } catch (_) { /* ignore */ }
+    return <Navigate to="/login" replace />;
+  }
   if (isLoggedIn() && !fileId && !isNew && !openLocal) return <Navigate to="/konto" replace />;
   return <NoodiMeister />;
 }

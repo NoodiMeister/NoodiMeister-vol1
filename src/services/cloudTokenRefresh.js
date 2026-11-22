@@ -73,7 +73,8 @@ export async function refreshGoogleTokenSilently() {
       const timer = setTimeout(() => done(reject, new Error('Google token refresh timeout')), 12000);
       const tokenClient = window.google.accounts.oauth2.initTokenClient({
         client_id: clientId,
-        scope: 'openid email profile https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/drive.install',
+        // Peab ühtima login/Drive scope’idega (drive.file + drive.install), mitte vananenud drive.readonly’ga.
+        scope: 'openid email profile https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.install',
         prompt: '',
         callback: (resp) => {
           clearTimeout(timer);
@@ -86,7 +87,7 @@ export async function refreshGoogleTokenSilently() {
 
     if (!tokenResponse?.access_token) throw new Error('Google token refresh ebaõnnestus.');
     storeGoogleToken(tokenResponse.access_token, tokenResponse.expires_in);
-    setGoogleGrantedScopes(tokenResponse.scope || 'openid email profile https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/drive.install');
+    setGoogleGrantedScopes(tokenResponse.scope || 'openid email profile https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.install');
     return tokenResponse.access_token;
   })();
   try {

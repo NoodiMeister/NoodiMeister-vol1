@@ -31,11 +31,21 @@ Nupp **„Muusika stuudio“** asendab otsest „Ava kujundaja“. Hüpik:
 ## 3. Ekraan
 
 ```text
-┌─ Montaaž · pealkiri ──── [Import|Stseenid|Sync|Cursor] [Salvesta] ─┐
-├──────────────────────────────┬──────────────────────────────────────┤
-│  Partituuri vaade + playhead │  Heli / media + ruler                 │
-└──────────────────────────────┴──────────────────────────────────────┘
+┌─ Montaaž · pealkiri ──── [Import|Stseenid|Sync|Cursor|Video] [Salvesta] ─┐
+├──────────────────────────────┬──────────────────────────────────────────┤
+│  A) Tööfail / partituur      │  B) Heli / media + mini-ruler            │
+│     (ainult vaade + playhead)│                                          │
+├──────────────────────────────┴──────────────────────────────────────────┤
+│  C) Videoredaktor (tööfaili all) — 3 rida:                              │
+│     1) Heli · 2) Stseenid · 3) Sync (+ quantize + playhead)            │
+└─────────────────────────────────────────────────────────────────────────┘
 ```
+
+**Videoredaktor** elab **imporditud tööfaili all** (`src/studio/MontageTimeline.jsx`):
+- **Rida 1 — Heli:** helifaili kandmine (nupp / klõps / drag-drop)
+- **Rida 2 — Stseenid:** oma rida; lohista / venita; topeltklõps lisab
+- **Rida 3 — Sync:** sync toimub **videoredaktoris** (topeltklõps / nupp / ankrute lohistamine)
+- **Quantize** `1/2`…`1/32` + playhead. Ei ole CapCut-tüüpi NLE.
 
 Implementatsioon: `src/pages/MusicStudioPage.jsx`, mudel `src/document/musicStudioDocumentModel.js`.
 
@@ -57,7 +67,7 @@ Implementatsioon: `src/pages/MusicStudioPage.jsx`, mudel `src/document/musicStud
   },
   "media": { "kind": "audioFile", "local": { "fileName": "…", "objectUrl": null } },
   "sync": { "mode": "measureMap", "unit": "measure", "points": [ /* measureIndex, mediaSec */ ] },
-  "scenes": [ { "id": "…", "name": "1" | "A" | "Intro", "startSec": 0 } ],
+  "scenes": [ { "id": "…", "name": "1" | "A" | "Intro", "startSec": 0, "endSec": null } ],
   "playback": {
     "cursor": {
       "motion": "linear" | "jump" | "arc" | "triangleJump",
@@ -83,6 +93,6 @@ Implementatsioon: `src/pages/MusicStudioPage.jsx`, mudel `src/document/musicStud
 
 ## 6. Faasid
 
-**MVP (praegu):** hub, import, heli, sync, stseenid, playhead, Drive `.nms`, **sisseehitatud video render** (`src/studio/montageVideoRender.js` — MP4 kui brauser toetab, muidu WebM) + allalaadimine / Drive.
+**MVP (praegu):** hub, import, heli, sync, stseenid, playhead, **timeline tööfaili all**, Drive `.nms`, **sisseehitatud video render** (`src/studio/montageVideoRender.js` — MP4 kui brauser toetab, muidu WebM) + allalaadimine / Drive.
 
 **Järgmine:** score SVG render montaaži kaadris, autosync, OneDrive parity.

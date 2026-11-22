@@ -16,6 +16,8 @@ import {
   createMusicStudioDocument,
   importMusicXmlScore,
   importNoodimeisterScore,
+  isMusicStudioDocumentJson,
+  isMusicStudioFileName,
   normalizeMusicStudioDocument,
   removeSceneFromDoc,
   removeSyncPointFromDoc,
@@ -25,9 +27,14 @@ import {
   setVideoAsset,
   touchMusicStudioMeta,
   updateSceneInDoc,
+  updateSyncPointInDoc,
 } from '../document/musicStudioDocumentModel';
 import * as googleDrive from '../services/googleDrive';
+import { ensureGoogleDriveAccess } from '../components/CloudLogin';
+import ComposerGoogleDriveImportPicker from '../components/composer/ComposerGoogleDriveImportPicker';
+import { isComposerFileName } from '../document/composerDocumentModel';
 import { mediaSecToProgress, renderMontageVideo } from '../studio/montageVideoRender';
+import MontageTimeline from '../studio/MontageTimeline';
 import {
   PLAYHEAD_QUANTIZE_GRIDS,
   estimateTotalBeatsFromDoc,
@@ -108,6 +115,11 @@ export default function MusicStudioPage() {
   const [presentationVideo, setPresentationVideo] = useState(null); // { blob, fileName, mimeType }
   const [renderProgress, setRenderProgress] = useState(null); // 0..1 or null
   const renderAbortRef = useRef(null);
+  const [googleImportOpen, setGoogleImportOpen] = useState(false);
+  const [googleImportLoading, setGoogleImportLoading] = useState(false);
+  const [googleImportError, setGoogleImportError] = useState('');
+  const [googleImportRows, setGoogleImportRows] = useState([]);
+  const loadedCloudFileIdRef = useRef('');
 
   const nmInputRef = useRef(null);
   const xmlInputRef = useRef(null);
@@ -148,6 +160,13 @@ export default function MusicStudioPage() {
     setDoc((prev) => normalizeMusicStudioDocument(typeof updater === 'function' ? updater(prev) : updater));
   }, []);
 
+  const isNotationCloudFileName = useCallback((name) => {
+    const lower = String(name || '').toLowerCase();
+    if (!lower) return false;
+    if (isComposerFileName(lower) || isMusicStudioFileName(lower)) return false;
+    return lower.endsWith('.nm') || lower.endsWith('.noodimeister') || lower.endsWith('.json');
+  }, []);
+
   const onImportNm = async (e) => {
     const file = e.target.files?.[0];
     e.target.value = '';
@@ -155,6 +174,10 @@ export default function MusicStudioPage() {
     try {
       const text = await file.text();
       const json = JSON.parse(text);
+      if (isMusicStudioDocumentJson(json)) {
+        setFeedback(tr('studio.importNmIsStudio', 'See on montaažifail (.nms). Ava see Minu töödest, mitte impordi tööfailina.'));
+        return;
+      }
       patchDoc((prev) => importNoodimeisterScore(prev, json, { fileName: file.name }));
       setFeedback(tr('studio.importNmOk', 'Noodimeistri tööfail imporditud (rikas snapshot).'));
       setActivePanel('sync');
@@ -162,6 +185,116 @@ export default function MusicStudioPage() {
       setFeedback(err?.message || tr('studio.importNmFail', 'Tööfaili lugemine ebaõnnestus.'));
     }
   };
+
+  const openGoogleDriveNmPicker = useCallback(async () => {
+    const access = await ensureGoogleDriveAccess(tr('studio.importNmDrive', 'Google Drive tööfail'));
+    if (!access.ok) {
+      setFeedback(access.error || tr('studio.driveNeedLogin', 'Google Drive sessioon puudub. Logi sisse Minu tööd lehel.'));
+      return;
+    }
+    let token = googleDrive.getStoredToken();
+    if (!token) {
+      setFeedback(tr('studio.driveNeedLogin', 'Google Drive sessioon puudub. Logi sisse Minu tööd lehel.'));
+      return;
+    }
+    setGoogleImportError('');
+    setGoogleImportRows([]);
+    setGoogleImportOpen(true);
+    setGoogleImportLoading(true);
+    try {
+      const [owned, shared] = await Promise.all([
+        googleDrive.listNoodimeisterFiles(token, { pageSize: 100 }),
+        googleDrive.listNoodimeisterFilesSharedWithMe(token),
+      ]);
+      const byId = new Map();
+      for (const f of owned || []) {
+        if (f?.id && isNotationCloudFileName(f.name)) byId.set(f.id, { ...f, fromShared: false });
+      }
+      for (const f of shared || []) {
+        if (f?.id && isNotationCloudFileName(f.name) && !byId.has(f.id)) {
+          byId.set(f.id, { ...f, fromShared: true });
+        }
+      }
+      const rows = Array.from(byId.values()).sort((a, b) => {
+        const ta = new Date(a.modifiedTime || 0).getTime();
+        const tb = new Date(b.modifiedTime || 0).getTime();
+        return tb - ta;
+      });
+      setGoogleImportRows(rows);
+    } catch (e) {
+      setGoogleImportError(e?.message || tr('studio.importNmDriveListFail', 'Failide nimekirja ei saanud laadida.'));
+    } finally {
+      setGoogleImportLoading(false);
+    }
+  }, [isNotationCloudFileName, tr]);
+
+  const importNmFromGoogleDrive = useCallback(async (row) => {
+    if (!row?.id) return;
+    setGoogleImportOpen(false);
+    setBusy(tr('studio.importNmDriveLoading', 'Laadin tööfaili Drive’ist…'));
+    try {
+      const access = await ensureGoogleDriveAccess(tr('studio.importNmDrive', 'Google Drive tööfail'));
+      if (!access.ok) throw new Error(access.error || tr('studio.driveNeedLogin', 'Google Drive sessioon puudub. Logi sisse Minu tööd lehel.'));
+      const token = googleDrive.getStoredToken();
+      if (!token) throw new Error(tr('studio.driveNeedLogin', 'Google Drive sessioon puudub. Logi sisse Minu tööd lehel.'));
+      const raw = await googleDrive.getFileContent(token, row.id);
+      const json = JSON.parse(raw);
+      if (isMusicStudioDocumentJson(json)) {
+        throw new Error(tr('studio.importNmIsStudio', 'See on montaažifail (.nms). Ava see Minu töödest, mitte impordi tööfailina.'));
+      }
+      patchDoc((prev) => importNoodimeisterScore(prev, json, {
+        fileName: row.name || 'Drive tööfail',
+        link: { provider: 'google', fileId: row.id },
+      }));
+      setFeedback(tr('studio.importNmOk', 'Noodimeistri tööfail imporditud (rikas snapshot).'));
+      setActivePanel('sync');
+    } catch (err) {
+      setFeedback(err?.message || tr('studio.importNmFail', 'Tööfaili lugemine ebaõnnestus.'));
+    } finally {
+      setBusy('');
+    }
+  }, [patchDoc, tr]);
+
+  // Ava salvestatud montaaž (.nms) Minu töödest / Drive’ist: /stuudio?fileId=…
+  useEffect(() => {
+    const fileId = searchParams.get('fileId');
+    if (!fileId || loadedCloudFileIdRef.current === fileId) return undefined;
+    let cancelled = false;
+    (async () => {
+      try {
+        const access = await ensureGoogleDriveAccess(tr('studio.loadMontage', 'Montaaži laadimine'));
+        if (cancelled) return;
+        if (!access.ok) {
+          setFeedback(access.error || tr('studio.driveNeedLogin', 'Google Drive sessioon puudub. Logi sisse Minu tööd lehel.'));
+          return;
+        }
+        const token = googleDrive.getStoredToken();
+        if (!token) {
+          setFeedback(tr('studio.driveNeedLogin', 'Google Drive sessioon puudub. Logi sisse Minu tööd lehel.'));
+          return;
+        }
+        setBusy(tr('studio.loadingMontage', 'Laadin montaaži Drive’ist…'));
+        const raw = await googleDrive.getFileContent(token, fileId);
+        if (cancelled) return;
+        const parsed = JSON.parse(raw);
+        if (!isMusicStudioDocumentJson(parsed)) {
+          setFeedback(tr('studio.loadNotMontage', 'See fail ei ole montaaž (.nms). Ava see nooditöö või kujundajana.'));
+          return;
+        }
+        setDoc(normalizeMusicStudioDocument(parsed));
+        setCloudFileId(fileId);
+        loadedCloudFileIdRef.current = fileId;
+        setFeedback(tr('studio.loadedMontage', 'Montaaž laaditud Google Drive’ist.'));
+      } catch (err) {
+        if (!cancelled) {
+          setFeedback(err?.message || tr('studio.loadMontageFail', 'Montaaži laadimine ebaõnnestus.'));
+        }
+      } finally {
+        if (!cancelled) setBusy('');
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [searchParams, tr]);
 
   const onImportXml = async (e) => {
     const file = e.target.files?.[0];
@@ -181,9 +314,7 @@ export default function MusicStudioPage() {
     }
   };
 
-  const onImportAudio = async (e) => {
-    const file = e.target.files?.[0];
-    e.target.value = '';
+  const applyAudioFile = useCallback((file) => {
     if (!file) return;
     if (objectUrlRef.current) {
       try { URL.revokeObjectURL(objectUrlRef.current); } catch { /* ignore */ }
@@ -196,8 +327,41 @@ export default function MusicStudioPage() {
       objectUrl: url,
     }));
     setFeedback(tr('studio.importAudioOk', 'Helifail lisatud. Seadista sync ankruptid.'));
-    setActivePanel('sync');
+  }, [patchDoc, tr]);
+
+  const onImportAudio = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    applyAudioFile(file);
   };
+
+  const onTimelineAudioFiles = useCallback((files) => {
+    const list = Array.from(files || []);
+    const audio = list.find((f) => f && (f.type?.startsWith('audio/') || /\.(mp3|wav|m4a|ogg|aac|flac)$/i.test(f.name || '')));
+    if (!audio) {
+      setFeedback(tr('studio.timelineAudioInvalid', 'Lohista või vali helifail (MP3 / WAV / M4A…).'));
+      return;
+    }
+    applyAudioFile(audio);
+  }, [applyAudioFile, tr]);
+
+  const onTimelineQuantizeChange = useCallback(({ enabled, unit } = {}) => {
+    patchDoc((prev) => {
+      const cur = prev.playback?.cursor || {};
+      const nextQuantize = {
+        ...(cur.quantize || {}),
+        ...(enabled !== undefined ? { enabled: !!enabled } : {}),
+        ...(unit !== undefined ? { unit } : {}),
+      };
+      // Timeline quantize mõjub hüppavatele cursoritele — kui võre sisse, eelistame jump.
+      let motion = cur.motion;
+      if (nextQuantize.enabled && (motion === CURSOR_MOTION_LINEAR || motion === CURSOR_MOTION_ARC || !motion)) {
+        motion = CURSOR_MOTION_JUMP;
+      }
+      return setPlaybackCursor(prev, { motion, quantize: nextQuantize });
+    });
+  }, [patchDoc]);
 
   const togglePlay = () => {
     const el = audioRef.current;
@@ -222,11 +386,38 @@ export default function MusicStudioPage() {
     }));
   };
 
+  const addSyncAtTime = useCallback((sec, measureIndex) => {
+    patchDoc((prev) => addSyncPointToDoc(prev, {
+      measureIndex: Number.isFinite(measureIndex) ? measureIndex : (Number(syncMeasureDraft) || 0),
+      beatInMeasure: 0,
+      mediaSec: Math.max(0, Number(sec) || 0),
+      source: 'manual',
+    }));
+  }, [patchDoc, syncMeasureDraft]);
+
+  const updateSyncOnTimeline = useCallback((pointId, patch) => {
+    patchDoc((prev) => updateSyncPointInDoc(prev, pointId, patch));
+  }, [patchDoc]);
+
+  const removeSyncOnTimeline = useCallback((pointId) => {
+    patchDoc((prev) => removeSyncPointFromDoc(prev, pointId));
+  }, [patchDoc]);
+
   const addScene = () => {
     const name = String(sceneNameDraft || '').trim() || String((doc.scenes?.length || 0) + 1);
-    patchDoc((prev) => addSceneToDoc(prev, name));
+    patchDoc((prev) => addSceneToDoc(prev, name, { startSec: mediaTime }));
     setSceneNameDraft(String((doc.scenes?.length || 0) + 2));
   };
+
+  const addSceneAtTime = useCallback((sec) => {
+    const name = String(sceneNameDraft || '').trim() || String((doc.scenes?.length || 0) + 1);
+    patchDoc((prev) => addSceneToDoc(prev, name, { startSec: Math.max(0, Number(sec) || 0) }));
+    setSceneNameDraft(String((doc.scenes?.length || 0) + 2));
+  }, [doc.scenes?.length, patchDoc, sceneNameDraft]);
+
+  const updateSceneOnTimeline = useCallback((sceneId, patch) => {
+    patchDoc((prev) => updateSceneInDoc(prev, sceneId, patch));
+  }, [patchDoc]);
 
   const saveLocal = () => {
     downloadJson(fileName, JSON.parse(serializeStudioDoc(doc)));
@@ -504,7 +695,7 @@ export default function MusicStudioPage() {
       ) : null}
 
       <div className="px-4 py-2 bg-amber-50 border-b border-amber-100 text-[11px] text-amber-900">
-        {tr('studio.noNotationTools', 'Montaažis ei ole noodigraafika redaktori tööriistu — ainult import, stseenid, sync ja playhead.')}
+        {tr('studio.noNotationTools', 'Montaažis ei ole noodigraafika redaktori tööriistu — ainult import, stseenid, sync, playhead ja timeline tööfaili all.')}
       </div>
 
       {/* Tool drawer */}
@@ -523,6 +714,14 @@ export default function MusicStudioPage() {
                 </button>
                 <button
                   type="button"
+                  onClick={openGoogleDriveNmPicker}
+                  disabled={!!busy}
+                  className="px-3 py-2 rounded-lg text-xs font-semibold border border-sky-600 text-sky-900 bg-sky-50 hover:bg-sky-100 disabled:opacity-60"
+                >
+                  {tr('studio.importNmDrive', 'Google Drive’ist (.nm)')}
+                </button>
+                <button
+                  type="button"
                   onClick={() => xmlInputRef.current?.click()}
                   className="px-3 py-2 rounded-lg text-xs font-semibold border border-zinc-400 text-zinc-800 bg-zinc-50 hover:bg-zinc-100"
                 >
@@ -530,7 +729,7 @@ export default function MusicStudioPage() {
                 </button>
               </div>
               <p className="text-[11px] text-zinc-500 max-w-md">
-                {tr('studio.importScoreHint', 'Rikas .nm toob kogu sisu ja kujunduse. MusicXML sobib teistest programmidest.')}
+                {tr('studio.importScoreHint', 'Rikas .nm toob kogu sisu ja kujunduse — arvutist või Google Drive’ist. MusicXML sobib teistest programmidest.')}
               </p>
             </div>
             <div className="space-y-1.5">
@@ -543,11 +742,13 @@ export default function MusicStudioPage() {
                 {tr('studio.importAudioBtn', 'Lae heli (MP3 / WAV…)')}
               </button>
             </div>
-            <input ref={nmInputRef} type="file" accept=".nm,.json,application/json" className="hidden" onChange={onImportNm} />
-            <input ref={xmlInputRef} type="file" accept=".xml,.musicxml,application/xml,text/xml" className="hidden" onChange={onImportXml} />
-            <input ref={audioInputRef} type="file" accept="audio/*,.mp3,.wav,.m4a,.ogg" className="hidden" onChange={onImportAudio} />
           </div>
         )}
+
+        {/* Failisisendid alati DOM-is — timeline peab saama heli kanda ka siis, kui Import-paneel pole avatud */}
+        <input ref={nmInputRef} type="file" accept=".nm,.json,application/json" className="hidden" onChange={onImportNm} />
+        <input ref={xmlInputRef} type="file" accept=".xml,.musicxml,application/xml,text/xml" className="hidden" onChange={onImportXml} />
+        <input ref={audioInputRef} type="file" accept="audio/*,.mp3,.wav,.m4a,.ogg" className="hidden" onChange={onImportAudio} />
 
         {activePanel === 'scenes' && (
           <div className="space-y-2 max-w-xl">
@@ -828,136 +1029,184 @@ export default function MusicStudioPage() {
         )}
       </div>
 
-      <main className="flex-1 flex flex-col lg:flex-row min-h-0">
-        <section className="flex-1 min-h-[36vh] border-b lg:border-b-0 lg:border-r border-zinc-200 bg-white p-4 flex flex-col relative overflow-hidden">
-          <h2 className="text-xs font-bold uppercase tracking-wide text-zinc-500 mb-2">
-            {tr('studio.scorePanel', 'Partituuri vaade')}
-          </h2>
-          <div className="flex-1 rounded-xl border border-zinc-200 bg-zinc-50 relative overflow-hidden">
-            {hasScore ? (
-              <div className="p-4 space-y-2">
-                <p className="text-sm font-semibold text-zinc-800">
-                  {doc.score.displayName || tr('studio.scoreLoaded', 'Partituur laetud')}
-                </p>
-                <p className="text-xs text-zinc-600">
-                  {doc.score.source === 'noodimeister'
-                    ? tr('studio.sourceNm', 'Allikas: Noodimeistri tööfail (rikas snapshot + kujundus)')
-                    : tr('studio.sourceXml', 'Allikas: MusicXML')}
-                </p>
-                {doc.score.source === 'noodimeister' && doc.score.snapshot ? (
-                  <p className="text-[11px] text-zinc-500 font-mono">
-                    notes: {Array.isArray(doc.score.snapshot.notes) ? doc.score.snapshot.notes.length : '—'}
-                    {' · '}
-                    mode: {doc.score.snapshot.notationMode || doc.score.snapshot.sourceNotationMode || '—'}
-                  </p>
-                ) : null}
-                {doc.score.source === 'musicxml' && doc.score.musicXml ? (
-                  <p className="text-[11px] text-zinc-500">
-                    MusicXML {Math.round(doc.score.musicXml.length / 1024)} KB — render järgmises faasis.
-                  </p>
-                ) : null}
-              </div>
-            ) : (
-              <div className="h-full flex items-center justify-center p-6 text-center text-sm text-zinc-500">
-                {tr('studio.scoreEmpty', 'Impordi MusicXML või Noodimeistri tööfail.')}
-              </div>
-            )}
-            {/* Playhead overlay preview */}
-            <div
-              className="absolute top-0 bottom-0 flex flex-col items-center pointer-events-none z-10"
-              style={{ left: `${playheadPct}%`, ...playheadStyle }}
-            >
-              <span
-                className={`text-lg leading-none ${
-                  cursor.motion === CURSOR_MOTION_TRIANGLE_JUMP ? 'text-orange-600' : 'text-teal-700'
-                }`}
-                style={cursor.motion === CURSOR_MOTION_TRIANGLE_JUMP ? { clipPath: 'polygon(50% 0, 100% 100%, 0 100%)' } : undefined}
-              >
-                {cursor.emoji || '┃'}
-              </span>
-              <div
-                className={`w-0.5 flex-1 ${
-                  cursor.motion === CURSOR_MOTION_TRIANGLE_JUMP ? 'bg-orange-500' : 'bg-teal-600'
-                } ${cursor.motion === CURSOR_MOTION_ARC ? 'opacity-80' : ''}`}
-              />
-            </div>
-          </div>
-        </section>
+      <ComposerGoogleDriveImportPicker
+        open={googleImportOpen}
+        loading={googleImportLoading}
+        error={googleImportError}
+        rows={googleImportRows}
+        locale={locale}
+        labels={{
+          title: tr('studio.importNmDriveTitle', 'Ava Google Drive’i tööfail'),
+          intro: tr('studio.importNmDriveIntro', 'Vali Noodimeistri tööfail (.nm), et tuua see montaaži rikka snapshot’ina.'),
+          loading: tr('file.loadCloudPickerLoading', 'Laadin failide nimekirja…'),
+          empty: tr('studio.importNmDriveEmpty', 'Google Drive’is ei leitud nooditöid (.nm).'),
+          shared: tr('file.loadCloudPickerShared', 'jagatud'),
+          close: tr('file.loadCloudPickerClose', 'Sulge'),
+        }}
+        onClose={() => {
+          setGoogleImportOpen(false);
+          setGoogleImportError('');
+        }}
+        onPick={importNmFromGoogleDrive}
+      />
 
-        <section className="w-full lg:w-[400px] flex flex-col bg-zinc-50">
-          <div className="p-4 border-b border-zinc-200 bg-white space-y-3">
-            <h2 className="text-xs font-bold uppercase tracking-wide text-zinc-500">
-              {tr('studio.mediaPanel', 'Heli / media')}
-            </h2>
-            {mediaUrl ? (
-              <>
-                <audio ref={audioRef} src={mediaUrl} preload="metadata" className="w-full" controls />
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={togglePlay}
-                    className="px-3 py-1.5 rounded-md text-xs font-semibold bg-zinc-900 text-white"
-                  >
-                    {playing ? tr('studio.pause', 'Paus') : tr('studio.play', 'Play')}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => seekTo(0)}
-                    className="px-3 py-1.5 rounded-md text-xs font-semibold border border-zinc-300 bg-white"
-                  >
-                    {tr('studio.toStart', 'Algusesse')}
-                  </button>
-                </div>
-                <p className="text-[11px] text-zinc-500 truncate">{doc.media?.local?.fileName}</p>
-              </>
-            ) : (
-              <p className="text-xs text-zinc-500">{tr('studio.noAudio', 'Helifaili pole — Impordi paneelist lae heli.')}</p>
-            )}
-          </div>
-
-          <div className="p-4 flex-1">
+      <main className="flex-1 flex flex-col min-h-0">
+        {/* Ülemine rida: lõigatav/imporditud tööfail + media */}
+        <div className="flex-1 flex flex-col lg:flex-row min-h-[28vh]">
+          <section className="flex-1 min-h-[22vh] border-b lg:border-b-0 lg:border-r border-zinc-200 bg-white p-4 flex flex-col relative overflow-hidden">
             <h2 className="text-xs font-bold uppercase tracking-wide text-zinc-500 mb-2">
-              {tr('studio.ruler', 'Ruler / sync')}
+              {tr('studio.scorePanel', 'Partituuri / tööfaili vaade')}
             </h2>
-            <div
-              className="h-14 rounded-lg border border-zinc-300 bg-white relative cursor-pointer"
-              onClick={(e) => {
-                if (!mediaUrl || !duration) return;
-                const rect = e.currentTarget.getBoundingClientRect();
-                const pct = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
-                seekTo(pct * duration);
-              }}
-              role="presentation"
-            >
-              {(doc.sync?.points || []).map((p) => {
-                const pct = duration > 0 ? (p.mediaSec / duration) * 100 : 0;
-                return (
-                  <div
-                    key={p.id}
-                    title={`M${p.measureIndex}`}
-                    className="absolute top-0 bottom-0 w-0.5 bg-amber-500"
-                    style={{ left: `${Math.min(100, pct)}%` }}
-                  />
-                );
-              })}
+            <div className="flex-1 rounded-xl border border-zinc-200 bg-zinc-50 relative overflow-hidden">
+              {hasScore ? (
+                <div className="p-4 space-y-2">
+                  <p className="text-sm font-semibold text-zinc-800">
+                    {doc.score.displayName || tr('studio.scoreLoaded', 'Partituur laetud')}
+                  </p>
+                  <p className="text-xs text-zinc-600">
+                    {doc.score.source === 'noodimeister'
+                      ? tr('studio.sourceNm', 'Allikas: Noodimeistri tööfail (rikas snapshot + kujundus)')
+                      : tr('studio.sourceXml', 'Allikas: MusicXML')}
+                  </p>
+                  {doc.score.source === 'noodimeister' && doc.score.snapshot ? (
+                    <p className="text-[11px] text-zinc-500 font-mono">
+                      notes: {Array.isArray(doc.score.snapshot.notes) ? doc.score.snapshot.notes.length : '—'}
+                      {' · '}
+                      mode: {doc.score.snapshot.notationMode || doc.score.snapshot.sourceNotationMode || '—'}
+                    </p>
+                  ) : null}
+                  {doc.score.source === 'musicxml' && doc.score.musicXml ? (
+                    <p className="text-[11px] text-zinc-500">
+                      MusicXML {Math.round(doc.score.musicXml.length / 1024)} KB — render järgmises faasis.
+                    </p>
+                  ) : null}
+                </div>
+              ) : (
+                <div className="h-full flex items-center justify-center p-6 text-center text-sm text-zinc-500">
+                  {tr('studio.scoreEmpty', 'Impordi MusicXML või Noodimeistri tööfail.')}
+                </div>
+              )}
+              {/* Playhead overlay preview */}
               <div
-                className="absolute top-0 bottom-0 w-0.5 bg-teal-700 z-10"
-                style={{ left: `${playheadPct}%` }}
-              />
+                className="absolute top-0 bottom-0 flex flex-col items-center pointer-events-none z-10"
+                style={{ left: `${playheadPct}%`, ...playheadStyle }}
+              >
+                <span
+                  className={`text-lg leading-none ${
+                    cursor.motion === CURSOR_MOTION_TRIANGLE_JUMP ? 'text-orange-600' : 'text-teal-700'
+                  }`}
+                  style={cursor.motion === CURSOR_MOTION_TRIANGLE_JUMP ? { clipPath: 'polygon(50% 0, 100% 100%, 0 100%)' } : undefined}
+                >
+                  {cursor.emoji || '┃'}
+                </span>
+                <div
+                  className={`w-0.5 flex-1 ${
+                    cursor.motion === CURSOR_MOTION_TRIANGLE_JUMP ? 'bg-orange-500' : 'bg-teal-600'
+                  } ${cursor.motion === CURSOR_MOTION_ARC ? 'opacity-80' : ''}`}
+                />
+              </div>
             </div>
-            <p className="mt-2 text-[11px] text-zinc-500">
-              {(doc.scenes || []).length} {tr('studio.scenesCount', 'stseeni')}
-              {' · '}
-              {(doc.sync?.points || []).length} sync
-            </p>
-          </div>
-        </section>
+          </section>
+
+          <section className="w-full lg:w-[360px] flex flex-col bg-zinc-50 shrink-0">
+            <div className="p-4 border-b border-zinc-200 bg-white space-y-3">
+              <h2 className="text-xs font-bold uppercase tracking-wide text-zinc-500">
+                {tr('studio.mediaPanel', 'Heli / media')}
+              </h2>
+              {mediaUrl ? (
+                <>
+                  <audio ref={audioRef} src={mediaUrl} preload="metadata" className="w-full" controls />
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={togglePlay}
+                      className="px-3 py-1.5 rounded-md text-xs font-semibold bg-zinc-900 text-white"
+                    >
+                      {playing ? tr('studio.pause', 'Paus') : tr('studio.play', 'Play')}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => seekTo(0)}
+                      className="px-3 py-1.5 rounded-md text-xs font-semibold border border-zinc-300 bg-white"
+                    >
+                      {tr('studio.toStart', 'Algusesse')}
+                    </button>
+                  </div>
+                  <p className="text-[11px] text-zinc-500 truncate">{doc.media?.local?.fileName}</p>
+                </>
+              ) : (
+                <p className="text-xs text-zinc-500">{tr('studio.noAudio', 'Helifaili pole — Impordi paneelist lae heli.')}</p>
+              )}
+            </div>
+
+            <div className="p-4 flex-1">
+              <h2 className="text-xs font-bold uppercase tracking-wide text-zinc-500 mb-2">
+                {tr('studio.ruler', 'Ruler / sync')}
+              </h2>
+              <div
+                className="h-14 rounded-lg border border-zinc-300 bg-white relative cursor-pointer"
+                onClick={(e) => {
+                  if (!mediaUrl || !duration) return;
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  const p = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
+                  seekTo(p * duration);
+                }}
+                role="presentation"
+              >
+                {(doc.sync?.points || []).map((point) => {
+                  const markerPct = duration > 0 ? (point.mediaSec / duration) * 100 : 0;
+                  return (
+                    <div
+                      key={point.id}
+                      title={`M${point.measureIndex}`}
+                      className="absolute top-0 bottom-0 w-0.5 bg-amber-500"
+                      style={{ left: `${Math.min(100, markerPct)}%` }}
+                    />
+                  );
+                })}
+                <div
+                  className="absolute top-0 bottom-0 w-0.5 bg-teal-700 z-10"
+                  style={{ left: `${playheadPct}%` }}
+                />
+              </div>
+              <p className="mt-2 text-[11px] text-zinc-500">
+                {(doc.scenes || []).length} {tr('studio.scenesCount', 'stseeni')}
+                {' · '}
+                {(doc.sync?.points || []).length} sync
+              </p>
+            </div>
+          </section>
+        </div>
+
+        {/* Timeline tööfaili all — stseenid aja peal */}
+        <MontageTimeline
+          duration={duration}
+          mediaTime={mediaTime}
+          playing={playing}
+          scenes={doc.scenes || []}
+          syncPoints={doc.sync?.points || []}
+          audioLabel={doc.media?.local?.fileName || ''}
+          hasAudio={!!mediaUrl}
+          syncMeasureDraft={syncMeasureDraft}
+          onSeek={seekTo}
+          onUpdateScene={updateSceneOnTimeline}
+          onAddSceneAt={addSceneAtTime}
+          onPickAudio={() => audioInputRef.current?.click()}
+          onAudioFiles={onTimelineAudioFiles}
+          onAddSyncAt={addSyncAtTime}
+          onUpdateSync={updateSyncOnTimeline}
+          onRemoveSync={removeSyncOnTimeline}
+          quantizeEnabled={!!cursor.quantize?.enabled}
+          quantizeUnit={cursor.quantize?.unit || '1/4'}
+          onQuantizeChange={onTimelineQuantizeChange}
+          tr={tr}
+        />
       </main>
 
       <footer className="px-4 py-2 bg-white border-t border-zinc-200 text-[11px] text-zinc-500 flex flex-wrap gap-2 items-center">
         <span className="font-mono">{fileName}</span>
         <span>·</span>
-        <span>{tr('studio.stubNote', 'Montaaž — import, stseenid, sync, playhead. Video redaktor ja MP4 eksport järgmistes sammudes.')}</span>
+        <span>{tr('studio.stubNote', 'Montaaž — tööfail ülal; videoredaktor all (heli · stseenid · sync).')}</span>
       </footer>
     </div>
   );
