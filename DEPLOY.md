@@ -12,7 +12,7 @@
 2. Või Git-ühendus: [dash.cloudflare.com](https://dash.cloudflare.com) → **Workers & Pages** → projekt → Production branch `main`.
 3. SPA: `wrangler.toml` → `not_found_handling = "single-page-application"`; ka `public/_redirects` → `dist/`.
 4. Custom domain: `noodimeister.ee` / `www` Cloudflare’i projekti Domains all.
-5. **Node:** wrangler ≥4.99 nõuab **Node 22+**. Repos peavad olema `.nvmrc` / `.node-version` = `22` (ja `package.json` → `engines.node: 22.x`). Kui build logis on Node 20, sea dashboardis ka `NODE_VERSION=22` (Settings → Environment variables) ja **Retry deployment**.
+5. **Node / wrangler:** Cloudflare build võib ikka kasutada Node 20 (dashboard “Detected … nodejs@20”). Selleks on `wrangler` **pin’itud** `4.86.0` peale (viimane 4.x, mis toetab Node ≥20.3). Soovituslikult sea CF Settings → Variables → `NODE_VERSION=22` (Production), et tulevikus saaks uuemat wrangler’it.
 
 **Uuendused:** Cloudflare Pages Git-ühenduse korral iga `git push origin main`; käsitsi: `npm run deploy:cf` (ainult kui kasutaja palub).
 
