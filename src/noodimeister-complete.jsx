@@ -2513,7 +2513,8 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
   const lastDurationRef = useRef(selectedDuration);
   /** Takti-sisene rütmiasendus (MuseScore replace). Keha omistatakse pärast measuresRef’i. */
   const applyRhythmRewriteRef = useRef(() => false);
-  // Pausi sisestus: 0 + rütmiklahv (2–7) → paus vastava vältusega
+  // MuseScore: 0 = ühekordne paus valitud kestusega (ei hoia pausirežiimi kinni).
+  // restNextRef jäetud ainult legacy cleanup’iks (N-mode väljumine); uut latch’i ei seata.
   const restNextRef = useRef(false);
   /** Taktiruudustiku lõpp (beatides); uuendatakse pärast maxCursorAllowed — setInstrument loeb ref’i (defineeritud enne arvutust). */
   const restPaddingGridEndBeatRef = useRef(0);
@@ -8881,7 +8882,24 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
       const semitones = accResolved === 1 ? 1 : accResolved === -1 ? -1 : 0;
       playPianoNote(pitch, oct, semitones);
     }
+    // Ühekordne paus (0 / toolbox): ära jäta sticky pausirežiimi peale.
+    if (options.forceRest) setIsRest(false);
   }, [cursorPosition, selectedDuration, getEffectiveDuration, isDotted, isRest, notes, saveToHistory, ghostOctave, ghostAccidental, ghostAccidentalIsExplicit, playPianoNote, playNoteOnInsert, tupletMode, durations, staves, activeStaffIndex, notesWithExplicitBeats, noteDurationInQuarterBeats, notationStyle, notationMode, keySignature, instrument, t, noteInputMode, expandScoreForNoteInputAdvance, timeSignature, pickupEnabled, pickupQuantity, pickupDuration, incompleteLastMeasure, assertCursorTimeModelInputs, throwCursorModelError, pendingArticulation]);
+
+  /** MuseScore: sisesta üks paus valitud kestusega; ei hoia pausirežiimi. */
+  const insertRestAtCursor = useCallback(() => {
+    if (!noteInputMode) return false;
+    const dur = lastDurationRef.current || selectedDuration || '1/4';
+    restNextRef.current = false;
+    setIsRest(false);
+    addNoteAtCursor('C', ghostOctave, 0, {
+      insertAtBeat: cursorPosition,
+      overrideDurationLabel: dur,
+      forceRest: true,
+      skipPlay: true,
+    });
+    return true;
+  }, [noteInputMode, selectedDuration, ghostOctave, cursorPosition, addNoteAtCursor]);
 
   // Add a note on top of the note at cursor (chord input). Traditional or Pedagogical only. Shift+Letter.
   const addNoteOnTopOfCursor = useCallback((pitch, octave, accidental, options = {}) => {
@@ -9324,7 +9342,12 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
                 : (i === selectedNoteIndex);
               return inRange ? { ...note, isRest: !note.isRest } : note;
             }));
-          } else setIsRest(prev => !prev);
+            setIsRest(false);
+          } else if (noteInputMode) {
+            insertRestAtCursor();
+          } else {
+            setIsRest(false);
+          }
         } else if (option.value === 'dotted') {
           if (hasSelection) applyRhythmRewriteRef.current?.({ mode: 'toggle-dot' });
           else setIsDotted(prev => !prev);
@@ -11960,24 +11983,8 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
           if (durationMap[e.code] && !e.shiftKey && !modKey) {
             e.preventDefault();
             const dur = durationMap[e.code];
-            if (restNextRef.current) {
-              restNextRef.current = false;
-              lastDurationRef.current = dur;
-              setSelectedDuration(dur);
-              setIsRest(true);
-              const restIdx = toolbox.options.findIndex(opt => opt.value === 'rest');
-              if (restIdx >= 0) setSelectedOptionIndex(restIdx);
-              if (noteInputMode) {
-                addNoteAtCursor('C', ghostOctave, 0, {
-                  insertAtBeat: cursorPosition,
-                  overrideDurationLabel: dur,
-                  forceRest: true,
-                  forceDotted: false,
-                  skipPlay: true,
-                });
-              }
-              return;
-            }
+            restNextRef.current = false;
+            setIsRest(false);
             lastDurationRef.current = dur;
             setSelectedDuration(dur);
             const optionIdx = toolbox.options.findIndex(opt => opt.value === dur);
@@ -11986,7 +11993,8 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
           }
           if (e.code === 'Digit0' && !e.shiftKey && !modKey) {
             e.preventDefault();
-            restNextRef.current = true;
+            if (noteInputMode) insertRestAtCursor();
+            else setIsRest(false);
             return;
           }
           if (e.code === 'Period' && !e.shiftKey && !modKey) {
@@ -12408,29 +12416,15 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         };
         if (durationMap[e.code] && !e.shiftKey && !modKey) {
           const dur = durationMap[e.code];
-          if (restNextRef.current) {
-            restNextRef.current = false;
-            e.preventDefault();
-            lastDurationRef.current = dur;
-            setSelectedDuration(dur);
-            // Insert a rest at the cursor beat (replace any placeholder rest),
-            // not appended to the end of the note list.
-            addNoteAtCursor('C', ghostOctave, 0, {
-              insertAtBeat: cursorPosition,
-              overrideDurationLabel: dur,
-              forceRest: true,
-              forceDotted: false,
-              skipPlay: true,
-            });
-            return;
-          }
+          restNextRef.current = false;
+          setIsRest(false);
           lastDurationRef.current = dur;
           setSelectedDuration(dur);
           return;
         }
         if (e.code === 'Digit0' && !e.shiftKey && !modKey) {
           e.preventDefault();
-          restNextRef.current = true;
+          insertRestAtCursor();
           return;
         }
         if (e.code === 'Period' && !e.shiftKey && !modKey) {
@@ -12475,6 +12469,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
         });
         if (!(keyboardDrivenPianoInsertActive && e.defaultPrevented) && ['c', 'd', 'e', 'f', 'g', 'a', 'b'].includes(noteLetter)) {
           restNextRef.current = false;
+          setIsRest(false);
           setGhostAccidentalIsExplicit(false);
           e.preventDefault();
           const letterUp = noteLetter.toUpperCase();
@@ -12496,7 +12491,10 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
               ghostAccidental ?? 0,
               pedagogicalLetterOctaveOptions(notationMode)
             );
-          addNoteAtCursor(letterUp, octForMelody, undefined, { skipPlay: !playNoteOnInsert });
+          addNoteAtCursor(letterUp, octForMelody, undefined, {
+            skipPlay: !playNoteOnInsert,
+            forceRest: false,
+          });
           setGhostPitch(letterUp);
           setGhostOctave(octForMelody);
           return;
@@ -12511,7 +12509,7 @@ function NoodiMeisterCore({ icons, demoVisibility = false }) {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [
     activeToolbox, selectedOptionIndex, handleToolboxSelection, noteInputMode, selectedDuration, isDotted, isRest, notes,
-    getEffectiveDuration, selectedNoteIndex, selectionStart, selectionEnd, clipboard, undo, saveToHistory, getSelectedNotes,
+    insertRestAtCursor, getEffectiveDuration, selectedNoteIndex, selectionStart, selectionEnd, clipboard, undo, saveToHistory, getSelectedNotes,
     shiftPitchClassSameOctave, shiftOctave, addMeasure, addSongBlock, ghostPitch, ghostOctave, ghostAccidental, ghostAccidentalIsExplicit, playNoteOnInsert, playPianoNote,
     cursorPosition, cursorSubRow, notationStyle, figurenotesChordBlocks, addChordAt, getChordInsertBeat, getChordAtCursor, transposeChordSymbol,
     beginChordSymbolEdit, cancelChordSymbolEdit, commitChordSymbolEdit,

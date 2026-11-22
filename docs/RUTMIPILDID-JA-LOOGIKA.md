@@ -150,7 +150,7 @@ Noodimeisteris (single-staff) kasutatakse kohalikku state’i: `selectedDuration
 ### 3.5 Klahvistik
 
 - **2–7:** valitud rütm (2=1/32 … 7=1/1) – kas rakendub valitud nootidele või määrab järgmise noodi rütmi.
-- **0 + rütmiklahv (2–7):** paus vastava vältusega (sisestatakse noot `isRest: true`).
+- **0:** sisestab ühe pausi **valitud** kestusega (MuseScore: ühekordne sisestus, ei hoia pausirežiimi). Rütm enne: 2–7, siis 0.
 - **.:** dotted toggle.
 - **Ctrl+3 / Ctrl+5 / Ctrl+6 / Ctrl+7:** triool, kvintool, sekstool, septool (rütmivältuse sisse).
 

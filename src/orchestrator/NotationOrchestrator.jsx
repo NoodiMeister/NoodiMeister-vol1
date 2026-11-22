@@ -5,7 +5,7 @@
  * RhythmToolbox valikud → NotationContext (selectedRhythm, isDotted, isRest) → NoteSymbols.
  */
 
-import React, { useMemo, useCallback, useState, useEffect, useRef } from 'react';
+import React, { useMemo, useCallback, useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 
 // —— Store & context ——
@@ -180,6 +180,9 @@ function RhythmToolbar({ t = (k) => k }) {
     setIsDotted,
     isRest,
     setIsRest,
+    addNote,
+    ghostPitch,
+    ghostOctave,
   } = useNotation();
 
   const durationOptions = [
@@ -260,8 +263,12 @@ function RhythmToolbar({ t = (k) => k }) {
 
       <button
         type="button"
-        onClick={() => setIsRest(!isRest)}
-        className={`px-2 py-1 rounded text-xs font-medium transition-colors ${isRest ? 'bg-amber-600 text-white' : 'bg-amber-200/80 text-amber-900 hover:bg-amber-300'}`}
+        onClick={() => {
+          // MuseScore: üks paus valitud kestusega; ei hoia pausirežiimi kinni.
+          addNote?.(ghostPitch || 'C', ghostOctave ?? 4, 0, { isRest: true, skipPlay: true });
+          setIsRest(false);
+        }}
+        className="px-2 py-1 rounded text-xs font-medium transition-colors bg-amber-200/80 text-amber-900 hover:bg-amber-300"
         title={t('note.rest') || 'Paus'}
       >
         <RhythmGlyph duration={selectedRhythm} rest={true} />
@@ -312,10 +319,7 @@ function NotationOrchestratorInner({ showPiano = true, t = (k) => k }) {
 
   const onNotePlay = usePianoToNotationHandler();
 
-  // Pausirežiimi modifikaator: 0 → järgmine rütmivõti (1–5) rakendub pausina.
-  const restModifierRef = useRef(false);
-
-  // Klaviatuuri kiirklahvid: 1–5 rütm, A–G noodi sisestus.
+  // Klaviatuuri kiirklahvid: 1–5 rütm, 0 = ühekordne paus, A–G noodi sisestus.
   useEffect(() => {
     const isTypingTarget = (el) => {
       if (!el) return false;
@@ -327,12 +331,12 @@ function NotationOrchestratorInner({ showPiano = true, t = (k) => k }) {
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       if (isTypingTarget(e.target)) return;
 
-      // Pausirežiim: 0 → märgi, et järgmine rütmivõti sisestab pausi.
+      // MuseScore: 0 = üks paus valitud kestusega; ei hoia pausirežiimi.
       if (e.key === '0') {
         e.preventDefault();
         e.stopPropagation();
-        restModifierRef.current = true;
-        setIsRest(true);
+        addNote(ghostPitch || 'C', ghostOctave ?? 4, 0, { isRest: true, skipPlay: true });
+        setIsRest(false);
         return;
       }
 
@@ -348,14 +352,7 @@ function NotationOrchestratorInner({ showPiano = true, t = (k) => k }) {
         e.preventDefault();
         e.stopPropagation();
         setSelectedRhythm(rhythmByDigit[e.key]);
-        if (restModifierRef.current) {
-          // 0 + (1–5): sama vältus, kuid paus (isRest = true).
-          setIsRest(true);
-          restModifierRef.current = false;
-        } else {
-          // Ainult 1–5: noodirežiim (isRest = false).
-          setIsRest(false);
-        }
+        setIsRest(false);
         return;
       }
 
@@ -364,12 +361,13 @@ function NotationOrchestratorInner({ showPiano = true, t = (k) => k }) {
       if (k.length === 1 && k >= 'A' && k <= 'G') {
         e.preventDefault();
         e.stopPropagation();
-        addNote(k, ghostOctave ?? 4, 0, { skipPlay: true });
+        setIsRest(false);
+        addNote(k, ghostOctave ?? 4, 0, { skipPlay: true, isRest: false });
       }
     };
     window.addEventListener('keydown', onKeyDown, { capture: true });
     return () => window.removeEventListener('keydown', onKeyDown, { capture: true });
-  }, [addNote, ghostOctave, setIsRest, setSelectedRhythm]);
+  }, [addNote, ghostPitch, ghostOctave, setIsRest, setSelectedRhythm]);
 
   const { measures, effectiveMeasuresPerInstrument } = useMemo(
     () => buildMeasuresFromInstruments(instruments, timeSignature),
